@@ -157,6 +157,53 @@ async function mapQuestRoute(a, b) {
   };
 }
 
+async function mapQuestRouteShape(points) {
+  const key = process.env.MAPQUEST_API_KEY;
+  if (!key || points.length < 2) return null;
+
+  const url = new URL("https://www.mapquestapi.com/directions/v2/route");
+  url.searchParams.set("key", key);
+  url.searchParams.set("unit", "k");
+  url.searchParams.set("outFormat", "json");
+
+  const response = await fetch(url, {
+    method: "POST",
+    signal: AbortSignal.timeout(12000),
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      locations: points.map((point) => ({ latLng: { lat: point.lat, lng: point.lng } })),
+      options: {
+        routeType: "fastest",
+        unit: "k",
+        locale: "it_IT",
+        fullShape: true,
+        shapeFormat: "raw",
+        generalize: 0
+      }
+    })
+  });
+
+  if (!response.ok) throw new Error(`MapQuest percorso non riuscito (${response.status})`);
+  const payload = await response.json();
+  const route = payload.route;
+  const shapePoints = route?.shape?.shapePoints;
+  if (!route || route.routeError?.errorCode > 0 || !Array.isArray(shapePoints)) return null;
+
+  const coordinates = [];
+  for (let index = 0; index < shapePoints.length - 1; index += 2) {
+    const lat = Number(shapePoints[index]);
+    const lng = Number(shapePoints[index + 1]);
+    if (Number.isFinite(lat) && Number.isFinite(lng)) coordinates.push([lat, lng]);
+  }
+
+  return {
+    source: "mapquest",
+    coordinates,
+    distanceKm: Number(route.distance || 0),
+    driveMinutes: Math.max(1, Math.ceil(Number(route.time || 0) / 60))
+  };
+}
+
 export async function resolvePlace(place) {
   if (place?.lat && place?.lng) {
     return { lat: Number(place.lat), lng: Number(place.lng), source: "saved" };
@@ -206,4 +253,38 @@ export async function routeBetween(a, b) {
   const km = Math.max(0.2, haversineKm(from, to) * roadFactor);
   const driveMinutes = Math.max(4, Math.ceil((km / speed) * 60 + 4));
   return { km, driveMinutes, source: "local-estimate" };
+}
+
+export async function routeShape(points) {
+  const resolved = [];
+  for (const point of points || []) {
+    const place = await resolvePlace(point);
+    resolved.push({
+      label: point.label || "",
+      address: point.address || point.fullAddress || "",
+      lat: place.lat,
+      lng: place.lng,
+      source: place.source
+    });
+  }
+
+  const valid = resolved.filter((point) => Number.isFinite(point.lat) && Number.isFinite(point.lng));
+  if (valid.length < 2) {
+    return { source: "none", points: valid, coordinates: [] };
+  }
+
+  try {
+    const routed = await mapQuestRouteShape(valid);
+    if (routed?.coordinates?.length) {
+      return { ...routed, points: valid };
+    }
+  } catch (error) {
+    console.warn(error.message);
+  }
+
+  return {
+    source: "straight-line",
+    points: valid,
+    coordinates: valid.map((point) => [point.lat, point.lng])
+  };
 }
