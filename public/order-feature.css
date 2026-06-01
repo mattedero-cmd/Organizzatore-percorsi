@@ -1,0 +1,64 @@
+.order-panel {
+  margin-bottom: 14px;
+}
+
+.section-head.compact {
+  margin-bottom: 10px;
+}
+
+.order-list {
+  display: grid;
+  gap: 8px;
+}
+
+.order-item {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+
+.order-index {
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--primary);
+  color: #001110;
+  font-weight: 900;
+}
+
+.order-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+.manual-result-note {
+  margin-bottom: 12px;
+}
+
+@media (max-width: 900px) {
+  .order-item {
+    grid-template-columns: 30px minmax(0, 1fr);
+  }
+
+  .order-actions {
+    grid-column: 1 / -1;
+    justify-content: stretch;
+  }
+
+  .order-actions .btn {
+    flex: 1 1 0;
+  }
+}
