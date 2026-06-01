@@ -1,0 +1,40 @@
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: 5174
+      DATABASE_PATH: /data/work-routes.sqlite
+      MAPQUEST_API_KEY: ${MAPQUEST_API_KEY:-}
+      OPENROUTESERVICE_API_KEY: ${OPENROUTESERVICE_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4.1-mini}
+      OPENWEATHER_API_KEY: ${OPENWEATHER_API_KEY:-}
+      WEATHERBIT_API_KEY: ${WEATHERBIT_API_KEY:-}
+      FALLBACK_AVERAGE_SPEED_KMH: ${FALLBACK_AVERAGE_SPEED_KMH:-52}
+      FALLBACK_ROAD_FACTOR: ${FALLBACK_ROAD_FACTOR:-1.22}
+    volumes:
+      - app_data:/data
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  app_data:
+  caddy_data:
+  caddy_config:
