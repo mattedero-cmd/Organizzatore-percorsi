@@ -96,6 +96,12 @@
     `;
   }
 
+  function replaceOrderPanel() {
+    const current = document.querySelector("#manual-order-panel");
+    if (current) current.outerHTML = renderOrderPanel();
+    else injectOrderPanel();
+  }
+
   function renderWarnings(warnings) {
     if (!warnings?.length) return `<span class="badge ok">OK</span>`;
     return warnings.map((warning) => `<span class="badge warning">${escapeHtml(warning)}</span>`).join(" ");
@@ -211,11 +217,7 @@
     if (!lastResult?.rows?.length) return;
     const app = document.querySelector("#app");
     if (!app || !/Risultato percorso/.test(app.textContent || "")) return;
-    const current = document.querySelector("#manual-order-panel");
-    if (current) {
-      current.outerHTML = renderOrderPanel();
-      return;
-    }
+    if (document.querySelector("#manual-order-panel")) return;
     const table = app.querySelector(".table-wrap");
     if (table) table.insertAdjacentHTML("beforebegin", renderOrderPanel());
   }
@@ -260,7 +262,7 @@
       if (target >= 0 && target < orderRows.length) {
         [orderRows[index], orderRows[target]] = [orderRows[target], orderRows[index]];
         orderRows = orderRows.map((row, rowIndex) => ({ ...row, stopNumber: rowIndex + 1 }));
-        injectOrderPanel();
+        replaceOrderPanel();
       }
       return;
     }
