@@ -213,7 +213,7 @@ function renderRoute() {
           <span class="route-dot"></span>
         </div>
         <h2>Nuovo percorso</h2>
-        <div class="form-grid">
+        <div class="form-grid route-fields">
           <label class="field">
             Data giro
             <input name="scheduledDate" type="date" value="${escapeHtml(route.scheduledDate)}" />
@@ -246,9 +246,9 @@ function renderRoute() {
             Indirizzo partenza
             <input name="startAddress" value="${escapeHtml(route.startAddress)}" autocomplete="street-address" />
           </label>
-          <label class="field row">
+          <label class="field checkbox-field full">
             <input name="endSameAsStart" type="checkbox" ${route.endSameAsStart ? "checked" : ""} />
-            Arrivo finale uguale alla partenza
+            <span>Arrivo finale uguale alla partenza</span>
           </label>
           <label class="field">
             Punto finale
