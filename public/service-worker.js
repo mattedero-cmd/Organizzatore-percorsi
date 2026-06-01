@@ -9,6 +9,7 @@ const STATIC_ASSETS = [
   "/startup-guard.js?v=20260601-9",
   "/map-enhancer.js?v=20260601-9",
   "/order-enhancer.js?v=20260601-9",
+  "/route-actions-enhancer.js?v=20260601-9",
   "/app.js?v=20260601-9",
   "/manifest.webmanifest?v=20260601-9",
   "/icons/icon-180.svg",
