@@ -31,6 +31,7 @@ function addDriveBuffer(baseMinutes) {
 
 function normalizeStop(stop, index) {
   return {
+    uid: stop.uid || stop.stopUid || `stop-${index}`,
     id: stop.id ?? stop.addressId ?? `new-${index}`,
     addressId: stop.addressId ?? stop.id ?? null,
     customer: stop.customer || stop.label || `Tappa ${index + 1}`,
@@ -198,11 +199,18 @@ function evaluateOrder(order, context) {
 
     rows.push({
       stopNumber: index + 1,
+      stopUid: stop.uid,
+      addressId: stop.addressId,
       customer: stop.customer,
       location: stop.location,
       address: stop.fullAddress,
       lat: stop.lat,
       lng: stop.lng,
+      notes: stop.notes,
+      openMorning: stop.openMorning,
+      closeMorning: stop.closeMorning,
+      openAfternoon: stop.openAfternoon,
+      closeAfternoon: stop.closeAfternoon,
       departureTime: formatTime(departure),
       driveMinutes: leg.driveMinutes,
       baseDriveMinutes: leg.baseDriveMinutes ?? leg.driveMinutes,
@@ -354,9 +362,12 @@ export async function planRoute(payload, settings) {
   const reorderable = lockedFirst ? stopsWithNodeIndex.slice(1) : stopsWithNodeIndex;
 
   const context = { nodes, matrix, startMinutes, firstArrivalRequired, rates, timingMode, arrivalLeadMinutes };
-  const candidateOrders = reorderable.length <= MAX_EXACT_STOPS
-    ? permute(reorderable)
-    : nearestOrders(reorderable, context);
+  const manualOrder = Boolean(payload.manualOrder || payload.lockOrder);
+  const candidateOrders = manualOrder
+    ? [reorderable]
+    : reorderable.length <= MAX_EXACT_STOPS
+      ? permute(reorderable)
+      : nearestOrders(reorderable, context);
 
   let best = null;
   for (const partial of candidateOrders) {
@@ -376,7 +387,24 @@ export async function planRoute(payload, settings) {
     arrivalLeadMinutes,
     firstArrivalTime: payload.firstArrivalTime || payload.firstArrivalRequired || "",
     firstArrivalRequired: payload.firstArrivalRequired || "",
+    manualOrder,
     rows: best.rows,
+    plannedStops: best.rows.map((row) => ({
+      uid: row.stopUid,
+      addressId: row.addressId,
+      customer: row.customer,
+      location: row.location,
+      fullAddress: row.address,
+      notes: row.notes,
+      durationMinutes: row.durationMinutes,
+      openMorning: row.openMorning,
+      closeMorning: row.closeMorning,
+      openAfternoon: row.openAfternoon,
+      closeAfternoon: row.closeAfternoon,
+      lat: row.lat,
+      lng: row.lng,
+      recognized: Boolean(row.addressId)
+    })),
     finalLeg: best.finalLeg,
     summary: best.summary,
     rates,
