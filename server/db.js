@@ -532,6 +532,14 @@ export async function saveRoute(route) {
 }
 
 export async function listRoutes() {
+  if (dbMode === "postgres") {
+    const rows = await runSql(
+      `SELECT * FROM planned_routes
+       ORDER BY COALESCE(NULLIF(scheduled_date, ''), created_at::date::text) DESC, id DESC;`,
+      true
+    );
+    return rows.map(rowToRouteSummary);
+  }
   const rows = await runSql(
     `SELECT * FROM planned_routes ORDER BY COALESCE(NULLIF(scheduled_date, ''), created_at) DESC, id DESC;`,
     true
