@@ -10,11 +10,16 @@ let pgPool;
 let dbMode = "sqlite";
 
 function postgresUrl() {
-  return process.env.DATABASE_URL
+  const namedUrl = process.env.DATABASE_URL
     || process.env.POSTGRES_URL
     || process.env.POSTGRES_PRISMA_URL
     || process.env.STORAGE_URL
     || "";
+  if (namedUrl) return namedUrl;
+  return Object.values(process.env).find((value) => {
+    const text = String(value || "");
+    return text.startsWith("postgres://") || text.startsWith("postgresql://");
+  }) || "";
 }
 
 function sqlValue(value) {
