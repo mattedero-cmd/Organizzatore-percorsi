@@ -19,6 +19,7 @@ import {
 } from "./db.js";
 import { loadEnv } from "./env.js";
 import { planRoute } from "./planner.js";
+import { routeShape } from "./mapService.js";
 import { parseVoiceCommand } from "./voiceParser.js";
 import { attachWeather, shouldRefreshWeather } from "./weatherService.js";
 
@@ -161,6 +162,11 @@ async function handleApi(request, response) {
       });
       route.id = saved.id;
       return sendJson(response, 200, route);
+    }
+
+    if (method === "POST" && url.pathname === "/api/route-shape") {
+      const body = await parseBody(request);
+      return sendJson(response, 200, await routeShape(body.points || []));
     }
 
     if (method === "GET" && url.pathname === "/api/routes") {
