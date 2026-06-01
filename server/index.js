@@ -1,0 +1,203 @@
+import http from "node:http";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import {
+  initDb,
+  listAddresses,
+  createAddress,
+  updateAddress,
+  deleteAddress,
+  getSettings,
+  updateSettings,
+  saveRoute,
+  listRoutes,
+  getRoute,
+  updateRoutePayload
+} from "./db.js";
+import { loadEnv } from "./env.js";
+import { planRoute } from "./planner.js";
+import { parseVoiceCommand } from "./voiceParser.js";
+import { attachWeather, shouldRefreshWeather } from "./weatherService.js";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const rootDir = path.resolve(__dirname, "..");
+const publicDir = path.join(rootDir, "public");
+
+loadEnv(rootDir);
+await initDb(rootDir);
+
+const PORT = Number(process.env.PORT || 5174);
+const HOST = process.env.HOST || (process.env.NODE_ENV === "production" ? "0.0.0.0" : "127.0.0.1");
+
+const mimeTypes = {
+  ".html": "text/html; charset=utf-8",
+  ".css": "text/css; charset=utf-8",
+  ".js": "text/javascript; charset=utf-8",
+  ".json": "application/json; charset=utf-8",
+  ".svg": "image/svg+xml",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg"
+};
+
+function sendJson(response, status, payload) {
+  response.writeHead(status, { "Content-Type": "application/json; charset=utf-8" });
+  response.end(JSON.stringify(payload));
+}
+
+function parseBody(request) {
+  return new Promise((resolve, reject) => {
+    let body = "";
+    request.on("data", (chunk) => {
+      body += chunk;
+      if (body.length > 2_000_000) {
+        request.destroy();
+        reject(new Error("Payload troppo grande"));
+      }
+    });
+    request.on("end", () => {
+      if (!body) return resolve({});
+      try {
+        resolve(JSON.parse(body));
+      } catch {
+        reject(new Error("JSON non valido"));
+      }
+    });
+    request.on("error", reject);
+  });
+}
+
+function serveStatic(request, response) {
+  const url = new URL(request.url, `http://${request.headers.host}`);
+  const pathname = decodeURIComponent(url.pathname === "/" ? "/index.html" : url.pathname);
+  const safePath = path.normalize(pathname).replace(/^(\.\.[/\\])+/, "");
+  const filePath = path.join(publicDir, safePath);
+
+  if (!filePath.startsWith(publicDir)) {
+    response.writeHead(403);
+    response.end("Forbidden");
+    return;
+  }
+
+  fs.readFile(filePath, (error, content) => {
+    if (error) {
+      response.writeHead(404);
+      response.end("Not found");
+      return;
+    }
+    response.writeHead(200, {
+      "Content-Type": mimeTypes[path.extname(filePath)] || "application/octet-stream"
+    });
+    response.end(content);
+  });
+}
+
+async function handleApi(request, response) {
+  const url = new URL(request.url, `http://${request.headers.host}`);
+  const method = request.method || "GET";
+
+  try {
+    if (method === "GET" && url.pathname === "/api/health") {
+      return sendJson(response, 200, {
+        ok: true,
+        mapApiConfigured: Boolean(process.env.MAPQUEST_API_KEY || process.env.OPENROUTESERVICE_API_KEY),
+        mapProviders: {
+          mapQuest: Boolean(process.env.MAPQUEST_API_KEY),
+          openRouteService: Boolean(process.env.OPENROUTESERVICE_API_KEY)
+        }
+      });
+    }
+
+    if (method === "GET" && url.pathname === "/api/addresses") {
+      const addresses = await listAddresses(url.searchParams.get("search") || "");
+      return sendJson(response, 200, addresses);
+    }
+
+    if (method === "POST" && url.pathname === "/api/addresses") {
+      const body = await parseBody(request);
+      if (!body.fullAddress) return sendJson(response, 400, { error: "Indirizzo completo obbligatorio" });
+      const address = await createAddress(body);
+      return sendJson(response, 201, address);
+    }
+
+    const addressMatch = url.pathname.match(/^\/api\/addresses\/(\d+)$/);
+    if (addressMatch && method === "PUT") {
+      const body = await parseBody(request);
+      const address = await updateAddress(addressMatch[1], body);
+      return sendJson(response, 200, address);
+    }
+
+    if (addressMatch && method === "DELETE") {
+      await deleteAddress(addressMatch[1]);
+      return sendJson(response, 200, { ok: true });
+    }
+
+    if (method === "GET" && url.pathname === "/api/settings") {
+      return sendJson(response, 200, await getSettings());
+    }
+
+    if (method === "PUT" && url.pathname === "/api/settings") {
+      const body = await parseBody(request);
+      return sendJson(response, 200, await updateSettings(body));
+    }
+
+    if (method === "POST" && url.pathname === "/api/plan") {
+      const body = await parseBody(request);
+      const settings = await getSettings();
+      let route = await planRoute(body, settings);
+      route = await attachWeather(route);
+      const saved = await saveRoute({
+        ...route,
+        name: body.name || "Percorso giornaliero",
+        scheduledDate: route.scheduledDate,
+        startLabel: body.start?.label || "",
+        startAddress: body.start?.address || body.start?.fullAddress || "",
+        endLabel: route.end?.label || "",
+        endAddress: route.end?.address || route.end?.fullAddress || ""
+      });
+      route.id = saved.id;
+      return sendJson(response, 200, route);
+    }
+
+    if (method === "GET" && url.pathname === "/api/routes") {
+      return sendJson(response, 200, await listRoutes());
+    }
+
+    const routeMatch = url.pathname.match(/^\/api\/routes\/(\d+)$/);
+    if (routeMatch && method === "GET") {
+      const stored = await getRoute(routeMatch[1]);
+      if (!stored) return sendJson(response, 404, { error: "Giro non trovato" });
+      let route = { ...stored.payload, id: stored.id };
+      if (shouldRefreshWeather(route)) {
+        route = await attachWeather(route);
+        await updateRoutePayload(stored.id, route);
+      }
+      return sendJson(response, 200, route);
+    }
+
+    if (method === "POST" && url.pathname === "/api/voice/parse") {
+      const body = await parseBody(request);
+      const addresses = await listAddresses("");
+      return sendJson(response, 200, parseVoiceCommand(body.text || "", addresses));
+    }
+
+    return sendJson(response, 404, { error: "Endpoint non trovato" });
+  } catch (error) {
+    console.error(error);
+    return sendJson(response, 500, { error: error.message || "Errore server" });
+  }
+}
+
+const server = http.createServer((request, response) => {
+  if (request.url?.startsWith("/api/")) {
+    handleApi(request, response);
+    return;
+  }
+  serveStatic(request, response);
+});
+
+server.listen(PORT, HOST, () => {
+  console.log(`Work Route Planner attivo su http://${HOST}:${PORT}`);
+});
