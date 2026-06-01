@@ -1,10 +1,11 @@
-const CACHE_NAME = "percorsi-lavoro-v2";
+const CACHE_NAME = "percorsi-lavoro-v4";
 const STATIC_ASSETS = [
-  "/",
-  "/index.html",
-  "/styles.css",
-  "/app.js",
-  "/manifest.webmanifest",
+  "/?v=20260601-2",
+  "/index.html?v=20260601-2",
+  "/styles.css?v=20260601-2",
+  "/cache-fix.css?v=20260601-2",
+  "/app.js?v=20260601-2",
+  "/manifest.webmanifest?v=20260601-2",
   "/icons/icon-180.svg",
   "/icons/icon-192.svg",
   "/icons/icon-512.svg"
@@ -21,13 +22,17 @@ self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
       Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key)))
-    )
+    ).then(() => self.clients.claim())
   );
-  self.clients.claim();
 });
 
 self.addEventListener("fetch", (event) => {
   const requestUrl = new URL(event.request.url);
+
+  if (event.request.method !== "GET") {
+    event.respondWith(fetch(event.request));
+    return;
+  }
 
   if (requestUrl.pathname.startsWith("/api/")) {
     event.respondWith(fetch(event.request));
@@ -35,15 +40,14 @@ self.addEventListener("fetch", (event) => {
   }
 
   event.respondWith(
-    caches.match(event.request).then((cached) => {
-      if (cached) return cached;
-      return fetch(event.request).then((response) => {
+    fetch(event.request)
+      .then((response) => {
         if (event.request.method === "GET" && response.ok) {
           const copy = response.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
         }
         return response;
-      });
-    })
+      })
+      .catch(() => caches.match(event.request))
   );
 });
