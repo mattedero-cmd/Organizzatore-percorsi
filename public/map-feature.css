@@ -1,0 +1,136 @@
+.route-map-panel {
+  margin-bottom: 14px;
+}
+
+.route-map-panel .section-head {
+  align-items: center;
+}
+
+.route-map {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--primary) 8%, transparent) 1px, transparent 1px),
+    linear-gradient(0deg, color-mix(in srgb, var(--primary) 8%, transparent) 1px, transparent 1px),
+    var(--surface-2);
+  background-size: 44px 44px;
+}
+
+.route-map svg {
+  display: block;
+  width: 100%;
+  min-height: 230px;
+}
+
+.route-map-bg {
+  fill: transparent;
+  stroke: none;
+}
+
+.route-line {
+  fill: none;
+  stroke: var(--primary);
+  stroke-width: 5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.route-point circle {
+  fill: var(--surface);
+  stroke: var(--primary);
+  stroke-width: 4;
+}
+
+.route-point circle.start,
+.route-point circle.end {
+  fill: var(--primary);
+}
+
+.route-point text {
+  fill: var(--text);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.route-point circle.start + text,
+.route-point circle.end + text {
+  fill: white;
+}
+
+.route-label {
+  fill: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.route-map-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.route-map-stop {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  min-width: 0;
+  padding: 9px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.route-map-stop strong,
+.route-map-stop span {
+  display: block;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.route-map-stop strong {
+  font-size: 0.9rem;
+}
+
+.route-map-stop span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.route-map-bullet {
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--surface-2);
+  border: 1px solid var(--line-strong);
+  color: var(--text);
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.route-map-bullet.start,
+.route-map-bullet.end {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: white;
+}
+
+@media (max-width: 900px) {
+  .route-map-panel .section-head {
+    align-items: stretch;
+  }
+
+  .route-map svg {
+    min-height: 210px;
+  }
+
+  .route-map-list {
+    grid-template-columns: 1fr;
+  }
+}
