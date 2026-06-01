@@ -1,23 +1,22 @@
 (() => {
-  if (!Object.prototype.map) {
-    Object.defineProperty(Object.prototype, "map", {
-      configurable: true,
-      writable: true,
-      enumerable: false,
-      value() {
-        return [];
-      }
-    });
-  }
+  const nativeFetch = window.fetch.bind(window);
 
-  if (!Object.prototype.find) {
-    Object.defineProperty(Object.prototype, "find", {
-      configurable: true,
-      writable: true,
-      enumerable: false,
-      value() {
-        return undefined;
-      }
-    });
-  }
+  window.fetch = async (...args) => {
+    const response = await nativeFetch(...args);
+    const url = String(args[0]?.url || args[0] || "");
+
+    if (!/\/api\/(addresses|routes)(\?|$)/.test(url)) return response;
+
+    try {
+      const data = await response.clone().json();
+      if (Array.isArray(data)) return response;
+      return new Response(JSON.stringify([]), {
+        status: response.ok ? 200 : response.status,
+        statusText: response.statusText,
+        headers: { "Content-Type": "application/json; charset=utf-8" }
+      });
+    } catch {
+      return response;
+    }
+  };
 })();
