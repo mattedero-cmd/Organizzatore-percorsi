@@ -1,3 +1,22 @@
+input,
+select,
+textarea {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  inline-size: 100%;
+  max-inline-size: 100%;
+  min-inline-size: 0;
+}
+
+input[type="date"],
+input[type="time"],
+input[type="number"],
+select {
+  appearance: none;
+  -webkit-appearance: none;
+}
+
 input[type="checkbox"] {
   appearance: none;
   -webkit-appearance: none;
@@ -31,4 +50,16 @@ input[type="checkbox"]:checked {
 
 input[type="checkbox"]:checked::before {
   transform: scale(1);
+}
+
+.checkbox-field {
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+@media (max-width: 900px) {
+  .panel {
+    overflow: hidden;
+  }
 }
