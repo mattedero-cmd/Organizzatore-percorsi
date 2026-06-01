@@ -2,7 +2,21 @@
 
 Per usare l'app da iPhone fuori dalla rete di casa serve un indirizzo pubblico HTTPS. La soluzione consigliata e un piccolo VPS con Docker e Caddy: l'app resta tua, il database SQLite viene salvato su volume persistente, Caddy gestisce automaticamente il certificato HTTPS.
 
-## Requisiti
+La versione Vercel usa invece Postgres collegato al progetto e legge le variabili ambiente dal pannello Vercel.
+
+## Vercel
+
+Nel progetto `organizzatore-percorsi`, aggiungi queste variabili in `Settings -> Environment Variables` per gli ambienti Production e Preview:
+
+```text
+MAPQUEST_API_KEY
+OPENWEATHER_API_KEY
+WEATHERBIT_API_KEY
+```
+
+Dopo ogni modifica alle variabili, avvia un nuovo deploy. Vercel applica le chiavi solo ai deploy creati dopo il salvataggio.
+
+## Requisiti VPS
 
 - Un dominio o sottodominio, per esempio `percorsi.tuodominio.it`.
 - Un VPS Linux con Docker e Docker Compose.
