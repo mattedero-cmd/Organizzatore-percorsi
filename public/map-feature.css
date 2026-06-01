@@ -6,62 +6,35 @@
   align-items: center;
 }
 
-.route-map {
+.route-map.real-map {
+  width: 100%;
+  height: min(56vh, 460px);
+  min-height: 320px;
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background:
-    linear-gradient(90deg, color-mix(in srgb, var(--primary) 8%, transparent) 1px, transparent 1px),
-    linear-gradient(0deg, color-mix(in srgb, var(--primary) 8%, transparent) 1px, transparent 1px),
-    var(--surface-2);
-  background-size: 44px 44px;
+  background: var(--surface-2);
 }
 
-.route-map svg {
-  display: block;
-  width: 100%;
-  min-height: 230px;
+.leaflet-container {
+  font-family: inherit;
 }
 
-.route-map-bg {
-  fill: transparent;
-  stroke: none;
-}
-
-.route-line {
-  fill: none;
-  stroke: var(--primary);
-  stroke-width: 5;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.route-point circle {
-  fill: var(--surface);
-  stroke: var(--primary);
-  stroke-width: 4;
-}
-
-.route-point circle.start,
-.route-point circle.end {
-  fill: var(--primary);
-}
-
-.route-point text {
-  fill: var(--text);
-  font-size: 12px;
+.leaflet-tooltip {
+  border: 1px solid var(--primary);
+  border-radius: 999px;
+  background: var(--primary);
+  color: white;
   font-weight: 900;
 }
 
-.route-point circle.start + text,
-.route-point circle.end + text {
-  fill: white;
-}
-
-.route-label {
-  fill: var(--muted);
-  font-size: 12px;
-  font-weight: 800;
+.map-error {
+  display: grid;
+  min-height: 260px;
+  place-items: center;
+  padding: 20px;
+  color: var(--muted);
+  text-align: center;
 }
 
 .route-map-list {
@@ -121,13 +94,27 @@
   color: white;
 }
 
+.map-stop-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.btn.tiny {
+  min-height: 30px;
+  padding: 6px 9px;
+  font-size: 0.78rem;
+}
+
 @media (max-width: 900px) {
   .route-map-panel .section-head {
     align-items: stretch;
   }
 
-  .route-map svg {
-    min-height: 210px;
+  .route-map.real-map {
+    height: 52vh;
+    min-height: 340px;
   }
 
   .route-map-list {
