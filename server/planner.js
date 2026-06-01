@@ -24,6 +24,11 @@ function minutesToHours(minutes) {
   return Math.round((minutes / 60) * 100) / 100;
 }
 
+function addDriveBuffer(baseMinutes) {
+  const minutes = Number(baseMinutes || 0);
+  return Math.max(1, Math.ceil(minutes + (minutes / 60) * 10));
+}
+
 function normalizeStop(stop, index) {
   return {
     id: stop.id ?? stop.addressId ?? `new-${index}`,
@@ -120,7 +125,14 @@ async function buildLegMatrix(nodes) {
   for (let from = 0; from < nodes.length; from += 1) {
     for (let to = 0; to < nodes.length; to += 1) {
       if (from === to) continue;
-      matrix.set(`${from}:${to}`, await routeBetween(nodes[from], nodes[to]));
+      const leg = await routeBetween(nodes[from], nodes[to]);
+      const adjustedDriveMinutes = addDriveBuffer(leg.driveMinutes);
+      matrix.set(`${from}:${to}`, {
+        ...leg,
+        baseDriveMinutes: leg.driveMinutes,
+        driveBufferMinutes: adjustedDriveMinutes - leg.driveMinutes,
+        driveMinutes: adjustedDriveMinutes
+      });
     }
   }
   return matrix;
@@ -131,7 +143,7 @@ function readLeg(matrix, from, to) {
 }
 
 function evaluateOrder(order, context) {
-  const { nodes, matrix, startMinutes, firstArrivalRequired, rates } = context;
+  const { nodes, matrix, startMinutes, firstArrivalRequired, rates, timingMode, arrivalLeadMinutes } = context;
   const rows = [];
   let currentNodeIndex = 0;
   let currentTime = startMinutes;
@@ -142,10 +154,20 @@ function evaluateOrder(order, context) {
   let totalWaitMinutes = 0;
   const allWarnings = [];
 
-  if (firstArrivalRequired !== null && startMinutes === null && order.length > 0) {
+  let targetArrival = firstArrivalRequired;
+  if ((timingMode === "first_open_minus" || timingMode === "first_open") && order.length > 0) {
+    const firstWindowStart = getWindows(order[0])[0]?.start ?? null;
+    if (firstWindowStart !== null) {
+      targetArrival = timingMode === "first_open_minus"
+        ? firstWindowStart - arrivalLeadMinutes
+        : firstWindowStart;
+    }
+  }
+
+  if (timingMode !== "depart_at" && targetArrival !== null && order.length > 0) {
     const firstNodeIndex = order[0].nodeIndex;
     const firstLeg = readLeg(matrix, 0, firstNodeIndex);
-    currentTime = firstArrivalRequired - firstLeg.driveMinutes;
+    currentTime = targetArrival - firstLeg.driveMinutes;
     dayStart = currentTime;
   }
   if (currentTime === null) {
@@ -160,16 +182,19 @@ function evaluateOrder(order, context) {
     const arrival = departure + leg.driveMinutes;
     const warnings = [];
 
-    if (index === 0 && firstArrivalRequired !== null) {
-      if (arrival < firstArrivalRequired) warnings.push("arrivo prima dell'orario richiesto");
-      if (arrival > firstArrivalRequired) warnings.push("arrivo dopo l'orario richiesto");
+    if (index === 0 && targetArrival !== null) {
+      if (arrival < targetArrival) warnings.push("arrivo prima dell'orario target");
+      if (arrival > targetArrival) warnings.push("arrivo dopo l'orario target");
     }
 
     const scheduled = scheduleStop(
-      index === 0 && firstArrivalRequired !== null ? Math.max(arrival, firstArrivalRequired) : arrival,
+      index === 0 && targetArrival !== null ? Math.max(arrival, targetArrival) : arrival,
       stop
     );
-    const rowWarnings = [...new Set([...warnings, ...scheduled.warnings])];
+    let rowWarnings = [...new Set([...warnings, ...scheduled.warnings])];
+    if (index === 0 && timingMode === "first_open_minus") {
+      rowWarnings = rowWarnings.filter((warning) => warning !== "arrivo prima dell'apertura");
+    }
 
     rows.push({
       stopNumber: index + 1,
@@ -180,6 +205,8 @@ function evaluateOrder(order, context) {
       lng: stop.lng,
       departureTime: formatTime(departure),
       driveMinutes: leg.driveMinutes,
+      baseDriveMinutes: leg.baseDriveMinutes ?? leg.driveMinutes,
+      driveBufferMinutes: leg.driveBufferMinutes ?? 0,
       km: Number(leg.km.toFixed(1)),
       arrivalTime: formatTime(arrival),
       serviceStartTime: formatTime(scheduled.serviceStart),
@@ -187,6 +214,7 @@ function evaluateOrder(order, context) {
       durationMinutes: stop.durationMinutes,
       serviceEndTime: formatTime(scheduled.serviceEnd),
       warnings: rowWarnings,
+      targetArrivalTime: index === 0 && targetArrival !== null ? formatTime(targetArrival) : "",
       legSource: leg.source
     });
 
@@ -220,6 +248,8 @@ function evaluateOrder(order, context) {
       departureTime: formatTime(finalDeparture),
       arrivalTime: formatTime(finalArrival),
       driveMinutes: finalLeg.driveMinutes,
+      baseDriveMinutes: finalLeg.baseDriveMinutes ?? finalLeg.driveMinutes,
+      driveBufferMinutes: finalLeg.driveBufferMinutes ?? 0,
       km: Number(finalLeg.km.toFixed(1)),
       source: finalLeg.source
     },
@@ -309,7 +339,9 @@ export async function planRoute(payload, settings) {
   const stopsWithNodeIndex = stops.map((stop, index) => ({ ...stop, nodeIndex: index + 1 }));
   const matrix = await buildLegMatrix(nodes);
   const startMinutes = parseTime(payload.startTime || payload.start?.time || "");
-  const firstArrivalRequired = parseTime(payload.firstArrivalRequired || "");
+  const timingMode = payload.timingMode || "first_open_minus";
+  const arrivalLeadMinutes = Number(payload.arrivalLeadMinutes ?? 10);
+  const firstArrivalRequired = parseTime(payload.firstArrivalTime || payload.firstArrivalRequired || "");
   const rates = {
     kmRate: Number(payload.rates?.kmRate ?? settings.kmRate),
     driveHourRate: Number(payload.rates?.driveHourRate ?? settings.driveHourRate),
@@ -321,7 +353,7 @@ export async function planRoute(payload, settings) {
     : null;
   const reorderable = lockedFirst ? stopsWithNodeIndex.slice(1) : stopsWithNodeIndex;
 
-  const context = { nodes, matrix, startMinutes, firstArrivalRequired, rates };
+  const context = { nodes, matrix, startMinutes, firstArrivalRequired, rates, timingMode, arrivalLeadMinutes };
   const candidateOrders = reorderable.length <= MAX_EXACT_STOPS
     ? permute(reorderable)
     : nearestOrders(reorderable, context);
@@ -340,6 +372,9 @@ export async function planRoute(payload, settings) {
     start: payload.start,
     end,
     startTime: payload.startTime || payload.start?.time || "",
+    timingMode,
+    arrivalLeadMinutes,
+    firstArrivalTime: payload.firstArrivalTime || payload.firstArrivalRequired || "",
     firstArrivalRequired: payload.firstArrivalRequired || "",
     rows: best.rows,
     finalLeg: best.finalLeg,
