@@ -13,7 +13,9 @@ import {
   saveRoute,
   listRoutes,
   getRoute,
-  updateRoutePayload
+  updateRoutePayload,
+  renameRoute,
+  deleteRoute
 } from "./db.js";
 import { loadEnv } from "./env.js";
 import { planRoute } from "./planner.js";
@@ -175,6 +177,18 @@ async function handleApi(request, response) {
         await updateRoutePayload(stored.id, route);
       }
       return sendJson(response, 200, route);
+    }
+
+    if (routeMatch && method === "PUT") {
+      const body = await parseBody(request);
+      const route = await renameRoute(routeMatch[1], body.name || "");
+      if (!route) return sendJson(response, 404, { error: "Giro non trovato" });
+      return sendJson(response, 200, route);
+    }
+
+    if (routeMatch && method === "DELETE") {
+      await deleteRoute(routeMatch[1]);
+      return sendJson(response, 200, { ok: true });
     }
 
     if (method === "POST" && url.pathname === "/api/voice/parse") {
