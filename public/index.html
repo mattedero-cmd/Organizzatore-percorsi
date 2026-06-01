@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="it">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#126b55" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Percorsi lavoro" />
+    <title>Percorsi lavoro</title>
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/icons/icon-180.svg" />
+    <link rel="icon" href="/icons/icon-192.svg" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Pianificazione giornaliera</p>
+          <h1>Percorsi lavoro</h1>
+        </div>
+        <div class="status" id="map-status">Locale</div>
+      </header>
+
+      <nav class="tabs" aria-label="Sezioni app">
+        <button class="tab active" data-tab="route">Nuovo percorso</button>
+        <button class="tab" data-tab="saved">Giri salvati</button>
+        <button class="tab" data-tab="archive">Archivio indirizzi</button>
+        <button class="tab" data-tab="result">Risultato percorso</button>
+        <button class="tab" data-tab="settings">Impostazioni tariffe</button>
+      </nav>
+
+      <main id="app" class="app"></main>
+    </div>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>
