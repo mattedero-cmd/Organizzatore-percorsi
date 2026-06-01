@@ -176,15 +176,25 @@ h3 {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
+  align-items: end;
 }
 
 .form-grid.three {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.form-grid.route-fields {
+  grid-template-columns: 1fr;
+}
+
 .field {
   display: grid;
   gap: 6px;
+  min-width: 0;
+}
+
+.route-fields .field {
+  grid-column: 1 / -1;
 }
 
 .field.full {
@@ -207,6 +217,34 @@ textarea {
   padding: 9px 10px;
   background: var(--surface);
   color: var(--text);
+}
+
+input[type="checkbox"] {
+  width: 18px;
+  min-width: 18px;
+  height: 18px;
+  min-height: 18px;
+  padding: 0;
+  accent-color: var(--primary);
+}
+
+.checkbox-field {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.checkbox-field span {
+  min-width: 0;
+  color: var(--text);
+  font-weight: 800;
+  line-height: 1.25;
 }
 
 textarea {
@@ -519,6 +557,7 @@ tbody tr:last-child td {
 
   .grid,
   .form-grid,
+  .form-grid.route-fields,
   .form-grid.three,
   .archive-list,
   .saved-list,
