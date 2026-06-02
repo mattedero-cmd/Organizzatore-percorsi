@@ -2,14 +2,14 @@
 
 ## Fase 0 - Ordine progetto
 
-Stato: in corso.
+Stato: completata.
 
-- Creare `PROJECT.md`.
-- Creare `VISIONE_PROGETTO.md`.
-- Creare `ROADMAP.md`.
-- Creare `DECISIONI.md`.
-- Stabilire che Codex aggiorna questi file dopo modifiche importanti.
-- Riallineare una cartella Git vera con GitHub.
+- Fatto: creato `PROJECT.md`, `VISIONE_PROGETTO.md`, `ROADMAP.md`, `DECISIONI.md`.
+- Fatto: regola di aggiornamento file stabilita.
+- Fatto 2026-06-02 (Claude Code): fix DB Postgres (prefisso `RouteOrg_`).
+- Fatto 2026-06-02 (Claude Code): fix crash `renderResult` su giri con struttura incompleta.
+- Fatto 2026-06-02 (Claude Code): cache PWA aggiornata a v18.
+- PR #1 mergiata su main: `claude/inspiring-volta-rmlZz` → `main`.
 
 ## Fase 1 - Rubrica clienti evoluta
 
@@ -19,7 +19,7 @@ Obiettivo: trovare una tappa anche se l'utente ricorda il nome del locale o dell
 
 Attivita:
 
-- Fatto 2026-06-02: aggiunto filtro archivio contatti per cliente/attivita/locale e citta/sede, con lista chiusa finche non si cerca.
+- Fatto 2026-06-02 (Codex): aggiunto filtro archivio contatti per cliente/attivita/locale e citta/sede, con lista chiusa finche non si cerca.
 - Aggiungere campi rubrica: `businessName`, `aliases`, `phone`, `email`, `favorite`, `lastUsedAt`.
 - Aggiornare database SQLite/Postgres con migrazione.
 - Aggiornare form archivio clienti.
@@ -86,8 +86,8 @@ Priorita: media.
 
 Attivita:
 
-- Eliminare giri salvati.
-- Rinominare giri salvati.
+- Fatto 2026-06-02 (Codex): eliminare giri salvati.
+- Fatto 2026-06-02 (Codex): rinominare giri salvati.
 - Filtrare per data, cliente, completato/annullato.
 - Salvare meteo storico reale per giri passati.
 

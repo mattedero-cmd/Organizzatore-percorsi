@@ -60,6 +60,34 @@ Decisione: il nuovo riferimento visivo e l'immagine allegata dall'utente con 5 s
 
 Il design deve essere semplice, professionale, con icone chiare, forte leggibilita e navigazione da telefono.
 
+## D007 - Variabili ambiente Vercel con prefisso RouteOrg_
+
+Data: 2026-06-02
+
+Decisione: il database Postgres su Vercel (Prisma Postgres `prisma-postgres-cobalt-globe`) espone le variabili con prefisso `RouteOrg_`:
+
+- `RouteOrg_DATABASE_URL`
+- `RouteOrg_POSTGRES_URL`
+- `RouteOrg_PRISMA_DATABASE_URL`
+
+Il codice in `server/db.js` nella funzione `postgresUrl()` deve leggere queste variabili oltre ai nomi standard (`DATABASE_URL`, `POSTGRES_URL`, ecc.).
+
+Fix applicato il 2026-06-02 da Claude Code nella PR #1.
+
+## D008 - Regola di handoff tra AI (Codex e Claude Code)
+
+Data: 2026-06-02
+
+Decisione: quando si cambia AI (da Codex a Claude Code o viceversa), l'AI che conclude il turno deve:
+
+1. Aggiornare `PROJECT.md` con stato attuale, fix applicati e note tecniche importanti.
+2. Aggiornare `ROADMAP.md` marcando le attivita completate con data e nome AI.
+3. Aggiornare `DECISIONI.md` con le nuove decisioni prese.
+4. Fare commit e push su `main` (o creare PR se su branch separato).
+5. Verificare che Vercel abbia il deploy aggiornato.
+
+Lo scopo e che ogni AI che riprende il lavoro trovi lo stato esatto del progetto senza dipendere dalla memoria della chat precedente.
+
 ## D006 - Rubrica iPhone: import file nella PWA, accesso diretto solo con app nativa
 
 Data: 2026-06-02
