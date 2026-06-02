@@ -1,5 +1,17 @@
 # DECISIONI
 
+## D010 - Push diretto su main, senza PR
+
+Data: 2026-06-02
+
+Decisione: Claude Code pusha i fix direttamente su `main` senza creare branch separati o PR.
+
+Motivo: il flusso con PR richiedeva un'azione manuale da parte dell'utente ad ogni fix.
+Con push diretto su `main`, Vercel rideploya automaticamente e l'app si aggiorna senza intervento.
+
+Regola: vale per Claude Code. Codex puo continuare a usare il proprio flusso.
+In caso di dubbio su modifiche strutturali grandi, chiedere conferma prima di pushare.
+
 ## D001 - Conservare memoria di progetto in file
 
 Data: 2026-06-02
@@ -59,6 +71,48 @@ Decisione: il nuovo riferimento visivo e l'immagine allegata dall'utente con 5 s
 - Storico lavori.
 
 Il design deve essere semplice, professionale, con icone chiare, forte leggibilita e navigazione da telefono.
+
+## D009 - Chiamate meteo in parallelo, non in sequenza
+
+Data: 2026-06-02
+
+Decisione: `attachWeather` in `server/weatherService.js` deve usare `Promise.all`
+per chiamare le API meteo in parallelo per tutte le tappe, non un loop sequenziale.
+
+Motivo: con 3 tappe e timeout di 9s ciascuna, il tempo totale poteva essere 27s.
+Vercel (e qualsiasi proxy) chiude le connessioni prima. Con `Promise.all` il tempo
+totale e pari alla tappa piu lenta, non alla somma.
+
+Regola: ogni nuova API esterna aggiunta a `attachWeather` deve seguire lo stesso
+pattern parallelo. Il timeout per singola chiamata deve restare sotto 5s.
+
+## D007 - Variabili ambiente Vercel con prefisso RouteOrg_
+
+Data: 2026-06-02
+
+Decisione: il database Postgres su Vercel (Prisma Postgres `prisma-postgres-cobalt-globe`) espone le variabili con prefisso `RouteOrg_`:
+
+- `RouteOrg_DATABASE_URL`
+- `RouteOrg_POSTGRES_URL`
+- `RouteOrg_PRISMA_DATABASE_URL`
+
+Il codice in `server/db.js` nella funzione `postgresUrl()` deve leggere queste variabili oltre ai nomi standard (`DATABASE_URL`, `POSTGRES_URL`, ecc.).
+
+Fix applicato il 2026-06-02 da Claude Code nella PR #1.
+
+## D008 - Regola di handoff tra AI (Codex e Claude Code)
+
+Data: 2026-06-02
+
+Decisione: quando si cambia AI (da Codex a Claude Code o viceversa), l'AI che conclude il turno deve:
+
+1. Aggiornare `PROJECT.md` con stato attuale, fix applicati e note tecniche importanti.
+2. Aggiornare `ROADMAP.md` marcando le attivita completate con data e nome AI.
+3. Aggiornare `DECISIONI.md` con le nuove decisioni prese.
+4. Fare commit e push su `main` (o creare PR se su branch separato).
+5. Verificare che Vercel abbia il deploy aggiornato.
+
+Lo scopo e che ogni AI che riprende il lavoro trovi lo stato esatto del progetto senza dipendere dalla memoria della chat precedente.
 
 ## D006 - Rubrica iPhone: import file nella PWA, accesso diretto solo con app nativa
 

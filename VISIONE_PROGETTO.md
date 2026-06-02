@@ -76,5 +76,13 @@ Stile mobile-first, vicino all'immagine allegata dall'utente:
 - Il parser vocale attuale cerca soprattutto `cliente + sede`.
 - Serve una ricerca fuzzy piu robusta.
 - Serve gestione dei casi ambigui: piu clienti simili.
-- Serve sincronizzare stabilmente il progetto su GitHub.
 - L'import Excel e utile ma va pulito con attenzione per fogli con colonne spostate.
+
+## Stato infrastruttura (aggiornato 2026-06-02)
+
+- GitHub: `mattedero-cmd/Organizzatore-percorsi`, branch principale `main`.
+- Vercel: deploy automatico da GitHub su push a `main`.
+- Database: Prisma Postgres su Vercel, nome `prisma-postgres-cobalt-globe`.
+  Variabili: `RouteOrg_DATABASE_URL`, `RouteOrg_POSTGRES_URL`, `RouteOrg_PRISMA_DATABASE_URL`.
+- PWA: cache v18, service worker attivo.
+- Il progetto gira senza dipendenze di build: Node.js puro, no bundler.
