@@ -59,3 +59,13 @@ Decisione: il nuovo riferimento visivo e l'immagine allegata dall'utente con 5 s
 - Storico lavori.
 
 Il design deve essere semplice, professionale, con icone chiare, forte leggibilita e navigazione da telefono.
+
+## D006 - Rubrica iPhone: import file nella PWA, accesso diretto solo con app nativa
+
+Data: 2026-06-02
+
+Decisione: nella web app/PWA l'importazione contatti deve passare da file `.vcf`, `.vcard` o `.csv` scelto dall'utente. La PWA non deve promettere accesso diretto e continuo alla rubrica iPhone.
+
+Motivo: Safari/iPhone non offre a una PWA un accesso affidabile alla rubrica nativa per scegliere/esportare contatti come farebbe un'app iOS. Per avere consenso rubrica e scelta contatti nativa serve una versione app iOS o un wrapper nativo, per esempio Capacitor.
+
+Conseguenza pratica: migliorare l'import file e la creazione manuale veloce nella web app; valutare app iOS solo quando la rubrica nativa diventa prioritaria.
