@@ -91,6 +91,7 @@ Priorita: media.
 Attivita:
 
 - Fatto 2026-06-02: rinomina/elimina giri salvati sono gia presenti nell'app principale; disattivato `route-management-lite.js` per evitare pulsanti duplicati.
+- Fatto 2026-06-02: aggiunto `saved-route-guard.js` per normalizzare giri salvati vecchi o incompleti prima del render, evitando blocchi quando mancano `finalLeg`, `summary` o righe meteo.
 - Eliminare giri salvati.
 - Rinominare giri salvati.
 - Filtrare per data, cliente, completato/annullato.
@@ -119,3 +120,17 @@ Attivita:
 - Richiedere permesso Contatti in modo nativo.
 - Permettere scelta contatti dalla rubrica iPhone.
 - Sincronizzare i contatti scelti con l'archivio clienti dell'app.
+
+## Fase 8 - Menu impostazioni e guida
+
+Priorita: prossima.
+
+Obiettivo: sostituire la scheda separata `Impostazioni tariffe` con un menu a tendina/impostazioni generale.
+
+Attivita:
+
+- Creare un pulsante menu impostazioni nell'header.
+- Spostare tariffe giornata dentro il menu.
+- Spostare preferenza navigatore dentro il menu.
+- Aggiungere sezione guida rapida: come creare un giro, usare archivio, aprire navigazione, modificare tariffe.
+- Valutare se rimuovere la tab `Impostazioni tariffe` dalla barra inferiore dopo il nuovo menu.
