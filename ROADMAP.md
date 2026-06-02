@@ -19,6 +19,7 @@ Obiettivo: trovare una tappa anche se l'utente ricorda il nome del locale o dell
 
 Attivita:
 
+- Fatto 2026-06-02: aggiunto filtro archivio contatti per cliente/attivita/locale e citta/sede, con lista chiusa finche non si cerca.
 - Aggiungere campi rubrica: `businessName`, `aliases`, `phone`, `email`, `favorite`, `lastUsedAt`.
 - Aggiornare database SQLite/Postgres con migrazione.
 - Aggiornare form archivio clienti.
