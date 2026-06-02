@@ -174,7 +174,7 @@
     try {
       const [existing, seeds] = await Promise.all([
         api("/api/addresses"),
-        fetch("/seed-addresses.json?v=20260602-2").then((response) => response.json())
+        fetch("/seed-addresses.json?v=20260602-3").then((response) => response.json())
       ]);
       const existingKeys = new Set(existing.map((item) => `${item.customer}|${item.fullAddress}`.toLowerCase()));
       let imported = 0;
@@ -233,6 +233,27 @@
     row.append(label, input);
     seedExcelArchive();
   }
+
+  function focusAddressForm() {
+    window.setTimeout(() => {
+      const form = document.querySelector("#address-form");
+      if (!form) return;
+      form.scrollIntoView({ behavior: "smooth", block: "start" });
+      form.style.outline = "3px solid rgba(37, 99, 235, 0.35)";
+      form.style.outlineOffset = "4px";
+      window.setTimeout(() => {
+        form.style.outline = "";
+        form.style.outlineOffset = "";
+      }, 1800);
+      showToast("Scheda pronta per la modifica");
+    }, 120);
+  }
+
+  document.addEventListener("click", (event) => {
+    if (event.target.closest("[data-edit-address]")) {
+      focusAddressForm();
+    }
+  }, true);
 
   const observer = new MutationObserver(() => mountImportButton());
   observer.observe(document.documentElement, { childList: true, subtree: true });
