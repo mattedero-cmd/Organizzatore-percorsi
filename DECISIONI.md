@@ -1,5 +1,17 @@
 # DECISIONI
 
+## D010 - Push diretto su main, senza PR
+
+Data: 2026-06-02
+
+Decisione: Claude Code pusha i fix direttamente su `main` senza creare branch separati o PR.
+
+Motivo: il flusso con PR richiedeva un'azione manuale da parte dell'utente ad ogni fix.
+Con push diretto su `main`, Vercel rideploya automaticamente e l'app si aggiorna senza intervento.
+
+Regola: vale per Claude Code. Codex puo continuare a usare il proprio flusso.
+In caso di dubbio su modifiche strutturali grandi, chiedere conferma prima di pushare.
+
 ## D001 - Conservare memoria di progetto in file
 
 Data: 2026-06-02
