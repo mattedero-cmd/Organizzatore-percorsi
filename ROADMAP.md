@@ -24,6 +24,8 @@ Attivita:
 - Aggiornare form archivio clienti.
 - Aggiornare ricerca archivio.
 - Aggiornare import Excel/clienti.
+- Migliorare import contatti da `.vcf`, `.vcard` e `.csv`.
+- Aggiungere creazione manuale veloce cliente da telefono.
 - Aggiungere preferiti e recenti.
 
 ## Fase 2 - Ricerca vocale intelligente
@@ -98,3 +100,16 @@ Attivita:
 - Separare bene cliente, attivita, sede e indirizzo.
 - Evitare duplicati.
 - Aggiungere correzione guidata degli indirizzi.
+
+## Fase 7 - Eventuale app iOS nativa
+
+Priorita: futura.
+
+Obiettivo: accedere alla rubrica iPhone con consenso nativo, se la sola importazione file non basta.
+
+Attivita:
+
+- Valutare wrapper Capacitor o app iOS dedicata.
+- Richiedere permesso Contatti in modo nativo.
+- Permettere scelta contatti dalla rubrica iPhone.
+- Sincronizzare i contatti scelti con l'archivio clienti dell'app.
