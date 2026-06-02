@@ -14,6 +14,9 @@ function postgresUrl() {
     || process.env.POSTGRES_URL
     || process.env.POSTGRES_PRISMA_URL
     || process.env.STORAGE_URL
+    || process.env.RouteOrg_DATABASE_URL
+    || process.env.RouteOrg_POSTGRES_URL
+    || process.env.RouteOrg_PRISMA_DATABASE_URL
     || "";
   if (namedUrl) return namedUrl;
   return Object.values(process.env).find((value) => {
