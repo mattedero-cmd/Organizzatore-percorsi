@@ -6,37 +6,6 @@
   align-items: center;
 }
 
-.route-map.real-map {
-  width: 100%;
-  height: min(56vh, 460px);
-  min-height: 320px;
-  overflow: hidden;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--surface-2);
-}
-
-.leaflet-container {
-  font-family: inherit;
-}
-
-.leaflet-tooltip {
-  border: 1px solid var(--primary);
-  border-radius: 999px;
-  background: var(--primary);
-  color: white;
-  font-weight: 900;
-}
-
-.map-error {
-  display: grid;
-  min-height: 260px;
-  place-items: center;
-  padding: 20px;
-  color: var(--muted);
-  text-align: center;
-}
-
 .route-map-list {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -107,17 +76,43 @@
   font-size: 0.78rem;
 }
 
+.navigator-setting-inline,
+.navigator-settings-block {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+  margin-bottom: 12px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-2);
+}
+
+.navigator-setting-inline {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+}
+
+.navigator-settings-block h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.route-navigation-panel .section-copy {
+  max-width: 62ch;
+}
+
 @media (max-width: 900px) {
   .route-map-panel .section-head {
     align-items: stretch;
   }
 
-  .route-map.real-map {
-    height: 52vh;
-    min-height: 340px;
-  }
-
   .route-map-list {
     grid-template-columns: 1fr;
+  }
+
+  .navigator-setting-inline {
+    grid-template-columns: 1fr;
+    align-items: stretch;
   }
 }
