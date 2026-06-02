@@ -79,3 +79,13 @@ Decisione: nella versione pubblica attuale telefono ed email vengono aggiunti tr
 Motivo: il database pubblico non espone ancora colonne native `phone` ed `email`. Salvare i dati nelle note permette di usare subito i pulsanti `Chiama` e `Email` senza rischiare una migrazione database urgente in produzione.
 
 Conseguenza pratica: quando si fara la migrazione nativa, importare `Tel:` ed `Email:` dalle note nei nuovi campi e lasciare il modulo lite come fallback o rimuoverlo.
+
+## D008 - Risultato percorso: navigazione esterna come fonte affidabile
+
+Data: 2026-06-02
+
+Decisione: la mappa interattiva interna del risultato percorso viene disattivata. Il pannello risultato deve aprire il percorso nel navigatore scelto dall'utente, Google Maps o Mappe Apple.
+
+Motivo: la mappa interna e MapQuest possono mostrare linee o percorsi incoerenti quando gli indirizzi vengono interpretati male. Per il percorso reale su strada e meglio delegare al navigatore esterno scelto.
+
+Conseguenza pratica: il risultato mostra un pannello `Navigazione percorso` con preferenza navigatore e pulsante `Apri percorso`; ogni tappa dettagliata mostra un solo pulsante `Naviga`, piu eventuali `Chiama` e `Email precompilata`.
