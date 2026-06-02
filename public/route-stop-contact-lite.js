@@ -1,4 +1,5 @@
 (function () {
+  const NAVIGATOR_STORAGE_KEY = "routeNavigatorPreference";
   let addresses = [];
   let scheduled = false;
 
@@ -86,10 +87,33 @@
     return `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
   }
 
-  function actionHtml({ phone, email, label, dateValue, arrivalTime }) {
-    if (!phone && !email) return "";
+  function navigatorPreference() {
+    return localStorage.getItem(NAVIGATOR_STORAGE_KEY) === "apple" ? "apple" : "google";
+  }
+
+  function navigationHref(address) {
+    const destination = String(address || "").trim();
+    if (!destination) return "";
+    if (navigatorPreference() === "apple") {
+      const url = new URL("https://maps.apple.com/");
+      url.searchParams.set("daddr", destination);
+      url.searchParams.set("dirflg", "d");
+      return url.toString();
+    }
+
+    const url = new URL("https://www.google.com/maps/dir/");
+    url.searchParams.set("api", "1");
+    url.searchParams.set("travelmode", "driving");
+    url.searchParams.set("destination", destination);
+    return url.toString();
+  }
+
+  function actionHtml({ phone, email, label, dateValue, arrivalTime, address }) {
+    const navHref = navigationHref(address);
+    if (!navHref && !phone && !email) return "";
     return `
       <div class="actions route-contact-actions" data-route-contact-actions="1">
+        ${navHref ? `<a class="btn primary" href="${escapeHtml(navHref)}" target="_blank" rel="noopener">Naviga</a>` : ""}
         ${phone ? `<a class="btn ghost" href="tel:${normalizePhone(phone)}">Chiama</a>` : ""}
         ${email ? `<a class="btn ghost" href="${mailHref({ email, label, dateValue, arrivalTime })}">Email precompilata</a>` : ""}
       </div>
@@ -106,10 +130,9 @@
       const addressText = cells[2]?.textContent.trim() || "";
       const arrivalTime = cells[6]?.textContent.trim() || "--:--";
       const address = findAddress({ address: addressText, label });
-      if (!address) return;
 
       const { phone, email } = contactMeta(address);
-      const html = actionHtml({ phone, email, label, dateValue, arrivalTime });
+      const html = actionHtml({ phone, email, label, dateValue, arrivalTime, address: addressText });
       if (!html) return;
       cells[1].insertAdjacentHTML("beforeend", html);
     });
@@ -127,7 +150,6 @@
       const title = card.querySelector(".stop-title")?.textContent.replace(/^\s*\d+\.\s*/, "").trim() || "cliente";
       const addressText = card.querySelector(".stop-meta")?.textContent.trim() || "";
       const address = findAddress({ address: addressText, label: title });
-      if (!address) return;
 
       const { phone, email } = contactMeta(address);
       const html = actionHtml({
@@ -135,7 +157,8 @@
         email,
         label: title,
         dateValue,
-        arrivalTime: arrivalFromMobileCard(card)
+        arrivalTime: arrivalFromMobileCard(card),
+        address: addressText
       });
       if (!html) return;
       card.insertAdjacentHTML("beforeend", html);
