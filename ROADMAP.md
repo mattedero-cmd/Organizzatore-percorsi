@@ -87,7 +87,7 @@ Priorita: media.
 
 Attivita:
 
-- Fatto 2026-06-02: aggiunto modulo `route-management-lite.js` per rinominare ed eliminare giri salvati usando le API esistenti.
+- Fatto 2026-06-02: rinomina/elimina giri salvati sono gia presenti nell'app principale; disattivato `route-management-lite.js` per evitare pulsanti duplicati.
 - Eliminare giri salvati.
 - Rinominare giri salvati.
 - Filtrare per data, cliente, completato/annullato.
