@@ -53,7 +53,7 @@
     toolbar.className = "archive-toolbar";
     toolbar.innerHTML = `
       <div id="archive-filter-lite-count" class="archive-count"></div>
-      <button class="btn ghost" type="button" id="archive-filter-lite-show-all">Mostra tutti</button>
+      <button class="btn ghost" type="button" id="archive-filter-lite-show-all">Elenco completo</button>
       <button class="btn ghost" type="button" id="archive-filter-lite-clear">Pulisci filtri</button>
     `;
     city.insertAdjacentElement("afterend", toolbar);
@@ -92,14 +92,14 @@
     if (empty) {
       empty.textContent = active
         ? "Nessun indirizzo trovato con questi filtri."
-        : "Cerca per cliente, sede o citta. La lista resta chiusa per arrivare subito al modulo nuovo cliente.";
+        : "Cerca per cliente, sede o citta. Oppure apri Elenco completo per vedere tutti i contatti con Modifica ed Elimina.";
       empty.style.display = active && visible > 0 ? "none" : "";
     }
 
     const count = panel.querySelector("#archive-filter-lite-count");
     if (count) {
       count.textContent = active
-        ? `${visible} risultati visibili`
+        ? `${visible} contatti visibili`
         : `${cards.length} contatti salvati`;
     }
   }
