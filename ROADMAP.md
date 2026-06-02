@@ -19,6 +19,7 @@ Obiettivo: trovare una tappa anche se l'utente ricorda il nome del locale o dell
 
 Attivita:
 
+- Fatto 2026-06-02: aggiunto `address-response-guard.js` per normalizzare le risposte `/api/addresses` e impedire il blocco `state.addresses.map is not a function` quando il telefono usa cache o formati risposta non previsti.
 - Fatto 2026-06-02: aggiunto filtro archivio compatibile con l'attuale `app.js`, con lista chiusa di default, filtro cliente/sede e filtro citta. Il modulo `archive-filter-lite.js` non intercetta piu gli eventi dell'app e nasconde realmente le card visibili.
 - Fatto 2026-06-02: aggiunto `contact-actions-lite.js` per telefono/email in modo compatibile con lo schema attuale. I dati vengono salvati nelle note come `Tel:`/`Email:` e mostrati con pulsanti `Chiama`/`Email` nella scheda contatto.
 - Fatto 2026-06-02: aggiunto `route-stop-contact-lite.js` per mostrare `Naviga`, `Chiama` e `Email precompilata` nelle tappe del giro calcolato o aperto dai giri salvati. L'email usa data giro, orario di arrivo e nome tappa.
