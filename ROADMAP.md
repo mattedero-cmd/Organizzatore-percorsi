@@ -20,6 +20,7 @@ Obiettivo: trovare una tappa anche se l'utente ricorda il nome del locale o dell
 Attivita:
 
 - Fatto 2026-06-02: aggiunto filtro archivio compatibile con l'attuale `app.js`, con lista chiusa di default, filtro cliente/sede e filtro citta. Il modulo `archive-filter-lite.js` non intercetta piu gli eventi dell'app e nasconde realmente le card visibili.
+- Da fare richiesto dall'utente: aggiungere per ogni contatto numero di telefono e email, con pulsanti dedicati per chiamare (`tel:`) e scrivere email (`mailto:`) direttamente dalla scheda contatto.
 - Aggiungere campi rubrica: `businessName`, `aliases`, `phone`, `email`, `favorite`, `lastUsedAt`.
 - Aggiornare database SQLite/Postgres con migrazione.
 - Aggiornare form archivio clienti.
@@ -86,6 +87,7 @@ Priorita: media.
 
 Attivita:
 
+- Fatto 2026-06-02: aggiunto modulo `route-management-lite.js` per rinominare ed eliminare giri salvati usando le API esistenti.
 - Eliminare giri salvati.
 - Rinominare giri salvati.
 - Filtrare per data, cliente, completato/annullato.
