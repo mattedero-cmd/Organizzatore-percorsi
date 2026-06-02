@@ -2,14 +2,14 @@
 
 ## Fase 0 - Ordine progetto
 
-Stato: completata.
+Stato: in corso.
 
-- Fatto: creato `PROJECT.md`, `VISIONE_PROGETTO.md`, `ROADMAP.md`, `DECISIONI.md`.
-- Fatto: regola di aggiornamento file stabilita.
-- Fatto 2026-06-02 (Claude Code): fix DB Postgres (prefisso `RouteOrg_`).
-- Fatto 2026-06-02 (Claude Code): fix crash `renderResult` su giri con struttura incompleta.
-- Fatto 2026-06-02 (Claude Code): cache PWA aggiornata a v18.
-- PR #1 mergiata su main: `claude/inspiring-volta-rmlZz` → `main`.
+- Creare `PROJECT.md`.
+- Creare `VISIONE_PROGETTO.md`.
+- Creare `ROADMAP.md`.
+- Creare `DECISIONI.md`.
+- Stabilire che Codex aggiorna questi file dopo modifiche importanti.
+- Riallineare una cartella Git vera con GitHub.
 
 ## Fase 1 - Rubrica clienti evoluta
 
@@ -19,7 +19,10 @@ Obiettivo: trovare una tappa anche se l'utente ricorda il nome del locale o dell
 
 Attivita:
 
-- Fatto 2026-06-02 (Codex): aggiunto filtro archivio contatti per cliente/attivita/locale e citta/sede, con lista chiusa finche non si cerca.
+- Fatto 2026-06-02: aggiunto filtro archivio compatibile con l'attuale `app.js`, con lista chiusa di default, filtro cliente/sede e filtro citta. Il modulo `archive-filter-lite.js` non intercetta piu gli eventi dell'app e nasconde realmente le card visibili.
+- Fatto 2026-06-02: aggiunto `contact-actions-lite.js` per telefono/email in modo compatibile con lo schema attuale. I dati vengono salvati nelle note come `Tel:`/`Email:` e mostrati con pulsanti `Chiama`/`Email` nella scheda contatto.
+- Fatto 2026-06-02: aggiunto `route-stop-contact-lite.js` per mostrare `Naviga`, `Chiama` e `Email precompilata` nelle tappe del giro calcolato o aperto dai giri salvati. L'email usa data giro, orario di arrivo e nome tappa.
+- Da completare: migrazione database nativa per campi `phone` ed `email`, cosi i contatti non dipendono piu dalle note.
 - Aggiungere campi rubrica: `businessName`, `aliases`, `phone`, `email`, `favorite`, `lastUsedAt`.
 - Aggiornare database SQLite/Postgres con migrazione.
 - Aggiornare form archivio clienti.
@@ -74,10 +77,11 @@ Obiettivo: percorso piu vicino a Maps, senza perdere ottimizzazione e costi.
 
 Attivita:
 
+- Fatto 2026-06-02: disattivata la mappa interattiva interna nel risultato percorso, per evitare percorsi visivi incoerenti.
+- Fatto 2026-06-02: aggiunta preferenza navigatore `Google Maps`/`Mappe Apple`, salvata nel browser e modificabile dal risultato e dalle impostazioni.
+- Fatto 2026-06-02: sostituiti i doppi pulsanti Google/Mappe con un solo pulsante `Naviga` per ogni tappa e `Apri percorso` per il giro completo.
 - Continuare a migliorare formato indirizzi per MapQuest.
 - Valutare integrazione Google Maps solo se MapQuest resta impreciso.
-- Aggiungere pulsante naviga per ogni tappa.
-- Aggiungere pulsante naviga percorso completo.
 - Salvare ordine manuale quando l'utente lo modifica.
 
 ## Fase 5 - Storico e gestione giri
@@ -86,8 +90,10 @@ Priorita: media.
 
 Attivita:
 
-- Fatto 2026-06-02 (Codex): eliminare giri salvati.
-- Fatto 2026-06-02 (Codex): rinominare giri salvati.
+- Fatto 2026-06-02: rinomina/elimina giri salvati sono gia presenti nell'app principale; disattivato `route-management-lite.js` per evitare pulsanti duplicati.
+- Fatto 2026-06-02: aggiunto `saved-route-guard.js` per normalizzare giri salvati vecchi o incompleti prima del render, evitando blocchi quando mancano `finalLeg`, `summary` o righe meteo.
+- Eliminare giri salvati.
+- Rinominare giri salvati.
 - Filtrare per data, cliente, completato/annullato.
 - Salvare meteo storico reale per giri passati.
 
@@ -114,3 +120,17 @@ Attivita:
 - Richiedere permesso Contatti in modo nativo.
 - Permettere scelta contatti dalla rubrica iPhone.
 - Sincronizzare i contatti scelti con l'archivio clienti dell'app.
+
+## Fase 8 - Menu impostazioni e guida
+
+Priorita: prossima.
+
+Obiettivo: sostituire la scheda separata `Impostazioni tariffe` con un menu a tendina/impostazioni generale.
+
+Attivita:
+
+- Creare un pulsante menu impostazioni nell'header.
+- Spostare tariffe giornata dentro il menu.
+- Spostare preferenza navigatore dentro il menu.
+- Aggiungere sezione guida rapida: come creare un giro, usare archivio, aprire navigazione, modificare tariffe.
+- Valutare se rimuovere la tab `Impostazioni tariffe` dalla barra inferiore dopo il nuovo menu.

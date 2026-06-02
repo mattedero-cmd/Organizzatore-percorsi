@@ -111,3 +111,23 @@ Decisione: nella web app/PWA l'importazione contatti deve passare da file `.vcf`
 Motivo: Safari/iPhone non offre a una PWA un accesso affidabile alla rubrica nativa per scegliere/esportare contatti come farebbe un'app iOS. Per avere consenso rubrica e scelta contatti nativa serve una versione app iOS o un wrapper nativo, per esempio Capacitor.
 
 Conseguenza pratica: migliorare l'import file e la creazione manuale veloce nella web app; valutare app iOS solo quando la rubrica nativa diventa prioritaria.
+
+## D007 - Telefono/email contatti in compatibilita con database attuale
+
+Data: 2026-06-02
+
+Decisione: nella versione pubblica attuale telefono ed email vengono aggiunti tramite `contact-actions-lite.js` e salvati anche nelle note come righe `Tel:` ed `Email:`.
+
+Motivo: il database pubblico non espone ancora colonne native `phone` ed `email`. Salvare i dati nelle note permette di usare subito i pulsanti `Chiama` e `Email` senza rischiare una migrazione database urgente in produzione.
+
+Conseguenza pratica: quando si fara la migrazione nativa, importare `Tel:` ed `Email:` dalle note nei nuovi campi e lasciare il modulo lite come fallback o rimuoverlo.
+
+## D008 - Risultato percorso: navigazione esterna come fonte affidabile
+
+Data: 2026-06-02
+
+Decisione: la mappa interattiva interna del risultato percorso viene disattivata. Il pannello risultato deve aprire il percorso nel navigatore scelto dall'utente, Google Maps o Mappe Apple.
+
+Motivo: la mappa interna e MapQuest possono mostrare linee o percorsi incoerenti quando gli indirizzi vengono interpretati male. Per il percorso reale su strada e meglio delegare al navigatore esterno scelto.
+
+Conseguenza pratica: il risultato mostra un pannello `Navigazione percorso` con preferenza navigatore e pulsante `Apri percorso`; ogni tappa dettagliata mostra un solo pulsante `Naviga`, piu eventuali `Chiama` e `Email precompilata`.
