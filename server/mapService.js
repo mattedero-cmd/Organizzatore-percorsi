@@ -11,7 +11,9 @@ const CITY_COORDS = [
   ["vicenza", 45.546, 11.535],
   ["venezia", 45.440, 12.315],
   ["mantova", 45.156, 10.791],
-  ["casa", 46.067, 11.122]
+  ["via vittoria", 46.004, 11.196],
+  ["vigolana", 46.004, 11.196],
+  ["casa", 46.004, 11.196]
 ];
 
 function hashString(value) {
@@ -43,7 +45,9 @@ function haversineKm(a, b) {
   const dLng = toRadians(b.lng - a.lng);
   const lat1 = toRadians(a.lat);
   const lat2 = toRadians(b.lat);
-  const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
   return 2 * earthKm * Math.asin(Math.sqrt(h));
 }
 
@@ -82,8 +86,23 @@ async function mapQuestGeocode(query) {
   const payload = await response.json();
   const location = payload.results?.[0]?.locations?.[0];
   const latLng = location?.latLng;
-  if (!latLng || !Number.isFinite(Number(latLng.lat)) || !Number.isFinite(Number(latLng.lng))) return null;
+  if (!latLng || !Number.isFinite(Number(latLng.lat)) || !Number.isFinite(Number(latLng.lng))) {
+    return null;
+  }
   return { lat: Number(latLng.lat), lng: Number(latLng.lng), source: "mapquest" };
+}
+
+function addressQuery(place) {
+  const structured = [
+    place?.street,
+    [place?.postalCode || place?.postal_code, place?.city].filter(Boolean).join(" "),
+    place?.province,
+    place?.country || "Italia"
+  ].filter(Boolean).join(", ");
+
+  const direct = place?.fullAddress || place?.address;
+  const label = [place?.label, place?.customer, place?.location].filter(Boolean).join(" ");
+  return structured || direct || label;
 }
 
 async function orsRoute(a, b) {
@@ -93,15 +112,27 @@ async function orsRoute(a, b) {
   const response = await fetch("https://api.openrouteservice.org/v2/directions/driving-car/json", {
     method: "POST",
     signal: AbortSignal.timeout(10000),
-    headers: { Authorization: key, "Content-Type": "application/json" },
-    body: JSON.stringify({ coordinates: [[a.lng, a.lat], [b.lng, b.lat]] })
+    headers: {
+      "Authorization": key,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      coordinates: [
+        [a.lng, a.lat],
+        [b.lng, b.lat]
+      ]
+    })
   });
 
   if (!response.ok) throw new Error(`Distanza non riuscita (${response.status})`);
   const payload = await response.json();
   const summary = payload.routes?.[0]?.summary;
   if (!summary) return null;
-  return { km: summary.distance / 1000, driveMinutes: Math.ceil(summary.duration / 60), source: "openrouteservice" };
+  return {
+    km: summary.distance / 1000,
+    driveMinutes: Math.ceil(summary.duration / 60),
+    source: "openrouteservice"
+  };
 }
 
 async function mapQuestRoute(a, b) {
@@ -118,8 +149,15 @@ async function mapQuestRoute(a, b) {
     signal: AbortSignal.timeout(10000),
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      locations: [{ latLng: { lat: a.lat, lng: a.lng } }, { latLng: { lat: b.lat, lng: b.lng } }],
-      options: { routeType: "fastest", unit: "k", locale: "it_IT" }
+      locations: [
+        { latLng: { lat: a.lat, lng: a.lng } },
+        { latLng: { lat: b.lat, lng: b.lng } }
+      ],
+      options: {
+        routeType: "fastest",
+        unit: "k",
+        locale: "it_IT"
+      }
     })
   });
 
@@ -127,7 +165,11 @@ async function mapQuestRoute(a, b) {
   const payload = await response.json();
   const route = payload.route;
   if (!route || route.routeError?.errorCode > 0) return null;
-  return { km: Number(route.distance || 0), driveMinutes: Math.max(1, Math.ceil(Number(route.time || 0) / 60)), source: "mapquest" };
+  return {
+    km: Number(route.distance || 0),
+    driveMinutes: Math.max(1, Math.ceil(Number(route.time || 0) / 60)),
+    source: "mapquest"
+  };
 }
 
 async function mapQuestRouteShape(points) {
@@ -145,7 +187,14 @@ async function mapQuestRouteShape(points) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       locations: points.map((point) => ({ latLng: { lat: point.lat, lng: point.lng } })),
-      options: { routeType: "fastest", unit: "k", locale: "it_IT", fullShape: true, shapeFormat: "raw", generalize: 0 }
+      options: {
+        routeType: "fastest",
+        unit: "k",
+        locale: "it_IT",
+        fullShape: true,
+        shapeFormat: "raw",
+        generalize: 0
+      }
     })
   });
 
@@ -162,12 +211,19 @@ async function mapQuestRouteShape(points) {
     if (Number.isFinite(lat) && Number.isFinite(lng)) coordinates.push([lat, lng]);
   }
 
-  return { source: "mapquest", coordinates, distanceKm: Number(route.distance || 0), driveMinutes: Math.max(1, Math.ceil(Number(route.time || 0) / 60)) };
+  return {
+    source: "mapquest",
+    coordinates,
+    distanceKm: Number(route.distance || 0),
+    driveMinutes: Math.max(1, Math.ceil(Number(route.time || 0) / 60))
+  };
 }
 
 async function osrmRouteShape(points) {
   if (points.length < 2) return null;
-  const coordinatePath = points.map((point) => `${Number(point.lng).toFixed(6)},${Number(point.lat).toFixed(6)}`).join(";");
+  const coordinatePath = points
+    .map((point) => `${Number(point.lng).toFixed(6)},${Number(point.lat).toFixed(6)}`)
+    .join(";");
   const url = new URL(`https://router.project-osrm.org/route/v1/driving/${coordinatePath}`);
   url.searchParams.set("overview", "full");
   url.searchParams.set("geometries", "geojson");
@@ -182,16 +238,20 @@ async function osrmRouteShape(points) {
 
   return {
     source: "osrm",
-    coordinates: coordinates.map(([lng, lat]) => [Number(lat), Number(lng)]).filter(([lat, lng]) => Number.isFinite(lat) && Number.isFinite(lng)),
+    coordinates: coordinates
+      .map(([lng, lat]) => [Number(lat), Number(lng)])
+      .filter(([lat, lng]) => Number.isFinite(lat) && Number.isFinite(lng)),
     distanceKm: Number(route.distance || 0) / 1000,
     driveMinutes: Math.max(1, Math.ceil(Number(route.duration || 0) / 60))
   };
 }
 
 export async function resolvePlace(place) {
-  if (place?.lat && place?.lng) return { lat: Number(place.lat), lng: Number(place.lng), source: "saved" };
+  if (place?.lat && place?.lng) {
+    return { lat: Number(place.lat), lng: Number(place.lng), source: "saved" };
+  }
 
-  const label = [place?.label, place?.customer, place?.location, place?.fullAddress, place?.address].filter(Boolean).join(" ");
+  const label = addressQuery(place);
 
   try {
     const mapQuest = await mapQuestGeocode(label);
@@ -239,25 +299,46 @@ export async function routeShape(points) {
   const resolved = [];
   for (const point of points || []) {
     const place = await resolvePlace(point);
-    resolved.push({ label: point.label || "", address: point.address || point.fullAddress || "", lat: place.lat, lng: place.lng, source: place.source });
+    resolved.push({
+      label: point.label || "",
+      address: point.address || point.fullAddress || "",
+      street: point.street || "",
+      city: point.city || "",
+      province: point.province || "",
+      postalCode: point.postalCode || point.postal_code || "",
+      country: point.country || "Italia",
+      lat: place.lat,
+      lng: place.lng,
+      source: place.source
+    });
   }
 
   const valid = resolved.filter((point) => Number.isFinite(point.lat) && Number.isFinite(point.lng));
-  if (valid.length < 2) return { source: "none", points: valid, coordinates: [] };
+  if (valid.length < 2) {
+    return { source: "none", points: valid, coordinates: [] };
+  }
 
   try {
     const routed = await mapQuestRouteShape(valid);
-    if (routed?.coordinates?.length) return { ...routed, points: valid };
+    if (routed?.coordinates?.length) {
+      return { ...routed, points: valid };
+    }
   } catch (error) {
     console.warn(error.message);
   }
 
   try {
     const routed = await osrmRouteShape(valid);
-    if (routed?.coordinates?.length) return { ...routed, points: valid };
+    if (routed?.coordinates?.length) {
+      return { ...routed, points: valid };
+    }
   } catch (error) {
     console.warn(error.message);
   }
 
-  return { source: "straight-line", points: valid, coordinates: valid.map((point) => [point.lat, point.lng]) };
+  return {
+    source: "straight-line",
+    points: valid,
+    coordinates: valid.map((point) => [point.lat, point.lng])
+  };
 }
