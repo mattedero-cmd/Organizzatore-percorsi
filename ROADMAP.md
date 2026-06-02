@@ -19,7 +19,7 @@ Obiettivo: trovare una tappa anche se l'utente ricorda il nome del locale o dell
 
 Attivita:
 
-- Fatto 2026-06-02: aggiunto filtro archivio contatti leggero per cliente/attivita/locale e citta/sede, con lista chiusa finche non si cerca e senza osservatori continui della pagina.
+- Fatto 2026-06-02: filtro archivio gestito nativamente da `app.js` per cliente/attivita/locale e citta/sede; lista chiusa finche non si cerca; disattivato il modulo esterno `archive-filter-lite.js` per evitare conflitti con il rendering.
 - Aggiungere campi rubrica: `businessName`, `aliases`, `phone`, `email`, `favorite`, `lastUsedAt`.
 - Aggiornare database SQLite/Postgres con migrazione.
 - Aggiornare form archivio clienti.
