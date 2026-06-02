@@ -20,7 +20,8 @@ Obiettivo: trovare una tappa anche se l'utente ricorda il nome del locale o dell
 Attivita:
 
 - Fatto 2026-06-02: aggiunto filtro archivio compatibile con l'attuale `app.js`, con lista chiusa di default, filtro cliente/sede e filtro citta. Il modulo `archive-filter-lite.js` non intercetta piu gli eventi dell'app e nasconde realmente le card visibili.
-- Da fare richiesto dall'utente: aggiungere per ogni contatto numero di telefono e email, con pulsanti dedicati per chiamare (`tel:`) e scrivere email (`mailto:`) direttamente dalla scheda contatto.
+- Fatto 2026-06-02: aggiunto `contact-actions-lite.js` per telefono/email in modo compatibile con lo schema attuale. I dati vengono salvati nelle note come `Tel:`/`Email:` e mostrati con pulsanti `Chiama`/`Email` nella scheda contatto.
+- Da completare: migrazione database nativa per campi `phone` ed `email`, cosi i contatti non dipendono piu dalle note.
 - Aggiungere campi rubrica: `businessName`, `aliases`, `phone`, `email`, `favorite`, `lastUsedAt`.
 - Aggiornare database SQLite/Postgres con migrazione.
 - Aggiornare form archivio clienti.
