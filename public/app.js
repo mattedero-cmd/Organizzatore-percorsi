@@ -91,6 +91,54 @@ function showToast(message) {
   showToast.timer = window.setTimeout(() => toast.classList.remove("show"), 2800);
 }
 
+function normalizeList(payload, keys = []) {
+  if (Array.isArray(payload)) return payload;
+  for (const key of keys) {
+    if (Array.isArray(payload?.[key])) return payload[key];
+  }
+  if (Array.isArray(payload?.items)) return payload.items;
+  return [];
+}
+
+function normalizeNumber(value, fallback = 0) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : fallback;
+}
+
+function normalizeRouteResult(result) {
+  const rows = normalizeList(result?.rows);
+  const weather = normalizeList(result?.weather);
+  const lastRow = rows[rows.length - 1] || {};
+  const finalLeg = result?.finalLeg || {
+    departureTime: lastRow.serviceEndTime || "",
+    driveMinutes: 0,
+    km: 0,
+    arrivalTime: lastRow.serviceEndTime || ""
+  };
+  const summary = {
+    totalKm: 0,
+    totalDriveMinutes: 0,
+    totalWorkMinutes: 0,
+    dayStart: "",
+    dayEnd: "",
+    costKm: 0,
+    costDrive: 0,
+    costWork: 0,
+    totalCost: 0,
+    warnings: [],
+    ...(result?.summary || {})
+  };
+
+  return {
+    ...(result || {}),
+    rows,
+    weather,
+    finalLeg,
+    summary,
+    end: result?.end || {}
+  };
+}
+
 function icon(value) {
   return `<span class="btn-icon" aria-hidden="true">${value}</span>`;
 }
@@ -110,11 +158,23 @@ function setActiveTab(tab) {
 }
 
 async function refreshAddresses() {
-  state.addresses = await api(`/api/addresses?search=${encodeURIComponent(state.addressSearch)}`);
+  try {
+    const payload = await api(`/api/addresses?search=${encodeURIComponent(state.addressSearch)}`);
+    state.addresses = normalizeList(payload, ["addresses"]);
+  } catch (error) {
+    console.warn("Archivio indirizzi non caricato", error);
+    state.addresses = [];
+  }
 }
 
 async function refreshSavedRoutes() {
-  state.savedRoutes = await api("/api/routes");
+  try {
+    const payload = await api("/api/routes");
+    state.savedRoutes = normalizeList(payload, ["routes"]);
+  } catch (error) {
+    console.warn("Giri salvati non caricati", error);
+    state.savedRoutes = [];
+  }
 }
 
 async function loadInitialData() {
@@ -131,7 +191,7 @@ async function loadInitialData() {
 }
 
 function renderAddressOptions() {
-  return state.addresses
+  return normalizeList(state.addresses)
     .map((address) => `<option value="${address.id}">${escapeHtml(optionLabel(address))}</option>`)
     .join("");
 }
@@ -383,6 +443,7 @@ function renderStops() {
 
 function renderArchive() {
   const form = state.addressForm;
+  const addresses = normalizeList(state.addresses);
   app.innerHTML = `
     <section class="grid">
       <div class="panel">
@@ -392,7 +453,7 @@ function renderArchive() {
           <button class="btn" id="new-address">Nuovo</button>
         </div>
         <div class="archive-list" style="margin-top: 14px;">
-          ${state.addresses.map((address) => `
+          ${addresses.map((address) => `
             <article class="card archive-card">
               <div>
                 <p class="stop-title">${escapeHtml(addressName(address))}</p>
@@ -466,6 +527,7 @@ function renderArchive() {
 }
 
 function renderSavedRoutes() {
+  const savedRoutes = normalizeList(state.savedRoutes);
   app.innerHTML = `
     <section class="panel">
       <div class="section-head">
@@ -476,11 +538,11 @@ function renderSavedRoutes() {
         <button class="btn" id="refresh-routes">${icon("↻")}Aggiorna</button>
       </div>
       <div class="saved-list">
-        ${state.savedRoutes.map((route) => `
+        ${savedRoutes.map((route) => `
           <article class="card saved-card">
             <div>
               <p class="stop-title">${escapeHtml(route.name)}</p>
-              <div class="stop-meta">${escapeHtml(route.scheduledDate || "Senza data")} · ${escapeHtml(route.startTime || "--:--")} · ${Number(route.totalKm).toFixed(1)} km · ${euro(route.totalCost)}</div>
+              <div class="stop-meta">${escapeHtml(route.scheduledDate || "Senza data")} · ${escapeHtml(route.startTime || "--:--")} · ${normalizeNumber(route.totalKm).toFixed(1)} km · ${euro(route.totalCost)}</div>
               <div class="stop-meta">${escapeHtml(route.startLabel || "Partenza")} → ${escapeHtml(route.endLabel || "Arrivo")}</div>
             </div>
             <div class="actions">
@@ -498,11 +560,7 @@ function renderResult() {
     app.innerHTML = `<section class="panel"><h2>Risultato percorso</h2><div class="empty">Nessun percorso calcolato.</div></section>`;
     return;
   }
-  const result = state.result;
-  if (!Array.isArray(result.rows) || !result.finalLeg || !result.summary) {
-    app.innerHTML = `<section class="panel"><h2>Risultato percorso</h2><div class="empty">Dati del giro non completi. Prova a ricalcolare il percorso.</div></section>`;
-    return;
-  }
+  const result = normalizeRouteResult(state.result);
   app.innerHTML = `
     <section>
       <div class="section-head">
@@ -538,7 +596,7 @@ function renderResult() {
                 <td>${escapeHtml(row.address)}</td>
                 <td>${escapeHtml(row.departureTime)}</td>
                 <td>${minutesLabel(row.driveMinutes)}<br><span class="stop-meta">+${minutesLabel(row.driveBufferMinutes || 0)} margine</span></td>
-                <td>${row.km.toFixed(1)}</td>
+                <td>${normalizeNumber(row.km).toFixed(1)}</td>
                 <td>${escapeHtml(row.arrivalTime)}</td>
                 <td>${escapeHtml(row.openingHours)}</td>
                 <td>${minutesLabel(row.durationMinutes)}</td>
@@ -553,7 +611,7 @@ function renderResult() {
               <td>${escapeHtml(result.end?.address || result.end?.fullAddress || "")}</td>
               <td>${escapeHtml(result.finalLeg.departureTime)}</td>
               <td>${minutesLabel(result.finalLeg.driveMinutes)}</td>
-              <td>${result.finalLeg.km.toFixed(1)}</td>
+              <td>${normalizeNumber(result.finalLeg.km).toFixed(1)}</td>
               <td>${escapeHtml(result.finalLeg.arrivalTime)}</td>
               <td></td>
               <td></td>
@@ -575,7 +633,7 @@ function renderResult() {
               <div><div class="metric-label">Arrivo</div><strong>${escapeHtml(row.arrivalTime)}</strong></div>
               <div><div class="metric-label">Fine</div><strong>${escapeHtml(row.serviceEndTime)}</strong></div>
               <div><div class="metric-label">Guida</div><strong>${minutesLabel(row.driveMinutes)}</strong></div>
-              <div><div class="metric-label">Km</div><strong>${row.km.toFixed(1)}</strong></div>
+              <div><div class="metric-label">Km</div><strong>${normalizeNumber(row.km).toFixed(1)}</strong></div>
               <div><div class="metric-label">Intervento</div><strong>${minutesLabel(row.durationMinutes)}</strong></div>
             </div>
             <div style="margin-top: 9px;">${renderWarnings(row.warnings)}</div>
@@ -590,23 +648,23 @@ function renderResult() {
 }
 
 function renderWeatherForStop(result, stopNumber) {
-  const weather = (result.weather || []).find((item) => Number(item.stopNumber) === Number(stopNumber));
+  const weather = normalizeList(result.weather).find((item) => Number(item.stopNumber) === Number(stopNumber));
   if (!weather) return `<span class="badge">meteo non caricato</span>`;
   const temp = weather.temperatureC === null || weather.temperatureC === undefined ? "--" : `${Math.round(weather.temperatureC)}°C`;
-  const rain = weather.precipitationMm === null || weather.precipitationMm === undefined ? "--" : `${Number(weather.precipitationMm).toFixed(1)} mm`;
+  const rain = weather.precipitationMm === null || weather.precipitationMm === undefined ? "--" : `${normalizeNumber(weather.precipitationMm).toFixed(1)} mm`;
   const wind = weather.windKmh === null || weather.windKmh === undefined ? "--" : `${Math.round(weather.windKmh)} km/h`;
   return `
     <div class="weather-pill">
       <strong><span class="weather-icon">${weatherIcon(weather)}</span>${escapeHtml(temp)}</strong>
       <span>${escapeHtml(weather.description || "")}</span>
       <small>Pioggia ${escapeHtml(rain)} · Vento ${escapeHtml(wind)}</small>
-      ${(weather.warnings || []).map((warning) => `<span class="badge warning">! ${escapeHtml(warning)}</span>`).join("")}
+      ${normalizeList(weather.warnings).map((warning) => `<span class="badge warning">! ${escapeHtml(warning)}</span>`).join("")}
     </div>
   `;
 }
 
 function weatherIcon(weather) {
-  const text = `${weather.description || ""} ${(weather.warnings || []).join(" ")}`.toLowerCase();
+  const text = `${weather.description || ""} ${normalizeList(weather.warnings).join(" ")}`.toLowerCase();
   if (text.includes("temporale")) return "!";
   if (text.includes("vento")) return "~";
   if (text.includes("ghiaccio") || text.includes("neve")) return "*";
@@ -617,14 +675,15 @@ function weatherIcon(weather) {
 }
 
 function renderWarnings(warnings) {
-  if (!warnings?.length) return `<span class="badge ok">OK</span>`;
-  return warnings.map((warning) => `<span class="badge warning">${escapeHtml(warning)}</span>`).join(" ");
+  const list = normalizeList(warnings);
+  if (!list.length) return `<span class="badge ok">OK</span>`;
+  return list.map((warning) => `<span class="badge warning">${escapeHtml(warning)}</span>`).join(" ");
 }
 
 function renderSummary(summary, mapMode) {
   return `
     <div class="summary-grid">
-      <div class="metric"><div class="metric-label">Km totali</div><div class="metric-value">${summary.totalKm.toFixed(1)}</div></div>
+      <div class="metric"><div class="metric-label">Km totali</div><div class="metric-value">${normalizeNumber(summary.totalKm).toFixed(1)}</div></div>
       <div class="metric"><div class="metric-label">Ore guida</div><div class="metric-value">${minutesLabel(summary.totalDriveMinutes)}</div></div>
       <div class="metric"><div class="metric-label">Ore lavoro</div><div class="metric-value">${minutesLabel(summary.totalWorkMinutes)}</div></div>
       <div class="metric"><div class="metric-label">Giornata</div><div class="metric-value">${escapeHtml(summary.dayStart)}-${escapeHtml(summary.dayEnd)}</div></div>
@@ -635,7 +694,7 @@ function renderSummary(summary, mapMode) {
     </div>
     <div class="actions">
       <span class="badge">Distanze: ${escapeHtml(mapMode || "locale")}</span>
-      ${(summary.warnings || []).map((warning) => `<span class="badge warning">${escapeHtml(warning)}</span>`).join("")}
+      ${normalizeList(summary.warnings).map((warning) => `<span class="badge warning">${escapeHtml(warning)}</span>`).join("")}
     </div>
   `;
 }
@@ -701,10 +760,10 @@ async function planCurrentRoute() {
       stops: state.route.stops,
       rates: state.settings
     };
-    state.result = await api("/api/plan", {
+    state.result = normalizeRouteResult(await api("/api/plan", {
       method: "POST",
       body: JSON.stringify(payload)
-    });
+    }));
     await refreshSavedRoutes();
     setActiveTab("result");
     showToast("Percorso calcolato e salvato");
@@ -832,7 +891,7 @@ function bindEvents() {
     if (openRoute) {
       try {
         showToast("Carico giro e meteo");
-        state.result = await api(`/api/routes/${openRoute.dataset.openRoute}`);
+        state.result = normalizeRouteResult(await api(`/api/routes/${openRoute.dataset.openRoute}`));
         await refreshSavedRoutes();
         setActiveTab("result");
       } catch (error) {
@@ -850,7 +909,7 @@ function bindEvents() {
 
     if (event.target.closest("#add-saved-stop")) {
       updateRouteFromForm();
-      const address = state.addresses.find((item) => String(item.id) === String(state.route.selectedAddressId));
+      const address = normalizeList(state.addresses).find((item) => String(item.id) === String(state.route.selectedAddressId));
       if (!address) return showToast("Seleziona un indirizzo");
       addStop(addressToStop(address));
       render();
@@ -921,7 +980,7 @@ function bindEvents() {
 
     const editAddress = event.target.closest("[data-edit-address]");
     if (editAddress) {
-      const address = state.addresses.find((item) => String(item.id) === editAddress.dataset.editAddress);
+      const address = normalizeList(state.addresses).find((item) => String(item.id) === editAddress.dataset.editAddress);
       state.addressForm = { ...address };
       render();
       return;
