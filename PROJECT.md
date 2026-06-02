@@ -35,6 +35,18 @@ L'app deve essere comoda su iPhone durante il lavoro: poche azioni, schermate ch
   `result.finalLeg` e `result.summary`. Evita crash silenzioso su giri con struttura incompleta.
 - Cache PWA aggiornata a v18.
 
+## Fix applicati il 2026-06-02 (seconda sessione Claude Code)
+
+- `public/styles.css`: toast non leggibile in night mode. Il toast usava
+  `background: var(--text)` che in night mode e quasi bianco (#f7ffff), con
+  `color: white` → testo bianco su sfondo bianco. Sostituito con colori fissi
+  `background: #1a2a2a` e `color: #f0fffe` che funzionano in entrambi i temi.
+- `server/weatherService.js`: caricamento giro bloccante per timeout meteo.
+  `attachWeather` chiamava Open-Meteo in sequenza (una per tappa, 9s timeout
+  ciascuna). Con 3 tappe = 27s, Vercel chiudeva la connessione. Fix: chiamate
+  parallele con `Promise.all` e timeout ridotto a 5s → max 5s totali per N tappe.
+- Cache PWA aggiornata a v19.
+
 ## Regola di continuita per Codex
 
 Prima di riprendere lavori importanti, rileggere:

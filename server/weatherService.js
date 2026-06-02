@@ -84,7 +84,7 @@ async function openMeteoWeather(coords, row, scheduledDate, mode) {
   } else {
     url.searchParams.set("forecast_days", "16");
   }
-  const response = await fetch(url, { signal: AbortSignal.timeout(9000) });
+  const response = await fetch(url, { signal: AbortSignal.timeout(5000) });
   if (!response.ok) throw new Error(`Meteo Open-Meteo non riuscito (${response.status})`);
   return fromOpenMeteo(await response.json(), row, scheduledDate, mode, "open-meteo");
 }
@@ -98,7 +98,7 @@ async function openWeatherForecast(coords, row, scheduledDate) {
   url.searchParams.set("appid", key);
   url.searchParams.set("units", "metric");
   url.searchParams.set("lang", "it");
-  const response = await fetch(url, { signal: AbortSignal.timeout(9000) });
+  const response = await fetch(url, { signal: AbortSignal.timeout(5000) });
   if (!response.ok) throw new Error(`Meteo OpenWeather non riuscito (${response.status})`);
   const payload = await response.json();
   if (!payload.list?.length) return null;
@@ -130,7 +130,7 @@ async function weatherbitForecast(coords, row, scheduledDate) {
   url.searchParams.set("key", key);
   url.searchParams.set("hours", "240");
   url.searchParams.set("lang", "it");
-  const response = await fetch(url, { signal: AbortSignal.timeout(9000) });
+  const response = await fetch(url, { signal: AbortSignal.timeout(5000) });
   if (!response.ok) throw new Error(`Meteo Weatherbit non riuscito (${response.status})`);
   const payload = await response.json();
   if (!payload.data?.length) return null;
@@ -188,12 +188,11 @@ export function shouldRefreshWeather(route) {
 export async function attachWeather(route, options = {}) {
   const scheduledDate = route.scheduledDate || todayIso();
   const forceHistorical = options.forceHistorical || isPastDate(scheduledDate);
-  const weather = [];
-  for (const row of route.rows || []) {
-    try {
-      weather.push(await weatherForRow(row, scheduledDate, forceHistorical));
-    } catch (error) {
-      weather.push({
+  const mode = forceHistorical ? "historical" : "forecast";
+
+  const weather = await Promise.all(
+    (route.rows || []).map((row) =>
+      weatherForRow(row, scheduledDate, forceHistorical).catch((error) => ({
         stopNumber: row.stopNumber,
         customer: row.customer,
         location: row.location,
@@ -204,15 +203,16 @@ export async function attachWeather(route, options = {}) {
         precipitationMm: null,
         windKmh: null,
         source: "none",
-        mode: forceHistorical ? "historical" : "forecast",
+        mode,
         warnings: [error.message]
-      });
-    }
-  }
+      }))
+    )
+  );
+
   return {
     ...route,
     weather,
     weatherCapturedAt: new Date().toISOString(),
-    weatherMode: forceHistorical ? "historical" : "forecast"
+    weatherMode: mode
   };
 }

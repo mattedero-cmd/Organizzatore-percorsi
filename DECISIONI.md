@@ -60,6 +60,20 @@ Decisione: il nuovo riferimento visivo e l'immagine allegata dall'utente con 5 s
 
 Il design deve essere semplice, professionale, con icone chiare, forte leggibilita e navigazione da telefono.
 
+## D009 - Chiamate meteo in parallelo, non in sequenza
+
+Data: 2026-06-02
+
+Decisione: `attachWeather` in `server/weatherService.js` deve usare `Promise.all`
+per chiamare le API meteo in parallelo per tutte le tappe, non un loop sequenziale.
+
+Motivo: con 3 tappe e timeout di 9s ciascuna, il tempo totale poteva essere 27s.
+Vercel (e qualsiasi proxy) chiude le connessioni prima. Con `Promise.all` il tempo
+totale e pari alla tappa piu lenta, non alla somma.
+
+Regola: ogni nuova API esterna aggiunta a `attachWeather` deve seguire lo stesso
+pattern parallelo. Il timeout per singola chiamata deve restare sotto 5s.
+
 ## D007 - Variabili ambiente Vercel con prefisso RouteOrg_
 
 Data: 2026-06-02
