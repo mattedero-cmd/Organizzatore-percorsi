@@ -499,6 +499,10 @@ function renderResult() {
     return;
   }
   const result = state.result;
+  if (!Array.isArray(result.rows) || !result.finalLeg || !result.summary) {
+    app.innerHTML = `<section class="panel"><h2>Risultato percorso</h2><div class="empty">Dati del giro non completi. Prova a ricalcolare il percorso.</div></section>`;
+    return;
+  }
   app.innerHTML = `
     <section>
       <div class="section-head">
