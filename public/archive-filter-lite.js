@@ -113,6 +113,12 @@
     });
   }
 
+  function scheduleRepeatedApply() {
+    scheduleApply();
+    window.setTimeout(scheduleApply, 80);
+    window.setTimeout(scheduleApply, 250);
+  }
+
   document.addEventListener("input", (event) => {
     if (event.target.id === "archive-filter-lite-city") {
       state.city = event.target.value;
@@ -135,13 +141,13 @@
 
     if (event.target.closest("#archive-filter-lite-show-all")) {
       state.city = "";
-      state.showAll = true;
       const search = archiveSearch(archivePanel());
       if (search) {
         search.value = "";
         search.dispatchEvent(new Event("input", { bubbles: true }));
       }
-      window.setTimeout(scheduleApply, 0);
+      state.showAll = true;
+      scheduleRepeatedApply();
       return;
     }
 
