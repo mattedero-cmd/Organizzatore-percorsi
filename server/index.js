@@ -21,7 +21,7 @@ import { loadEnv } from "./env.js";
 import { planRoute } from "./planner.js";
 import { routeShape } from "./mapService.js";
 import { parseVoiceCommand } from "./voiceParser.js";
-import { attachWeather } from "./weatherService.js";
+import { attachWeather, shouldRefreshWeather } from "./weatherService.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -177,7 +177,11 @@ async function handleApi(request, response) {
     if (routeMatch && method === "GET") {
       const stored = await getRoute(routeMatch[1]);
       if (!stored) return sendJson(response, 404, { error: "Giro non trovato" });
-      const route = { ...stored.payload, id: stored.id };
+      let route = { ...stored.payload, id: stored.id };
+      if (shouldRefreshWeather(route)) {
+        route = await attachWeather(route);
+        await updateRoutePayload(stored.id, route);
+      }
       return sendJson(response, 200, route);
     }
 
