@@ -92,6 +92,7 @@ Attivita:
 
 - Fatto 2026-06-02: rinomina/elimina giri salvati sono gia presenti nell'app principale; disattivato `route-management-lite.js` per evitare pulsanti duplicati.
 - Fatto 2026-06-02: aggiunto `saved-route-guard.js` per normalizzare giri salvati vecchi o incompleti prima del render, evitando blocchi quando mancano `finalLeg`, `summary` o righe meteo.
+- Fatto 2026-06-02: aggiunto `saved-route-open-lite.js` per intercettare direttamente il pulsante `Apri` dei giri salvati e renderizzare una vista risultato stabile, evitando il vecchio handler che restava bloccato su `Carico giro e meteo`.
 - Eliminare giri salvati.
 - Rinominare giri salvati.
 - Filtrare per data, cliente, completato/annullato.
