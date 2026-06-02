@@ -21,6 +21,7 @@ Attivita:
 
 - Fatto 2026-06-02: aggiunto filtro archivio compatibile con l'attuale `app.js`, con lista chiusa di default, filtro cliente/sede e filtro citta. Il modulo `archive-filter-lite.js` non intercetta piu gli eventi dell'app e nasconde realmente le card visibili.
 - Fatto 2026-06-02: aggiunto `contact-actions-lite.js` per telefono/email in modo compatibile con lo schema attuale. I dati vengono salvati nelle note come `Tel:`/`Email:` e mostrati con pulsanti `Chiama`/`Email` nella scheda contatto.
+- Fatto 2026-06-02: aggiunto `route-stop-contact-lite.js` per mostrare `Chiama` e `Email precompilata` anche nelle tappe del giro calcolato o aperto dai giri salvati. L'email usa data giro, orario di arrivo e nome tappa.
 - Da completare: migrazione database nativa per campi `phone` ed `email`, cosi i contatti non dipendono piu dalle note.
 - Aggiungere campi rubrica: `businessName`, `aliases`, `phone`, `email`, `favorite`, `lastUsedAt`.
 - Aggiornare database SQLite/Postgres con migrazione.
