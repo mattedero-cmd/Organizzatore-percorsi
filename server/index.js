@@ -178,8 +178,7 @@ async function handleApi(request, response) {
       const stored = await getRoute(routeMatch[1]);
       if (!stored) return sendJson(response, 404, { error: "Giro non trovato" });
       let route = { ...stored.payload, id: stored.id };
-      const refreshWeather = url.searchParams.get("refreshWeather") === "1";
-      if ((refreshWeather || !route.weather?.length) && shouldRefreshWeather(route)) {
+      if (shouldRefreshWeather(route)) {
         route = await attachWeather(route, {
           existingWeather: route.weather || [],
           rowTimeoutMs: 3000
