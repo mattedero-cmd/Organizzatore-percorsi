@@ -123,12 +123,23 @@ function permute(items) {
 
 async function buildLegMatrix(nodes) {
   const matrix = new Map();
+  const pairs = [];
   for (let from = 0; from < nodes.length; from += 1) {
     for (let to = 0; to < nodes.length; to += 1) {
       if (from === to) continue;
-      const leg = await routeBetween(nodes[from], nodes[to]);
+      pairs.push({ from, to });
+    }
+  }
+
+  const concurrency = Number(process.env.ROUTE_MATRIX_CONCURRENCY || 8);
+  let cursor = 0;
+  async function worker() {
+    while (cursor < pairs.length) {
+      const pair = pairs[cursor];
+      cursor += 1;
+      const leg = await routeBetween(nodes[pair.from], nodes[pair.to]);
       const adjustedDriveMinutes = addDriveBuffer(leg.driveMinutes);
-      matrix.set(`${from}:${to}`, {
+      matrix.set(`${pair.from}:${pair.to}`, {
         ...leg,
         baseDriveMinutes: leg.driveMinutes,
         driveBufferMinutes: adjustedDriveMinutes - leg.driveMinutes,
@@ -136,6 +147,10 @@ async function buildLegMatrix(nodes) {
       });
     }
   }
+
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, pairs.length) }, () => worker())
+  );
   return matrix;
 }
 
