@@ -82,7 +82,7 @@ Attivita:
 - Fatto 2026-06-02: disattivata la mappa interattiva interna nel risultato percorso, per evitare percorsi visivi incoerenti.
 - Fatto 2026-06-02: aggiunta preferenza navigatore `Google Maps`/`Mappe Apple`, salvata nel browser e modificabile dal risultato e dalle impostazioni.
 - Fatto 2026-06-02: sostituiti i doppi pulsanti Google/Mappe con un solo pulsante `Naviga` per ogni tappa e `Apri percorso` per il giro completo.
-- Fatto 2026-06-03: eliminato il blocco su `Calcolo...` e `Carico giro e meteo` con fallback locale distanze, matrice tratte parallela, apertura giri senza refresh meteo sincrono e timeout meteo per tappa.
+- Fatto 2026-06-03: eliminato il blocco su `Calcolo...` e `Carico giro e meteo` con fallback locale distanze, matrice tratte parallela, refresh meteo automatico con timeout e fallback per tappa.
 - Fatto 2026-06-03: corretto `addressQuery()` per usare l'indirizzo completo quando non ci sono campi strutturati; prima trasformava molti indirizzi in sola `Italia`, producendo distanze da 0,2 km.
 - Continuare a migliorare formato indirizzi per MapQuest.
 - Valutare integrazione Google Maps solo se MapQuest resta impreciso.
