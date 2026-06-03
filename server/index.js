@@ -150,7 +150,7 @@ async function handleApi(request, response) {
       const body = await parseBody(request);
       const settings = await getSettings();
       let route = await planRoute(body, settings);
-      route = await attachWeather(route);
+      route = await attachWeather(route, { rowTimeoutMs: 3000 });
       const saved = await saveRoute({
         ...route,
         name: body.name || "Percorso giornaliero",
@@ -178,8 +178,12 @@ async function handleApi(request, response) {
       const stored = await getRoute(routeMatch[1]);
       if (!stored) return sendJson(response, 404, { error: "Giro non trovato" });
       let route = { ...stored.payload, id: stored.id };
-      if (shouldRefreshWeather(route)) {
-        route = await attachWeather(route);
+      const refreshWeather = url.searchParams.get("refreshWeather") === "1";
+      if ((refreshWeather || !route.weather?.length) && shouldRefreshWeather(route)) {
+        route = await attachWeather(route, {
+          existingWeather: route.weather || [],
+          rowTimeoutMs: 3000
+        });
         await updateRoutePayload(stored.id, route);
       }
       return sendJson(response, 200, route);
