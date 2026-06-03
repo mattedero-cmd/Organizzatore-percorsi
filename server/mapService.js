@@ -113,12 +113,14 @@ async function mapQuestGeocode(query) {
 }
 
 function addressQuery(place) {
-  const structured = [
+  const structuredParts = [
     place?.street,
     [place?.postalCode || place?.postal_code, place?.city].filter(Boolean).join(" "),
-    place?.province,
-    place?.country || "Italia"
-  ].filter(Boolean).join(", ");
+    place?.province
+  ].filter(Boolean);
+  const structured = structuredParts.length
+    ? [...structuredParts, place?.country || "Italia"].filter(Boolean).join(", ")
+    : "";
 
   const direct = place?.fullAddress || place?.address;
   const label = [place?.label, place?.customer, place?.location].filter(Boolean).join(" ");
