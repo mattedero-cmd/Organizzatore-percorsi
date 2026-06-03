@@ -143,3 +143,13 @@ Decisione: la mappa interattiva interna del risultato percorso viene disattivata
 Motivo: la mappa interna e MapQuest possono mostrare linee o percorsi incoerenti quando gli indirizzi vengono interpretati male. Per il percorso reale su strada e meglio delegare al navigatore esterno scelto.
 
 Conseguenza pratica: il risultato mostra un pannello `Navigazione percorso` con preferenza navigatore e pulsante `Apri percorso`; ogni tappa dettagliata mostra un solo pulsante `Naviga`, piu eventuali `Chiama` e `Email precompilata`.
+
+## D011 - API esterne non devono bloccare calcolo e apertura giri
+
+Data: 2026-06-03
+
+Decisione: `POST /api/plan` e `GET /api/routes/:id` devono rispondere anche se mappe o meteo sono lente. Le distanze usano fallback locale immediato di default; MapQuest/OpenRouteService per le distanze sono opt-in con `USE_EXTERNAL_DISTANCE_API=1`. Il meteo usa timeout per tappa e fallback a dato non disponibile o meteo esistente.
+
+Motivo: su iPhone l'app restava bloccata su `Calcolo...` e `Carico giro e meteo` perche il server aspettava chiamate esterne sequenziali o lente.
+
+Regola: ogni nuova integrazione esterna deve avere timeout breve, fallback leggibile e non deve bloccare l'apertura dei giri salvati.
