@@ -8,8 +8,42 @@ const WEATHER_CODES = new Map([
   [81, "Rovesci"], [82, "Rovesci intensi"], [95, "Temporale"]
 ]);
 
+const WEATHER_FETCH_TIMEOUT_MS = Number(process.env.WEATHER_FETCH_TIMEOUT_MS || 2500);
+const WEATHER_ROW_TIMEOUT_MS = Number(process.env.WEATHER_ROW_TIMEOUT_MS || 3000);
+
 function todayIso() {
   return new Date().toISOString().slice(0, 10);
+}
+
+function timeoutAfter(ms, message) {
+  return new Promise((_, reject) => {
+    setTimeout(() => reject(new Error(message)), ms);
+  });
+}
+
+function fallbackWeather(row, scheduledDate, mode, reason, existingWeather = []) {
+  const existing = existingWeather.find((item) => Number(item.stopNumber) === Number(row.stopNumber));
+  if (existing) {
+    return {
+      ...existing,
+      warnings: [...new Set([...(existing.warnings || []), "meteo non aggiornato in tempo"])]
+    };
+  }
+
+  return {
+    stopNumber: row.stopNumber,
+    customer: row.customer,
+    location: row.location,
+    scheduledDate,
+    time: row.arrivalTime,
+    description: "Meteo non disponibile",
+    temperatureC: null,
+    precipitationMm: null,
+    windKmh: null,
+    source: "none",
+    mode,
+    warnings: [reason]
+  };
 }
 
 function isPastDate(date) {
@@ -84,7 +118,7 @@ async function openMeteoWeather(coords, row, scheduledDate, mode) {
   } else {
     url.searchParams.set("forecast_days", "16");
   }
-  const response = await fetch(url, { signal: AbortSignal.timeout(5000) });
+  const response = await fetch(url, { signal: AbortSignal.timeout(WEATHER_FETCH_TIMEOUT_MS) });
   if (!response.ok) throw new Error(`Meteo Open-Meteo non riuscito (${response.status})`);
   return fromOpenMeteo(await response.json(), row, scheduledDate, mode, "open-meteo");
 }
@@ -98,7 +132,7 @@ async function openWeatherForecast(coords, row, scheduledDate) {
   url.searchParams.set("appid", key);
   url.searchParams.set("units", "metric");
   url.searchParams.set("lang", "it");
-  const response = await fetch(url, { signal: AbortSignal.timeout(5000) });
+  const response = await fetch(url, { signal: AbortSignal.timeout(WEATHER_FETCH_TIMEOUT_MS) });
   if (!response.ok) throw new Error(`Meteo OpenWeather non riuscito (${response.status})`);
   const payload = await response.json();
   if (!payload.list?.length) return null;
@@ -130,7 +164,7 @@ async function weatherbitForecast(coords, row, scheduledDate) {
   url.searchParams.set("key", key);
   url.searchParams.set("hours", "240");
   url.searchParams.set("lang", "it");
-  const response = await fetch(url, { signal: AbortSignal.timeout(5000) });
+  const response = await fetch(url, { signal: AbortSignal.timeout(WEATHER_FETCH_TIMEOUT_MS) });
   if (!response.ok) throw new Error(`Meteo Weatherbit non riuscito (${response.status})`);
   const payload = await response.json();
   if (!payload.data?.length) return null;
@@ -189,25 +223,22 @@ export async function attachWeather(route, options = {}) {
   const scheduledDate = route.scheduledDate || todayIso();
   const forceHistorical = options.forceHistorical || isPastDate(scheduledDate);
   const mode = forceHistorical ? "historical" : "forecast";
-
-  const weather = await Promise.all(
-    (route.rows || []).map((row) =>
-      weatherForRow(row, scheduledDate, forceHistorical).catch((error) => ({
-        stopNumber: row.stopNumber,
-        customer: row.customer,
-        location: row.location,
-        scheduledDate,
-        time: row.arrivalTime,
-        description: "Meteo non disponibile",
-        temperatureC: null,
-        precipitationMm: null,
-        windKmh: null,
-        source: "none",
-        mode,
-        warnings: [error.message]
-      }))
-    )
-  );
+  const existingWeather = Array.isArray(options.existingWeather)
+    ? options.existingWeather
+    : Array.isArray(route.weather)
+      ? route.weather
+      : [];
+  const rows = route.rows || [];
+  const weather = await Promise.all(rows.map(async (row) => {
+    try {
+      return await Promise.race([
+        weatherForRow(row, scheduledDate, forceHistorical),
+        timeoutAfter(Number(options.rowTimeoutMs || WEATHER_ROW_TIMEOUT_MS), "meteo non aggiornato in tempo")
+      ]);
+    } catch (error) {
+      return fallbackWeather(row, scheduledDate, mode, error.message, existingWeather);
+    }
+  }));
 
   return {
     ...route,
