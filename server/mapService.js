@@ -3,7 +3,15 @@ const CITY_COORDS = [
   ["arco", 45.918, 10.886],
   ["rovereto", 45.890, 11.040],
   ["trento", 46.067, 11.122],
+  ["lavis", 46.140, 11.112],
+  ["mezzolombardo", 46.214, 11.096],
+  ["mezzocorona", 46.214, 11.119],
+  ["cles", 46.365, 11.033],
+  ["borgo valsugana", 46.053, 11.456],
+  ["bressanone", 46.716, 11.657],
+  ["brunico", 46.797, 11.936],
   ["bolzano", 46.498, 11.354],
+  ["merano", 46.669, 11.163],
   ["verona", 45.438, 10.992],
   ["brescia", 45.541, 10.211],
   ["milano", 45.464, 9.190],
@@ -16,12 +24,24 @@ const CITY_COORDS = [
   ["casa", 46.004, 11.196]
 ];
 
+const GEOCODE_TIMEOUT_MS = Number(process.env.GEOCODE_TIMEOUT_MS || 2500);
+const ROUTE_TIMEOUT_MS = Number(process.env.ROUTE_TIMEOUT_MS || 3000);
+const USE_EXTERNAL_DISTANCE_API = process.env.USE_EXTERNAL_DISTANCE_API === "1";
+const placeCache = new Map();
+const routeCache = new Map();
+
 function hashString(value) {
   let hash = 0;
   for (let index = 0; index < value.length; index += 1) {
     hash = (hash * 31 + value.charCodeAt(index)) >>> 0;
   }
   return hash;
+}
+
+function hasValidSavedCoords(place) {
+  const lat = Number(place?.lat);
+  const lng = Number(place?.lng);
+  return Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) > 1 && Math.abs(lng) > 1;
 }
 
 function fallbackCoords(label) {
@@ -61,7 +81,7 @@ async function orsGeocode(query) {
   url.searchParams.set("boundary.country", "IT");
   url.searchParams.set("size", "1");
 
-  const response = await fetch(url, { signal: AbortSignal.timeout(7000) });
+  const response = await fetch(url, { signal: AbortSignal.timeout(GEOCODE_TIMEOUT_MS) });
   if (!response.ok) throw new Error(`Geocoding non riuscito (${response.status})`);
   const payload = await response.json();
   const feature = payload.features?.[0];
@@ -81,7 +101,7 @@ async function mapQuestGeocode(query) {
   url.searchParams.set("thumbMaps", "false");
   url.searchParams.set("outFormat", "json");
 
-  const response = await fetch(url, { signal: AbortSignal.timeout(7000) });
+  const response = await fetch(url, { signal: AbortSignal.timeout(GEOCODE_TIMEOUT_MS) });
   if (!response.ok) throw new Error(`MapQuest geocoding non riuscito (${response.status})`);
   const payload = await response.json();
   const location = payload.results?.[0]?.locations?.[0];
@@ -111,7 +131,7 @@ async function orsRoute(a, b) {
 
   const response = await fetch("https://api.openrouteservice.org/v2/directions/driving-car/json", {
     method: "POST",
-    signal: AbortSignal.timeout(10000),
+    signal: AbortSignal.timeout(ROUTE_TIMEOUT_MS),
     headers: {
       "Authorization": key,
       "Content-Type": "application/json"
@@ -146,7 +166,7 @@ async function mapQuestRoute(a, b) {
 
   const response = await fetch(url, {
     method: "POST",
-    signal: AbortSignal.timeout(10000),
+    signal: AbortSignal.timeout(ROUTE_TIMEOUT_MS),
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       locations: [
@@ -247,52 +267,90 @@ async function osrmRouteShape(points) {
 }
 
 export async function resolvePlace(place) {
-  if (place?.lat && place?.lng) {
+  if (hasValidSavedCoords(place)) {
     return { lat: Number(place.lat), lng: Number(place.lng), source: "saved" };
   }
 
   const label = addressQuery(place);
+  const cacheKey = String(label || "").toLowerCase().trim();
+  if (placeCache.has(cacheKey)) return placeCache.get(cacheKey);
+
+  const local = fallbackCoords(label);
+  if (local.source === "local-city") {
+    placeCache.set(cacheKey, local);
+    return local;
+  }
 
   try {
     const mapQuest = await mapQuestGeocode(label);
-    if (mapQuest) return mapQuest;
+    if (mapQuest) {
+      placeCache.set(cacheKey, mapQuest);
+      return mapQuest;
+    }
   } catch (error) {
     console.warn(error.message);
   }
 
   try {
     const geocoded = await orsGeocode(label);
-    if (geocoded) return geocoded;
+    if (geocoded) {
+      placeCache.set(cacheKey, geocoded);
+      return geocoded;
+    }
   } catch (error) {
     console.warn(error.message);
   }
 
-  return fallbackCoords(label);
+  placeCache.set(cacheKey, local);
+  return local;
 }
 
 export async function routeBetween(a, b) {
   const from = await resolvePlace(a);
   const to = await resolvePlace(b);
+  const cacheKey = [
+    from.lat.toFixed(5),
+    from.lng.toFixed(5),
+    to.lat.toFixed(5),
+    to.lng.toFixed(5)
+  ].join(":");
+  if (routeCache.has(cacheKey)) return routeCache.get(cacheKey);
+
+  const roadFactor = Number(process.env.FALLBACK_ROAD_FACTOR || 1.22);
+  const speed = Number(process.env.FALLBACK_AVERAGE_SPEED_KMH || 52);
+  const fallback = {
+    km: Math.max(0.2, haversineKm(from, to) * roadFactor),
+    driveMinutes: Math.max(4, Math.ceil((Math.max(0.2, haversineKm(from, to) * roadFactor) / speed) * 60 + 4)),
+    source: "local-estimate"
+  };
+
+  if (!USE_EXTERNAL_DISTANCE_API) {
+    routeCache.set(cacheKey, fallback);
+    return fallback;
+  }
 
   try {
     const mapQuest = await mapQuestRoute(from, to);
-    if (mapQuest) return mapQuest;
+    if (mapQuest) {
+      routeCache.set(cacheKey, mapQuest);
+      return mapQuest;
+    }
   } catch (error) {
     console.warn(error.message);
   }
 
   try {
     const routed = await orsRoute(from, to);
-    if (routed) return routed;
+    if (routed) {
+      routeCache.set(cacheKey, routed);
+      return routed;
+    }
   } catch (error) {
     console.warn(error.message);
   }
 
-  const roadFactor = Number(process.env.FALLBACK_ROAD_FACTOR || 1.22);
-  const speed = Number(process.env.FALLBACK_AVERAGE_SPEED_KMH || 52);
-  const km = Math.max(0.2, haversineKm(from, to) * roadFactor);
-  const driveMinutes = Math.max(4, Math.ceil((km / speed) * 60 + 4));
-  return { km, driveMinutes, source: "local-estimate" };
+  routeCache.set(cacheKey, fallback);
+  return fallback;
 }
 
 export async function routeShape(points) {
