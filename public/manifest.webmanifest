@@ -3,7 +3,7 @@
   "short_name": "Percorsi",
   "description": "Pianifica percorsi lavorativi giornalieri con tappe, orari, tempi e costi.",
   "lang": "it",
-  "start_url": "/?v=20260603-1",
+  "start_url": "/?v=20260603-rollback-v22",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
