@@ -105,6 +105,62 @@ function decodePolyline(encoded) {
   return coords;
 }
 
+// Cache per evitare chiamate doppie nella stessa area durante una pianificazione
+const placesCache = new Map();
+
+function placesCacheKey(lat, lng) {
+  return `${Math.round(lat * 50) / 50},${Math.round(lng * 50) / 50}`;
+}
+
+function placesScore(place) {
+  const rating = Number(place.rating || 0);
+  const reviews = Number(place.user_ratings_total || 0);
+  // Penalizza posti con poche recensioni: 4.3★ × 100 rec > 4.4★ × 10 rec
+  return rating * Math.log10(reviews + 1);
+}
+
+export async function findNearbyRestStop(lat, lng, radiusM = 2000) {
+  if (!lat || !lng) return null;
+  const key = API_KEY();
+  if (!key) return null;
+
+  const cacheKey = placesCacheKey(lat, lng);
+  if (placesCache.has(cacheKey)) return placesCache.get(cacheKey);
+
+  try {
+    const url = `${BASE}/place/nearbysearch/json?location=${lat},${lng}&radius=${radiusM}&type=cafe&language=it&key=${key}`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(6000) });
+    const data = await res.json();
+    if (data.status !== "OK" || !data.results?.length) {
+      placesCache.set(cacheKey, null);
+      return null;
+    }
+
+    const best = data.results
+      .filter(p => p.rating && p.user_ratings_total >= 5)
+      .sort((a, b) => placesScore(b) - placesScore(a))[0];
+
+    if (!best) { placesCache.set(cacheKey, null); return null; }
+
+    const result = {
+      customer: best.name,
+      location: best.vicinity || "",
+      fullAddress: best.vicinity || "",
+      lat: best.geometry.location.lat,
+      lng: best.geometry.location.lng,
+      rating: best.rating,
+      reviewCount: best.user_ratings_total,
+      addressType: "rest",
+      fromPlaces: true
+    };
+    placesCache.set(cacheKey, result);
+    return result;
+  } catch {
+    placesCache.set(cacheKey, null);
+    return null;
+  }
+}
+
 export async function routeShape(points) {
   if (points.length < 2) return { source: "none", coordinates: [] };
   const resolved = await Promise.all(points.map(resolvePlace));

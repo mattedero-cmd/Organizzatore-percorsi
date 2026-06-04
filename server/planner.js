@@ -1,4 +1,4 @@
-import { routeBetween } from "./googleMapsService.js";
+import { routeBetween, findNearbyRestStop } from "./googleMapsService.js";
 
 const MAX_EXACT_STOPS = 7;
 
@@ -356,7 +356,7 @@ function shiftRowTimes(row, minutes) {
   };
 }
 
-function insertBreaks(rows, options) {
+async function insertBreaks(rows, options) {
   const { lunchBreakEnabled, lunchBreakMinutes = 45, restStops = [] } = options;
   if (!lunchBreakEnabled && !restStops.length) return { rows, addedMinutes: 0 };
 
@@ -387,7 +387,7 @@ function insertBreaks(rows, options) {
     }
   }
 
-  if (restStops.length) {
+  if (restStops.length || true) { // always check for rest breaks (may use Places API)
     const dayStart = rows.length > 0 ? (parseTime(rows[0].departureTime) || 7 * 60) : 7 * 60;
     let lastBreak = dayStart;
     let lastLat = null, lastLng = null;
@@ -398,9 +398,14 @@ function insertBreaks(rows, options) {
       if (elapsed >= REST_EVERY - REST_TOL) {
         const alreadyHas = insertions.some(ins => ins.beforeIndex === i);
         if (!alreadyHas) {
-          const spot = findNearestRestStop(restStops, lastLat, lastLng);
+          let spot = findNearestRestStop(restStops, lastLat, lastLng);
+          // Fallback: cerca su Google Places se non ci sono soste salvate
+          if (!spot && lastLat && lastLng) {
+            spot = await findNearbyRestStop(lastLat, lastLng).catch(() => null);
+          }
           if (spot) {
-            insertions.push({ beforeIndex: i, type: "rest", duration: REST_DUR, customer: spot.customer, location: spot.location || "", address: spot.fullAddress || "", lat: spot.lat, lng: spot.lng });
+            const label = spot.rating ? `${spot.customer} · ⭐ ${spot.rating} (${spot.reviewCount})` : spot.customer;
+            insertions.push({ beforeIndex: i, type: "rest", duration: REST_DUR, customer: label, location: spot.location || spot.vicinity || "", address: spot.fullAddress || spot.vicinity || "", lat: spot.lat, lng: spot.lng });
             lastBreak = dep;
           }
         } else {
