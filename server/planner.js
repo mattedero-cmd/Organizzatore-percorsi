@@ -358,7 +358,8 @@ function shiftRowTimes(row, minutes) {
 
 async function insertBreaks(rows, options) {
   const { lunchBreakEnabled, lunchBreakMinutes = 45, restStops = [] } = options;
-  if (!lunchBreakEnabled) return { rows, addedMinutes: 0 };
+  // nothing to do only if both lunch and rest breaks are explicitly skipped
+  // rest breaks are always attempted (may fall back to Places API)
 
   const LUNCH_OPEN = 11 * 60 + 30;
   const LUNCH_CLOSE = 14 * 60;
