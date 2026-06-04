@@ -430,8 +430,8 @@ async function insertBreaks(rows, options) {
       cumulative = 0;
       return true;
     }
-    // Prefer saved rest stops (higher tolerance: 3 km)
-    let spot = findNearestRestStop(restStops, refLat, refLng, 3.0);
+    // Prefer saved rest stops (up to 15 km)
+    let spot = findNearestRestStop(restStops, refLat, refLng, 15.0);
     if (!spot && refLat && refLng) {
       spot = await findNearbyRestStop(refLat, refLng).catch(() => null);
     }

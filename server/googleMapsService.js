@@ -119,7 +119,7 @@ function placesScore(place) {
   return rating * Math.log10(reviews + 1);
 }
 
-export async function findNearbyRestStop(lat, lng, radiusM = 800) {
+export async function findNearbyRestStop(lat, lng, radiusM = 15000) {
   if (!lat || !lng) return null;
   const key = API_KEY();
   if (!key) return null;
