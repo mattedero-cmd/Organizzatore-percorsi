@@ -146,6 +146,23 @@ async function refreshSavedRoutes() {
   state.savedRoutes = await api("/api/routes").catch(() => []);
 }
 
+async function migrateContactNotes() {
+  const all = await api("/api/addresses?search=").catch(() => []);
+  const emailRe = /[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/;
+  const phoneRe = /(?:\+39[\s.\-]?)?(?:0\d{1,4}[\s.\-]?\d{4,8}|3\d{2}[\s.\-]?\d{6,7})/;
+  for (const addr of all) {
+    const notes = addr.notes || "";
+    if (!notes) continue;
+    const needsEmail = !addr.email && emailRe.test(notes);
+    const needsPhone = !addr.phone && phoneRe.test(notes);
+    if (!needsEmail && !needsPhone) continue;
+    const patch = { ...addr };
+    if (needsEmail) patch.email = notes.match(emailRe)[0];
+    if (needsPhone) patch.phone = notes.match(phoneRe)[0].trim();
+    await api(`/api/addresses/${addr.id}`, { method: "PUT", body: JSON.stringify(patch) }).catch(() => {});
+  }
+}
+
 async function loadInitialData() {
   const [health, config, settings] = await Promise.all([
     api("/api/health").catch(() => ({})),
@@ -161,6 +178,7 @@ async function loadInitialData() {
   applyTheme();
   document.querySelector("#map-status").textContent = state.mapApiConfigured ? "Google Maps" : "Stima locale";
   await Promise.all([refreshAddressesForRoute(), refreshSavedRoutes()]);
+  migrateContactNotes().catch(() => {});
 }
 
 // ── normalize saved route ─────────────────────────────────────────────────────
@@ -248,7 +266,13 @@ async function renderGoogleMap(result) {
   const ready = await loadGoogleMapsScript();
   if (!ready || !window.google?.maps) { el.style.display = "none"; return; }
 
-  const rows = result.rows || [];
+  // Enrich rows with coordinates from allAddresses when missing in payload
+  const rows = (result.rows || []).map(row => {
+    if (row.lat && row.lng) return row;
+    const addr = state.allAddresses.find(a => String(a.id) === String(row.addressId));
+    return addr?.lat ? { ...row, lat: addr.lat, lng: addr.lng } : row;
+  });
+
   const firstCoord = rows.find(r => r.lat) || result.start;
   const center = firstCoord?.lat ? { lat: Number(firstCoord.lat), lng: Number(firstCoord.lng) } : { lat: 46.0, lng: 11.0 };
 
@@ -649,13 +673,7 @@ function renderResult() {
       ${state.googleMapsKey ? `<div id="route-map" style="height:280px;border-radius:8px;border:1px solid var(--line);margin-bottom:14px;"></div>` : ""}
 
       <div class="nav-panel">
-        <div class="row" style="gap:10px;flex-wrap:wrap;">
-          <select id="nav-pref" style="flex:1;min-width:140px;">
-            <option value="google" ${pref === "google" ? "selected" : ""}>Google Maps</option>
-            <option value="apple" ${pref === "apple" ? "selected" : ""}>Apple Mappe</option>
-          </select>
-          <a class="btn primary" href="${navUrl(result, pref)}" target="_blank" rel="noopener">↗ Apri percorso completo</a>
-        </div>
+        <a class="btn primary" href="${navUrl(result, pref)}" target="_blank" rel="noopener">↗ Apri percorso completo</a>
       </div>
 
       ${renderManualOrder(result)}
@@ -1260,12 +1278,6 @@ function bindEvents() {
         if (filterInput) filterInput.focus();
       }
     }
-    // navigator preference
-    if (e.target.id === "nav-pref") {
-      state.navigatorPref = e.target.value;
-      localStorage.setItem("navigatorPref", state.navigatorPref);
-      renderResult();
-    }
   });
 
   app.addEventListener("change", e => {
@@ -1359,9 +1371,6 @@ function bindEvents() {
         state.result = normalizeSavedRoute({ ...raw.payload, id: raw.id, ...raw });
         state.manualOrderRows = null;
         setActiveTab("result");
-        if (state.googleMapsKey) {
-          requestAnimationFrame(() => renderGoogleMap(normalizeSavedRoute(state.result)));
-        }
       } catch (err) {
         showToast(err.message);
       }
