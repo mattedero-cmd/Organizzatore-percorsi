@@ -329,7 +329,10 @@ async function renderGoogleMap(result) {
   let endCoord = result.end?.lat ? { lat: Number(result.end.lat), lng: Number(result.end.lng) } : await geocodeAddr(result.end);
 
   if (startCoord) addMarker(startCoord.lat, startCoord.lng, "P", result.start?.label || "Partenza");
-  for (const row of rows) addMarker(row.lat, row.lng, String(row.stopNumber), row.customer);
+  for (const row of rows) {
+    if (row.type) continue; // skip lunch/rest break rows — not real stops
+    addMarker(row.lat, row.lng, String(row.stopNumber), row.customer);
+  }
   if (endCoord) addMarker(endCoord.lat, endCoord.lng, "A", result.end?.label || "Arrivo");
 
   if (hasPoints) map.fitBounds(bounds);
@@ -337,7 +340,7 @@ async function renderGoogleMap(result) {
   // Draw route using Google Maps Directions Service (browser-side)
   const allPoints = [];
   if (startCoord) allPoints.push(startCoord);
-  for (const row of rows) if (row.lat) allPoints.push({ lat: Number(row.lat), lng: Number(row.lng) });
+  for (const row of rows) if (!row.type && row.lat) allPoints.push({ lat: Number(row.lat), lng: Number(row.lng) });
   if (endCoord) allPoints.push(endCoord);
 
   const drawFallbackPolyline = () => {
