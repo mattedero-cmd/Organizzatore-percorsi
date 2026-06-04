@@ -50,7 +50,8 @@ async function api(path, options = {}) {
 
 const emptyForm = {
   id: null, customer: "", location: "", fullAddress: "",
-  phone: "", email: "", notes: "",
+  phone: "", phoneType: "cell", phone2: "", phone2Type: "fisso",
+  email: "", notes: "",
   openMorning: "08:30", closeMorning: "12:30",
   openAfternoon: "14:30", closeAfternoon: "18:00",
   defaultDuration: 45, lat: "", lng: ""
@@ -59,6 +60,7 @@ const emptyForm = {
 const state = {
   activeTab: "route",
   theme: "day",
+  themePref: "auto",
   googleMapsKey: "",
   googleMapsReady: false,
   navigatorPref: localStorage.getItem("navigatorPref") || "google",
@@ -104,8 +106,14 @@ const state = {
 // ── theme ────────────────────────────────────────────────────────────────────
 
 function applyTheme() {
-  const h = new Date().getHours();
-  state.theme = (h >= 19 || h < 7) ? "night" : "day";
+  if (state.themePref === "dark") {
+    state.theme = "night";
+  } else if (state.themePref === "light") {
+    state.theme = "day";
+  } else {
+    const h = new Date().getHours();
+    state.theme = (h >= 19 || h < 7) ? "night" : "day";
+  }
   document.documentElement.dataset.theme = state.theme;
 }
 
@@ -148,6 +156,9 @@ async function loadInitialData() {
   state.whisperConfigured = health.whisperConfigured || false;
   state.googleMapsKey = config.googleMapsKey || "";
   state.settings = settings;
+  state.navigatorPref = settings.navigatorPref || localStorage.getItem("navigatorPref") || "google";
+  state.themePref = settings.themePref || "auto";
+  applyTheme();
   document.querySelector("#map-status").textContent = state.mapApiConfigured ? "Google Maps" : "Stima locale";
   await Promise.all([refreshAddressesForRoute(), refreshSavedRoutes()]);
 }
@@ -486,11 +497,13 @@ function renderArchive() {
             <article class="card archive-card">
               <p class="stop-title">${escapeHtml(addressName(a))}</p>
               <div class="stop-meta">${escapeHtml(a.fullAddress)}</div>
-              ${a.phone ? `<div class="stop-meta">📞 ${escapeHtml(a.phone)}</div>` : ""}
+              ${a.phone ? `<div class="stop-meta">📞 ${escapeHtml(a.phone)}${a.phoneType === "fisso" ? " ☎" : ""}</div>` : ""}
+              ${a.phone2 ? `<div class="stop-meta">📞 ${escapeHtml(a.phone2)}${a.phone2Type === "fisso" ? " ☎" : ""}</div>` : ""}
               ${a.email ? `<div class="stop-meta">✉ ${escapeHtml(a.email)}</div>` : ""}
               <div class="stop-meta">${[a.openMorning, a.closeMorning].filter(Boolean).join("–") || "—"} / ${[a.openAfternoon, a.closeAfternoon].filter(Boolean).join("–") || "—"}</div>
               <div class="actions">
                 ${a.phone ? `<a class="btn" href="tel:${escapeHtml(a.phone)}">📞</a>` : ""}
+                ${a.phone2 ? `<a class="btn" href="tel:${escapeHtml(a.phone2)}">📞₂</a>` : ""}
                 ${a.email ? `<a class="btn" href="mailto:${escapeHtml(a.email)}">✉</a>` : ""}
                 <button class="btn" data-edit-address="${a.id}">Modifica</button>
                 <button class="btn danger" data-delete-address="${a.id}">×</button>
@@ -505,9 +518,30 @@ function renderArchive() {
           <label class="field">Cliente / nome<input name="customer" value="${escapeHtml(form.customer)}" required /></label>
           <label class="field">Sede<input name="location" value="${escapeHtml(form.location)}" /></label>
           <label class="field full">Indirizzo completo<input name="fullAddress" value="${escapeHtml(form.fullAddress)}" required /></label>
-          <label class="field">Telefono<input name="phone" type="tel" value="${escapeHtml(form.phone)}" /></label>
+          <div class="field phone-group">
+            <label class="phone-label">Telefono 1</label>
+            <div class="phone-row">
+              <select name="phoneType" class="phone-type-select">
+                <option value="cell" ${form.phoneType === "cell" ? "selected" : ""}>📱 Cell</option>
+                <option value="fisso" ${form.phoneType === "fisso" ? "selected" : ""}>☎ Fisso</option>
+                <option value="altro" ${form.phoneType === "altro" ? "selected" : ""}>Altro</option>
+              </select>
+              <input name="phone" type="tel" value="${escapeHtml(form.phone)}" placeholder="Numero" />
+            </div>
+          </div>
+          <div class="field phone-group">
+            <label class="phone-label">Telefono 2</label>
+            <div class="phone-row">
+              <select name="phone2Type" class="phone-type-select">
+                <option value="cell" ${form.phone2Type === "cell" ? "selected" : ""}>📱 Cell</option>
+                <option value="fisso" ${form.phone2Type === "fisso" ? "selected" : ""}>☎ Fisso</option>
+                <option value="altro" ${form.phone2Type === "altro" ? "selected" : ""}>Altro</option>
+              </select>
+              <input name="phone2" type="tel" value="${escapeHtml(form.phone2)}" placeholder="Numero" />
+            </div>
+          </div>
           <label class="field">Email<input name="email" type="email" value="${escapeHtml(form.email)}" /></label>
-          <label class="field full">Note<textarea name="notes">${escapeHtml(form.notes)}</textarea></label>
+          <label class="field full">Note<textarea name="notes" id="contact-notes">${escapeHtml(form.notes)}</textarea></label>
           <label class="field">Apr. mattina<input name="openMorning" type="time" value="${escapeHtml(form.openMorning)}" /></label>
           <label class="field">Ch. mattina<input name="closeMorning" type="time" value="${escapeHtml(form.closeMorning)}" /></label>
           <label class="field">Apr. pomeriggio<input name="openAfternoon" type="time" value="${escapeHtml(form.openAfternoon)}" /></label>
@@ -603,7 +637,10 @@ function renderResult() {
     <section>
       <div class="section-head" style="margin-bottom:10px;">
         <div>
-          <h2>Percorso — ${escapeHtml(result.scheduledDate || "")}</h2>
+          <div class="row" style="align-items:center;gap:8px;">
+            <h2 style="margin:0;">${escapeHtml(result.name || ("Percorso — " + (result.scheduledDate || "")))}</h2>
+            ${result.id ? `<button class="btn" style="padding:2px 8px;font-size:0.85rem;" data-rename-current-route="${result.id}">✎</button>` : ""}
+          </div>
           <div class="stop-meta">${escapeHtml(summary.dayStart)} → ${escapeHtml(summary.dayEnd)} · ${summary.totalKm.toFixed(1)} km · ${euro(summary.totalCost)}</div>
         </div>
         <button class="btn" data-tab-jump="saved">▣ Giri</button>
@@ -625,11 +662,15 @@ function renderResult() {
 
       <div class="result-list">
         ${rows.map(row => {
-          const addr = state.addresses.find(a => String(a.id) === String(row.addressId));
+          const addr = state.allAddresses.find(a => String(a.id) === String(row.addressId));
           const phone = addr?.phone || row.phone || "";
+          const phone2 = addr?.phone2 || row.phone2 || "";
           const email = addr?.email || row.email || "";
           const emailSubject = encodeURIComponent(`Appuntamento ${row.customer} - ${result.scheduledDate || ""} ore ${row.arrivalTime}`);
           const stopTitle = `${row.stopNumber}. ${escapeHtml(row.customer)}${row.location ? ` — ${escapeHtml(row.location)}` : ""}`;
+          const phoneBtn = phone && phone2
+            ? `<button class="btn" data-phone-picker="${row.stopNumber}" data-phone1="${escapeHtml(phone)}" data-phone2="${escapeHtml(phone2)}">📞</button>`
+            : phone ? `<a class="btn" href="tel:${escapeHtml(phone)}">📞</a>` : "";
           return `
           <article class="card result-card">
             <div class="stop-compact-head" data-expand-stop="${row.stopNumber}">
@@ -639,7 +680,7 @@ function renderResult() {
             </div>
             <div class="stop-actions-big">
               <a class="btn primary" href="${stopNavUrl(row, pref)}" target="_blank" rel="noopener">↗ Naviga</a>
-              ${phone ? `<a class="btn" href="tel:${escapeHtml(phone)}">📞</a>` : ""}
+              ${phoneBtn}
               ${email ? `<a class="btn" href="mailto:${escapeHtml(email)}?subject=${emailSubject}">✉</a>` : ""}
             </div>
             <div class="stop-details" data-stop-details="${row.stopNumber}" hidden>
@@ -651,6 +692,7 @@ function renderResult() {
                 <div><div class="metric-label">Fine</div><strong>${escapeHtml(row.serviceEndTime)}</strong></div>
               </div>
               ${phone ? `<div class="stop-meta">📞 <a href="tel:${escapeHtml(phone)}">${escapeHtml(phone)}</a></div>` : ""}
+              ${phone2 ? `<div class="stop-meta">📞 <a href="tel:${escapeHtml(phone2)}">${escapeHtml(phone2)}</a></div>` : ""}
               ${email ? `<div class="stop-meta">✉ <a href="mailto:${escapeHtml(email)}">${escapeHtml(email)}</a></div>` : ""}
               ${row.notes ? `<div class="stop-meta" style="margin-top:6px;font-style:italic">${escapeHtml(row.notes)}</div>` : ""}
               ${warningBadges(row.warnings)}
@@ -690,14 +732,34 @@ function renderResult() {
 // ── render: settings tab ──────────────────────────────────────────────────────
 
 function renderSettings() {
+  const nav = state.navigatorPref;
+  const theme = state.themePref;
   app.innerHTML = `
     <section class="panel">
-      <h2>Tariffe</h2>
-      <form id="settings-form" class="form-grid">
-        <label class="field">€ per km<input name="kmRate" type="number" min="0" step="0.01" value="${escapeHtml(state.settings.kmRate)}" /></label>
-        <label class="field">€/ora guida<input name="driveHourRate" type="number" min="0" step="0.01" value="${escapeHtml(state.settings.driveHourRate)}" /></label>
-        <label class="field">€/ora lavoro<input name="workHourRate" type="number" min="0" step="0.01" value="${escapeHtml(state.settings.workHourRate)}" /></label>
-        <div class="field full actions"><button class="btn primary" type="submit">Salva tariffe</button></div>
+      <h2>Impostazioni</h2>
+      <form id="settings-form">
+        <h3 class="settings-section-title">Tariffe</h3>
+        <div class="form-grid">
+          <label class="field">€ per km<input name="kmRate" type="number" min="0" step="0.01" value="${escapeHtml(state.settings.kmRate)}" /></label>
+          <label class="field">€/ora guida<input name="driveHourRate" type="number" min="0" step="0.01" value="${escapeHtml(state.settings.driveHourRate)}" /></label>
+          <label class="field full">€/ora lavoro<input name="workHourRate" type="number" min="0" step="0.01" value="${escapeHtml(state.settings.workHourRate)}" /></label>
+        </div>
+
+        <h3 class="settings-section-title">Navigatore</h3>
+        <div class="settings-radio-group">
+          <label class="settings-radio"><input type="radio" name="navigatorPref" value="google" ${nav === "google" ? "checked" : ""} /> Google Maps</label>
+          <label class="settings-radio"><input type="radio" name="navigatorPref" value="apple" ${nav === "apple" ? "checked" : ""} /> Apple Mappe</label>
+          <label class="settings-radio"><input type="radio" name="navigatorPref" value="waze" ${nav === "waze" ? "checked" : ""} /> Waze</label>
+        </div>
+
+        <h3 class="settings-section-title">Tema</h3>
+        <div class="settings-radio-group">
+          <label class="settings-radio"><input type="radio" name="themePref" value="auto" ${theme === "auto" ? "checked" : ""} /> 🔄 Automatico (segue l'orario)</label>
+          <label class="settings-radio"><input type="radio" name="themePref" value="light" ${theme === "light" ? "checked" : ""} /> ☀️ Chiaro</label>
+          <label class="settings-radio"><input type="radio" name="themePref" value="dark" ${theme === "dark" ? "checked" : ""} /> 🌙 Scuro</label>
+        </div>
+
+        <div class="actions" style="margin-top:16px;"><button class="btn primary" type="submit">Salva impostazioni</button></div>
       </form>
     </section>`;
 }
@@ -1011,7 +1073,9 @@ async function saveAddressForm(form) {
   const v = readForm(form);
   const payload = {
     customer: v.customer, location: v.location, fullAddress: v.fullAddress,
-    phone: v.phone || "", email: v.email || "", notes: v.notes,
+    phone: v.phone || "", phoneType: v.phoneType || "cell",
+    phone2: v.phone2 || "", phone2Type: v.phone2Type || "fisso",
+    email: v.email || "", notes: v.notes,
     openMorning: v.openMorning, closeMorning: v.closeMorning,
     openAfternoon: v.openAfternoon, closeAfternoon: v.closeAfternoon,
     defaultDuration: Number(v.defaultDuration || 45),
@@ -1242,6 +1306,27 @@ function bindEvents() {
       return;
     }
 
+    const renameCurrentRoute = e.target.closest("[data-rename-current-route]");
+    if (renameCurrentRoute) {
+      const name = window.prompt("Nuovo nome giro:", state.result?.name || "");
+      if (!name) return;
+      const id = renameCurrentRoute.dataset.renameCurrentRoute;
+      await api(`/api/routes/${id}`, { method: "PUT", body: JSON.stringify({ name }) });
+      if (state.result) state.result.name = name;
+      await refreshSavedRoutes();
+      render();
+      return;
+    }
+
+    const phonePicker = e.target.closest("[data-phone-picker]");
+    if (phonePicker) {
+      const p1 = phonePicker.dataset.phone1;
+      const p2 = phonePicker.dataset.phone2;
+      const choice = window.confirm(`Chiama ${p1}?\n(Annulla per usare ${p2})`);
+      window.location.href = `tel:${choice ? p1 : p2}`;
+      return;
+    }
+
     // show all archive contacts
     if (e.target.closest("#show-all-addresses")) {
       state.archiveShowAll = true;
@@ -1274,6 +1359,9 @@ function bindEvents() {
         state.result = normalizeSavedRoute({ ...raw.payload, id: raw.id, ...raw });
         state.manualOrderRows = null;
         setActiveTab("result");
+        if (state.googleMapsKey) {
+          requestAnimationFrame(() => renderGoogleMap(normalizeSavedRoute(state.result)));
+        }
       } catch (err) {
         showToast(err.message);
       }
@@ -1357,6 +1445,7 @@ function bindEvents() {
       const addr = state.allAddresses.find(a => String(a.id) === editAddr.dataset.editAddress) || state.addresses.find(a => String(a.id) === editAddr.dataset.editAddress);
       state.addressForm = { ...emptyForm, ...addr };
       render();
+      requestAnimationFrame(() => document.getElementById("address-form")?.scrollIntoView({ behavior: "smooth", block: "start" }));
       return;
     }
 
@@ -1414,6 +1503,22 @@ function bindEvents() {
     }
   });
 
+  // Auto-detect phone/email from notes
+  app.addEventListener("blur", e => {
+    if (e.target.id !== "contact-notes") return;
+    const text = e.target.value || "";
+    const emailField = document.querySelector("#address-form [name=email]");
+    const phoneField = document.querySelector("#address-form [name=phone]");
+    if (emailField && !emailField.value) {
+      const emailMatch = text.match(/[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/);
+      if (emailMatch) { emailField.value = emailMatch[0]; showToast("Email trovata nelle note"); }
+    }
+    if (phoneField && !phoneField.value) {
+      const phoneMatch = text.match(/(?:\+39[\s.-]?)?(?:0\d{1,4}[\s.\-]?\d{4,8}|3\d{2}[\s.\-]?\d{6,7})/);
+      if (phoneMatch) { phoneField.value = phoneMatch[0].trim(); showToast("Telefono trovato nelle note"); }
+    }
+  }, true);
+
   app.addEventListener("change", e => {
     if (e.target.id === "vcf-input") {
       const file = e.target.files?.[0];
@@ -1428,8 +1533,15 @@ function bindEvents() {
     }
     if (e.target.id === "settings-form") {
       const v = readForm(e.target);
-      state.settings = await api("/api/settings", { method: "PUT", body: JSON.stringify({ kmRate: Number(v.kmRate), driveHourRate: Number(v.driveHourRate), workHourRate: Number(v.workHourRate) }) });
-      showToast("Tariffe salvate");
+      state.settings = await api("/api/settings", { method: "PUT", body: JSON.stringify({
+        kmRate: Number(v.kmRate), driveHourRate: Number(v.driveHourRate), workHourRate: Number(v.workHourRate),
+        navigatorPref: v.navigatorPref || "google", themePref: v.themePref || "auto"
+      }) });
+      state.navigatorPref = state.settings.navigatorPref;
+      localStorage.setItem("navigatorPref", state.navigatorPref);
+      state.themePref = state.settings.themePref;
+      applyTheme();
+      showToast("Impostazioni salvate");
     }
   });
 }
