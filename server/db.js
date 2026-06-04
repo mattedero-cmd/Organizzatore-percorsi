@@ -189,6 +189,7 @@ export async function initDb(rootDir) {
   `);
 
   await migratePlannedRoutes();
+  await migrateWeeklyHours();
 
   const count = await runSql("SELECT COUNT(*) AS count FROM addresses;", true);
   if (Number(count[0]?.count ?? 0) === 0) {
@@ -248,6 +249,7 @@ async function initPostgresDb() {
   `);
 
   await migratePlannedRoutes();
+  await migrateWeeklyHours();
 
   const count = await runSql("SELECT COUNT(*) AS count FROM addresses;", true);
   if (Number(count[0]?.count ?? 0) === 0) {
@@ -324,6 +326,32 @@ async function migratePlannedRoutes() {
   }
   if (!settingsCols.includes("lunch_break_enabled")) {
     await runSql("ALTER TABLE settings ADD COLUMN lunch_break_enabled INTEGER DEFAULT 1;");
+  }
+}
+
+async function migrateWeeklyHours() {
+  // One-shot: convert old open_morning/close_morning/open_afternoon/close_afternoon
+  // into weekly_hours for addresses that don't have it yet.
+  // Applies the same hours to Mon–Fri (1–5); Sat (6) and Sun (0) default to closed.
+  const rows = await runSql("SELECT id, open_morning, close_morning, open_afternoon, close_afternoon FROM addresses WHERE weekly_hours IS NULL;", true);
+  for (const row of rows) {
+    const om = row.open_morning || "";
+    const cm = row.close_morning || "";
+    const oa = row.open_afternoon || "";
+    const ca = row.close_afternoon || "";
+    if (!om && !cm && !oa && !ca) continue; // no hours at all — leave NULL
+    const hasTwoSlots = (om || cm) && (oa || ca);
+    const continuous = !hasTwoSlots && !!(om || cm);
+    const dayEntry = continuous
+      ? { closed: false, continuous: true, openMorning: om, closeMorning: "", openAfternoon: "", closeAfternoon: cm || ca }
+      : { closed: false, continuous: false, openMorning: om, closeMorning: cm, openAfternoon: oa, closeAfternoon: ca };
+    const wh = {
+      1: { ...dayEntry }, 2: { ...dayEntry }, 3: { ...dayEntry },
+      4: { ...dayEntry }, 5: { ...dayEntry },
+      6: { closed: true, continuous: false, openMorning: "", closeMorning: "", openAfternoon: "", closeAfternoon: "" },
+      0: { closed: true, continuous: false, openMorning: "", closeMorning: "", openAfternoon: "", closeAfternoon: "" }
+    };
+    await runSql(`UPDATE addresses SET weekly_hours = ${sqlValue(JSON.stringify(wh))} WHERE id = ${sqlValue(Number(row.id))};`);
   }
 }
 

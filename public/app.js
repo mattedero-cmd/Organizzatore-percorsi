@@ -568,26 +568,57 @@ const DAYS_IT = ["Dom", "Lun", "Mar", "Mer", "Gio", "Ven", "Sab"];
 function renderWeeklyHoursSection(weeklyHours) {
   const wh = weeklyHours || {};
   const rows = [1,2,3,4,5,6,0].map(d => {
-    const h = wh[d] || {};
+    const h = wh[d] || wh[String(d)] || {};
     const closed = h.closed ? "checked" : "";
+    const cont = h.continuous ? "checked" : "";
+    const dis = h.closed ? "disabled" : "";
     return `<tr class="wh-row" data-day="${d}">
       <td class="wh-day">${DAYS_IT[d]}</td>
-      <td><label><input type="checkbox" class="wh-closed" ${closed} /> Chiuso</label></td>
-      <td><input type="time" class="wh-om" value="${h.openMorning || ""}" ${h.closed ? "disabled" : ""} /></td>
-      <td><input type="time" class="wh-cm" value="${h.closeMorning || ""}" ${h.closed ? "disabled" : ""} /></td>
-      <td><input type="time" class="wh-oa" value="${h.openAfternoon || ""}" ${h.closed ? "disabled" : ""} /></td>
-      <td><input type="time" class="wh-ca" value="${h.closeAfternoon || ""}" ${h.closed ? "disabled" : ""} /></td>
+      <td><label><input type="checkbox" class="wh-closed" ${closed} /> Ch.</label></td>
+      <td><label><input type="checkbox" class="wh-cont" ${cont} ${dis} /> Cont.</label></td>
+      <td><input type="time" class="wh-om" value="${h.openMorning || ""}" ${dis} /></td>
+      <td><input type="time" class="wh-cm" value="${h.closeMorning || ""}" ${dis || (h.continuous ? "disabled" : "")} /></td>
+      <td><input type="time" class="wh-oa" value="${h.openAfternoon || ""}" ${dis || (h.continuous ? "disabled" : "")} /></td>
+      <td><input type="time" class="wh-ca" value="${h.closeAfternoon || ""}" ${dis} /></td>
     </tr>`;
   }).join("");
   return `<div class="field full">
     <label class="wh-label">Orari settimanali</label>
     <div class="wh-table-wrap">
       <table class="wh-table">
-        <thead><tr><th></th><th></th><th>Apr. matt.</th><th>Ch. matt.</th><th>Apr. pom.</th><th>Ch. pom.</th></tr></thead>
+        <thead><tr><th></th><th></th><th></th><th>Apertura</th><th>Ch. matt.</th><th>Apr. pom.</th><th>Chiusura</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
     </div>
   </div>`;
+}
+
+function weeklyHoursSummary(a) {
+  const wh = a.weeklyHours;
+  if (!wh) {
+    const parts = [];
+    if (a.openMorning && a.closeMorning) parts.push(`${a.openMorning}–${a.closeMorning}`);
+    if (a.openAfternoon && a.closeAfternoon) parts.push(`${a.openAfternoon}–${a.closeAfternoon}`);
+    return parts.join(" / ") || "—";
+  }
+  const today = new Date().getDay();
+  const d = wh[today] || wh[String(today)];
+  if (!d) return "—";
+  if (d.closed) return "Oggi chiuso";
+  if (d.continuous) return d.openMorning && d.closeAfternoon ? `${d.openMorning}–${d.closeAfternoon} cont.` : "—";
+  const parts = [];
+  if (d.openMorning && d.closeMorning) parts.push(`${d.openMorning}–${d.closeMorning}`);
+  if (d.openAfternoon && d.closeAfternoon) parts.push(`${d.openAfternoon}–${d.closeAfternoon}`);
+  return parts.join(" / ") || "—";
+}
+
+function deriveHoursFromWeekly(wh) {
+  if (!wh) return { openMorning: "", closeMorning: "", openAfternoon: "", closeAfternoon: "" };
+  // Use Monday (1) or first non-closed weekday
+  const day = wh[1] || wh[2] || wh[3] || wh[4] || wh[5] || Object.values(wh).find(d => !d.closed);
+  if (!day || day.closed) return { openMorning: "", closeMorning: "", openAfternoon: "", closeAfternoon: "" };
+  if (day.continuous) return { openMorning: day.openMorning || "", closeMorning: "", openAfternoon: "", closeAfternoon: day.closeAfternoon || "" };
+  return { openMorning: day.openMorning || "", closeMorning: day.closeMorning || "", openAfternoon: day.openAfternoon || "", closeAfternoon: day.closeAfternoon || "" };
 }
 
 function readWeeklyHours() {
@@ -595,12 +626,13 @@ function readWeeklyHours() {
   document.querySelectorAll(".wh-row").forEach(row => {
     const d = Number(row.dataset.day);
     const closed = row.querySelector(".wh-closed")?.checked;
+    const cont = row.querySelector(".wh-cont")?.checked;
     const om = row.querySelector(".wh-om")?.value || "";
     const cm = row.querySelector(".wh-cm")?.value || "";
     const oa = row.querySelector(".wh-oa")?.value || "";
     const ca = row.querySelector(".wh-ca")?.value || "";
     if (closed || om || cm || oa || ca) {
-      result[d] = { closed: !!closed, openMorning: om, closeMorning: cm, openAfternoon: oa, closeAfternoon: ca };
+      result[d] = { closed: !!closed, continuous: !!cont, openMorning: om, closeMorning: cont ? "" : cm, openAfternoon: cont ? "" : oa, closeAfternoon: ca };
     }
   });
   return Object.keys(result).length ? result : null;
@@ -664,7 +696,7 @@ function renderArchive() {
               ${a.phone ? `<div class="stop-meta">${phoneIcon(a.phoneType)} ${escapeHtml(a.phone)}${a.phoneName ? ` <span class="phone-name-badge">${escapeHtml(a.phoneName)}</span>` : ""}${a.phonePreferred === "phone" && a.phone2 ? " ★" : ""}</div>` : ""}
               ${a.phone2 ? `<div class="stop-meta">${phoneIcon(a.phone2Type)} ${escapeHtml(a.phone2)}${a.phone2Name ? ` <span class="phone-name-badge">${escapeHtml(a.phone2Name)}</span>` : ""}${a.phonePreferred === "phone2" ? " ★" : ""}</div>` : ""}
               ${a.email ? `<div class="stop-meta">✉ ${escapeHtml(a.email)}</div>` : ""}
-              <div class="stop-meta">${[a.openMorning, a.closeMorning].filter(Boolean).join("–") || "—"} / ${[a.openAfternoon, a.closeAfternoon].filter(Boolean).join("–") || "—"}</div>
+              <div class="stop-meta">${weeklyHoursSummary(a)}</div>
               <div class="actions">
                 ${a.phone ? `<a class="btn" href="tel:${escapeHtml(a.phone)}" title="${escapeHtml(a.phoneName || a.phone)}">${phoneIcon(a.phoneType)}</a>` : ""}
                 ${a.phone2 ? `<a class="btn" href="tel:${escapeHtml(a.phone2)}" title="${escapeHtml(a.phone2Name || a.phone2)}">${phoneIcon(a.phone2Type)}</a>` : ""}
@@ -718,10 +750,6 @@ function renderArchive() {
           </select></label>
           <label class="field">Email<input name="email" type="email" value="${escapeHtml(form.email)}" /></label>
           <label class="field full">Note<textarea name="notes" id="contact-notes">${escapeHtml(form.notes)}</textarea></label>
-          <label class="field">Apr. mattina<input name="openMorning" type="time" value="${escapeHtml(form.openMorning)}" /></label>
-          <label class="field">Ch. mattina<input name="closeMorning" type="time" value="${escapeHtml(form.closeMorning)}" /></label>
-          <label class="field">Apr. pomeriggio<input name="openAfternoon" type="time" value="${escapeHtml(form.openAfternoon)}" /></label>
-          <label class="field">Ch. pomeriggio<input name="closeAfternoon" type="time" value="${escapeHtml(form.closeAfternoon)}" /></label>
           ${renderWeeklyHoursSection(form.weeklyHours)}
           <label class="field">Durata abituale (min)<input name="defaultDuration" type="number" min="5" step="5" value="${escapeHtml(form.defaultDuration)}" /></label>
           <div class="field full">
@@ -1025,6 +1053,7 @@ function addressToStop(address, durationOverride = null) {
     fullAddress: address.fullAddress, notes: address.notes,
     openMorning: address.openMorning, closeMorning: address.closeMorning,
     openAfternoon: address.openAfternoon, closeAfternoon: address.closeAfternoon,
+    weeklyHours: address.weeklyHours || null,
     durationMinutes: Number(durationOverride || address.defaultDuration || 45),
     lat: address.lat, lng: address.lng, recognized: true
   };
@@ -1304,9 +1333,9 @@ async function saveAddressForm(form) {
     phone2: v.phone2 || "", phone2Type: v.phone2Type || "fisso", phone2Name: v.phone2Name || "",
     phonePreferred: v.phonePreferred || "phone",
     email: v.email || "", notes: v.notes,
-    openMorning: v.openMorning, closeMorning: v.closeMorning,
-    openAfternoon: v.openAfternoon, closeAfternoon: v.closeAfternoon,
     weeklyHours: readWeeklyHours(),
+    // Derive legacy fields from Mon or first working day for backward compat
+    ...deriveHoursFromWeekly(readWeeklyHours()),
     defaultDuration: Number(v.defaultDuration || 45),
     lat: v.lat ? Number(v.lat) : null, lng: v.lng ? Number(v.lng) : null
   };
@@ -1540,12 +1569,26 @@ function openMapPicker() {
             const openT = p.open?.time ? fmtTime(p.open.time) : "";
             const closeT = p.close?.time ? fmtTime(p.close.time) : "";
             const slot = byDay[d];
-            if (!slot.openMorning) { slot.openMorning = openT; slot.closeMorning = closeT; }
-            else { slot.openAfternoon = openT; slot.closeAfternoon = closeT; }
+            if (!slot.openMorning) {
+              slot.openMorning = openT; slot.closeMorning = closeT; slot._periods = 1;
+            } else {
+              slot.openAfternoon = openT; slot.closeAfternoon = closeT; slot._periods = 2;
+            }
           }
-          // Mark closed days
+          // Mark closed days; detect continuous (single period)
           for (let d = 0; d < 7; d++) {
-            if (!byDay[d]) byDay[d] = { closed: true, openMorning:"", closeMorning:"", openAfternoon:"", closeAfternoon:"" };
+            if (!byDay[d]) { byDay[d] = { closed: true, continuous: false, openMorning:"", closeMorning:"", openAfternoon:"", closeAfternoon:"" }; continue; }
+            const s = byDay[d];
+            if (!s.closed && s._periods === 1) {
+              // Single period — treat as continuous: openMorning→closeMorning becomes open→close
+              s.continuous = true;
+              s.closeAfternoon = s.closeMorning;
+              s.closeMorning = "";
+              s.openAfternoon = "";
+            } else {
+              s.continuous = false;
+            }
+            delete s._periods;
           }
           // Update state and re-render weekly hours table
           state.addressForm.weeklyHours = byDay;
@@ -1894,12 +1937,17 @@ function bindEvents() {
     if (e.target.closest("#use-current-pos")) { useCurrentPosition(); return; }
     if (e.target.closest("#open-map-picker")) { openMapPicker(); return; }
 
-    // Weekly hours: toggle disabled state when "Chiuso" checkbox is clicked
-    if (e.target.classList.contains("wh-closed")) {
+    // Weekly hours: toggle disabled state
+    if (e.target.classList.contains("wh-closed") || e.target.classList.contains("wh-cont")) {
       const row = e.target.closest(".wh-row");
       if (row) {
-        const disabled = e.target.checked;
-        row.querySelectorAll(".wh-om, .wh-cm, .wh-oa, .wh-ca").forEach(inp => inp.disabled = disabled);
+        const closed = row.querySelector(".wh-closed")?.checked;
+        const cont = row.querySelector(".wh-cont")?.checked;
+        row.querySelector(".wh-cont") && (row.querySelector(".wh-cont").disabled = closed);
+        row.querySelector(".wh-om") && (row.querySelector(".wh-om").disabled = closed);
+        row.querySelector(".wh-cm") && (row.querySelector(".wh-cm").disabled = closed || cont);
+        row.querySelector(".wh-oa") && (row.querySelector(".wh-oa").disabled = closed || cont);
+        row.querySelector(".wh-ca") && (row.querySelector(".wh-ca").disabled = closed);
       }
       return;
     }

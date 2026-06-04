@@ -29,7 +29,28 @@ function addDriveBuffer(baseMinutes) {
   return Math.max(1, Math.ceil(minutes + (minutes / 60) * 10));
 }
 
-function normalizeStop(stop, index) {
+function normalizeStop(stop, index, dayOfWeek = null) {
+  // Resolve day-specific hours from weeklyHours when available
+  let openMorning = stop.openMorning || "";
+  let closeMorning = stop.closeMorning || "";
+  let openAfternoon = stop.openAfternoon || "";
+  let closeAfternoon = stop.closeAfternoon || "";
+  let continuous = false;
+  let closedToday = false;
+
+  const wh = stop.weeklyHours;
+  if (wh && dayOfWeek !== null) {
+    const day = wh[String(dayOfWeek)] || wh[dayOfWeek];
+    if (day) {
+      closedToday = !!day.closed;
+      continuous = !!day.continuous;
+      openMorning = day.openMorning || "";
+      closeMorning = continuous ? "" : (day.closeMorning || "");
+      openAfternoon = continuous ? "" : (day.openAfternoon || "");
+      closeAfternoon = day.closeAfternoon || day.closeMorning || "";
+    }
+  }
+
   return {
     uid: stop.uid || stop.stopUid || `stop-${index}`,
     id: stop.id ?? stop.addressId ?? `new-${index}`,
@@ -39,17 +60,32 @@ function normalizeStop(stop, index) {
     fullAddress: stop.fullAddress || stop.address || "",
     notes: stop.notes || "",
     durationMinutes: Number(stop.durationMinutes || stop.defaultDuration || 45),
-    openMorning: stop.openMorning || "",
-    closeMorning: stop.closeMorning || "",
-    openAfternoon: stop.openAfternoon || "",
-    closeAfternoon: stop.closeAfternoon || "",
+    openMorning,
+    closeMorning,
+    openAfternoon,
+    closeAfternoon,
+    continuous,
+    closedToday,
+    weeklyHours: wh || null,
     lat: stop.lat ?? null,
     lng: stop.lng ?? null
   };
 }
 
 function getWindows(stop) {
+  if (stop.closedToday) return [];
   const windows = [];
+
+  if (stop.continuous) {
+    // Single unbroken window: openMorning → closeAfternoon
+    const start = parseTime(stop.openMorning);
+    const end = parseTime(stop.closeAfternoon);
+    if (start !== null && end !== null && end > start) {
+      windows.push({ label: "Orario continuato", start, end });
+    }
+    return windows;
+  }
+
   const morningStart = parseTime(stop.openMorning);
   const morningEnd = parseTime(stop.closeMorning);
   const afternoonStart = parseTime(stop.openAfternoon);
@@ -65,9 +101,14 @@ function getWindows(stop) {
 }
 
 function openingLabel(stop) {
+  if (stop.closedToday) return "Chiuso";
   const parts = [];
-  if (stop.openMorning && stop.closeMorning) parts.push(`${stop.openMorning}-${stop.closeMorning}`);
-  if (stop.openAfternoon && stop.closeAfternoon) parts.push(`${stop.openAfternoon}-${stop.closeAfternoon}`);
+  if (stop.continuous) {
+    if (stop.openMorning && stop.closeAfternoon) parts.push(`${stop.openMorning}-${stop.closeAfternoon} (continuato)`);
+  } else {
+    if (stop.openMorning && stop.closeMorning) parts.push(`${stop.openMorning}-${stop.closeMorning}`);
+    if (stop.openAfternoon && stop.closeAfternoon) parts.push(`${stop.openAfternoon}-${stop.closeAfternoon}`);
+  }
   return parts.join(" / ") || "Non indicato";
 }
 
@@ -233,6 +274,9 @@ function evaluateOrder(order, context) {
       closeMorning: stop.closeMorning,
       openAfternoon: stop.openAfternoon,
       closeAfternoon: stop.closeAfternoon,
+      continuous: stop.continuous || false,
+      closedToday: stop.closedToday || false,
+      weeklyHours: stop.weeklyHours || null,
       openingHours: openingLabel(stop),
       departureTime: formatTime(departure),
       driveMinutes: leg.driveMinutes,
@@ -564,7 +608,10 @@ async function insertBreaks(rows, options) {
 }
 
 export async function planRoute(payload, settings, restStops = []) {
-  const stops = (payload.stops || []).map(normalizeStop);
+  const scheduledDate = payload.scheduledDate || new Date().toISOString().slice(0, 10);
+  // JS getDay(): 0=Sun,1=Mon,...,6=Sat — matches Google Places periods
+  const dayOfWeek = new Date(scheduledDate + "T12:00:00").getDay();
+  const stops = (payload.stops || []).map((s, i) => normalizeStop(s, i, dayOfWeek));
   if (!payload.start?.address && !payload.start?.fullAddress) {
     throw new Error("Inserisci un punto di partenza.");
   }
@@ -673,7 +720,7 @@ export async function planRoute(payload, settings, restStops = []) {
   return {
     id: null,
     generatedAt: new Date().toISOString(),
-    scheduledDate: payload.scheduledDate || new Date().toISOString().slice(0, 10),
+    scheduledDate,
     start: payload.start,
     end,
     startTime: payload.startTime || payload.start?.time || "",
@@ -695,6 +742,7 @@ export async function planRoute(payload, settings, restStops = []) {
       closeMorning: row.closeMorning,
       openAfternoon: row.openAfternoon,
       closeAfternoon: row.closeAfternoon,
+      weeklyHours: row.weeklyHours || null,
       lat: row.lat,
       lng: row.lng,
       recognized: Boolean(row.addressId)
