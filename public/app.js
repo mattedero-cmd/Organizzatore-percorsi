@@ -1397,10 +1397,12 @@ function openMapPicker() {
     map.addListener("click", e => reverseGeocode(e.latLng.lat(), e.latLng.lng()));
     marker.addListener("dragend", e => reverseGeocode(e.latLng.lat(), e.latLng.lng()));
 
-    // Places Autocomplete on the search input
+    // Places Autocomplete — request all useful fields including phone and opening hours
     const searchInput = document.getElementById("map-picker-search");
     const autocomplete = new google.maps.places.Autocomplete(searchInput, {
-      fields: ["name", "formatted_address", "geometry", "address_components"],
+      fields: ["name", "formatted_address", "geometry", "address_components",
+               "formatted_phone_number", "international_phone_number",
+               "opening_hours", "website", "types"],
       componentRestrictions: { country: "it" }
     });
 
@@ -1415,10 +1417,9 @@ function openMapPicker() {
     });
 
     document.getElementById("map-picker-confirm").onclick = () => {
-      // Fill lat/lng always
+      // Always save coordinates (useful for route planning even for real addresses)
       setCoordFields(pickedLat, pickedLng);
 
-      // If a structured place was selected via search, fill all form fields
       if (pickedPlace) {
         const components = pickedPlace.address_components || [];
         const get = (...types) => {
@@ -1431,14 +1432,34 @@ function openMapPicker() {
         const city = get("locality", "administrative_area_level_3", "administrative_area_level_2");
         const province = get("administrative_area_level_2");
 
-        const customerEl = document.querySelector("#address-form [name=customer]");
-        const locationEl = document.querySelector("#address-form [name=location]");
-        const fullAddressEl = document.querySelector("#address-form [name=fullAddress]");
+        const f = name => document.querySelector(`#address-form [name=${name}]`);
 
-        if (customerEl && !customerEl.value) customerEl.value = pickedPlace.name || "";
-        if (locationEl && !locationEl.value) locationEl.value = city || province || "";
-        if (fullAddressEl) fullAddressEl.value = pickedPlace.formatted_address || "";
-        showToast("Campi compilati dalla mappa");
+        // Always overwrite with place data when coming from map search
+        if (f("customer")) f("customer").value = pickedPlace.name || "";
+        if (f("location")) f("location").value = city || province || "";
+        if (f("fullAddress")) f("fullAddress").value = pickedPlace.formatted_address || "";
+
+        // Phone — prefer formatted local number, fall back to international
+        const phone = pickedPlace.formatted_phone_number || pickedPlace.international_phone_number || "";
+        if (phone && f("phone") && !f("phone").value) f("phone").value = phone;
+
+        // Opening hours → morning/afternoon windows
+        const periods = pickedPlace.opening_hours?.periods;
+        if (periods) {
+          // Find today's entry (or first available weekday) to extract typical hours
+          const today = new Date().getDay(); // 0=Sun
+          const todayPeriod = periods.find(p => p.open?.day === today);
+          const anyPeriod = todayPeriod || periods.find(p => p.open);
+          if (anyPeriod) {
+            const fmt = t => t ? `${String(Math.floor(t/100)).padStart(2,"0")}:${String(t%100).padStart(2,"0")}` : "";
+            const openTime = fmt(anyPeriod.open?.time ? Number(anyPeriod.open.time) : null);
+            const closeTime = fmt(anyPeriod.close?.time ? Number(anyPeriod.close.time) : null);
+            if (openTime && f("openMorning") && !f("openMorning").value) f("openMorning").value = openTime;
+            if (closeTime && f("closeMorning") && !f("closeMorning").value) f("closeMorning").value = closeTime;
+          }
+        }
+
+        showToast("Dati compilati dalla mappa");
       } else {
         showToast("Coordinate aggiornate");
       }
