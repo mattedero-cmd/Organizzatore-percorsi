@@ -119,7 +119,19 @@ function placesScore(place) {
   return rating * Math.log10(reviews + 1);
 }
 
-export async function findNearbyRestStop(lat, lng, radiusM = 15000) {
+// Perpendicular distance (km) from point P to segment A→B.
+function perpKmToSegment(pLat, pLng, aLat, aLng, bLat, bLng) {
+  const dLat = bLat - aLat, dLng = bLng - aLng;
+  const len2 = dLat * dLat + dLng * dLng;
+  const t = len2 < 1e-12 ? 0 : Math.max(0, Math.min(1,
+    ((pLat - aLat) * dLat + (pLng - aLng) * dLng) / len2));
+  return haversineKm({ lat: pLat, lng: pLng }, { lat: aLat + t * dLat, lng: aLng + t * dLng });
+}
+
+// segFrom/segTo: route segment endpoints for perpendicular filtering.
+// radiusM: how wide to cast the Places API net (default 15 km).
+// MAX_DETOUR_KM: max perpendicular distance from the segment (≈ 2 min at 50 km/h).
+export async function findNearbyRestStop(lat, lng, segFromLat, segFromLng, segToLat, segToLng, radiusM = 15000) {
   if (!lat || !lng) return null;
   const key = API_KEY();
   if (!key) return null;
@@ -128,9 +140,11 @@ export async function findNearbyRestStop(lat, lng, radiusM = 15000) {
   if (placesCache.has(cacheKey)) return placesCache.get(cacheKey);
 
   const EXCLUDE_KEYWORDS = /hotel|alberg|agritur|b&b|bed|hostel|ostello|ristorante|pizzeria|trattoria/i;
+  const MAX_DETOUR_KM = 1.7; // ≈ 2 min at 50 km/h
+
+  const hasSegment = segFromLat != null && segToLat != null;
 
   try {
-    // Search for bars — more relevant for a quick rest stop than generic cafés
     const url = `${BASE}/place/nearbysearch/json?location=${lat},${lng}&radius=${radiusM}&type=bar&language=it&key=${key}`;
     const res = await fetch(url, { signal: AbortSignal.timeout(6000) });
     const data = await res.json();
@@ -140,15 +154,16 @@ export async function findNearbyRestStop(lat, lng, radiusM = 15000) {
       return null;
     }
 
-    // Max detour: 2 minutes ≈ 1.7 km at 50 km/h. Keep only bars reachable
-    // with at most a 2-min deviation from the current route position.
-    const MAX_DETOUR_KM = 1.7;
-
     const best = data.results
       .filter(p => {
         if (!p.rating || p.user_ratings_total < 5) return false;
         if (EXCLUDE_KEYWORDS.test(p.name)) return false;
-        const km = haversineKm({ lat, lng }, { lat: p.geometry.location.lat, lng: p.geometry.location.lng });
+        const pLat = p.geometry.location.lat, pLng = p.geometry.location.lng;
+        // Use perpendicular distance to the route segment when available;
+        // otherwise fall back to haversine from the search point.
+        const km = hasSegment
+          ? perpKmToSegment(pLat, pLng, segFromLat, segFromLng, segToLat, segToLng)
+          : haversineKm({ lat, lng }, { lat: pLat, lng: pLng });
         return km <= MAX_DETOUR_KM;
       })
       .sort((a, b) => placesScore(b) - placesScore(a))[0];
