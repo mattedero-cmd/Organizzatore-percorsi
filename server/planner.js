@@ -410,8 +410,8 @@ async function insertBreaks(rows, options) {
     if (t < dayStart + NO_BREAK_EARLY) return false;
     if (t > finalArrival - NO_BREAK_BEFORE_HOME) return false;
     if (lunchTime != null) {
-      if (t > lunchTime - NO_BREAK_BEFORE_LUNCH) return false;
-      if (t < lunchTime + NO_BREAK_AFTER_LUNCH) return false;
+      // Block the window from 1h before lunch to 2h after lunch (range, not two thresholds)
+      if (t >= lunchTime - NO_BREAK_BEFORE_LUNCH && t <= lunchTime + NO_BREAK_AFTER_LUNCH) return false;
     }
     return true;
   };
