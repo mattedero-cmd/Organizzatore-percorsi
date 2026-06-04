@@ -1354,7 +1354,7 @@ function bindEvents() {
 
     const editAddr = e.target.closest("[data-edit-address]");
     if (editAddr) {
-      const addr = state.addresses.find(a => String(a.id) === editAddr.dataset.editAddress);
+      const addr = state.allAddresses.find(a => String(a.id) === editAddr.dataset.editAddress) || state.addresses.find(a => String(a.id) === editAddr.dataset.editAddress);
       state.addressForm = { ...emptyForm, ...addr };
       render();
       return;
