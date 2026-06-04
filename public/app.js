@@ -274,7 +274,7 @@ async function loadGoogleMapsScript() {
     if (window.google?.maps) { state.googleMapsReady = true; resolve(true); return; }
     window.__gMapsCb = () => { state.googleMapsReady = true; resolve(true); };
     const s = document.createElement("script");
-    s.src = `https://maps.googleapis.com/maps/api/js?key=${state.googleMapsKey}&callback=__gMapsCb`;
+    s.src = `https://maps.googleapis.com/maps/api/js?key=${state.googleMapsKey}&libraries=places&callback=__gMapsCb`;
     s.onerror = () => resolve(false);
     document.head.appendChild(s);
   });
@@ -1315,45 +1315,105 @@ function openMapPicker() {
   const startLat = Number(latEl?.value) || 46.07;
   const startLng = Number(lngEl?.value) || 11.12;
   let pickedLat = startLat, pickedLng = startLng;
+  let pickedPlace = null; // full place data when selected via search
 
   const modal = document.createElement("div");
   modal.className = "map-picker-modal";
   modal.innerHTML = `
     <div class="map-picker-inner">
       <div class="map-picker-header">
-        <span>Tocca la mappa per spostare il punto</span>
-        <button class="btn" id="map-picker-cancel">✕ Annulla</button>
+        <input id="map-picker-search" class="map-picker-search" type="text" placeholder="Cerca un posto, indirizzo…" autocomplete="off" />
+        <button class="btn" id="map-picker-cancel">✕</button>
       </div>
       <div id="map-picker-map"></div>
       <div class="map-picker-footer">
-        <span id="map-picker-coords" class="stop-meta">${startLat.toFixed(5)}, ${startLng.toFixed(5)}</span>
-        <button class="btn primary" id="map-picker-confirm">✓ Usa questo punto</button>
+        <span id="map-picker-label" class="stop-meta">Tocca la mappa o cerca un luogo</span>
+        <button class="btn primary" id="map-picker-confirm">✓ Usa</button>
       </div>
     </div>`;
   document.body.appendChild(modal);
 
   loadGoogleMapsScript().then(ready => {
     if (!ready) { showToast("Google Maps non disponibile"); modal.remove(); return; }
+
     const map = new google.maps.Map(document.getElementById("map-picker-map"), {
       center: { lat: startLat, lng: startLng }, zoom: 15,
       mapTypeControl: false, fullscreenControl: false, streetViewControl: false
     });
+
     const marker = new google.maps.Marker({
-      position: { lat: startLat, lng: startLng }, map, draggable: true,
-      title: "Trascina per spostare"
+      position: { lat: startLat, lng: startLng }, map, draggable: true
     });
-    const updateCoords = (lat, lng) => {
+
+    const labelEl = document.getElementById("map-picker-label");
+
+    const updateMarker = (lat, lng, label) => {
       pickedLat = lat; pickedLng = lng;
-      const el = document.getElementById("map-picker-coords");
-      if (el) el.textContent = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+      marker.setPosition({ lat, lng });
+      map.panTo({ lat, lng });
+      if (labelEl) labelEl.textContent = label || `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
     };
-    map.addListener("click", e => { marker.setPosition(e.latLng); updateCoords(e.latLng.lat(), e.latLng.lng()); });
-    marker.addListener("dragend", e => updateCoords(e.latLng.lat(), e.latLng.lng()));
+
+    // Reverse geocode a tap to get a readable address
+    const reverseGeocode = (lat, lng) => {
+      new google.maps.Geocoder().geocode({ location: { lat, lng } }, (res, st) => {
+        const addr = st === "OK" && res[0] ? res[0].formatted_address : `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+        updateMarker(lat, lng, addr);
+        pickedPlace = null; // tapped manually — no structured place data
+      });
+    };
+
+    map.addListener("click", e => reverseGeocode(e.latLng.lat(), e.latLng.lng()));
+    marker.addListener("dragend", e => reverseGeocode(e.latLng.lat(), e.latLng.lng()));
+
+    // Places Autocomplete on the search input
+    const searchInput = document.getElementById("map-picker-search");
+    const autocomplete = new google.maps.places.Autocomplete(searchInput, {
+      fields: ["name", "formatted_address", "geometry", "address_components"],
+      componentRestrictions: { country: "it" }
+    });
+
+    autocomplete.addListener("place_changed", () => {
+      const place = autocomplete.getPlace();
+      if (!place.geometry?.location) { showToast("Luogo non trovato"); return; }
+      pickedPlace = place;
+      const lat = place.geometry.location.lat();
+      const lng = place.geometry.location.lng();
+      updateMarker(lat, lng, place.name || place.formatted_address);
+      map.setZoom(17);
+    });
+
     document.getElementById("map-picker-confirm").onclick = () => {
+      // Fill lat/lng always
       setCoordFields(pickedLat, pickedLng);
+
+      // If a structured place was selected via search, fill all form fields
+      if (pickedPlace) {
+        const components = pickedPlace.address_components || [];
+        const get = (...types) => {
+          for (const t of types) {
+            const c = components.find(x => x.types.includes(t));
+            if (c) return c.long_name;
+          }
+          return "";
+        };
+        const city = get("locality", "administrative_area_level_3", "administrative_area_level_2");
+        const province = get("administrative_area_level_2");
+
+        const customerEl = document.querySelector("#address-form [name=customer]");
+        const locationEl = document.querySelector("#address-form [name=location]");
+        const fullAddressEl = document.querySelector("#address-form [name=fullAddress]");
+
+        if (customerEl && !customerEl.value) customerEl.value = pickedPlace.name || "";
+        if (locationEl && !locationEl.value) locationEl.value = city || province || "";
+        if (fullAddressEl) fullAddressEl.value = pickedPlace.formatted_address || "";
+        showToast("Campi compilati dalla mappa");
+      } else {
+        showToast("Coordinate aggiornate");
+      }
       modal.remove();
-      showToast("Coordinate aggiornate");
     };
+
     document.getElementById("map-picker-cancel").onclick = () => modal.remove();
   });
 }

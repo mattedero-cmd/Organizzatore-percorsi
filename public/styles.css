@@ -946,6 +946,22 @@ tbody tr:last-child td {
   min-height: 0;
 }
 
+.map-picker-search {
+  flex: 1;
+  font-size: 1rem;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  min-width: 0;
+}
+
+/* Google Places autocomplete dropdown — keep on top of the modal */
+.pac-container {
+  z-index: 300 !important;
+}
+
 /* ── phone group (multi-number form) ──────────────────────────────────────── */
 .phone-group {
   display: flex;
