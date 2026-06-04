@@ -1039,6 +1039,61 @@ tbody tr:last-child td {
   cursor: pointer;
 }
 
+.phone-pref-inline {
+  flex-shrink: 0;
+  order: -1;
+}
+
+/* ── weekly hours table ───────────────────────────────────────────────────── */
+.wh-label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--muted);
+  margin-bottom: 6px;
+  display: block;
+}
+
+.wh-table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.wh-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+
+.wh-table th {
+  text-align: left;
+  padding: 4px 4px 6px;
+  font-weight: 600;
+  color: var(--muted);
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+.wh-table td {
+  padding: 3px 4px;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.wh-day {
+  font-weight: 600;
+  min-width: 32px;
+}
+
+.wh-table input[type=time] {
+  width: 90px;
+  padding: 3px 4px;
+  font-size: 0.8rem;
+}
+
+.wh-table input[type=time]:disabled {
+  opacity: 0.35;
+}
+
 .phone-name-badge {
   display: inline-block;
   background: var(--surface-2);

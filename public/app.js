@@ -70,6 +70,7 @@ const emptyForm = {
   email: "", notes: "",
   openMorning: "08:30", closeMorning: "12:30",
   openAfternoon: "14:30", closeAfternoon: "18:00",
+  weeklyHours: null,
   defaultDuration: 45, lat: "", lng: ""
 };
 
@@ -560,6 +561,51 @@ function renderRoute() {
     </section>`;
 }
 
+// ── weekly hours helper ───────────────────────────────────────────────────────
+
+const DAYS_IT = ["Dom", "Lun", "Mar", "Mer", "Gio", "Ven", "Sab"];
+
+function renderWeeklyHoursSection(weeklyHours) {
+  const wh = weeklyHours || {};
+  const rows = [1,2,3,4,5,6,0].map(d => {
+    const h = wh[d] || {};
+    const closed = h.closed ? "checked" : "";
+    return `<tr class="wh-row" data-day="${d}">
+      <td class="wh-day">${DAYS_IT[d]}</td>
+      <td><label><input type="checkbox" class="wh-closed" ${closed} /> Chiuso</label></td>
+      <td><input type="time" class="wh-om" value="${h.openMorning || ""}" ${h.closed ? "disabled" : ""} /></td>
+      <td><input type="time" class="wh-cm" value="${h.closeMorning || ""}" ${h.closed ? "disabled" : ""} /></td>
+      <td><input type="time" class="wh-oa" value="${h.openAfternoon || ""}" ${h.closed ? "disabled" : ""} /></td>
+      <td><input type="time" class="wh-ca" value="${h.closeAfternoon || ""}" ${h.closed ? "disabled" : ""} /></td>
+    </tr>`;
+  }).join("");
+  return `<div class="field full">
+    <label class="wh-label">Orari settimanali</label>
+    <div class="wh-table-wrap">
+      <table class="wh-table">
+        <thead><tr><th></th><th></th><th>Apr. matt.</th><th>Ch. matt.</th><th>Apr. pom.</th><th>Ch. pom.</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  </div>`;
+}
+
+function readWeeklyHours() {
+  const result = {};
+  document.querySelectorAll(".wh-row").forEach(row => {
+    const d = Number(row.dataset.day);
+    const closed = row.querySelector(".wh-closed")?.checked;
+    const om = row.querySelector(".wh-om")?.value || "";
+    const cm = row.querySelector(".wh-cm")?.value || "";
+    const oa = row.querySelector(".wh-oa")?.value || "";
+    const ca = row.querySelector(".wh-ca")?.value || "";
+    if (closed || om || cm || oa || ca) {
+      result[d] = { closed: !!closed, openMorning: om, closeMorning: cm, openAfternoon: oa, closeAfternoon: ca };
+    }
+  });
+  return Object.keys(result).length ? result : null;
+}
+
 // ── render: saved tab ─────────────────────────────────────────────────────────
 
 function renderSaved() {
@@ -639,9 +685,9 @@ function renderArchive() {
           <div class="field full phone-group">
             <div class="phone-label-row">
               <span class="phone-label">Telefono 1</span>
-              <label class="phone-pref-label"><input type="radio" name="phonePreferred" value="phone" ${form.phonePreferred !== "phone2" ? "checked" : ""} /> Preferito</label>
             </div>
             <div class="phone-row">
+              <label class="phone-pref-label phone-pref-inline"><input type="radio" name="phonePreferred" value="phone" ${form.phonePreferred !== "phone2" ? "checked" : ""} /> Preferito</label>
               <select name="phoneType" class="phone-type-select">
                 <option value="cell" ${form.phoneType === "cell" ? "selected" : ""}>📱 Cell</option>
                 <option value="fisso" ${form.phoneType === "fisso" ? "selected" : ""}>☎ Fisso</option>
@@ -654,9 +700,9 @@ function renderArchive() {
           <div class="field full phone-group">
             <div class="phone-label-row">
               <span class="phone-label">Telefono 2</span>
-              <label class="phone-pref-label"><input type="radio" name="phonePreferred" value="phone2" ${form.phonePreferred === "phone2" ? "checked" : ""} /> Preferito</label>
             </div>
             <div class="phone-row">
+              <label class="phone-pref-label phone-pref-inline"><input type="radio" name="phonePreferred" value="phone2" ${form.phonePreferred === "phone2" ? "checked" : ""} /> Preferito</label>
               <select name="phone2Type" class="phone-type-select">
                 <option value="cell" ${form.phone2Type === "cell" ? "selected" : ""}>📱 Cell</option>
                 <option value="fisso" ${form.phone2Type === "fisso" ? "selected" : ""}>☎ Fisso</option>
@@ -676,6 +722,7 @@ function renderArchive() {
           <label class="field">Ch. mattina<input name="closeMorning" type="time" value="${escapeHtml(form.closeMorning)}" /></label>
           <label class="field">Apr. pomeriggio<input name="openAfternoon" type="time" value="${escapeHtml(form.openAfternoon)}" /></label>
           <label class="field">Ch. pomeriggio<input name="closeAfternoon" type="time" value="${escapeHtml(form.closeAfternoon)}" /></label>
+          ${renderWeeklyHoursSection(form.weeklyHours)}
           <label class="field">Durata abituale (min)<input name="defaultDuration" type="number" min="5" step="5" value="${escapeHtml(form.defaultDuration)}" /></label>
           <div class="field full">
             <label>Coordinate GPS</label>
@@ -1259,6 +1306,7 @@ async function saveAddressForm(form) {
     email: v.email || "", notes: v.notes,
     openMorning: v.openMorning, closeMorning: v.closeMorning,
     openAfternoon: v.openAfternoon, closeAfternoon: v.closeAfternoon,
+    weeklyHours: readWeeklyHours(),
     defaultDuration: Number(v.defaultDuration || 45),
     lat: v.lat ? Number(v.lat) : null, lng: v.lng ? Number(v.lng) : null
   };
@@ -1460,23 +1508,83 @@ function openMapPicker() {
         if (f("location")) f("location").value = city || province || "";
         if (f("fullAddress")) f("fullAddress").value = pickedPlace.formatted_address || "";
 
-        // Phone — prefer formatted local number, fall back to international
+        // Phone — prefer formatted local number, fall back to international; auto-detect type
         const phone = pickedPlace.formatted_phone_number || pickedPlace.international_phone_number || "";
-        if (phone && f("phone") && !f("phone").value) f("phone").value = phone;
+        if (phone) {
+          const digits = phone.replace(/\D/g, "");
+          // Italian mobile: starts with 3 (after country code +39 → strip it)
+          const localDigits = digits.startsWith("39") ? digits.slice(2) : digits;
+          const autoType = localDigits.startsWith("3") ? "cell" : "fisso";
+          if (f("phone") && !f("phone").value) {
+            f("phone").value = phone;
+            const sel = document.querySelector("#address-form [name=phoneType]");
+            if (sel) sel.value = autoType;
+          }
+        }
 
-        // Opening hours → morning/afternoon windows
+        // Opening hours — parse periods into morning/afternoon for each day
         const periods = pickedPlace.opening_hours?.periods;
-        if (periods) {
-          // Find today's entry (or first available weekday) to extract typical hours
-          const today = new Date().getDay(); // 0=Sun
-          const todayPeriod = periods.find(p => p.open?.day === today);
-          const anyPeriod = todayPeriod || periods.find(p => p.open);
-          if (anyPeriod) {
-            const fmt = t => t ? `${String(Math.floor(t/100)).padStart(2,"0")}:${String(t%100).padStart(2,"0")}` : "";
-            const openTime = fmt(anyPeriod.open?.time ? Number(anyPeriod.open.time) : null);
-            const closeTime = fmt(anyPeriod.close?.time ? Number(anyPeriod.close.time) : null);
-            if (openTime && f("openMorning") && !f("openMorning").value) f("openMorning").value = openTime;
-            if (closeTime && f("closeMorning") && !f("closeMorning").value) f("closeMorning").value = closeTime;
+        const weekdayText = pickedPlace.opening_hours?.weekday_text || [];
+        if (periods && periods.length) {
+          const fmtTime = s => {
+            // s is a string like "0830" or "1730"
+            const str = String(s || "").padStart(4, "0");
+            return `${str.slice(0,2)}:${str.slice(2,4)}`;
+          };
+          // Build per-day hours map (Google day: 0=Sun)
+          const byDay = {};
+          for (const p of periods) {
+            const d = p.open?.day;
+            if (d == null) continue;
+            if (!byDay[d]) byDay[d] = { openMorning:"", closeMorning:"", openAfternoon:"", closeAfternoon:"", closed:false };
+            const openT = p.open?.time ? fmtTime(p.open.time) : "";
+            const closeT = p.close?.time ? fmtTime(p.close.time) : "";
+            const slot = byDay[d];
+            if (!slot.openMorning) { slot.openMorning = openT; slot.closeMorning = closeT; }
+            else { slot.openAfternoon = openT; slot.closeAfternoon = closeT; }
+          }
+          // Mark closed days
+          for (let d = 0; d < 7; d++) {
+            if (!byDay[d]) byDay[d] = { closed: true, openMorning:"", closeMorning:"", openAfternoon:"", closeAfternoon:"" };
+          }
+          // Update state and re-render weekly hours table
+          state.addressForm.weeklyHours = byDay;
+
+          // Fill standard fields from a typical weekday (prefer Monday=1)
+          const typical = byDay[1] || byDay[2] || byDay[3] || byDay[4] || byDay[5];
+          if (typical && !typical.closed) {
+            if (f("openMorning") && !f("openMorning").value) f("openMorning").value = typical.openMorning || "";
+            if (f("closeMorning") && !f("closeMorning").value) f("closeMorning").value = typical.closeMorning || "";
+            if (f("openAfternoon") && !f("openAfternoon").value) f("openAfternoon").value = typical.openAfternoon || "";
+            if (f("closeAfternoon") && !f("closeAfternoon").value) f("closeAfternoon").value = typical.closeAfternoon || "";
+          }
+
+          // Re-render weekly hours table with imported data
+          const whContainer = document.querySelector("#address-form .wh-table-wrap");
+          if (whContainer) {
+            const tempDiv = document.createElement("div");
+            tempDiv.innerHTML = renderWeeklyHoursSection(byDay);
+            const newTable = tempDiv.querySelector(".wh-table-wrap");
+            if (newTable) whContainer.replaceWith(newTable);
+          }
+
+          // Special hours: check if any day differs from the typical pattern
+          const specialDays = [];
+          if (weekdayText.length) {
+            // Always include full weekday_text when there are irregular hours
+            const hasClosure = Object.values(byDay).some(d => d.closed);
+            const uniqueSlots = new Set(Object.values(byDay).map(d => `${d.openMorning}-${d.closeMorning}-${d.openAfternoon}-${d.closeAfternoon}`));
+            if (hasClosure || uniqueSlots.size > 2) {
+              specialDays.push(...weekdayText);
+            }
+          }
+          if (specialDays.length) {
+            const notesEl = f("notes");
+            if (notesEl) {
+              const existing = notesEl.value.trim();
+              const hoursBlock = "Orari: " + specialDays.join("; ");
+              notesEl.value = existing ? `${existing}\n${hoursBlock}` : hoursBlock;
+            }
           }
         }
 
@@ -1785,6 +1893,16 @@ function bindEvents() {
 
     if (e.target.closest("#use-current-pos")) { useCurrentPosition(); return; }
     if (e.target.closest("#open-map-picker")) { openMapPicker(); return; }
+
+    // Weekly hours: toggle disabled state when "Chiuso" checkbox is clicked
+    if (e.target.classList.contains("wh-closed")) {
+      const row = e.target.closest(".wh-row");
+      if (row) {
+        const disabled = e.target.checked;
+        row.querySelectorAll(".wh-om, .wh-cm, .wh-oa, .wh-ca").forEach(inp => inp.disabled = disabled);
+      }
+      return;
+    }
 
     if (e.target.closest("#import-contacts")) {
       await importFromContactPicker();
