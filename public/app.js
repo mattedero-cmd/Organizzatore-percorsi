@@ -304,17 +304,44 @@ async function renderGoogleMap(result) {
     hasPoints = true;
   };
 
-  if (result.start?.lat) addMarker(result.start.lat, result.start.lng, "P", result.start.label || "Partenza");
+  // Geocode missing start/end coords using Geocoding API
+  const geocodeAddr = async (addr) => {
+    if (!addr) return null;
+    try {
+      const gc = new google.maps.Geocoder();
+      return await new Promise(resolve => gc.geocode({ address: addr.address || addr.fullAddress || addr.label || "" }, (res, st) => {
+        if (st === "OK" && res[0]) {
+          const loc = res[0].geometry.location;
+          resolve({ lat: loc.lat(), lng: loc.lng() });
+        } else resolve(null);
+      }));
+    } catch { return null; }
+  };
+
+  let startCoord = result.start?.lat ? { lat: Number(result.start.lat), lng: Number(result.start.lng) } : await geocodeAddr(result.start);
+  let endCoord = result.end?.lat ? { lat: Number(result.end.lat), lng: Number(result.end.lng) } : await geocodeAddr(result.end);
+
+  if (startCoord) addMarker(startCoord.lat, startCoord.lng, "P", result.start?.label || "Partenza");
   for (const row of rows) addMarker(row.lat, row.lng, String(row.stopNumber), row.customer);
-  if (result.end?.lat) addMarker(result.end.lat, result.end.lng, "A", result.end.label || "Arrivo");
+  if (endCoord) addMarker(endCoord.lat, endCoord.lng, "A", result.end?.label || "Arrivo");
 
   if (hasPoints) map.fitBounds(bounds);
 
   // Draw route using Google Maps Directions Service (browser-side)
   const allPoints = [];
-  if (result.start?.lat) allPoints.push({ lat: Number(result.start.lat), lng: Number(result.start.lng) });
+  if (startCoord) allPoints.push(startCoord);
   for (const row of rows) if (row.lat) allPoints.push({ lat: Number(row.lat), lng: Number(row.lng) });
-  if (result.end?.lat) allPoints.push({ lat: Number(result.end.lat), lng: Number(result.end.lng) });
+  if (endCoord) allPoints.push(endCoord);
+
+  const drawFallbackPolyline = () => {
+    new google.maps.Polyline({
+      path: allPoints.map(p => new google.maps.LatLng(p.lat, p.lng)),
+      map,
+      strokeColor: "#00a99d",
+      strokeOpacity: 0.75,
+      strokeWeight: 4
+    });
+  };
 
   if (allPoints.length >= 2) {
     const ds = new google.maps.DirectionsService();
@@ -324,11 +351,12 @@ async function renderGoogleMap(result) {
       polylineOptions: { strokeColor: "#00a99d", strokeOpacity: 0.9, strokeWeight: 4 }
     });
 
-    const waypoints = allPoints.slice(1, -1).map(p => ({ location: new google.maps.LatLng(p.lat, p.lng), stopover: true }));
+    // Directions API max 25 waypoints; split if needed
+    const origin = new google.maps.LatLng(allPoints[0].lat, allPoints[0].lng);
+    const destination = new google.maps.LatLng(allPoints[allPoints.length - 1].lat, allPoints[allPoints.length - 1].lng);
+    const waypoints = allPoints.slice(1, -1).slice(0, 23).map(p => ({ location: new google.maps.LatLng(p.lat, p.lng), stopover: true }));
     ds.route({
-      origin: new google.maps.LatLng(allPoints[0].lat, allPoints[0].lng),
-      destination: new google.maps.LatLng(allPoints[allPoints.length - 1].lat, allPoints[allPoints.length - 1].lng),
-      waypoints,
+      origin, destination, waypoints,
       travelMode: google.maps.TravelMode.DRIVING
     }, (res, status) => {
       if (status === "OK") {
@@ -339,6 +367,8 @@ async function renderGoogleMap(result) {
           route.legs.forEach(leg => { b.extend(leg.start_location); b.extend(leg.end_location); });
           map.fitBounds(b);
         }
+      } else {
+        drawFallbackPolyline();
       }
     });
   }
