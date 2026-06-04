@@ -281,12 +281,26 @@ async function renderGoogleMap(result) {
   const ready = await loadGoogleMapsScript();
   if (!ready || !window.google?.maps) { el.style.display = "none"; return; }
 
-  // Enrich rows with coordinates from allAddresses when missing in payload
-  const rows = (result.rows || []).map(row => {
+  // Geocode an address string using Google Geocoder
+  const geocodeStr = (addressStr) => new Promise(resolve => {
+    if (!addressStr) return resolve(null);
+    new google.maps.Geocoder().geocode({ address: addressStr }, (res, st) => {
+      if (st === "OK" && res[0]) {
+        const loc = res[0].geometry.location;
+        resolve({ lat: loc.lat(), lng: loc.lng() });
+      } else resolve(null);
+    });
+  });
+
+  // Enrich rows with coordinates — from payload, allAddresses cache, or geocoding
+  const rawRows = result.rows || [];
+  const rows = await Promise.all(rawRows.map(async row => {
     if (row.lat && row.lng) return row;
     const addr = state.allAddresses.find(a => String(a.id) === String(row.addressId));
-    return addr?.lat ? { ...row, lat: addr.lat, lng: addr.lng } : row;
-  });
+    if (addr?.lat) return { ...row, lat: addr.lat, lng: addr.lng };
+    const coord = await geocodeStr(row.fullAddress || row.address || `${row.customer} ${row.location || ""}`);
+    return coord ? { ...row, ...coord } : row;
+  }));
 
   const firstCoord = rows.find(r => r.lat) || result.start;
   const center = firstCoord?.lat ? { lat: Number(firstCoord.lat), lng: Number(firstCoord.lng) } : { lat: 46.0, lng: 11.0 };
@@ -304,19 +318,7 @@ async function renderGoogleMap(result) {
     hasPoints = true;
   };
 
-  // Geocode missing start/end coords using Geocoding API
-  const geocodeAddr = async (addr) => {
-    if (!addr) return null;
-    try {
-      const gc = new google.maps.Geocoder();
-      return await new Promise(resolve => gc.geocode({ address: addr.address || addr.fullAddress || addr.label || "" }, (res, st) => {
-        if (st === "OK" && res[0]) {
-          const loc = res[0].geometry.location;
-          resolve({ lat: loc.lat(), lng: loc.lng() });
-        } else resolve(null);
-      }));
-    } catch { return null; }
-  };
+  const geocodeAddr = (addr) => geocodeStr(addr?.address || addr?.fullAddress || addr?.label || "");
 
   let startCoord = result.start?.lat ? { lat: Number(result.start.lat), lng: Number(result.start.lng) } : await geocodeAddr(result.start);
   let endCoord = result.end?.lat ? { lat: Number(result.end.lat), lng: Number(result.end.lng) } : await geocodeAddr(result.end);
