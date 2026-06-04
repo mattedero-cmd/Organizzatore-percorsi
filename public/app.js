@@ -408,8 +408,8 @@ function renderRoute() {
             <option value="arrive_at" ${dm === "arrive_at" ? "selected" : ""}>Arrivo a orario fisso</option>
             <option value="depart_at" ${dm === "depart_at" ? "selected" : ""}>Partenza a orario fisso</option>
           </select></label>
-          <label class="field">Minuti prima apertura<input name="arrivalLeadMinutes" type="number" min="0" max="60" step="5" value="${escapeHtml(r.arrivalLeadMinutes)}" ${dm !== "first_open_minus" ? "disabled" : ""} /></label>
-          <label class="field">Orario arrivo target<input name="firstArrivalTime" type="time" value="${escapeHtml(r.firstArrivalTime)}" ${dm !== "arrive_at" ? "disabled" : ""} /></label>
+          <label class="field">Anticipo (min)<input name="arrivalLeadMinutes" type="number" min="0" max="60" step="5" value="${escapeHtml(r.arrivalLeadMinutes)}" ${dm !== "first_open_minus" ? "disabled" : ""} /></label>
+          <label class="field">Arrivo target<input name="firstArrivalTime" type="time" value="${escapeHtml(r.firstArrivalTime)}" ${dm !== "arrive_at" ? "disabled" : ""} /></label>
           <label class="field checkbox-field full">
             <input name="endSameAsStart" type="checkbox" ${r.endSameAsStart ? "checked" : ""} />
             <span>Arrivo finale = partenza</span>
