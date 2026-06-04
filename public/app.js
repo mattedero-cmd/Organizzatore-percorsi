@@ -379,6 +379,7 @@ function renderSaved() {
 
 function renderArchive() {
   const form = state.addressForm;
+  const addresses = normalizeList(state.addresses);
   app.innerHTML = `
     <section class="grid">
       <div class="panel">
