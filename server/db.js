@@ -38,6 +38,7 @@ function rowToAddress(row) {
     customer: row.customer ?? "",
     location: row.location ?? "",
     fullAddress: row.full_address ?? "",
+    addressType: row.address_type ?? "customer",
     phone: row.phone ?? "",
     phoneType: row.phone_type ?? "cell",
     phoneName: row.phone_name ?? "",
@@ -65,7 +66,9 @@ function rowToSettings(row) {
     driveHourRate: Number(row.drive_hour_rate ?? 22),
     workHourRate: Number(row.work_hour_rate ?? 60),
     navigatorPref: row.navigator_pref ?? "google",
-    themePref: row.theme_pref ?? "auto"
+    themePref: row.theme_pref ?? "auto",
+    lunchBreakMinutes: Number(row.lunch_break_minutes ?? 45),
+    lunchBreakEnabled: row.lunch_break_enabled === undefined || row.lunch_break_enabled === null ? true : Boolean(Number(row.lunch_break_enabled))
   };
 }
 
@@ -295,12 +298,22 @@ async function migratePlannedRoutes() {
     await runSql("ALTER TABLE addresses ADD COLUMN phone_preferred TEXT DEFAULT 'phone';");
   }
 
+  if (!addrCols.includes("address_type")) {
+    await runSql("ALTER TABLE addresses ADD COLUMN address_type TEXT DEFAULT 'customer';");
+  }
+
   const settingsCols = await tableColumns("settings");
   if (!settingsCols.includes("navigator_pref")) {
     await runSql("ALTER TABLE settings ADD COLUMN navigator_pref TEXT DEFAULT 'google';");
   }
   if (!settingsCols.includes("theme_pref")) {
     await runSql("ALTER TABLE settings ADD COLUMN theme_pref TEXT DEFAULT 'auto';");
+  }
+  if (!settingsCols.includes("lunch_break_minutes")) {
+    await runSql("ALTER TABLE settings ADD COLUMN lunch_break_minutes INTEGER DEFAULT 45;");
+  }
+  if (!settingsCols.includes("lunch_break_enabled")) {
+    await runSql("ALTER TABLE settings ADD COLUMN lunch_break_enabled INTEGER DEFAULT 1;");
   }
 }
 
@@ -322,8 +335,8 @@ export async function getAddress(id) {
 }
 
 export async function createAddress(address) {
-  const cols = `customer, location, full_address, phone, phone_type, phone_name, phone2, phone2_type, phone2_name, phone_preferred, email, notes, open_morning, close_morning, open_afternoon, close_afternoon, default_duration, lat, lng`;
-  const vals = `${sqlValue(address.customer || "Senza nome")}, ${sqlValue(address.location || "")}, ${sqlValue(address.fullAddress || address.full_address || "")}, ${sqlValue(address.phone || "")}, ${sqlValue(address.phoneType || "cell")}, ${sqlValue(address.phoneName || "")}, ${sqlValue(address.phone2 || "")}, ${sqlValue(address.phone2Type || "fisso")}, ${sqlValue(address.phone2Name || "")}, ${sqlValue(address.phonePreferred || "phone")}, ${sqlValue(address.email || "")}, ${sqlValue(address.notes || "")}, ${sqlValue(address.openMorning || address.open_morning || "")}, ${sqlValue(address.closeMorning || address.close_morning || "")}, ${sqlValue(address.openAfternoon || address.open_afternoon || "")}, ${sqlValue(address.closeAfternoon || address.close_afternoon || "")}, ${sqlValue(Number(address.defaultDuration || address.default_duration || 45))}, ${sqlValue(address.lat === undefined ? null : Number(address.lat))}, ${sqlValue(address.lng === undefined ? null : Number(address.lng))}`;
+  const cols = `customer, location, full_address, address_type, phone, phone_type, phone_name, phone2, phone2_type, phone2_name, phone_preferred, email, notes, open_morning, close_morning, open_afternoon, close_afternoon, default_duration, lat, lng`;
+  const vals = `${sqlValue(address.customer || "Senza nome")}, ${sqlValue(address.location || "")}, ${sqlValue(address.fullAddress || address.full_address || "")}, ${sqlValue(address.addressType || "customer")}, ${sqlValue(address.phone || "")}, ${sqlValue(address.phoneType || "cell")}, ${sqlValue(address.phoneName || "")}, ${sqlValue(address.phone2 || "")}, ${sqlValue(address.phone2Type || "fisso")}, ${sqlValue(address.phone2Name || "")}, ${sqlValue(address.phonePreferred || "phone")}, ${sqlValue(address.email || "")}, ${sqlValue(address.notes || "")}, ${sqlValue(address.openMorning || address.open_morning || "")}, ${sqlValue(address.closeMorning || address.close_morning || "")}, ${sqlValue(address.openAfternoon || address.open_afternoon || "")}, ${sqlValue(address.closeAfternoon || address.close_afternoon || "")}, ${sqlValue(Number(address.defaultDuration || address.default_duration || 45))}, ${sqlValue(address.lat === undefined ? null : Number(address.lat))}, ${sqlValue(address.lng === undefined ? null : Number(address.lng))}`;
   if (dbMode === "postgres") {
     const rows = await runSql(`INSERT INTO addresses (${cols}) VALUES (${vals}) RETURNING *;`, true);
     return rowToAddress(rows[0]);
@@ -334,7 +347,7 @@ export async function createAddress(address) {
 }
 
 export async function updateAddress(id, address) {
-  const setClause = `customer = ${sqlValue(address.customer || "Senza nome")}, location = ${sqlValue(address.location || "")}, full_address = ${sqlValue(address.fullAddress || "")}, phone = ${sqlValue(address.phone || "")}, phone_type = ${sqlValue(address.phoneType || "cell")}, phone_name = ${sqlValue(address.phoneName || "")}, phone2 = ${sqlValue(address.phone2 || "")}, phone2_type = ${sqlValue(address.phone2Type || "fisso")}, phone2_name = ${sqlValue(address.phone2Name || "")}, phone_preferred = ${sqlValue(address.phonePreferred || "phone")}, email = ${sqlValue(address.email || "")}, notes = ${sqlValue(address.notes || "")}, open_morning = ${sqlValue(address.openMorning || "")}, close_morning = ${sqlValue(address.closeMorning || "")}, open_afternoon = ${sqlValue(address.openAfternoon || "")}, close_afternoon = ${sqlValue(address.closeAfternoon || "")}, default_duration = ${sqlValue(Number(address.defaultDuration || 45))}, lat = ${sqlValue(address.lat === undefined ? null : Number(address.lat))}, lng = ${sqlValue(address.lng === undefined ? null : Number(address.lng))}`;
+  const setClause = `customer = ${sqlValue(address.customer || "Senza nome")}, location = ${sqlValue(address.location || "")}, full_address = ${sqlValue(address.fullAddress || "")}, address_type = ${sqlValue(address.addressType || "customer")}, phone = ${sqlValue(address.phone || "")}, phone_type = ${sqlValue(address.phoneType || "cell")}, phone_name = ${sqlValue(address.phoneName || "")}, phone2 = ${sqlValue(address.phone2 || "")}, phone2_type = ${sqlValue(address.phone2Type || "fisso")}, phone2_name = ${sqlValue(address.phone2Name || "")}, phone_preferred = ${sqlValue(address.phonePreferred || "phone")}, email = ${sqlValue(address.email || "")}, notes = ${sqlValue(address.notes || "")}, open_morning = ${sqlValue(address.openMorning || "")}, close_morning = ${sqlValue(address.closeMorning || "")}, open_afternoon = ${sqlValue(address.openAfternoon || "")}, close_afternoon = ${sqlValue(address.closeAfternoon || "")}, default_duration = ${sqlValue(Number(address.defaultDuration || 45))}, lat = ${sqlValue(address.lat === undefined ? null : Number(address.lat))}, lng = ${sqlValue(address.lng === undefined ? null : Number(address.lng))}`;
   if (dbMode === "postgres") {
     const rows = await runSql(`UPDATE addresses SET ${setClause}, updated_at = NOW() WHERE id = ${sqlValue(Number(id))} RETURNING *;`, true);
     return rows[0] ? rowToAddress(rows[0]) : null;
@@ -356,15 +369,17 @@ export async function getSettings() {
 export async function updateSettings(settings) {
   const navPref = sqlValue(settings.navigatorPref || "google");
   const themePref = sqlValue(settings.themePref || "auto");
+  const lunchMinutes = sqlValue(Number(settings.lunchBreakMinutes ?? 45));
+  const lunchEnabled = sqlValue(settings.lunchBreakEnabled === false ? 0 : 1);
   if (dbMode === "postgres") {
     await runSql(`
-      INSERT INTO settings (id, km_rate, drive_hour_rate, work_hour_rate, navigator_pref, theme_pref)
-      VALUES (1, ${sqlValue(Number(settings.kmRate ?? 0.65))}, ${sqlValue(Number(settings.driveHourRate ?? 22))}, ${sqlValue(Number(settings.workHourRate ?? 60))}, ${navPref}, ${themePref})
-      ON CONFLICT (id) DO UPDATE SET km_rate = EXCLUDED.km_rate, drive_hour_rate = EXCLUDED.drive_hour_rate, work_hour_rate = EXCLUDED.work_hour_rate, navigator_pref = EXCLUDED.navigator_pref, theme_pref = EXCLUDED.theme_pref;
+      INSERT INTO settings (id, km_rate, drive_hour_rate, work_hour_rate, navigator_pref, theme_pref, lunch_break_minutes, lunch_break_enabled)
+      VALUES (1, ${sqlValue(Number(settings.kmRate ?? 0.65))}, ${sqlValue(Number(settings.driveHourRate ?? 22))}, ${sqlValue(Number(settings.workHourRate ?? 60))}, ${navPref}, ${themePref}, ${lunchMinutes}, ${lunchEnabled})
+      ON CONFLICT (id) DO UPDATE SET km_rate = EXCLUDED.km_rate, drive_hour_rate = EXCLUDED.drive_hour_rate, work_hour_rate = EXCLUDED.work_hour_rate, navigator_pref = EXCLUDED.navigator_pref, theme_pref = EXCLUDED.theme_pref, lunch_break_minutes = EXCLUDED.lunch_break_minutes, lunch_break_enabled = EXCLUDED.lunch_break_enabled;
     `);
     return getSettings();
   }
-  await runSql(`UPDATE settings SET km_rate = ${sqlValue(Number(settings.kmRate ?? 0.65))}, drive_hour_rate = ${sqlValue(Number(settings.driveHourRate ?? 22))}, work_hour_rate = ${sqlValue(Number(settings.workHourRate ?? 60))}, navigator_pref = ${navPref}, theme_pref = ${themePref} WHERE id = 1;`);
+  await runSql(`UPDATE settings SET km_rate = ${sqlValue(Number(settings.kmRate ?? 0.65))}, drive_hour_rate = ${sqlValue(Number(settings.driveHourRate ?? 22))}, work_hour_rate = ${sqlValue(Number(settings.workHourRate ?? 60))}, navigator_pref = ${navPref}, theme_pref = ${themePref}, lunch_break_minutes = ${lunchMinutes}, lunch_break_enabled = ${lunchEnabled} WHERE id = 1;`);
   return getSettings();
 }
 

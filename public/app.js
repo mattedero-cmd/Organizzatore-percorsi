@@ -63,6 +63,7 @@ async function api(path, options = {}) {
 
 const emptyForm = {
   id: null, customer: "", location: "", fullAddress: "",
+  addressType: "customer",
   phone: "", phoneType: "cell", phoneName: "",
   phone2: "", phone2Type: "fisso", phone2Name: "",
   phonePreferred: "phone",
@@ -106,7 +107,9 @@ const state = {
     customOpenMorning: "08:30", customCloseMorning: "12:30",
     customOpenAfternoon: "14:30", customCloseAfternoon: "18:00",
     stops: [],
-    transcript: ""
+    transcript: "",
+    lunchBreak: true,
+    lunchBreakMinutes: 45
   },
   result: null,
   manualOrderRows: null,
@@ -190,6 +193,8 @@ async function loadInitialData() {
   state.settings = settings;
   state.navigatorPref = settings.navigatorPref || localStorage.getItem("navigatorPref") || "google";
   state.themePref = settings.themePref || "auto";
+  state.route.lunchBreak = settings.lunchBreakEnabled !== false;
+  state.route.lunchBreakMinutes = settings.lunchBreakMinutes || 45;
   applyTheme();
   document.querySelector("#map-status").textContent = state.mapApiConfigured ? "Google Maps" : "Stima locale";
   await Promise.all([refreshAddressesForRoute(), refreshSavedRoutes()]);
@@ -450,6 +455,14 @@ function renderRoute() {
           <label class="field full">Indirizzo arrivo<input name="endAddress" value="${escapeHtml(r.endAddress)}" ${r.endSameAsStart ? "disabled" : ""} /></label>
         </div>
 
+        <div class="form-grid route-fields" style="margin-top:12px;">
+          <label class="field checkbox-field">
+            <input name="lunchBreak" type="checkbox" ${r.lunchBreak ? "checked" : ""} id="lunch-break-check" />
+            <span>Pausa pranzo</span>
+          </label>
+          <label class="field">Durata pranzo (min)<input name="lunchBreakMinutes" type="number" min="15" max="120" step="5" value="${escapeHtml(r.lunchBreakMinutes)}" ${!r.lunchBreak ? "disabled" : ""} id="lunch-break-minutes" /></label>
+        </div>
+
         <div class="stop-add-row">
           <div style="position:relative;flex:1;">
             <input id="stop-search" placeholder="Cerca cliente o città…" value="${escapeHtml(state.stopSearchText)}" autocomplete="off" />
@@ -572,7 +585,7 @@ function renderArchive() {
             ? `<div class="empty" style="grid-column:1/-1">Cerca un contatto per nome o città, oppure premi <b>Mostra tutti</b>.</div>`
             : state.addresses.map(a => `
             <article class="card archive-card">
-              <p class="stop-title">${escapeHtml(addressName(a))}</p>
+              <p class="stop-title">${a.addressType === "rest" ? "☕ " : ""}${escapeHtml(addressName(a))}</p>
               <div class="stop-meta">${escapeHtml(a.fullAddress)}</div>
               ${a.phone ? `<div class="stop-meta">${phoneIcon(a.phoneType)} ${escapeHtml(a.phone)}${a.phoneName ? ` <span class="phone-name-badge">${escapeHtml(a.phoneName)}</span>` : ""}${a.phonePreferred === "phone" && a.phone2 ? " ★" : ""}</div>` : ""}
               ${a.phone2 ? `<div class="stop-meta">${phoneIcon(a.phone2Type)} ${escapeHtml(a.phone2)}${a.phone2Name ? ` <span class="phone-name-badge">${escapeHtml(a.phone2Name)}</span>` : ""}${a.phonePreferred === "phone2" ? " ★" : ""}</div>` : ""}
@@ -625,6 +638,10 @@ function renderArchive() {
               <input name="phone2Name" value="${escapeHtml(form.phone2Name)}" placeholder="Nome (es. Ufficio)" style="flex:1" />
             </div>
           </div>
+          <label class="field">Tipo contatto<select name="addressType">
+            <option value="customer" ${form.addressType !== "rest" ? "selected" : ""}>👤 Cliente</option>
+            <option value="rest" ${form.addressType === "rest" ? "selected" : ""}>☕ Sosta (bar/autogrill)</option>
+          </select></label>
           <label class="field">Email<input name="email" type="email" value="${escapeHtml(form.email)}" /></label>
           <label class="field full">Note<textarea name="notes" id="contact-notes">${escapeHtml(form.notes)}</textarea></label>
           <label class="field">Apr. mattina<input name="openMorning" type="time" value="${escapeHtml(form.openMorning)}" /></label>
@@ -687,12 +704,12 @@ function warningBadges(warnings) {
 }
 
 function renderManualOrder(result) {
-  const rows = state.manualOrderRows || result.rows;
+  const rows = (state.manualOrderRows || result.rows).filter(r => !r.type);
   return `
     <details class="panel order-panel" ${state.manualOrderRows ? "open" : ""}>
       <summary>Riordina tappe manualmente</summary>
       <div class="order-list" style="margin-top:10px;">
-        ${rows.map((row, i) => `
+        ${rows.filter(r => !r.stopPart || r.stopPart === "morning").map((row, i) => `
           <div class="order-item">
             <span class="order-num">${i + 1}</span>
             <span>${escapeHtml(row.customer)} ${escapeHtml(row.location || "")}</span>
@@ -741,38 +758,65 @@ function renderResult() {
 
       <div class="result-list">
         ${rows.map(row => {
+          // Special row: lunch break
+          if (row.type === "lunch") return `
+          <article class="card result-card break-card lunch-card">
+            <div class="break-row">
+              <span class="break-icon">🍽</span>
+              <div>
+                <p class="stop-title" style="margin:0">Pausa pranzo</p>
+                <div class="stop-meta">${escapeHtml(row.serviceStartTime)} – ${escapeHtml(row.serviceEndTime)} · ${minutesLabel(row.durationMinutes)}</div>
+              </div>
+            </div>
+          </article>`;
+
+          // Special row: rest stop
+          if (row.type === "rest") return `
+          <article class="card result-card break-card rest-card">
+            <div class="break-row">
+              <span class="break-icon">☕</span>
+              <div>
+                <p class="stop-title" style="margin:0">${escapeHtml(row.customer)}${row.location ? ` — ${escapeHtml(row.location)}` : ""}</p>
+                <div class="stop-meta">${escapeHtml(row.serviceStartTime)} – ${escapeHtml(row.serviceEndTime)} · ${minutesLabel(row.durationMinutes)}</div>
+                ${row.address ? `<div class="stop-meta" style="font-size:0.8rem">${escapeHtml(row.address)}</div>` : ""}
+              </div>
+              ${row.address ? `<a class="btn" href="${stopNavUrl(row, state.navigatorPref)}" target="_blank" rel="noopener" style="margin-left:auto">↗</a>` : ""}
+            </div>
+          </article>`;
+
           const addr = state.allAddresses.find(a => String(a.id) === String(row.addressId));
           const pref = preferredPhone(addr || {});
           const phone = addr?.phone || row.phone || "";
           const phone2 = addr?.phone2 || row.phone2 || "";
           const email = addr?.email || row.email || "";
           const emailSubject = encodeURIComponent(`Appuntamento ${row.customer} - ${result.scheduledDate || ""} ore ${row.arrivalTime}`);
+          const partBadge = row.stopPart === "morning" ? `<span class="badge" style="background:color-mix(in srgb,#3b82f6 15%,var(--surface));color:#1d4ed8">mattina</span> ` : row.stopPart === "afternoon" ? `<span class="badge" style="background:color-mix(in srgb,#f97316 15%,var(--surface));color:#c2410c">pomeriggio</span> ` : "";
           const stopTitle = `${row.stopNumber}. ${escapeHtml(row.customer)}${row.location ? ` — ${escapeHtml(row.location)}` : ""}`;
           const phoneBtn = pref ? `<a class="btn" href="tel:${escapeHtml(pref.number)}" title="${escapeHtml(pref.name || pref.number)}">${phoneIcon(pref.type)}</a>` : "";
           return `
           <article class="card result-card">
-            <div class="stop-compact-head" data-expand-stop="${row.stopNumber}">
-              <p class="stop-title">${stopTitle}</p>
+            <div class="stop-compact-head" data-expand-stop="${row.stopNumber}${row.stopPart ? "-" + row.stopPart : ""}">
+              <div>${partBadge}<p class="stop-title" style="display:inline">${stopTitle}</p></div>
               <div class="stop-meta" style="font-size:0.82rem">${escapeHtml(row.address)}</div>
               ${weatherCompact(result, row.stopNumber)}
             </div>
             <div class="stop-actions-big">
-              <a class="btn primary" href="${stopNavUrl(row, pref)}" target="_blank" rel="noopener">↗ Naviga</a>
+              ${row.stopPart !== "afternoon" ? `<a class="btn primary" href="${stopNavUrl(row, state.navigatorPref)}" target="_blank" rel="noopener">↗ Naviga</a>` : ""}
               ${phoneBtn}
-              ${email ? `<a class="btn" href="mailto:${escapeHtml(email)}?subject=${emailSubject}">✉</a>` : ""}
+              ${email && !row.stopPart ? `<a class="btn" href="mailto:${escapeHtml(email)}?subject=${emailSubject}">✉</a>` : ""}
             </div>
-            <div class="stop-details" data-stop-details="${row.stopNumber}" hidden>
+            <div class="stop-details" data-stop-details="${row.stopNumber}${row.stopPart ? "-" + row.stopPart : ""}" hidden>
               <div class="result-times" style="margin-bottom:10px;">
-                <div><div class="metric-label">Partenza</div><strong>${escapeHtml(row.departureTime)}</strong></div>
-                <div><div class="metric-label">Guida</div><strong>${minutesLabel(row.driveMinutes)} · ${row.km.toFixed(1)} km</strong></div>
-                <div><div class="metric-label">Arrivo</div><strong>${escapeHtml(row.arrivalTime)}</strong></div>
+                ${row.stopPart !== "afternoon" ? `<div><div class="metric-label">Partenza</div><strong>${escapeHtml(row.departureTime)}</strong></div>` : ""}
+                ${row.stopPart !== "afternoon" ? `<div><div class="metric-label">Guida</div><strong>${minutesLabel(row.driveMinutes)} · ${row.km.toFixed(1)} km</strong></div>` : ""}
+                <div><div class="metric-label">${row.stopPart === "afternoon" ? "Riprende" : "Arrivo"}</div><strong>${escapeHtml(row.stopPart === "afternoon" ? row.serviceStartTime : row.arrivalTime)}</strong></div>
                 <div><div class="metric-label">Intervento</div><strong>${minutesLabel(row.durationMinutes)}</strong></div>
                 <div><div class="metric-label">Fine</div><strong>${escapeHtml(row.serviceEndTime)}</strong></div>
               </div>
-              ${phone ? `<div class="stop-meta">${phoneIcon(addr?.phoneType)} <a href="tel:${escapeHtml(phone)}">${escapeHtml(phone)}</a>${addr?.phoneName ? ` <span class="phone-name-badge">${escapeHtml(addr.phoneName)}</span>` : ""}${addr?.phonePreferred !== "phone2" && phone2 ? " ★" : ""}</div>` : ""}
-              ${phone2 ? `<div class="stop-meta">${phoneIcon(addr?.phone2Type)} <a href="tel:${escapeHtml(phone2)}">${escapeHtml(phone2)}</a>${addr?.phone2Name ? ` <span class="phone-name-badge">${escapeHtml(addr.phone2Name)}</span>` : ""}${addr?.phonePreferred === "phone2" ? " ★" : ""}</div>` : ""}
-              ${email ? `<div class="stop-meta">✉ <a href="mailto:${escapeHtml(email)}">${escapeHtml(email)}</a></div>` : ""}
-              ${row.notes ? `<div class="stop-meta" style="margin-top:6px;font-style:italic">${escapeHtml(row.notes)}</div>` : ""}
+              ${phone && !row.stopPart ? `<div class="stop-meta">${phoneIcon(addr?.phoneType)} <a href="tel:${escapeHtml(phone)}">${escapeHtml(phone)}</a>${addr?.phoneName ? ` <span class="phone-name-badge">${escapeHtml(addr.phoneName)}</span>` : ""}${addr?.phonePreferred !== "phone2" && phone2 ? " ★" : ""}</div>` : ""}
+              ${phone2 && !row.stopPart ? `<div class="stop-meta">${phoneIcon(addr?.phone2Type)} <a href="tel:${escapeHtml(phone2)}">${escapeHtml(phone2)}</a>${addr?.phone2Name ? ` <span class="phone-name-badge">${escapeHtml(addr.phone2Name)}</span>` : ""}${addr?.phonePreferred === "phone2" ? " ★" : ""}</div>` : ""}
+              ${email && !row.stopPart ? `<div class="stop-meta">✉ <a href="mailto:${escapeHtml(email)}">${escapeHtml(email)}</a></div>` : ""}
+              ${row.notes && !row.stopPart ? `<div class="stop-meta" style="margin-top:6px;font-style:italic">${escapeHtml(row.notes)}</div>` : ""}
               ${warningBadges(row.warnings)}
             </div>
           </article>`;
@@ -837,6 +881,16 @@ function renderSettings() {
           <label class="settings-radio"><input type="radio" name="themePref" value="dark" ${theme === "dark" ? "checked" : ""} /> 🌙 Scuro</label>
         </div>
 
+        <h3 class="settings-section-title">Pianificazione</h3>
+        <div class="form-grid">
+          <label class="field checkbox-field full">
+            <input type="checkbox" name="lunchBreakEnabled" ${state.settings.lunchBreakEnabled !== false ? "checked" : ""} />
+            <span>Pausa pranzo di default</span>
+          </label>
+          <label class="field">Durata pranzo (min)<input name="lunchBreakMinutes" type="number" min="15" max="120" step="5" value="${escapeHtml(state.settings.lunchBreakMinutes || 45)}" /></label>
+        </div>
+        <p class="stop-meta" style="margin-top:6px;">Puoi sempre modificarla o saltarla al momento della pianificazione. Le soste automatiche si inseriscono aggiungendo contatti di tipo "☕ Sosta" nell'archivio.</p>
+
         <div class="actions" style="margin-top:16px;"><button class="btn primary" type="submit">Salva impostazioni</button></div>
       </form>
     </section>`;
@@ -872,7 +926,9 @@ function updateRouteFromForm() {
     customAddress: v.customAddress, customDuration: Number(v.customDuration || 45),
     customOpenMorning: v.customOpenMorning, customCloseMorning: v.customCloseMorning,
     customOpenAfternoon: v.customOpenAfternoon, customCloseAfternoon: v.customCloseAfternoon,
-    transcript: v.transcript || ""
+    transcript: v.transcript || "",
+    lunchBreak: Boolean(v.lunchBreak),
+    lunchBreakMinutes: Number(v.lunchBreakMinutes || 45)
   });
 }
 
@@ -910,7 +966,8 @@ async function planCurrentRoute() {
         arrivalLeadMinutes: r.arrivalLeadMinutes,
         firstArrivalTime: r.firstArrivalTime,
         firstArrivalRequired: r.firstArrivalRequired,
-        stops: r.stops, rates: state.settings
+        stops: r.stops, rates: state.settings,
+        lunchBreak: r.lunchBreak, lunchBreakMinutes: r.lunchBreakMinutes
       })
     });
     state.manualOrderRows = null;
@@ -1157,6 +1214,7 @@ async function saveAddressForm(form) {
   const v = readForm(form);
   const payload = {
     customer: v.customer, location: v.location, fullAddress: v.fullAddress,
+    addressType: v.addressType || "customer",
     phone: v.phone || "", phoneType: v.phoneType || "cell", phoneName: v.phoneName || "",
     phone2: v.phone2 || "", phone2Type: v.phone2Type || "fisso", phone2Name: v.phone2Name || "",
     phonePreferred: v.phonePreferred || "phone",
@@ -1351,6 +1409,11 @@ function bindEvents() {
     if (e.target.name === "endSameAsStart" || e.target.name === "timingMode") {
       updateRouteFromForm();
       render();
+    }
+    if (e.target.name === "lunchBreak") {
+      const minutesInput = document.getElementById("lunch-break-minutes");
+      if (minutesInput) minutesInput.disabled = !e.target.checked;
+      state.route.lunchBreak = e.target.checked;
     }
   });
 
@@ -1602,11 +1665,15 @@ function bindEvents() {
       const v = readForm(e.target);
       state.settings = await api("/api/settings", { method: "PUT", body: JSON.stringify({
         kmRate: Number(v.kmRate), driveHourRate: Number(v.driveHourRate), workHourRate: Number(v.workHourRate),
-        navigatorPref: v.navigatorPref || "google", themePref: v.themePref || "auto"
+        navigatorPref: v.navigatorPref || "google", themePref: v.themePref || "auto",
+        lunchBreakMinutes: Number(v.lunchBreakMinutes || 45),
+        lunchBreakEnabled: v.lunchBreakEnabled === "on" || v.lunchBreakEnabled === true
       }) });
       state.navigatorPref = state.settings.navigatorPref;
       localStorage.setItem("navigatorPref", state.navigatorPref);
       state.themePref = state.settings.themePref;
+      state.route.lunchBreak = state.settings.lunchBreakEnabled !== false;
+      state.route.lunchBreakMinutes = state.settings.lunchBreakMinutes || 45;
       applyTheme();
       showToast("Impostazioni salvate");
     }

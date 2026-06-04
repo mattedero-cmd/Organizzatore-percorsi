@@ -76,38 +76,45 @@ function scheduleStop(arrival, stop) {
   const warnings = [];
 
   if (windows.length === 0) {
-    return {
-      serviceStart: arrival,
-      serviceEnd: arrival + stop.durationMinutes,
-      waitMinutes: 0,
-      warnings: ["orari non indicati"]
-    };
+    return { split: false, serviceStart: arrival, serviceEnd: arrival + stop.durationMinutes, waitMinutes: 0, warnings: ["orari non indicati"] };
   }
 
-  for (const window of windows) {
-    if (arrival <= window.end) {
-      const serviceStart = Math.max(arrival, window.start);
-      if (arrival < window.start) warnings.push("arrivo prima dell'apertura");
-      if (serviceStart + stop.durationMinutes <= window.end) {
-        return {
-          serviceStart,
-          serviceEnd: serviceStart + stop.durationMinutes,
-          waitMinutes: Math.max(0, serviceStart - arrival),
-          warnings
-        };
+  for (let wi = 0; wi < windows.length; wi++) {
+    const win = windows[wi];
+    if (arrival <= win.end) {
+      const serviceStart = Math.max(arrival, win.start);
+      const waitMinutes = Math.max(0, serviceStart - arrival);
+      if (arrival < win.start) warnings.push("arrivo prima dell'apertura");
+
+      if (serviceStart + stop.durationMinutes <= win.end) {
+        return { split: false, serviceStart, serviceEnd: serviceStart + stop.durationMinutes, waitMinutes, warnings };
       }
-      if (arrival <= window.end) {
-        warnings.push(`intervento oltre chiusura ${window.label.toLowerCase()}`);
+
+      // Work overflows this window — try split across next window
+      const nextWin = windows[wi + 1];
+      if (nextWin && serviceStart < win.end) {
+        const morningWork = win.end - serviceStart;
+        const afternoonWork = stop.durationMinutes - morningWork;
+        if (afternoonWork > 0 && nextWin.start + afternoonWork <= nextWin.end) {
+          return {
+            split: true,
+            morningStart: serviceStart,
+            morningEnd: win.end,
+            morningWork,
+            afternoonStart: nextWin.start,
+            afternoonEnd: nextWin.start + afternoonWork,
+            afternoonWork,
+            waitMinutes,
+            warnings
+          };
+        }
       }
+
+      warnings.push(`intervento oltre chiusura ${win.label.toLowerCase()}`);
     }
   }
 
-  return {
-    serviceStart: arrival,
-    serviceEnd: arrival + stop.durationMinutes,
-    waitMinutes: 0,
-    warnings: [...new Set([...warnings, "sede chiusa o orario incompatibile"])]
-  };
+  return { split: false, serviceStart: arrival, serviceEnd: arrival + stop.durationMinutes, waitMinutes: 0, warnings: [...new Set([...warnings, "sede chiusa o orario incompatibile"])] };
 }
 
 function permute(items) {
@@ -209,10 +216,10 @@ function evaluateOrder(order, context) {
     );
     let rowWarnings = [...new Set([...warnings, ...scheduled.warnings])];
     if (index === 0 && timingMode === "first_open_minus") {
-      rowWarnings = rowWarnings.filter((warning) => warning !== "arrivo prima dell'apertura");
+      rowWarnings = rowWarnings.filter((w) => w !== "arrivo prima dell'apertura");
     }
 
-    rows.push({
+    const baseRow = {
       stopNumber: index + 1,
       stopUid: stop.uid,
       addressId: stop.addressId,
@@ -226,27 +233,32 @@ function evaluateOrder(order, context) {
       closeMorning: stop.closeMorning,
       openAfternoon: stop.openAfternoon,
       closeAfternoon: stop.closeAfternoon,
+      openingHours: openingLabel(stop),
       departureTime: formatTime(departure),
       driveMinutes: leg.driveMinutes,
       baseDriveMinutes: leg.baseDriveMinutes ?? leg.driveMinutes,
       driveBufferMinutes: leg.driveBufferMinutes ?? 0,
       km: Number(leg.km.toFixed(1)),
       arrivalTime: formatTime(arrival),
-      serviceStartTime: formatTime(scheduled.serviceStart),
-      openingHours: openingLabel(stop),
-      durationMinutes: stop.durationMinutes,
-      serviceEndTime: formatTime(scheduled.serviceEnd),
-      warnings: rowWarnings,
       targetArrivalTime: index === 0 && targetArrival !== null ? formatTime(targetArrival) : "",
       legSource: leg.source
-    });
+    };
+
+    if (scheduled.split) {
+      rows.push({ ...baseRow, stopPart: "morning", serviceStartTime: formatTime(scheduled.morningStart), durationMinutes: scheduled.morningWork, serviceEndTime: formatTime(scheduled.morningEnd), warnings: rowWarnings });
+      rows.push({ ...baseRow, stopPart: "afternoon", departureTime: formatTime(scheduled.morningEnd), driveMinutes: 0, baseDriveMinutes: 0, driveBufferMinutes: 0, km: 0, arrivalTime: formatTime(scheduled.afternoonStart), serviceStartTime: formatTime(scheduled.afternoonStart), durationMinutes: scheduled.afternoonWork, serviceEndTime: formatTime(scheduled.afternoonEnd), warnings: [], targetArrivalTime: "" });
+      totalWaitMinutes += scheduled.waitMinutes + (scheduled.afternoonStart - scheduled.morningEnd);
+      currentTime = scheduled.afternoonEnd;
+    } else {
+      rows.push({ ...baseRow, serviceStartTime: formatTime(scheduled.serviceStart), durationMinutes: stop.durationMinutes, serviceEndTime: formatTime(scheduled.serviceEnd), warnings: rowWarnings });
+      totalWaitMinutes += scheduled.waitMinutes;
+      currentTime = scheduled.serviceEnd;
+    }
 
     totalKm += leg.km;
     totalDriveMinutes += leg.driveMinutes;
     totalWorkMinutes += stop.durationMinutes;
-    totalWaitMinutes += scheduled.waitMinutes;
     allWarnings.push(...rowWarnings);
-    currentTime = scheduled.serviceEnd;
     currentNodeIndex = stop.nodeIndex;
   }
 
@@ -321,7 +333,129 @@ function nearestOrders(stops, context) {
   return [order];
 }
 
-export async function planRoute(payload, settings) {
+function findNearestRestStop(restStops, lat, lng) {
+  if (!restStops.length) return null;
+  if (!lat || !lng) return restStops[0];
+  let nearest = restStops[0], minDist = Infinity;
+  for (const s of restStops) {
+    if (!s.lat || !s.lng) continue;
+    const d = Math.hypot(s.lat - lat, s.lng - lng);
+    if (d < minDist) { minDist = d; nearest = s; }
+  }
+  return nearest;
+}
+
+function shiftRowTimes(row, minutes) {
+  if (!minutes) return row;
+  return {
+    ...row,
+    departureTime: formatTime(parseTime(row.departureTime) + minutes),
+    arrivalTime: formatTime(parseTime(row.arrivalTime) + minutes),
+    serviceStartTime: formatTime(parseTime(row.serviceStartTime) + minutes),
+    serviceEndTime: formatTime(parseTime(row.serviceEndTime) + minutes)
+  };
+}
+
+function insertBreaks(rows, options) {
+  const { lunchBreakEnabled, lunchBreakMinutes = 45, restStops = [] } = options;
+  if (!lunchBreakEnabled && !restStops.length) return { rows, addedMinutes: 0 };
+
+  const LUNCH_OPEN = 11 * 60 + 30;
+  const LUNCH_CLOSE = 14 * 60;
+  const REST_EVERY = 120;
+  const REST_TOL = 30;
+  const REST_DUR = 15;
+
+  // Determine insertion points (before which row index)
+  const insertions = [];
+
+  if (lunchBreakEnabled) {
+    let placed = false;
+    for (let i = 0; i < rows.length; i++) {
+      const dep = parseTime(rows[i].departureTime);
+      if (dep >= LUNCH_OPEN && dep <= LUNCH_CLOSE) {
+        insertions.push({ beforeIndex: i, type: "lunch", duration: lunchBreakMinutes, customer: "Pausa pranzo" });
+        placed = true;
+        break;
+      }
+    }
+    if (!placed && rows.length > 0) {
+      const lastEnd = parseTime(rows[rows.length - 1].serviceEndTime);
+      if (lastEnd >= LUNCH_OPEN && lastEnd <= LUNCH_CLOSE) {
+        insertions.push({ beforeIndex: rows.length, type: "lunch", duration: lunchBreakMinutes, customer: "Pausa pranzo" });
+      }
+    }
+  }
+
+  if (restStops.length) {
+    const dayStart = rows.length > 0 ? (parseTime(rows[0].departureTime) || 7 * 60) : 7 * 60;
+    let lastBreak = dayStart;
+    let lastLat = null, lastLng = null;
+
+    for (let i = 0; i < rows.length; i++) {
+      const dep = parseTime(rows[i].departureTime);
+      const elapsed = dep - lastBreak;
+      if (elapsed >= REST_EVERY - REST_TOL) {
+        const alreadyHas = insertions.some(ins => ins.beforeIndex === i);
+        if (!alreadyHas) {
+          const spot = findNearestRestStop(restStops, lastLat, lastLng);
+          if (spot) {
+            insertions.push({ beforeIndex: i, type: "rest", duration: REST_DUR, customer: spot.customer, location: spot.location || "", address: spot.fullAddress || "", lat: spot.lat, lng: spot.lng });
+            lastBreak = dep;
+          }
+        } else {
+          lastBreak = dep;
+        }
+      }
+      lastLat = rows[i].lat;
+      lastLng = rows[i].lng;
+      const endTime = parseTime(rows[i].serviceEndTime);
+      if (endTime > lastBreak) lastBreak = endTime;
+    }
+  }
+
+  insertions.sort((a, b) => a.beforeIndex - b.beforeIndex);
+
+  const result = [];
+  let timeShift = 0;
+  let pending = [...insertions];
+
+  for (let i = 0; i <= rows.length; i++) {
+    while (pending.length && pending[0].beforeIndex === i) {
+      const brk = pending.shift();
+      const refDep = i < rows.length
+        ? parseTime(rows[i].departureTime) + timeShift
+        : parseTime(rows[rows.length - 1].serviceEndTime) + timeShift;
+      const brkEnd = refDep + brk.duration;
+      result.push({
+        type: brk.type,
+        stopNumber: null,
+        customer: brk.customer || "",
+        location: brk.location || "",
+        address: brk.address || "",
+        lat: brk.lat ?? null,
+        lng: brk.lng ?? null,
+        departureTime: formatTime(refDep),
+        arrivalTime: formatTime(refDep),
+        serviceStartTime: formatTime(refDep),
+        serviceEndTime: formatTime(brkEnd),
+        durationMinutes: brk.duration,
+        warnings: [],
+        driveMinutes: 0,
+        baseDriveMinutes: 0,
+        driveBufferMinutes: 0,
+        km: 0,
+        legSource: "break"
+      });
+      timeShift += brk.duration;
+    }
+    if (i < rows.length) result.push(shiftRowTimes(rows[i], timeShift));
+  }
+
+  return { rows: result, addedMinutes: timeShift };
+}
+
+export async function planRoute(payload, settings, restStops = []) {
   const stops = (payload.stops || []).map(normalizeStop);
   if (!payload.start?.address && !payload.start?.fullAddress) {
     throw new Error("Inserisci un punto di partenza.");
@@ -390,6 +524,26 @@ export async function planRoute(payload, settings) {
     const evaluated = evaluateOrder(order, context);
     if (!best || evaluated.score < best.score) best = evaluated;
   }
+
+  // Insert lunch break and rest stops into the timeline
+  const lunchBreakEnabled = payload.lunchBreak !== false && (payload.lunchBreak === true || settings.lunchBreakEnabled !== false);
+  const lunchBreakMinutes = Number(payload.lunchBreakMinutes ?? settings.lunchBreakMinutes ?? 45);
+  const activeRestStops = restStops.filter(s => s.addressType === "rest");
+  const { rows: enrichedRows, addedMinutes } = insertBreaks(best.rows, { lunchBreakEnabled, lunchBreakMinutes, restStops: activeRestStops });
+  best = {
+    ...best,
+    rows: enrichedRows,
+    finalLeg: {
+      ...best.finalLeg,
+      departureTime: formatTime(parseTime(best.finalLeg.departureTime) + addedMinutes),
+      arrivalTime: formatTime(parseTime(best.finalLeg.arrivalTime) + addedMinutes)
+    },
+    summary: {
+      ...best.summary,
+      dayEnd: formatTime(parseTime(best.summary.dayEnd) + addedMinutes),
+      totalDayMinutes: best.summary.totalDayMinutes + addedMinutes
+    }
+  };
 
   return {
     id: null,

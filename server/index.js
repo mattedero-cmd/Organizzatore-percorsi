@@ -153,7 +153,8 @@ async function handleApi(request, response) {
     if (method === "POST" && url.pathname === "/api/plan") {
       const body = await parseBody(request);
       const settings = await getSettings();
-      let route = await planRoute(body, settings);
+      const allAddresses = await listAddresses("");
+      let route = await planRoute(body, settings, allAddresses);
       route = await attachWeather(route, { rowTimeoutMs: 3000 });
       const saved = await saveRoute({
         ...route,
