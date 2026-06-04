@@ -64,6 +64,7 @@ const state = {
   navigatorPref: localStorage.getItem("navigatorPref") || "google",
   mapApiConfigured: false,
   addresses: [],
+  allAddresses: [],
   savedRoutes: [],
   addressSearch: "",
   archiveShowAll: false,
@@ -126,9 +127,11 @@ async function refreshAddresses() {
 }
 
 async function refreshAddressesForRoute() {
-  // Always load addresses for route planning (needed for autocomplete)
-  const q = encodeURIComponent(state.addressSearch);
-  state.addresses = await api(`/api/addresses?search=${q}`).catch(() => []);
+  state.allAddresses = await api("/api/addresses?search=").catch(() => []);
+}
+
+async function refreshAllData() {
+  await Promise.all([refreshAddresses(), refreshAddressesForRoute()]);
 }
 
 async function refreshSavedRoutes() {
@@ -296,7 +299,7 @@ async function renderGoogleMap(result) {
 function renderStopSuggestions() {
   const q = state.stopSearchText.trim().toLowerCase();
   if (!q) return "";
-  const matches = state.addresses.filter(a =>
+  const matches = state.allAddresses.filter(a =>
     [a.customer, a.location, a.fullAddress].some(v => (v || "").toLowerCase().includes(q))
   ).slice(0, 8);
   if (!matches.length) return `<div class="stop-suggestion-empty">Nessun risultato</div>`;
@@ -927,7 +930,7 @@ async function importFromContactPicker() {
       });
       added++;
     }
-    await refreshAddresses();
+    await refreshAllData();
     render();
     showToast(added ? `${added} contatti importati` : "Nessun nuovo contatto da aggiungere");
   } catch (e) {
@@ -969,7 +972,7 @@ async function importFromVcf(file) {
     await api("/api/addresses", { method: "POST", body: JSON.stringify(c) });
     added++;
   }
-  await refreshAddresses();
+  await refreshAllData();
   render();
   showToast(`${added} contatti importati da file`);
 }
@@ -1011,7 +1014,7 @@ async function saveAddressForm(form) {
     await api("/api/addresses", { method: "POST", body: JSON.stringify(payload) });
   }
   state.addressForm = { ...emptyForm };
-  await refreshAddresses();
+  await refreshAllData();
   render();
   showToast("Contatto salvato");
 }
@@ -1088,7 +1091,7 @@ function bindEvents() {
     if (e.target.id === "archive-search") {
       state.addressSearch = e.target.value;
       state.archiveShowAll = Boolean(e.target.value);
-      refreshAddresses().then(() => renderArchive());
+      refreshAllData().then(() => renderArchive());
     }
     // stop autocomplete
     if (e.target.id === "stop-search") {
@@ -1144,7 +1147,7 @@ function bindEvents() {
     const sugItem = e.target.closest("[data-suggest-id]");
     if (sugItem) {
       const id = sugItem.dataset.suggestId;
-      const addr = state.addresses.find(a => String(a.id) === id);
+      const addr = state.allAddresses.find(a => String(a.id) === id);
       if (addr) {
         state.route.selectedAddressId = id;
         state.stopSearchText = addressName(addr);
@@ -1161,7 +1164,7 @@ function bindEvents() {
     // show all archive contacts
     if (e.target.closest("#show-all-addresses")) {
       state.archiveShowAll = true;
-      await refreshAddresses();
+      await refreshAllData();
       renderArchive();
       return;
     }
@@ -1224,7 +1227,7 @@ function bindEvents() {
 
     if (e.target.closest("#add-saved-stop")) {
       updateRouteFromForm();
-      const addr = state.addresses.find(a => String(a.id) === String(state.route.selectedAddressId));
+      const addr = state.allAddresses.find(a => String(a.id) === String(state.route.selectedAddressId));
       if (!addr) { showToast("Seleziona prima un contatto dalla lista"); return; }
       state.route.stops.push(addressToStop(addr));
       state.route.selectedAddressId = "";
@@ -1246,7 +1249,7 @@ function bindEvents() {
           defaultDuration: state.route.customDuration
         })
       }).catch(() => null);
-      await refreshAddresses();
+      await refreshAllData();
       state.route.stops.push({
         uid: crypto.randomUUID(),
         addressId: saved?.id, customer: state.route.customCustomer, location: state.route.customLocation,
@@ -1280,7 +1283,7 @@ function bindEvents() {
     if (delAddr) {
       if (!confirm("Eliminare questo contatto?")) return;
       await api(`/api/addresses/${delAddr.dataset.deleteAddress}`, { method: "DELETE" });
-      await refreshAddresses();
+      await refreshAllData();
       render();
       return;
     }
