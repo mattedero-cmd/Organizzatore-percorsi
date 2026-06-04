@@ -90,7 +90,12 @@ const state = {
   },
   result: null,
   manualOrderRows: null,
-  planning: false
+  planning: false,
+  stopFilter: "",
+  whisperConfigured: false,
+  voiceRecording: false,
+  _mediaRecorder: null,
+  _audioChunks: []
 };
 
 // ── theme ────────────────────────────────────────────────────────────────────
@@ -125,6 +130,7 @@ async function loadInitialData() {
     api("/api/settings").catch(() => state.settings)
   ]);
   state.mapApiConfigured = health.mapApiConfigured || false;
+  state.whisperConfigured = health.whisperConfigured || false;
   state.googleMapsKey = config.googleMapsKey || "";
   state.settings = settings;
   document.querySelector("#map-status").textContent = state.mapApiConfigured ? "Google Maps" : "Stima locale";
@@ -280,12 +286,20 @@ function addressOptions() {
 }
 
 function renderStops() {
+  const q = state.stopFilter.trim().toLowerCase();
+  const visible = q
+    ? state.route.stops.filter(s =>
+        [s.customer, s.location, s.fullAddress].some(v => (v || "").toLowerCase().includes(q)))
+    : state.route.stops;
   if (!state.route.stops.length) return `<div class="empty">Nessuna tappa inserita.</div>`;
-  return `<div class="stop-list">${state.route.stops.map((stop, i) => `
+  if (!visible.length) return `<div class="empty">Nessuna tappa corrisponde alla ricerca.</div>`;
+  return `<div class="stop-list">${visible.map((stop, i) => {
+    const globalIdx = state.route.stops.indexOf(stop);
+    return `
     <article class="card stop-card">
       <div class="stop-head">
         <div>
-          <p class="stop-title">${i + 1}. ${escapeHtml(stop.customer)} ${escapeHtml(stop.location || "")}</p>
+          <p class="stop-title">${globalIdx + 1}. ${escapeHtml(stop.customer)} ${escapeHtml(stop.location || "")}</p>
           <div class="stop-meta">${escapeHtml(stop.fullAddress)}</div>
         </div>
         <button class="btn danger icon-btn" data-remove-stop="${stop.uid}">×</button>
@@ -298,7 +312,8 @@ function renderStops() {
         <label class="field">Ch. pomeriggio<input type="time" value="${escapeHtml(stop.closeAfternoon || "")}" data-stop="${stop.uid}:closeAfternoon" /></label>
         <div class="field"><span class="badge ${stop.recognized ? "ok" : "warning"}">${stop.recognized ? "Archivio" : "Da confermare"}</span></div>
       </div>
-    </article>`).join("")}</div>`;
+    </article>`;
+  }).join("")}</div>`;
 }
 
 function renderRoute() {
@@ -350,16 +365,39 @@ function renderRoute() {
           <button type="button" class="btn primary" id="plan-route">${state.planning ? "Calcolo in corso…" : "→ Ottimizza e salva"}</button>
         </div>
 
-        <h3>Comando vocale</h3>
+        <div class="row" style="align-items:center;gap:8px;margin-bottom:6px;">
+          <h3 style="margin:0">Comando vocale</h3>
+          <details class="voice-help-wrap">
+            <summary class="btn ghost" style="min-height:28px;padding:0 8px;font-size:0.78rem;list-style:none">❓ Comandi</summary>
+            <div class="voice-help-panel">
+              <ul>
+                <li><b>aggiungi [nome cliente]</b> — aggiunge tappa dall'archivio</li>
+                <li><b>aggiungi X e aggiungi Y</b> — più tappe in un comando</li>
+                <li><b>rimuovi [nome cliente]</b> — rimuove la tappa</li>
+                <li><b>ottimizza</b> · <b>salva e vai</b> — calcola il percorso</li>
+                <li><b>partenza alle 8</b> — cambia orario di partenza</li>
+                <li><b>primo arrivo alle 9:30</b> — orario primo cliente</li>
+                <li><b>in anticipo di 10 minuti</b> — minuti prima apertura</li>
+                <li><b>per il 10 giugno</b> · <b>domani</b> — cambia la data</li>
+                <li><b>parto da [luogo]</b> — cambia punto di partenza</li>
+              </ul>
+            </div>
+          </details>
+        </div>
         <label class="field"><textarea name="transcript" id="transcript">${escapeHtml(r.transcript)}</textarea></label>
         <div class="actions">
-          <button type="button" class="btn" id="listen-command">● Avvia voce</button>
+          <button type="button" class="btn${state.voiceRecording ? " recording" : ""}" id="listen-command">${state.voiceRecording ? "■ Stop" : "● Avvia"}</button>
           <button type="button" class="btn" id="apply-command">✓ Applica</button>
         </div>
       </form>
 
-      <aside class="panel">
-        <h2>Tappe (${state.route.stops.length})</h2>
+      <aside class="panel" id="stops-aside">
+        <div class="section-head" style="margin-bottom:10px;">
+          <h2 style="margin-bottom:0">Tappe (${state.route.stops.length})</h2>
+        </div>
+        <div class="row" style="gap:8px;margin-bottom:10px;">
+          <input id="stop-filter" placeholder="Cerca tappa per nome o città…" value="${escapeHtml(state.stopFilter)}" style="flex:1" />
+        </div>
         ${renderStops()}
       </aside>
     </section>`;
@@ -454,21 +492,31 @@ function renderArchive() {
 
 // ── render: result tab ────────────────────────────────────────────────────────
 
+function weatherIcon(w) {
+  const t = `${w.description || ""} ${(w.warnings || []).join(" ")}`.toLowerCase();
+  if (t.includes("temporale")) return "⛈";
+  if (t.includes("vento")) return "💨";
+  if (t.includes("ghiaccio") || t.includes("neve")) return "❄";
+  if (t.includes("piogg") || t.includes("precip")) return "🌧";
+  if (t.includes("nuvol")) return "☁";
+  return "☀";
+}
+
 function weatherPill(result, stopNumber) {
   const w = (result.weather || []).find(x => Number(x.stopNumber) === Number(stopNumber));
   if (!w) return "";
   const temp = w.temperatureC != null ? `${Math.round(w.temperatureC)}°C` : "--";
-  const icon = (() => {
-    const t = `${w.description || ""} ${(w.warnings || []).join(" ")}`.toLowerCase();
-    if (t.includes("temporale")) return "⛈";
-    if (t.includes("vento")) return "💨";
-    if (t.includes("ghiaccio") || t.includes("neve")) return "❄";
-    if (t.includes("piogg") || t.includes("precip")) return "🌧";
-    if (t.includes("nuvol")) return "☁";
-    return "☀";
-  })();
   const warnings = (w.warnings || []).map(s => `<span class="badge warning">${escapeHtml(s)}</span>`).join(" ");
-  return `<div class="weather-pill">${icon} <strong>${temp}</strong> <span class="stop-meta">${escapeHtml(w.description || "")}</span>${warnings ? " " + warnings : ""}</div>`;
+  return `<div class="weather-pill">${weatherIcon(w)} <strong>${temp}</strong> <span class="stop-meta">${escapeHtml(w.description || "")}</span>${warnings ? " " + warnings : ""}</div>`;
+}
+
+function weatherCompact(result, stopNumber) {
+  const w = (result.weather || []).find(x => Number(x.stopNumber) === Number(stopNumber));
+  if (!w) return "";
+  const temp = w.temperatureC != null ? `${Math.round(w.temperatureC)}°C` : "";
+  const wind = w.windKmh > 20 ? ` · 💨 ${Math.round(w.windKmh)} km/h` : "";
+  const alerts = (w.warnings || []).map(s => `<span class="badge warning">${escapeHtml(s)}</span>`).join(" ");
+  return `<div class="stop-weather-line">${weatherIcon(w)} ${temp}${wind}${alerts ? "  " + alerts : ""}</div>`;
 }
 
 function warningBadges(warnings) {
@@ -518,7 +566,7 @@ function renderResult() {
         <button class="btn" data-tab-jump="saved">▣ Giri</button>
       </div>
 
-      ${state.googleMapsKey ? `<div id="route-map" style="height:300px;border-radius:8px;border:1px solid var(--line);margin-bottom:14px;"></div>` : ""}
+      ${state.googleMapsKey ? `<div id="route-map" style="height:280px;border-radius:8px;border:1px solid var(--line);margin-bottom:14px;"></div>` : ""}
 
       <div class="nav-panel">
         <div class="row" style="gap:10px;flex-wrap:wrap;">
@@ -526,7 +574,7 @@ function renderResult() {
             <option value="google" ${pref === "google" ? "selected" : ""}>Google Maps</option>
             <option value="apple" ${pref === "apple" ? "selected" : ""}>Apple Mappe</option>
           </select>
-          <a class="btn primary" href="${navUrl(result, pref)}" target="_blank" rel="noopener">↗ Apri percorso</a>
+          <a class="btn primary" href="${navUrl(result, pref)}" target="_blank" rel="noopener">↗ Apri percorso completo</a>
         </div>
       </div>
 
@@ -535,35 +583,42 @@ function renderResult() {
       <div class="result-list">
         ${rows.map(row => {
           const addr = state.addresses.find(a => String(a.id) === String(row.addressId));
+          const phone = addr?.phone || row.phone || "";
+          const email = addr?.email || row.email || "";
+          const emailSubject = encodeURIComponent(`Appuntamento ${row.customer} - ${result.scheduledDate || ""} ore ${row.arrivalTime}`);
+          const stopTitle = `${row.stopNumber}. ${escapeHtml(row.customer)}${row.location ? ` — ${escapeHtml(row.location)}` : ""}`;
           return `
           <article class="card result-card">
-            <div class="result-head">
-              <div>
-                <p class="stop-title">${row.stopNumber}. ${escapeHtml(row.customer)} ${escapeHtml(row.location || "")}</p>
-                <div class="stop-meta">${escapeHtml(row.address)}</div>
+            <div class="stop-compact-head" data-expand-stop="${row.stopNumber}">
+              <p class="stop-title">${stopTitle}</p>
+              <div class="stop-meta" style="font-size:0.82rem">${escapeHtml(row.address)}</div>
+              ${weatherCompact(result, row.stopNumber)}
+            </div>
+            <div class="stop-actions-big">
+              <a class="btn primary" href="${stopNavUrl(row, pref)}" target="_blank" rel="noopener">↗ Naviga</a>
+              ${phone ? `<a class="btn" href="tel:${escapeHtml(phone)}">📞</a>` : ""}
+              ${email ? `<a class="btn" href="mailto:${escapeHtml(email)}?subject=${emailSubject}">✉</a>` : ""}
+            </div>
+            <div class="stop-details" data-stop-details="${row.stopNumber}" hidden>
+              <div class="result-times" style="margin-bottom:10px;">
+                <div><div class="metric-label">Partenza</div><strong>${escapeHtml(row.departureTime)}</strong></div>
+                <div><div class="metric-label">Guida</div><strong>${minutesLabel(row.driveMinutes)} · ${row.km.toFixed(1)} km</strong></div>
+                <div><div class="metric-label">Arrivo</div><strong>${escapeHtml(row.arrivalTime)}</strong></div>
+                <div><div class="metric-label">Intervento</div><strong>${minutesLabel(row.durationMinutes)}</strong></div>
+                <div><div class="metric-label">Fine</div><strong>${escapeHtml(row.serviceEndTime)}</strong></div>
               </div>
+              ${phone ? `<div class="stop-meta">📞 <a href="tel:${escapeHtml(phone)}">${escapeHtml(phone)}</a></div>` : ""}
+              ${email ? `<div class="stop-meta">✉ <a href="mailto:${escapeHtml(email)}">${escapeHtml(email)}</a></div>` : ""}
+              ${row.notes ? `<div class="stop-meta" style="margin-top:6px;font-style:italic">${escapeHtml(row.notes)}</div>` : ""}
               ${warningBadges(row.warnings)}
-            </div>
-            <div class="result-times">
-              <div><div class="metric-label">Partenza</div><strong>${escapeHtml(row.departureTime)}</strong></div>
-              <div><div class="metric-label">Guida</div><strong>${minutesLabel(row.driveMinutes)} · ${row.km.toFixed(1)} km</strong></div>
-              <div><div class="metric-label">Arrivo</div><strong>${escapeHtml(row.arrivalTime)}</strong></div>
-              <div><div class="metric-label">Intervento</div><strong>${minutesLabel(row.durationMinutes)}</strong></div>
-              <div><div class="metric-label">Fine</div><strong>${escapeHtml(row.serviceEndTime)}</strong></div>
-              <div>${weatherPill(result, row.stopNumber)}</div>
-            </div>
-            <div class="actions">
-              <a class="btn" href="${stopNavUrl(row, pref)}" target="_blank" rel="noopener">↗ Naviga</a>
-              ${addr?.phone ? `<a class="btn" href="tel:${escapeHtml(addr.phone)}">📞 Chiama</a>` : ""}
-              ${addr?.email ? `<a class="btn" href="mailto:${escapeHtml(addr.email)}?subject=${encodeURIComponent("Appuntamento " + row.customer + " - " + (result.scheduledDate || "") + " ore " + row.arrivalTime)}">✉ Email</a>` : ""}
             </div>
           </article>`;
         }).join("")}
 
         <article class="card result-card">
-          <p class="stop-title">↩ Arrivo finale — ${escapeHtml(result.end?.label || "")}</p>
+          <p class="stop-title">↩ ${escapeHtml(result.end?.label || "Arrivo finale")}</p>
           <div class="stop-meta">${escapeHtml(result.end?.address || result.end?.fullAddress || "")}</div>
-          <div class="result-times">
+          <div class="result-times" style="margin-top:8px;">
             <div><div class="metric-label">Partenza</div><strong>${escapeHtml(finalLeg.departureTime)}</strong></div>
             <div><div class="metric-label">Guida</div><strong>${minutesLabel(finalLeg.driveMinutes)} · ${finalLeg.km.toFixed(1)} km</strong></div>
             <div><div class="metric-label">Arrivo</div><strong>${escapeHtml(finalLeg.arrivalTime)}</strong></div>
@@ -689,7 +744,31 @@ async function planCurrentRoute() {
 
 // ── voice ─────────────────────────────────────────────────────────────────────
 
-function startSpeechRecognition() {
+function updateVoiceButton() {
+  const btn = document.querySelector("#listen-command");
+  if (!btn) return;
+  if (state.voiceRecording) {
+    btn.textContent = "■ Stop";
+    btn.classList.add("recording");
+  } else {
+    btn.textContent = "● Avvia";
+    btn.classList.remove("recording");
+  }
+}
+
+async function transcribeBlob(blob, mimeType) {
+  showToast("Trascrizione in corso…");
+  const res = await fetch("/api/voice/transcribe", {
+    method: "POST",
+    headers: { "Content-Type": mimeType },
+    body: blob
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Errore trascrizione");
+  return data.text || "";
+}
+
+function startSpeechRecognitionFallback() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SR) { showToast("Riconoscimento vocale non disponibile"); return; }
   const rec = new SR();
@@ -705,15 +784,86 @@ function startSpeechRecognition() {
   rec.start();
 }
 
+async function toggleVoiceRecording() {
+  // Stop ongoing recording
+  if (state.voiceRecording && state._mediaRecorder) {
+    state._mediaRecorder.stop();
+    return;
+  }
+
+  // Use Whisper if configured and MediaRecorder available
+  if (state.whisperConfigured && window.MediaRecorder && navigator.mediaDevices?.getUserMedia) {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      state._audioChunks = [];
+      const mimeType = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg"]
+        .find(t => MediaRecorder.isTypeSupported(t)) || "audio/webm";
+      const mr = new MediaRecorder(stream, { mimeType });
+      mr.ondataavailable = e => { if (e.data.size > 0) state._audioChunks.push(e.data); };
+      mr.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop());
+        state.voiceRecording = false;
+        updateVoiceButton();
+        try {
+          const blob = new Blob(state._audioChunks, { type: mimeType });
+          const text = await transcribeBlob(blob, mimeType);
+          const ta = document.querySelector("#transcript");
+          if (ta) ta.value = text;
+          state.route.transcript = text;
+          showToast("Testo acquisito");
+        } catch (err) {
+          showToast(err.message);
+        }
+      };
+      state._mediaRecorder = mr;
+      mr.start();
+      state.voiceRecording = true;
+      updateVoiceButton();
+      return;
+    } catch {
+      // mic permission denied or not available — fall through
+    }
+  }
+
+  // Fallback: Web Speech API
+  startSpeechRecognitionFallback();
+}
+
 async function applyVoiceCommand() {
   updateRouteFromForm();
   if (!state.route.transcript.trim()) return;
   const parsed = await api("/api/voice/parse", { method: "POST", body: JSON.stringify({ text: state.route.transcript }) });
-  if (parsed.start) { state.route.startLabel = parsed.start.label || state.route.startLabel; state.route.startAddress = parsed.start.address || state.route.startAddress; }
+
+  if (parsed.start) {
+    state.route.startLabel = parsed.start.label || state.route.startLabel;
+    state.route.startAddress = parsed.start.address || state.route.startAddress;
+  }
   if (parsed.startTime) state.route.startTime = parsed.startTime;
-  if (parsed.end) { state.route.endSameAsStart = false; state.route.endLabel = parsed.end.label || state.route.endLabel; state.route.endAddress = parsed.end.address || state.route.endAddress; }
-  for (const stop of parsed.stops || []) state.route.stops.push({ ...stop, uid: stop.uid || crypto.randomUUID() });
-  showToast(parsed.needsConfirmation?.length ? `Da confermare: ${parsed.needsConfirmation.join(", ")}` : "Comando applicato");
+  if (parsed.firstArrivalTime) state.route.firstArrivalTime = parsed.firstArrivalTime;
+  if (parsed.arrivalLeadMinutes != null) state.route.arrivalLeadMinutes = parsed.arrivalLeadMinutes;
+  if (parsed.scheduledDate) state.route.scheduledDate = parsed.scheduledDate;
+  if (parsed.end) {
+    state.route.endSameAsStart = false;
+    state.route.endLabel = parsed.end.label || state.route.endLabel;
+    state.route.endAddress = parsed.end.address || state.route.endAddress;
+  }
+  for (const stop of parsed.stops || []) state.route.stops.push({ ...stop, uid: crypto.randomUUID() });
+  for (const rem of parsed.removeStops || []) {
+    state.route.stops = state.route.stops.filter(s => {
+      if (rem.id && s.addressId && String(s.addressId) === String(rem.id)) return false;
+      const a = `${rem.customer} ${rem.location || ""}`.toLowerCase().trim();
+      const b = `${s.customer} ${s.location || ""}`.toLowerCase().trim();
+      return a !== b;
+    });
+  }
+
+  const msg = parsed.needsConfirmation?.length
+    ? `Da confermare: ${parsed.needsConfirmation.join(", ")}`
+    : parsed.removeStops?.length
+    ? `${parsed.removeStops.length} tappa rimossa`
+    : "Comando applicato";
+  showToast(msg);
+
   if (parsed.action === "optimize") await planCurrentRoute();
   else render();
 }
@@ -900,6 +1050,21 @@ function bindEvents() {
       state.addressSearch = e.target.value;
       refreshAddresses().then(() => renderArchive());
     }
+    // stop filter
+    if (e.target.id === "stop-filter") {
+      state.stopFilter = e.target.value;
+      const aside = document.querySelector("#stops-aside");
+      if (aside) {
+        const h2 = aside.querySelector("h2");
+        if (h2) h2.textContent = `Tappe (${state.route.stops.length})`;
+        const filterInput = aside.querySelector("#stop-filter");
+        const stopListEl = aside.querySelector(".stop-list, .empty");
+        const newHtml = renderStops();
+        if (stopListEl) stopListEl.outerHTML = newHtml;
+        else aside.insertAdjacentHTML("beforeend", newHtml);
+        if (filterInput) filterInput.focus();
+      }
+    }
     // navigator preference
     if (e.target.id === "nav-pref") {
       state.navigatorPref = e.target.value;
@@ -916,6 +1081,15 @@ function bindEvents() {
   });
 
   app.addEventListener("click", async e => {
+    // accordion expand/collapse for result stop cards
+    const expandHead = e.target.closest("[data-expand-stop]");
+    if (expandHead && !e.target.closest("a, button")) {
+      const id = expandHead.dataset.expandStop;
+      const details = document.querySelector(`[data-stop-details="${id}"]`);
+      if (details) details.hidden = !details.hidden;
+      return;
+    }
+
     const tabJump = e.target.closest("[data-tab-jump]");
     if (tabJump) { setActiveTab(tabJump.dataset.tabJump); return; }
 
@@ -1004,7 +1178,7 @@ function bindEvents() {
     }
 
     if (e.target.closest("#plan-route")) { await planCurrentRoute(); return; }
-    if (e.target.closest("#listen-command")) { startSpeechRecognition(); return; }
+    if (e.target.closest("#listen-command")) { toggleVoiceRecording(); return; }
     if (e.target.closest("#apply-command")) {
       try { await applyVoiceCommand(); } catch (err) { showToast(err.message); }
       return;

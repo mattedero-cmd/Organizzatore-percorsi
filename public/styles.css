@@ -540,6 +540,96 @@ tbody tr:last-child td {
   transform: translateY(0);
 }
 
+.stop-compact-head {
+  cursor: pointer;
+  padding-bottom: 4px;
+  user-select: none;
+}
+
+.stop-compact-head:active {
+  opacity: 0.75;
+}
+
+.stop-weather-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+  font-size: 0.88rem;
+  color: var(--muted);
+}
+
+.stop-actions-big {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.stop-actions-big .btn {
+  flex: 1;
+  min-height: 52px;
+  font-size: 1rem;
+}
+
+.stop-details {
+  border-top: 1px solid var(--line);
+  margin-top: 10px;
+  padding-top: 10px;
+  display: grid;
+  gap: 6px;
+}
+
+@keyframes recording-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.btn.recording {
+  background: color-mix(in srgb, var(--danger) 15%, var(--surface));
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 40%, var(--line));
+  animation: recording-pulse 1.2s ease-in-out infinite;
+}
+
+.voice-help-wrap {
+  position: relative;
+}
+
+.voice-help-wrap > summary {
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+}
+
+.voice-help-wrap > summary::-webkit-details-marker { display: none; }
+
+.voice-help-panel {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 320px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 12px 14px;
+}
+
+.voice-help-panel ul {
+  margin: 0;
+  padding: 0 0 0 16px;
+  display: grid;
+  gap: 6px;
+  font-size: 0.84rem;
+  color: var(--muted);
+}
+
+.voice-help-panel li b {
+  color: var(--text);
+}
+
 .result-list {
   display: grid;
   gap: 10px;

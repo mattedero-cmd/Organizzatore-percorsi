@@ -4,10 +4,58 @@ function normalize(value) {
   return String(value || "")
     .toLowerCase()
     .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[̀-ͯ]/g, "")
     .replace(/[^\w\s:.']/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+const MONTH_MAP = {
+  gennaio: 1, febbraio: 2, marzo: 3, aprile: 4, maggio: 5, giugno: 6,
+  luglio: 7, agosto: 8, settembre: 9, ottobre: 10, novembre: 11, dicembre: 12
+};
+
+function parseItalianDate(text) {
+  const v = normalize(text);
+
+  // domani
+  if (v.includes("domani")) {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    return d.toISOString().slice(0, 10);
+  }
+
+  // "il 10 giugno" / "per il 5 luglio"
+  for (const [name, num] of Object.entries(MONTH_MAP)) {
+    const m = v.match(new RegExp(`(\\d{1,2})\\s+${name}`));
+    if (m) {
+      const day = m[1].padStart(2, "0");
+      const month = String(num).padStart(2, "0");
+      const year = new Date().getFullYear();
+      return `${year}-${month}-${day}`;
+    }
+  }
+
+  // "10/6" or "10-6"
+  const slashMatch = v.match(/\b(\d{1,2})[\/\-](\d{1,2})\b/);
+  if (slashMatch) {
+    const day = slashMatch[1].padStart(2, "0");
+    const month = slashMatch[2].padStart(2, "0");
+    const year = new Date().getFullYear();
+    return `${year}-${month}-${day}`;
+  }
+
+  return "";
+}
+
+function parseItalianTime(fragment) {
+  const v = normalize(fragment);
+  const m = v.match(/(\d{1,2})(?:[:.,e](\d{0,2}))?/);
+  if (!m) return "";
+  const h = m[1].padStart(2, "0");
+  const min = (m[2] || "00").padStart(2, "0");
+  const raw = `${h}:${min}`;
+  return parseTime(raw) !== null ? raw : "";
 }
 
 function parseDuration(text) {
@@ -21,17 +69,6 @@ function parseDuration(text) {
   if (minuteMatch) minutes += Number(minuteMatch[1]);
   if (!minutes && value.includes("un ora")) minutes = 60;
   return minutes || null;
-}
-
-function findTimeAfter(text, marker) {
-  const value = normalize(text);
-  const index = value.indexOf(marker);
-  if (index === -1) return "";
-  const tail = value.slice(index + marker.length);
-  const match = tail.match(/(?:alle|all|a)\s+(\d{1,2}(?::|\.)?\d{0,2})/);
-  if (!match) return "";
-  const raw = match[1].includes(":") || match[1].includes(".") ? match[1] : `${match[1]}:00`;
-  return parseTime(raw) !== null ? raw.replace(".", ":") : "";
 }
 
 function addressLabel(address) {
@@ -57,97 +94,139 @@ function matchAddress(fragment, addresses) {
   return bestScore >= 0.5 ? { ...best, confidence: bestScore } : null;
 }
 
-function extractStopName(text) {
-  const value = normalize(text);
-  const patterns = [
-    /aggiungi(?: anche)?\s+(.+?)(?:\s+intervento|\s+lavoro|$)/,
-    /arrivare da\s+(.+?)(?:\s+alle|$)/,
-    /da\s+(.+?)(?:\s+alle|$)/
-  ];
-  for (const pattern of patterns) {
-    const match = value.match(pattern);
-    if (match?.[1]) return match[1].trim();
-  }
-  return "";
+function buildStop(address, duration) {
+  return {
+    addressId: address.id,
+    customer: address.customer,
+    location: address.location,
+    fullAddress: address.fullAddress,
+    openMorning: address.openMorning,
+    closeMorning: address.closeMorning,
+    openAfternoon: address.openAfternoon,
+    closeAfternoon: address.closeAfternoon,
+    durationMinutes: duration || address.defaultDuration || 45,
+    lat: address.lat,
+    lng: address.lng,
+    recognized: true,
+    confidence: address.confidence || 1
+  };
 }
 
 export function parseVoiceCommand(text, addresses) {
   const normalized = normalize(text);
   const result = {
     transcript: text,
-    action: normalized.includes("ottimizza") ? "optimize" : "update",
+    action: "update",
     start: null,
     end: null,
     startTime: "",
-    firstArrivalRequired: "",
+    firstArrivalTime: "",
+    arrivalLeadMinutes: null,
+    scheduledDate: "",
     stops: [],
+    removeStops: [],
     needsConfirmation: []
   };
 
+  // ── action ────────────────────────────────────────────────────────────────
+  if (/ottimizza|salva e vai|calcola percorso|calcola il percorso/.test(normalized)) {
+    result.action = "optimize";
+  }
+
+  // ── date ──────────────────────────────────────────────────────────────────
+  const dateKw = normalized.match(/(?:per il|per|data|giorno)\s+(.{3,20}?)(?:\s+alle|\s+partenza|$)/);
+  if (dateKw) {
+    const parsed = parseItalianDate(dateKw[1]);
+    if (parsed) result.scheduledDate = parsed;
+  } else {
+    const parsed = parseItalianDate(normalized);
+    if (parsed) result.scheduledDate = parsed;
+  }
+
+  // ── partenza alle ─────────────────────────────────────────────────────────
+  const startTimeMatch = normalized.match(/partenza\s+alle?\s+(.{2,8}?)(?:\s|$)/);
+  if (startTimeMatch) result.startTime = parseItalianTime(startTimeMatch[1]);
+
+  // ── primo arrivo alle / arrivo alle ───────────────────────────────────────
+  const firstArrMatch = normalized.match(/(?:primo\s+)?arrivo\s+alle?\s+(.{2,8}?)(?:\s|$)/);
+  if (firstArrMatch) result.firstArrivalTime = parseItalianTime(firstArrMatch[1]);
+
+  // ── in anticipo di N minuti ───────────────────────────────────────────────
+  const leadMatch = normalized.match(/in\s+anticipo\s+di\s+(\d+)/);
+  if (leadMatch) result.arrivalLeadMinutes = Number(leadMatch[1]);
+
+  // ── parto da ──────────────────────────────────────────────────────────────
   const startMatch = normalized.match(/parto da\s+(.+?)(?:\s+alle|$)/);
   if (startMatch) {
     const rawStart = startMatch[1].trim();
     const knownStart = matchAddress(rawStart, addresses);
-    result.startTime = findTimeAfter(normalized, "parto da") || "";
+    if (!result.startTime) result.startTime = "";
     result.start = knownStart
-      ? {
-          label: `${knownStart.customer} ${knownStart.location}`.trim(),
-          address: knownStart.fullAddress,
-          lat: knownStart.lat,
-          lng: knownStart.lng
-        }
+      ? { label: `${knownStart.customer} ${knownStart.location}`.trim(), address: knownStart.fullAddress, lat: knownStart.lat, lng: knownStart.lng }
       : { label: rawStart, address: rawStart };
     if (!knownStart) result.needsConfirmation.push(`Partenza: ${rawStart}`);
   }
 
-  const endMatch = normalized.match(/(?:punto finale|arrivo finale|finale)\s+(?:e|è|a)?\s*(.+)$/);
+  // ── arrivo finale ─────────────────────────────────────────────────────────
+  const endMatch = normalized.match(/(?:punto finale|arrivo finale|finale)\s+(?:e|e|a)?\s*(.+)$/);
   if (endMatch) {
-    const rawEnd = endMatch[1].replace("casa", "casa").trim();
+    const rawEnd = endMatch[1].trim();
     const knownEnd = matchAddress(rawEnd, addresses);
     result.end = knownEnd
-      ? {
-          label: `${knownEnd.customer} ${knownEnd.location}`.trim(),
-          address: knownEnd.fullAddress,
-          lat: knownEnd.lat,
-          lng: knownEnd.lng
-        }
+      ? { label: `${knownEnd.customer} ${knownEnd.location}`.trim(), address: knownEnd.fullAddress, lat: knownEnd.lat, lng: knownEnd.lng }
       : { label: rawEnd, address: rawEnd };
     if (!knownEnd) result.needsConfirmation.push(`Arrivo: ${rawEnd}`);
   }
 
-  if (normalized.includes("arrivare da")) {
-    result.firstArrivalRequired = findTimeAfter(normalized, "arrivare da") || "";
+  // ── aggiungi (one or more) ────────────────────────────────────────────────
+  const duration = parseDuration(normalized);
+  // Split on "aggiungi" / "e aggiungi" to find multiple stops in one command
+  const addParts = normalized.split(/\baggiungi(?:\s+anche)?\s+/).slice(1);
+  for (const part of addParts) {
+    // Take text up to next keyword
+    const stopName = part.replace(/\s+(?:intervento|lavoro|per|dalle|alle|e aggiungi|ottimizza|salva e vai).*$/, "").trim();
+    if (!stopName) continue;
+    const known = matchAddress(stopName, addresses);
+    if (known) {
+      result.stops.push(buildStop(known, duration));
+    } else {
+      result.stops.push({ customer: stopName, location: "", fullAddress: stopName, durationMinutes: duration || 45, recognized: false });
+      result.needsConfirmation.push(`Tappa: ${stopName}`);
+    }
   }
 
-  const stopName = extractStopName(normalized);
-  if (stopName) {
-    const duration = parseDuration(normalized);
-    const knownStop = matchAddress(stopName, addresses);
-    if (knownStop) {
-      result.stops.push({
-        addressId: knownStop.id,
-        customer: knownStop.customer,
-        location: knownStop.location,
-        fullAddress: knownStop.fullAddress,
-        openMorning: knownStop.openMorning,
-        closeMorning: knownStop.closeMorning,
-        openAfternoon: knownStop.openAfternoon,
-        closeAfternoon: knownStop.closeAfternoon,
-        durationMinutes: duration || knownStop.defaultDuration,
-        lat: knownStop.lat,
-        lng: knownStop.lng,
-        recognized: true,
-        confidence: knownStop.confidence
-      });
+  // fallback: "arrivare da" / "da X alle"
+  if (!addParts.length) {
+    const legacyPatterns = [
+      /arrivare da\s+(.+?)(?:\s+alle|$)/,
+      /^da\s+(.+?)(?:\s+alle|$)/
+    ];
+    for (const pat of legacyPatterns) {
+      const m = normalized.match(pat);
+      if (m) {
+        const stopName = m[1].trim();
+        const known = matchAddress(stopName, addresses);
+        if (known) {
+          result.stops.push(buildStop(known, duration));
+        } else {
+          result.stops.push({ customer: stopName, location: "", fullAddress: stopName, durationMinutes: duration || 45, recognized: false });
+          result.needsConfirmation.push(`Tappa: ${stopName}`);
+        }
+        break;
+      }
+    }
+  }
+
+  // ── rimuovi ───────────────────────────────────────────────────────────────
+  const removeMatch = normalized.match(/(?:rimuovi|elimina|togli)\s+(.+?)(?:\s+dal percorso|\s+dalla lista|$)/);
+  if (removeMatch) {
+    if (result.action !== "optimize") result.action = "remove";
+    const removeName = removeMatch[1].trim();
+    const found = matchAddress(removeName, addresses);
+    if (found) {
+      result.removeStops.push(found);
     } else {
-      result.stops.push({
-        customer: stopName,
-        location: "",
-        fullAddress: stopName,
-        durationMinutes: duration || 45,
-        recognized: false
-      });
-      result.needsConfirmation.push(`Tappa: ${stopName}`);
+      result.needsConfirmation.push(`Non trovato: ${removeName}`);
     }
   }
 
