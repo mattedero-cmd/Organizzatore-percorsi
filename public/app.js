@@ -1,36 +1,72 @@
-const api = async (path, options = {}) => {
-  const response = await fetch(path, {
+// ── helpers ──────────────────────────────────────────────────────────────────
+
+const app = document.querySelector("#app");
+const toastEl = document.querySelector("#toast");
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;").replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;").replaceAll('"', "&quot;");
+}
+
+function euro(value) {
+  return new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR" }).format(Number(value || 0));
+}
+
+function minutesLabel(minutes) {
+  const value = Number(minutes || 0);
+  const h = Math.floor(value / 60), m = value % 60;
+  if (!h) return `${m} min`;
+  if (!m) return `${h} h`;
+  return `${h} h ${m} min`;
+}
+
+function addressName(a) {
+  return `${a.customer || ""}${a.location ? ` — ${a.location}` : ""}`.trim();
+}
+
+function showToast(message) {
+  toastEl.textContent = message;
+  toastEl.classList.add("show");
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(() => toastEl.classList.remove("show"), 2800);
+}
+
+function readForm(form) {
+  return Object.fromEntries(new FormData(form).entries());
+}
+
+async function api(path, options = {}) {
+  const res = await fetch(path, {
     headers: { "Content-Type": "application/json", ...(options.headers || {}) },
     ...options
   });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(payload.error || "Errore richiesta");
+  const payload = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(payload.error || `Errore ${res.status}`);
   return payload;
-};
+}
 
-const emptyAddressForm = {
-  id: null,
-  customer: "",
-  location: "",
-  fullAddress: "",
-  notes: "",
-  openMorning: "08:30",
-  closeMorning: "12:30",
-  openAfternoon: "14:30",
-  closeAfternoon: "18:00",
-  defaultDuration: 45,
-  lat: "",
-  lng: ""
+// ── state ────────────────────────────────────────────────────────────────────
+
+const emptyForm = {
+  id: null, customer: "", location: "", fullAddress: "",
+  phone: "", email: "", notes: "",
+  openMorning: "08:30", closeMorning: "12:30",
+  openAfternoon: "14:30", closeAfternoon: "18:00",
+  defaultDuration: 45, lat: "", lng: ""
 };
 
 const state = {
   activeTab: "route",
   theme: "day",
+  googleMapsKey: "",
+  googleMapsReady: false,
+  navigatorPref: localStorage.getItem("navigatorPref") || "google",
   mapApiConfigured: false,
   addresses: [],
   savedRoutes: [],
   addressSearch: "",
-  addressForm: { ...emptyAddressForm },
+  addressForm: { ...emptyForm },
   settings: { kmRate: 0.65, driveHourRate: 22, workHourRate: 60 },
   route: {
     scheduledDate: new Date().toISOString().slice(0, 10),
@@ -45,946 +81,1008 @@ const state = {
     endAddress: "Via Vittoria 11, 38049, Altopiano della Vigolana, TN",
     firstArrivalRequired: "",
     selectedAddressId: "",
-    customCustomer: "",
-    customLocation: "",
-    customAddress: "",
+    customCustomer: "", customLocation: "", customAddress: "",
     customDuration: 45,
-    customOpenMorning: "08:30",
-    customCloseMorning: "12:30",
-    customOpenAfternoon: "14:30",
-    customCloseAfternoon: "18:00",
+    customOpenMorning: "08:30", customCloseMorning: "12:30",
+    customOpenAfternoon: "14:30", customCloseAfternoon: "18:00",
     stops: [],
     transcript: ""
   },
   result: null,
+  manualOrderRows: null,
   planning: false
 };
 
-const app = document.querySelector("#app");
-const toast = document.querySelector("#toast");
-
-function euro(value) {
-  return new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR" }).format(Number(value || 0));
-}
-
-function minutesLabel(minutes) {
-  const value = Number(minutes || 0);
-  const hours = Math.floor(value / 60);
-  const mins = value % 60;
-  if (!hours) return `${mins} min`;
-  if (!mins) return `${hours} h`;
-  return `${hours} h ${mins} min`;
-}
-
-function addressName(address) {
-  return `${address.customer || ""}${address.location ? ` - ${address.location}` : ""}`.trim();
-}
-
-function optionLabel(address) {
-  return `${addressName(address)} | ${address.fullAddress}`;
-}
-
-function showToast(message) {
-  toast.textContent = message;
-  toast.classList.add("show");
-  window.clearTimeout(showToast.timer);
-  showToast.timer = window.setTimeout(() => toast.classList.remove("show"), 2800);
-}
-
-function icon(value) {
-  return `<span class="btn-icon" aria-hidden="true">${value}</span>`;
-}
+// ── theme ────────────────────────────────────────────────────────────────────
 
 function applyTheme() {
-  const hour = new Date().getHours();
-  state.theme = hour >= 19 || hour < 7 ? "night" : "day";
+  const h = new Date().getHours();
+  state.theme = (h >= 19 || h < 7) ? "night" : "day";
   document.documentElement.dataset.theme = state.theme;
 }
 
 function setActiveTab(tab) {
   state.activeTab = tab;
-  document.querySelectorAll(".tab").forEach((button) => {
-    button.classList.toggle("active", button.dataset.tab === tab);
-  });
+  document.querySelectorAll(".tab").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
   render();
 }
 
+// ── data loading ──────────────────────────────────────────────────────────────
+
 async function refreshAddresses() {
-  state.addresses = await api(`/api/addresses?search=${encodeURIComponent(state.addressSearch)}`);
+  const q = encodeURIComponent(state.addressSearch);
+  state.addresses = await api(`/api/addresses?search=${q}`).catch(() => []);
 }
 
 async function refreshSavedRoutes() {
-  state.savedRoutes = await api("/api/routes");
+  state.savedRoutes = await api("/api/routes").catch(() => []);
 }
 
 async function loadInitialData() {
-  const [health, settings] = await Promise.all([
-    api("/api/health"),
-    api("/api/settings")
+  const [health, config, settings] = await Promise.all([
+    api("/api/health").catch(() => ({})),
+    api("/api/config").catch(() => ({})),
+    api("/api/settings").catch(() => state.settings)
   ]);
-  state.mapApiConfigured = health.mapApiConfigured;
+  state.mapApiConfigured = health.mapApiConfigured || false;
+  state.googleMapsKey = config.googleMapsKey || "";
   state.settings = settings;
-  document.querySelector("#map-status").textContent = health.mapApiConfigured
-    ? "Mappe API"
-    : "Stima locale";
+  document.querySelector("#map-status").textContent = state.mapApiConfigured ? "Google Maps" : "Stima locale";
   await Promise.all([refreshAddresses(), refreshSavedRoutes()]);
 }
 
-function renderAddressOptions() {
-  return state.addresses
-    .map((address) => `<option value="${address.id}">${escapeHtml(optionLabel(address))}</option>`)
-    .join("");
-}
+// ── normalize saved route ─────────────────────────────────────────────────────
 
-function escapeHtml(value) {
-  return String(value ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;");
-}
-
-function readForm(form) {
-  return Object.fromEntries(new FormData(form).entries());
-}
-
-function addressToStop(address, duration = null) {
+function normalizeSavedRoute(route) {
+  const rows = Array.isArray(route?.rows) ? route.rows : [];
+  const lastRow = rows[rows.length - 1] || {};
+  const finalLeg = route?.finalLeg || {};
+  const summary = route?.summary || {};
   return {
-    uid: crypto.randomUUID(),
-    addressId: address.id,
-    customer: address.customer,
-    location: address.location,
-    fullAddress: address.fullAddress,
-    notes: address.notes,
-    openMorning: address.openMorning,
-    closeMorning: address.closeMorning,
-    openAfternoon: address.openAfternoon,
-    closeAfternoon: address.closeAfternoon,
-    durationMinutes: Number(duration || address.defaultDuration || 45),
-    lat: address.lat,
-    lng: address.lng,
-    recognized: true
+    ...route, rows,
+    weather: Array.isArray(route?.weather) ? route.weather : [],
+    start: route?.start || { label: route?.startLabel || "Partenza", address: route?.startAddress || "" },
+    end: route?.end || { label: route?.endLabel || "Arrivo", address: route?.endAddress || "" },
+    finalLeg: {
+      departureTime: finalLeg.departureTime || lastRow.serviceEndTime || "",
+      driveMinutes: Number(finalLeg.driveMinutes || 0),
+      km: Number(finalLeg.km || 0),
+      arrivalTime: finalLeg.arrivalTime || lastRow.serviceEndTime || ""
+    },
+    summary: {
+      totalKm: Number(summary.totalKm ?? route?.totalKm ?? 0),
+      totalDriveMinutes: Number(summary.totalDriveMinutes || 0),
+      totalWorkMinutes: Number(summary.totalWorkMinutes || rows.reduce((t, r) => t + Number(r.durationMinutes || 0), 0)),
+      dayStart: summary.dayStart || route?.startTime || "--:--",
+      dayEnd: summary.dayEnd || finalLeg.arrivalTime || "--:--",
+      costKm: Number(summary.costKm || 0),
+      costDrive: Number(summary.costDrive || 0),
+      costWork: Number(summary.costWork || 0),
+      totalCost: Number(summary.totalCost ?? route?.totalCost ?? 0),
+      warnings: Array.isArray(summary.warnings) ? summary.warnings : []
+    }
   };
 }
 
-function addStop(stop) {
-  state.route.stops.push({ ...stop, uid: stop.uid || crypto.randomUUID() });
+// ── navigation helpers ────────────────────────────────────────────────────────
+
+function routePoints(result) {
+  const points = [];
+  const s = result.start;
+  if (s) points.push(s.address || s.fullAddress || s.label || "");
+  for (const row of (result.rows || [])) points.push(row.address || `${row.customer} ${row.location || ""}`);
+  const e = result.end;
+  if (e) points.push(e.address || e.fullAddress || e.label || "");
+  return points.filter(Boolean);
 }
 
-function updateRouteFromForm() {
-  const form = document.querySelector("#route-form");
-  if (!form) return;
-  const values = readForm(form);
-  Object.assign(state.route, {
-    startLabel: values.startLabel,
-    scheduledDate: values.scheduledDate,
-    startAddress: values.startAddress,
-    startTime: values.startTime,
-    timingMode: values.timingMode,
-    arrivalLeadMinutes: Number(values.arrivalLeadMinutes || 10),
-    firstArrivalTime: values.firstArrivalTime,
-    endSameAsStart: Boolean(values.endSameAsStart),
-    endLabel: values.endLabel,
-    endAddress: values.endAddress,
-    firstArrivalRequired: values.firstArrivalRequired,
-    selectedAddressId: values.selectedAddressId,
-    customCustomer: values.customCustomer,
-    customLocation: values.customLocation,
-    customAddress: values.customAddress,
-    customDuration: Number(values.customDuration || 45),
-    customOpenMorning: values.customOpenMorning,
-    customCloseMorning: values.customCloseMorning,
-    customOpenAfternoon: values.customOpenAfternoon,
-    customCloseAfternoon: values.customCloseAfternoon,
-    transcript: values.transcript || ""
+function navUrl(result, pref) {
+  const pts = routePoints(result);
+  if (!pts.length) return "#";
+  if (pref === "apple") {
+    const stops = pts.map(p => encodeURIComponent(p)).join("+to:");
+    return `http://maps.apple.com/?daddr=${stops}`;
+  }
+  const origin = encodeURIComponent(pts[0]);
+  const dest = encodeURIComponent(pts[pts.length - 1]);
+  const wps = pts.slice(1, -1).map(p => encodeURIComponent(p)).join("|");
+  return `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${dest}${wps ? "&waypoints=" + wps : ""}`;
+}
+
+function stopNavUrl(row, pref) {
+  const addr = row.address || `${row.customer} ${row.location || ""}`;
+  if (pref === "apple") return `http://maps.apple.com/?q=${encodeURIComponent(addr)}`;
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addr)}`;
+}
+
+// ── Google Maps display ───────────────────────────────────────────────────────
+
+async function loadGoogleMapsScript() {
+  if (state.googleMapsReady) return true;
+  if (!state.googleMapsKey) return false;
+  return new Promise(resolve => {
+    if (window.google?.maps) { state.googleMapsReady = true; resolve(true); return; }
+    window.__gMapsCb = () => { state.googleMapsReady = true; resolve(true); };
+    const s = document.createElement("script");
+    s.src = `https://maps.googleapis.com/maps/api/js?key=${state.googleMapsKey}&callback=__gMapsCb`;
+    s.onerror = () => resolve(false);
+    document.head.appendChild(s);
   });
 }
 
+async function renderGoogleMap(result) {
+  const el = document.querySelector("#route-map");
+  if (!el) return;
+  const ready = await loadGoogleMapsScript();
+  if (!ready || !window.google?.maps) { el.style.display = "none"; return; }
+
+  const rows = result.rows || [];
+  const firstCoord = rows.find(r => r.lat) || result.start;
+  const center = firstCoord?.lat ? { lat: Number(firstCoord.lat), lng: Number(firstCoord.lng) } : { lat: 46.0, lng: 11.0 };
+
+  const map = new google.maps.Map(el, { center, zoom: 10, mapTypeControl: false, fullscreenControl: false });
+  const bounds = new google.maps.LatLngBounds();
+  let hasPoints = false;
+
+  const addMarker = (lat, lng, label, title) => {
+    if (!lat || !lng) return;
+    const pos = { lat: Number(lat), lng: Number(lng) };
+    new google.maps.Marker({ position: pos, map, title,
+      label: { text: label, color: "#001110", fontWeight: "bold", fontSize: "11px" } });
+    bounds.extend(pos);
+    hasPoints = true;
+  };
+
+  if (result.start?.lat) addMarker(result.start.lat, result.start.lng, "P", result.start.label || "Partenza");
+  for (const row of rows) addMarker(row.lat, row.lng, String(row.stopNumber), row.customer);
+  if (result.end?.lat) addMarker(result.end.lat, result.end.lng, "A", result.end.label || "Arrivo");
+
+  if (hasPoints) map.fitBounds(bounds);
+
+  // Fetch and draw polyline
+  try {
+    const shapePoints = [];
+    if (result.start?.lat) shapePoints.push({ lat: result.start.lat, lng: result.start.lng });
+    for (const row of rows) if (row.lat) shapePoints.push({ lat: row.lat, lng: row.lng });
+    if (result.end?.lat) shapePoints.push({ lat: result.end.lat, lng: result.end.lng });
+
+    if (shapePoints.length >= 2) {
+      const shape = await api("/api/route-shape", { method: "POST", body: JSON.stringify({ points: shapePoints }) });
+      if (shape.coordinates?.length > 1) {
+        new google.maps.Polyline({
+          path: shape.coordinates.map(([lat, lng]) => ({ lat, lng })),
+          geodesic: true, strokeColor: "#00a99d", strokeOpacity: 0.9, strokeWeight: 4, map
+        });
+      }
+    }
+  } catch { /* map still shows markers */ }
+}
+
+// ── render: route tab ─────────────────────────────────────────────────────────
+
+function addressOptions() {
+  return state.addresses.map(a => `<option value="${a.id}">${escapeHtml(addressName(a))} | ${escapeHtml(a.fullAddress)}</option>`).join("");
+}
+
+function renderStops() {
+  if (!state.route.stops.length) return `<div class="empty">Nessuna tappa inserita.</div>`;
+  return `<div class="stop-list">${state.route.stops.map((stop, i) => `
+    <article class="card stop-card">
+      <div class="stop-head">
+        <div>
+          <p class="stop-title">${i + 1}. ${escapeHtml(stop.customer)} ${escapeHtml(stop.location || "")}</p>
+          <div class="stop-meta">${escapeHtml(stop.fullAddress)}</div>
+        </div>
+        <button class="btn danger icon-btn" data-remove-stop="${stop.uid}">×</button>
+      </div>
+      <div class="form-grid three">
+        <label class="field">Durata (min)<input type="number" min="5" step="5" value="${escapeHtml(stop.durationMinutes)}" data-stop="${stop.uid}:durationMinutes" /></label>
+        <label class="field">Apr. mattina<input type="time" value="${escapeHtml(stop.openMorning || "")}" data-stop="${stop.uid}:openMorning" /></label>
+        <label class="field">Ch. mattina<input type="time" value="${escapeHtml(stop.closeMorning || "")}" data-stop="${stop.uid}:closeMorning" /></label>
+        <label class="field">Apr. pomeriggio<input type="time" value="${escapeHtml(stop.openAfternoon || "")}" data-stop="${stop.uid}:openAfternoon" /></label>
+        <label class="field">Ch. pomeriggio<input type="time" value="${escapeHtml(stop.closeAfternoon || "")}" data-stop="${stop.uid}:closeAfternoon" /></label>
+        <div class="field"><span class="badge ${stop.recognized ? "ok" : "warning"}">${stop.recognized ? "Archivio" : "Da confermare"}</span></div>
+      </div>
+    </article>`).join("")}</div>`;
+}
+
 function renderRoute() {
-  const route = state.route;
+  const r = state.route;
+  const dm = r.timingMode;
   app.innerHTML = `
     <section class="grid">
       <form class="panel" id="route-form">
-        <div class="route-strip" aria-hidden="true">
-          <span class="route-dot active"></span>
-          <span class="route-dot active"></span>
-          <span class="route-dot"></span>
-          <span class="route-dot"></span>
-          <span class="route-dot"></span>
-        </div>
         <h2>Nuovo percorso</h2>
-        <div class="form-grid route-fields">
-          <label class="field">
-            Data giro
-            <input name="scheduledDate" type="date" value="${escapeHtml(route.scheduledDate)}" />
-          </label>
-          <label class="field">
-            Punto di partenza
-            <input name="startLabel" value="${escapeHtml(route.startLabel)}" autocomplete="off" />
-          </label>
-          <label class="field">
-            Orario partenza manuale
-            <input name="startTime" type="time" value="${escapeHtml(route.startTime)}" />
-          </label>
-          <label class="field">
-            Regola orario
-            <select name="timingMode">
-              <option value="first_open_minus" ${route.timingMode === "first_open_minus" ? "selected" : ""}>Arriva prima apertura</option>
-              <option value="arrive_at" ${route.timingMode === "arrive_at" ? "selected" : ""}>Arriva a orario specifico</option>
-              <option value="depart_at" ${route.timingMode === "depart_at" ? "selected" : ""}>Parti a orario specifico</option>
-            </select>
-          </label>
-          <label class="field">
-            Minuti prima apertura
-            <input name="arrivalLeadMinutes" type="number" min="0" max="60" step="5" value="${escapeHtml(route.arrivalLeadMinutes)}" ${route.timingMode !== "first_open_minus" ? "disabled" : ""} />
-          </label>
-          <label class="field">
-            Orario arrivo target
-            <input name="firstArrivalTime" type="time" value="${escapeHtml(route.firstArrivalTime)}" ${route.timingMode !== "arrive_at" ? "disabled" : ""} />
-          </label>
-          <label class="field full">
-            Indirizzo partenza
-            <input name="startAddress" value="${escapeHtml(route.startAddress)}" autocomplete="street-address" />
-          </label>
+        <div class="form-grid">
+          <label class="field">Data<input name="scheduledDate" type="date" value="${escapeHtml(r.scheduledDate)}" /></label>
+          <label class="field">Partenza (nome)<input name="startLabel" value="${escapeHtml(r.startLabel)}" autocomplete="off" /></label>
+          <label class="field full">Indirizzo partenza<input name="startAddress" value="${escapeHtml(r.startAddress)}" /></label>
+          <label class="field">Orario partenza<input name="startTime" type="time" value="${escapeHtml(r.startTime)}" /></label>
+          <label class="field">Regola orario<select name="timingMode">
+            <option value="first_open_minus" ${dm === "first_open_minus" ? "selected" : ""}>Prima dell'apertura</option>
+            <option value="arrive_at" ${dm === "arrive_at" ? "selected" : ""}>Arrivo a orario fisso</option>
+            <option value="depart_at" ${dm === "depart_at" ? "selected" : ""}>Partenza a orario fisso</option>
+          </select></label>
+          <label class="field">Minuti prima apertura<input name="arrivalLeadMinutes" type="number" min="0" max="60" step="5" value="${escapeHtml(r.arrivalLeadMinutes)}" ${dm !== "first_open_minus" ? "disabled" : ""} /></label>
+          <label class="field">Orario arrivo target<input name="firstArrivalTime" type="time" value="${escapeHtml(r.firstArrivalTime)}" ${dm !== "arrive_at" ? "disabled" : ""} /></label>
           <label class="field checkbox-field full">
-            <input name="endSameAsStart" type="checkbox" ${route.endSameAsStart ? "checked" : ""} />
-            <span>Arrivo finale uguale alla partenza</span>
+            <input name="endSameAsStart" type="checkbox" ${r.endSameAsStart ? "checked" : ""} />
+            <span>Arrivo finale = partenza</span>
           </label>
-          <label class="field">
-            Punto finale
-            <input name="endLabel" value="${escapeHtml(route.endLabel)}" ${route.endSameAsStart ? "disabled" : ""} />
-          </label>
-          <label class="field full">
-            Indirizzo finale
-            <input name="endAddress" value="${escapeHtml(route.endAddress)}" ${route.endSameAsStart ? "disabled" : ""} />
-          </label>
+          <label class="field">Arrivo (nome)<input name="endLabel" value="${escapeHtml(r.endLabel)}" ${r.endSameAsStart ? "disabled" : ""} /></label>
+          <label class="field full">Indirizzo arrivo<input name="endAddress" value="${escapeHtml(r.endAddress)}" ${r.endSameAsStart ? "disabled" : ""} /></label>
         </div>
 
-        <h3>Archivio</h3>
+        <h3>Aggiungi da archivio</h3>
         <div class="form-grid">
-          <label class="field full">
-            Indirizzo salvato
-            <select name="selectedAddressId">
-              <option value="">Seleziona indirizzo</option>
-              ${renderAddressOptions()}
-            </select>
-          </label>
+          <label class="field full"><select name="selectedAddressId"><option value="">Seleziona…</option>${addressOptions()}</select></label>
         </div>
-        <div class="actions">
-          <button type="button" class="btn" id="add-saved-stop">${icon("+")}Aggiungi da archivio</button>
-        </div>
+        <div class="actions"><button type="button" class="btn" id="add-saved-stop">+ Aggiungi</button></div>
 
         <h3>Nuova tappa</h3>
         <div class="form-grid">
-          <label class="field">
-            Cliente/lavoro
-            <input name="customCustomer" value="${escapeHtml(route.customCustomer)}" />
-          </label>
-          <label class="field">
-            Sede
-            <input name="customLocation" value="${escapeHtml(route.customLocation)}" />
-          </label>
-          <label class="field full">
-            Indirizzo completo
-            <input name="customAddress" value="${escapeHtml(route.customAddress)}" />
-          </label>
-          <label class="field">
-            Durata intervento
-            <input name="customDuration" type="number" min="5" step="5" value="${escapeHtml(route.customDuration)}" />
-          </label>
-          <label class="field">
-            Apertura mattina
-            <input name="customOpenMorning" type="time" value="${escapeHtml(route.customOpenMorning)}" />
-          </label>
-          <label class="field">
-            Chiusura mattina
-            <input name="customCloseMorning" type="time" value="${escapeHtml(route.customCloseMorning)}" />
-          </label>
-          <label class="field">
-            Apertura pomeriggio
-            <input name="customOpenAfternoon" type="time" value="${escapeHtml(route.customOpenAfternoon)}" />
-          </label>
-          <label class="field">
-            Chiusura pomeriggio
-            <input name="customCloseAfternoon" type="time" value="${escapeHtml(route.customCloseAfternoon)}" />
-          </label>
+          <label class="field">Cliente<input name="customCustomer" value="${escapeHtml(r.customCustomer)}" /></label>
+          <label class="field">Sede<input name="customLocation" value="${escapeHtml(r.customLocation)}" /></label>
+          <label class="field full">Indirizzo completo<input name="customAddress" value="${escapeHtml(r.customAddress)}" /></label>
+          <label class="field">Durata (min)<input name="customDuration" type="number" min="5" step="5" value="${escapeHtml(r.customDuration)}" /></label>
+          <label class="field">Apr. mattina<input name="customOpenMorning" type="time" value="${escapeHtml(r.customOpenMorning)}" /></label>
+          <label class="field">Ch. mattina<input name="customCloseMorning" type="time" value="${escapeHtml(r.customCloseMorning)}" /></label>
+          <label class="field">Apr. pomeriggio<input name="customOpenAfternoon" type="time" value="${escapeHtml(r.customOpenAfternoon)}" /></label>
+          <label class="field">Ch. pomeriggio<input name="customCloseAfternoon" type="time" value="${escapeHtml(r.customCloseAfternoon)}" /></label>
         </div>
         <div class="actions">
-          <button type="button" class="btn" id="add-custom-stop">${icon("+")}Aggiungi tappa</button>
-          <button type="button" class="btn primary" id="plan-route">${icon("→")}${state.planning ? "Calcolo..." : "Ottimizza e salva"}</button>
+          <button type="button" class="btn" id="add-custom-stop">+ Salva e aggiungi</button>
+          <button type="button" class="btn primary" id="plan-route">${state.planning ? "Calcolo in corso…" : "→ Ottimizza e salva"}</button>
         </div>
 
-        <h3>Voce</h3>
-        <div class="form-grid">
-          <label class="field full">
-            Comando
-            <textarea name="transcript" id="transcript">${escapeHtml(route.transcript)}</textarea>
-          </label>
-        </div>
+        <h3>Comando vocale</h3>
+        <label class="field"><textarea name="transcript" id="transcript">${escapeHtml(r.transcript)}</textarea></label>
         <div class="actions">
-          <button type="button" class="btn" id="listen-command">${icon("●")}Avvia voce</button>
-          <button type="button" class="btn" id="apply-command">${icon("✓")}Applica comando</button>
+          <button type="button" class="btn" id="listen-command">● Avvia voce</button>
+          <button type="button" class="btn" id="apply-command">✓ Applica</button>
         </div>
       </form>
 
       <aside class="panel">
-        <h2>Tappe</h2>
+        <h2>Tappe (${state.route.stops.length})</h2>
         ${renderStops()}
       </aside>
-    </section>
-  `;
+    </section>`;
 }
 
-function renderStops() {
-  if (!state.route.stops.length) {
-    return `<div class="empty">Nessuna tappa inserita.</div>`;
-  }
-  return `
-    <div class="stop-list">
-      ${state.route.stops.map((stop, index) => `
-        <article class="card stop-card">
-          <div class="stop-head">
-            <div>
-              <p class="stop-title">${index + 1}. ${escapeHtml(stop.customer)} ${escapeHtml(stop.location || "")}</p>
-              <div class="stop-meta">${escapeHtml(stop.fullAddress)}</div>
+// ── render: saved tab ─────────────────────────────────────────────────────────
+
+function renderSaved() {
+  app.innerHTML = `
+    <section class="panel">
+      <div class="section-head">
+        <h2>Giri salvati</h2>
+        <button class="btn" id="refresh-routes">↻ Aggiorna</button>
+      </div>
+      <div class="saved-list">
+        ${state.savedRoutes.map(route => `
+          <article class="card saved-card">
+            <p class="stop-title">${escapeHtml(route.name)}</p>
+            <div class="stop-meta">${escapeHtml(route.scheduledDate || "Senza data")} · ${escapeHtml(route.startTime || "--:--")} · ${Number(route.totalKm).toFixed(1)} km · ${euro(route.totalCost)}</div>
+            <div class="stop-meta">${escapeHtml(route.startLabel || "—")} → ${escapeHtml(route.endLabel || "—")}</div>
+            <div class="actions">
+              <button class="btn primary" data-open-route="${route.id}">→ Apri</button>
+              <button class="btn" data-rename-route="${route.id}">✎</button>
+              <button class="btn danger" data-delete-route="${route.id}">×</button>
             </div>
-            <button class="btn danger icon-btn" data-remove-stop="${stop.uid}" title="Rimuovi">×</button>
-          </div>
-          <div class="form-grid three">
-            <label class="field">
-              Durata
-              <input type="number" min="5" step="5" value="${escapeHtml(stop.durationMinutes)}" data-stop-field="${stop.uid}:durationMinutes" />
-            </label>
-            <label class="field">
-              Mattina
-              <input type="time" value="${escapeHtml(stop.openMorning || "")}" data-stop-field="${stop.uid}:openMorning" />
-            </label>
-            <label class="field">
-              Chiusura
-              <input type="time" value="${escapeHtml(stop.closeMorning || "")}" data-stop-field="${stop.uid}:closeMorning" />
-            </label>
-            <label class="field">
-              Pomeriggio
-              <input type="time" value="${escapeHtml(stop.openAfternoon || "")}" data-stop-field="${stop.uid}:openAfternoon" />
-            </label>
-            <label class="field">
-              Chiusura
-              <input type="time" value="${escapeHtml(stop.closeAfternoon || "")}" data-stop-field="${stop.uid}:closeAfternoon" />
-            </label>
-            <div class="field">
-              <span class="badge ${stop.recognized ? "ok" : "warning"}">${stop.recognized ? "Archivio" : "Da confermare"}</span>
-            </div>
-          </div>
-        </article>
-      `).join("")}
-    </div>
-  `;
+          </article>`).join("") || `<div class="empty">Nessun giro salvato.</div>`}
+      </div>
+    </section>`;
 }
+
+// ── render: archive tab ───────────────────────────────────────────────────────
 
 function renderArchive() {
   const form = state.addressForm;
   app.innerHTML = `
     <section class="grid">
       <div class="panel">
-        <h2>Archivio indirizzi</h2>
-        <div class="row wrap">
-          <input id="archive-search" placeholder="Cerca cliente, sede o indirizzo" value="${escapeHtml(state.addressSearch)}" />
-          <button class="btn" id="new-address">Nuovo</button>
+        <div class="section-head">
+          <h2>Archivio</h2>
+          <div class="row">
+            <button class="btn" id="import-contacts">📱 Importa</button>
+            <button class="btn" id="new-address">+ Nuovo</button>
+          </div>
         </div>
-        <div class="archive-list" style="margin-top: 14px;">
-          ${state.addresses.map((address) => `
+        <div class="row" style="gap:8px; margin-bottom:10px;">
+          <input id="archive-search" placeholder="Cerca cliente, sede, indirizzo…" value="${escapeHtml(state.addressSearch)}" style="flex:1" />
+        </div>
+        <input id="vcf-input" type="file" accept=".vcf,.vcard,.csv" style="display:none" />
+        <div class="archive-list">
+          ${state.addresses.map(a => `
             <article class="card archive-card">
-              <div>
-                <p class="stop-title">${escapeHtml(addressName(address))}</p>
-                <div class="stop-meta">${escapeHtml(address.fullAddress)}</div>
-                <div class="stop-meta">${escapeHtml(address.openMorning || "--:--")}-${escapeHtml(address.closeMorning || "--:--")} / ${escapeHtml(address.openAfternoon || "--:--")}-${escapeHtml(address.closeAfternoon || "--:--")}</div>
-              </div>
+              <p class="stop-title">${escapeHtml(addressName(a))}</p>
+              <div class="stop-meta">${escapeHtml(a.fullAddress)}</div>
+              ${a.phone ? `<div class="stop-meta">📞 ${escapeHtml(a.phone)}</div>` : ""}
+              ${a.email ? `<div class="stop-meta">✉ ${escapeHtml(a.email)}</div>` : ""}
+              <div class="stop-meta">${[a.openMorning, a.closeMorning].filter(Boolean).join("–") || "—"} / ${[a.openAfternoon, a.closeAfternoon].filter(Boolean).join("–") || "—"}</div>
               <div class="actions">
-                <button class="btn" data-edit-address="${address.id}">Modifica</button>
-                <button class="btn danger" data-delete-address="${address.id}">Elimina</button>
+                ${a.phone ? `<a class="btn" href="tel:${escapeHtml(a.phone)}">📞</a>` : ""}
+                ${a.email ? `<a class="btn" href="mailto:${escapeHtml(a.email)}">✉</a>` : ""}
+                <button class="btn" data-edit-address="${a.id}">Modifica</button>
+                <button class="btn danger" data-delete-address="${a.id}">×</button>
               </div>
-            </article>
-          `).join("") || `<div class="empty">Nessun indirizzo trovato.</div>`}
+            </article>`).join("") || `<div class="empty">Nessun contatto trovato.</div>`}
         </div>
       </div>
 
       <form class="panel" id="address-form">
-        <h2>${form.id ? "Modifica indirizzo" : "Aggiungi indirizzo"}</h2>
+        <h2>${form.id ? "Modifica contatto" : "Nuovo contatto"}</h2>
         <div class="form-grid">
-          <label class="field">
-            Cliente/lavoro
-            <input name="customer" value="${escapeHtml(form.customer)}" required />
-          </label>
-          <label class="field">
-            Sede/descrizione
-            <input name="location" value="${escapeHtml(form.location)}" />
-          </label>
-          <label class="field full">
-            Indirizzo completo
-            <input name="fullAddress" value="${escapeHtml(form.fullAddress)}" required />
-          </label>
-          <label class="field full">
-            Note
-            <textarea name="notes">${escapeHtml(form.notes)}</textarea>
-          </label>
-          <label class="field">
-            Apertura mattina
-            <input name="openMorning" type="time" value="${escapeHtml(form.openMorning)}" />
-          </label>
-          <label class="field">
-            Chiusura mattina
-            <input name="closeMorning" type="time" value="${escapeHtml(form.closeMorning)}" />
-          </label>
-          <label class="field">
-            Apertura pomeriggio
-            <input name="openAfternoon" type="time" value="${escapeHtml(form.openAfternoon)}" />
-          </label>
-          <label class="field">
-            Chiusura pomeriggio
-            <input name="closeAfternoon" type="time" value="${escapeHtml(form.closeAfternoon)}" />
-          </label>
-          <label class="field">
-            Durata abituale
-            <input name="defaultDuration" type="number" min="5" step="5" value="${escapeHtml(form.defaultDuration)}" />
-          </label>
-          <label class="field">
-            Latitudine
-            <input name="lat" type="number" step="0.000001" value="${escapeHtml(form.lat ?? "")}" />
-          </label>
-          <label class="field">
-            Longitudine
-            <input name="lng" type="number" step="0.000001" value="${escapeHtml(form.lng ?? "")}" />
-          </label>
+          <label class="field">Cliente / nome<input name="customer" value="${escapeHtml(form.customer)}" required /></label>
+          <label class="field">Sede<input name="location" value="${escapeHtml(form.location)}" /></label>
+          <label class="field full">Indirizzo completo<input name="fullAddress" value="${escapeHtml(form.fullAddress)}" required /></label>
+          <label class="field">Telefono<input name="phone" type="tel" value="${escapeHtml(form.phone)}" /></label>
+          <label class="field">Email<input name="email" type="email" value="${escapeHtml(form.email)}" /></label>
+          <label class="field full">Note<textarea name="notes">${escapeHtml(form.notes)}</textarea></label>
+          <label class="field">Apr. mattina<input name="openMorning" type="time" value="${escapeHtml(form.openMorning)}" /></label>
+          <label class="field">Ch. mattina<input name="closeMorning" type="time" value="${escapeHtml(form.closeMorning)}" /></label>
+          <label class="field">Apr. pomeriggio<input name="openAfternoon" type="time" value="${escapeHtml(form.openAfternoon)}" /></label>
+          <label class="field">Ch. pomeriggio<input name="closeAfternoon" type="time" value="${escapeHtml(form.closeAfternoon)}" /></label>
+          <label class="field">Durata abituale (min)<input name="defaultDuration" type="number" min="5" step="5" value="${escapeHtml(form.defaultDuration)}" /></label>
+          <label class="field">Latitudine<input name="lat" type="number" step="0.000001" value="${escapeHtml(form.lat ?? "")}" /></label>
+          <label class="field">Longitudine<input name="lng" type="number" step="0.000001" value="${escapeHtml(form.lng ?? "")}" /></label>
         </div>
         <div class="actions">
           <button class="btn primary" type="submit">Salva</button>
-          <button class="btn ghost" type="button" id="reset-address-form">Annulla</button>
+          <button class="btn ghost" type="button" id="cancel-address">Annulla</button>
         </div>
       </form>
-    </section>
-  `;
+    </section>`;
 }
 
-function renderSavedRoutes() {
-  app.innerHTML = `
-    <section class="panel">
-      <div class="section-head">
-        <div>
-          <h2>Giri salvati</h2>
-          <p class="section-copy">Ogni giro viene salvato quando calcoli il percorso. Aprendolo, il meteo viene ricalcolato se il giro e oggi o futuro; per i giri passati resta memorizzato lo storico.</p>
-        </div>
-        <button class="btn" id="refresh-routes">${icon("↻")}Aggiorna</button>
-      </div>
-      <div class="saved-list">
-        ${state.savedRoutes.map((route) => `
-          <article class="card saved-card">
-            <div>
-              <p class="stop-title">${escapeHtml(route.name)}</p>
-              <div class="stop-meta">${escapeHtml(route.scheduledDate || "Senza data")} · ${escapeHtml(route.startTime || "--:--")} · ${Number(route.totalKm).toFixed(1)} km · ${euro(route.totalCost)}</div>
-              <div class="stop-meta">${escapeHtml(route.startLabel || "Partenza")} → ${escapeHtml(route.endLabel || "Arrivo")}</div>
+// ── render: result tab ────────────────────────────────────────────────────────
+
+function weatherPill(result, stopNumber) {
+  const w = (result.weather || []).find(x => Number(x.stopNumber) === Number(stopNumber));
+  if (!w) return "";
+  const temp = w.temperatureC != null ? `${Math.round(w.temperatureC)}°C` : "--";
+  const icon = (() => {
+    const t = `${w.description || ""} ${(w.warnings || []).join(" ")}`.toLowerCase();
+    if (t.includes("temporale")) return "⛈";
+    if (t.includes("vento")) return "💨";
+    if (t.includes("ghiaccio") || t.includes("neve")) return "❄";
+    if (t.includes("piogg") || t.includes("precip")) return "🌧";
+    if (t.includes("nuvol")) return "☁";
+    return "☀";
+  })();
+  const warnings = (w.warnings || []).map(s => `<span class="badge warning">${escapeHtml(s)}</span>`).join(" ");
+  return `<div class="weather-pill">${icon} <strong>${temp}</strong> <span class="stop-meta">${escapeHtml(w.description || "")}</span>${warnings ? " " + warnings : ""}</div>`;
+}
+
+function warningBadges(warnings) {
+  if (!warnings?.length) return `<span class="badge ok">OK</span>`;
+  return warnings.map(w => `<span class="badge warning">${escapeHtml(w)}</span>`).join(" ");
+}
+
+function renderManualOrder(result) {
+  const rows = state.manualOrderRows || result.rows;
+  return `
+    <details class="panel order-panel" ${state.manualOrderRows ? "open" : ""}>
+      <summary>Riordina tappe manualmente</summary>
+      <div class="order-list" style="margin-top:10px;">
+        ${rows.map((row, i) => `
+          <div class="order-item">
+            <span class="order-num">${i + 1}</span>
+            <span>${escapeHtml(row.customer)} ${escapeHtml(row.location || "")}</span>
+            <div class="row">
+              ${i > 0 ? `<button class="btn" data-move-up="${i}">↑</button>` : ""}
+              ${i < rows.length - 1 ? `<button class="btn" data-move-down="${i}">↓</button>` : ""}
             </div>
-            <div class="actions">
-              <button class="btn primary" data-open-route="${route.id}">${icon("→")}Apri</button>
-            </div>
-          </article>
-        `).join("") || `<div class="empty">Nessun giro salvato.</div>`}
+          </div>`).join("")}
       </div>
-    </section>
-  `;
+      <div class="actions">
+        <button class="btn primary" id="replan-order">✓ Ricalcola con quest'ordine</button>
+        <button class="btn" id="reset-order">↻ Ottimizzato</button>
+      </div>
+    </details>`;
 }
 
 function renderResult() {
   if (!state.result) {
-    app.innerHTML = `<section class="panel"><h2>Risultato percorso</h2><div class="empty">Nessun percorso calcolato.</div></section>`;
+    app.innerHTML = `<section class="panel"><h2>Percorso</h2><div class="empty">Nessun percorso calcolato. Vai su "Nuovo percorso" e premi Ottimizza.</div></section>`;
     return;
   }
-  const result = state.result;
-  if (!Array.isArray(result.rows) || !result.finalLeg || !result.summary) {
-    app.innerHTML = `<section class="panel"><h2>Risultato percorso</h2><div class="empty">Dati del giro non completi. Prova a ricalcolare il percorso.</div></section>`;
-    return;
-  }
+  const result = normalizeSavedRoute(state.result);
+  const { rows, finalLeg, summary } = result;
+  const pref = state.navigatorPref;
+
   app.innerHTML = `
     <section>
-      <div class="section-head">
+      <div class="section-head" style="margin-bottom:10px;">
         <div>
-          <h2>Risultato percorso</h2>
-          <p class="section-copy">${escapeHtml(result.scheduledDate || "")} · Meteo: ${escapeHtml(result.weatherMode || "previsione")} · aggiornato ${escapeHtml(result.weatherCapturedAt ? new Date(result.weatherCapturedAt).toLocaleString("it-IT") : "")}</p>
+          <h2>Percorso — ${escapeHtml(result.scheduledDate || "")}</h2>
+          <div class="stop-meta">${escapeHtml(summary.dayStart)} → ${escapeHtml(summary.dayEnd)} · ${summary.totalKm.toFixed(1)} km · ${euro(summary.totalCost)}</div>
         </div>
-        <button class="btn" data-tab-jump="saved">${icon("▣")}Giri salvati</button>
-      </div>
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>#</th>
-              <th>Cliente</th>
-              <th>Indirizzo</th>
-              <th>Partenza</th>
-              <th>Guida</th>
-              <th>Km</th>
-              <th>Arrivo</th>
-              <th>Orari sede</th>
-              <th>Intervento</th>
-              <th>Fine</th>
-              <th>Meteo</th>
-              <th>Avvisi</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${result.rows.map((row) => `
-              <tr>
-                <td>${row.stopNumber}</td>
-                <td>${escapeHtml(row.customer)}<br><span class="stop-meta">${escapeHtml(row.location || "")}</span></td>
-                <td>${escapeHtml(row.address)}</td>
-                <td>${escapeHtml(row.departureTime)}</td>
-                <td>${minutesLabel(row.driveMinutes)}<br><span class="stop-meta">+${minutesLabel(row.driveBufferMinutes || 0)} margine</span></td>
-                <td>${row.km.toFixed(1)}</td>
-                <td>${escapeHtml(row.arrivalTime)}</td>
-                <td>${escapeHtml(row.openingHours)}</td>
-                <td>${minutesLabel(row.durationMinutes)}</td>
-                <td>${escapeHtml(row.serviceEndTime)}</td>
-                <td>${renderWeatherForStop(result, row.stopNumber)}</td>
-                <td>${renderWarnings(row.warnings)}</td>
-              </tr>
-            `).join("")}
-            <tr>
-              <td>F</td>
-              <td>Arrivo finale</td>
-              <td>${escapeHtml(result.end?.address || result.end?.fullAddress || "")}</td>
-              <td>${escapeHtml(result.finalLeg.departureTime)}</td>
-              <td>${minutesLabel(result.finalLeg.driveMinutes)}</td>
-              <td>${result.finalLeg.km.toFixed(1)}</td>
-              <td>${escapeHtml(result.finalLeg.arrivalTime)}</td>
-              <td></td>
-              <td></td>
-              <td>${escapeHtml(result.finalLeg.arrivalTime)}</td>
-              <td></td>
-              <td></td>
-            </tr>
-          </tbody>
-        </table>
+        <button class="btn" data-tab-jump="saved">▣ Giri</button>
       </div>
 
-      <div class="mobile-result">
-        ${result.rows.map((row) => `
-          <article class="card">
-            <p class="stop-title">${row.stopNumber}. ${escapeHtml(row.customer)} ${escapeHtml(row.location || "")}</p>
-            <div class="stop-meta">${escapeHtml(row.address)}</div>
-            <div class="form-grid three" style="margin-top: 10px;">
-              <div><div class="metric-label">Partenza</div><strong>${escapeHtml(row.departureTime)}</strong></div>
-              <div><div class="metric-label">Arrivo</div><strong>${escapeHtml(row.arrivalTime)}</strong></div>
-              <div><div class="metric-label">Fine</div><strong>${escapeHtml(row.serviceEndTime)}</strong></div>
-              <div><div class="metric-label">Guida</div><strong>${minutesLabel(row.driveMinutes)}</strong></div>
-              <div><div class="metric-label">Km</div><strong>${row.km.toFixed(1)}</strong></div>
-              <div><div class="metric-label">Intervento</div><strong>${minutesLabel(row.durationMinutes)}</strong></div>
+      ${state.googleMapsKey ? `<div id="route-map" style="height:300px;border-radius:8px;border:1px solid var(--line);margin-bottom:14px;"></div>` : ""}
+
+      <div class="nav-panel">
+        <div class="row" style="gap:10px;flex-wrap:wrap;">
+          <select id="nav-pref" style="flex:1;min-width:140px;">
+            <option value="google" ${pref === "google" ? "selected" : ""}>Google Maps</option>
+            <option value="apple" ${pref === "apple" ? "selected" : ""}>Apple Mappe</option>
+          </select>
+          <a class="btn primary" href="${navUrl(result, pref)}" target="_blank" rel="noopener">↗ Apri percorso</a>
+        </div>
+      </div>
+
+      ${renderManualOrder(result)}
+
+      <div class="result-list">
+        ${rows.map(row => {
+          const addr = state.addresses.find(a => String(a.id) === String(row.addressId));
+          return `
+          <article class="card result-card">
+            <div class="result-head">
+              <div>
+                <p class="stop-title">${row.stopNumber}. ${escapeHtml(row.customer)} ${escapeHtml(row.location || "")}</p>
+                <div class="stop-meta">${escapeHtml(row.address)}</div>
+              </div>
+              ${warningBadges(row.warnings)}
             </div>
-            <div style="margin-top: 9px;">${renderWarnings(row.warnings)}</div>
-            <div style="margin-top: 9px;">${renderWeatherForStop(result, row.stopNumber)}</div>
-          </article>
-        `).join("")}
+            <div class="result-times">
+              <div><div class="metric-label">Partenza</div><strong>${escapeHtml(row.departureTime)}</strong></div>
+              <div><div class="metric-label">Guida</div><strong>${minutesLabel(row.driveMinutes)} · ${row.km.toFixed(1)} km</strong></div>
+              <div><div class="metric-label">Arrivo</div><strong>${escapeHtml(row.arrivalTime)}</strong></div>
+              <div><div class="metric-label">Intervento</div><strong>${minutesLabel(row.durationMinutes)}</strong></div>
+              <div><div class="metric-label">Fine</div><strong>${escapeHtml(row.serviceEndTime)}</strong></div>
+              <div>${weatherPill(result, row.stopNumber)}</div>
+            </div>
+            <div class="actions">
+              <a class="btn" href="${stopNavUrl(row, pref)}" target="_blank" rel="noopener">↗ Naviga</a>
+              ${addr?.phone ? `<a class="btn" href="tel:${escapeHtml(addr.phone)}">📞 Chiama</a>` : ""}
+              ${addr?.email ? `<a class="btn" href="mailto:${escapeHtml(addr.email)}?subject=${encodeURIComponent("Appuntamento " + row.customer + " - " + (result.scheduledDate || "") + " ore " + row.arrivalTime)}">✉ Email</a>` : ""}
+            </div>
+          </article>`;
+        }).join("")}
+
+        <article class="card result-card">
+          <p class="stop-title">↩ Arrivo finale — ${escapeHtml(result.end?.label || "")}</p>
+          <div class="stop-meta">${escapeHtml(result.end?.address || result.end?.fullAddress || "")}</div>
+          <div class="result-times">
+            <div><div class="metric-label">Partenza</div><strong>${escapeHtml(finalLeg.departureTime)}</strong></div>
+            <div><div class="metric-label">Guida</div><strong>${minutesLabel(finalLeg.driveMinutes)} · ${finalLeg.km.toFixed(1)} km</strong></div>
+            <div><div class="metric-label">Arrivo</div><strong>${escapeHtml(finalLeg.arrivalTime)}</strong></div>
+          </div>
+        </article>
       </div>
 
-      ${renderSummary(result.summary, result.mapMode)}
-    </section>
-  `;
+      <div class="summary-grid">
+        <div class="metric"><div class="metric-label">Km totali</div><div class="metric-value">${summary.totalKm.toFixed(1)}</div></div>
+        <div class="metric"><div class="metric-label">Ore guida</div><div class="metric-value">${minutesLabel(summary.totalDriveMinutes)}</div></div>
+        <div class="metric"><div class="metric-label">Ore lavoro</div><div class="metric-value">${minutesLabel(summary.totalWorkMinutes)}</div></div>
+        <div class="metric"><div class="metric-label">Giornata</div><div class="metric-value">${escapeHtml(summary.dayStart)}–${escapeHtml(summary.dayEnd)}</div></div>
+        <div class="metric"><div class="metric-label">Costo km</div><div class="metric-value">${euro(summary.costKm)}</div></div>
+        <div class="metric"><div class="metric-label">Costo guida</div><div class="metric-value">${euro(summary.costDrive)}</div></div>
+        <div class="metric"><div class="metric-label">Costo lavoro</div><div class="metric-value">${euro(summary.costWork)}</div></div>
+        <div class="metric"><div class="metric-label">Totale</div><div class="metric-value">${euro(summary.totalCost)}</div></div>
+      </div>
+      ${(summary.warnings || []).map(w => `<span class="badge warning" style="margin-top:8px;display:inline-flex;">${escapeHtml(w)}</span>`).join(" ")}
+    </section>`;
+
+  if (state.googleMapsKey) {
+    requestAnimationFrame(() => renderGoogleMap(result));
+  }
 }
 
-function renderWeatherForStop(result, stopNumber) {
-  const weather = (result.weather || []).find((item) => Number(item.stopNumber) === Number(stopNumber));
-  if (!weather) return `<span class="badge">meteo non caricato</span>`;
-  const temp = weather.temperatureC === null || weather.temperatureC === undefined ? "--" : `${Math.round(weather.temperatureC)}°C`;
-  const rain = weather.precipitationMm === null || weather.precipitationMm === undefined ? "--" : `${Number(weather.precipitationMm).toFixed(1)} mm`;
-  const wind = weather.windKmh === null || weather.windKmh === undefined ? "--" : `${Math.round(weather.windKmh)} km/h`;
-  return `
-    <div class="weather-pill">
-      <strong><span class="weather-icon">${weatherIcon(weather)}</span>${escapeHtml(temp)}</strong>
-      <span>${escapeHtml(weather.description || "")}</span>
-      <small>Pioggia ${escapeHtml(rain)} · Vento ${escapeHtml(wind)}</small>
-      ${(weather.warnings || []).map((warning) => `<span class="badge warning">! ${escapeHtml(warning)}</span>`).join("")}
-    </div>
-  `;
-}
-
-function weatherIcon(weather) {
-  const text = `${weather.description || ""} ${(weather.warnings || []).join(" ")}`.toLowerCase();
-  if (text.includes("temporale")) return "!";
-  if (text.includes("vento")) return "~";
-  if (text.includes("ghiaccio") || text.includes("neve")) return "*";
-  if (text.includes("piogg") || text.includes("rovesci") || text.includes("precip")) return "/";
-  if (text.includes("nuvol")) return "o";
-  if (text.includes("nebb")) return "=";
-  return "+";
-}
-
-function renderWarnings(warnings) {
-  if (!warnings?.length) return `<span class="badge ok">OK</span>`;
-  return warnings.map((warning) => `<span class="badge warning">${escapeHtml(warning)}</span>`).join(" ");
-}
-
-function renderSummary(summary, mapMode) {
-  return `
-    <div class="summary-grid">
-      <div class="metric"><div class="metric-label">Km totali</div><div class="metric-value">${summary.totalKm.toFixed(1)}</div></div>
-      <div class="metric"><div class="metric-label">Ore guida</div><div class="metric-value">${minutesLabel(summary.totalDriveMinutes)}</div></div>
-      <div class="metric"><div class="metric-label">Ore lavoro</div><div class="metric-value">${minutesLabel(summary.totalWorkMinutes)}</div></div>
-      <div class="metric"><div class="metric-label">Giornata</div><div class="metric-value">${escapeHtml(summary.dayStart)}-${escapeHtml(summary.dayEnd)}</div></div>
-      <div class="metric"><div class="metric-label">Costo km</div><div class="metric-value">${euro(summary.costKm)}</div></div>
-      <div class="metric"><div class="metric-label">Costo guida</div><div class="metric-value">${euro(summary.costDrive)}</div></div>
-      <div class="metric"><div class="metric-label">Costo lavoro</div><div class="metric-value">${euro(summary.costWork)}</div></div>
-      <div class="metric"><div class="metric-label">Totale</div><div class="metric-value">${euro(summary.totalCost)}</div></div>
-    </div>
-    <div class="actions">
-      <span class="badge">Distanze: ${escapeHtml(mapMode || "locale")}</span>
-      ${(summary.warnings || []).map((warning) => `<span class="badge warning">${escapeHtml(warning)}</span>`).join("")}
-    </div>
-  `;
-}
+// ── render: settings tab ──────────────────────────────────────────────────────
 
 function renderSettings() {
   app.innerHTML = `
     <section class="panel">
-      <h2>Impostazioni tariffe</h2>
+      <h2>Tariffe</h2>
       <form id="settings-form" class="form-grid">
-        <label class="field">
-          Euro per km
-          <input name="kmRate" type="number" min="0" step="0.01" value="${escapeHtml(state.settings.kmRate)}" />
-        </label>
-        <label class="field">
-          Euro/ora guida
-          <input name="driveHourRate" type="number" min="0" step="0.01" value="${escapeHtml(state.settings.driveHourRate)}" />
-        </label>
-        <label class="field">
-          Euro/ora lavoro
-          <input name="workHourRate" type="number" min="0" step="0.01" value="${escapeHtml(state.settings.workHourRate)}" />
-        </label>
-        <div class="actions field full">
-          <button class="btn primary" type="submit">Salva tariffe</button>
-        </div>
+        <label class="field">€ per km<input name="kmRate" type="number" min="0" step="0.01" value="${escapeHtml(state.settings.kmRate)}" /></label>
+        <label class="field">€/ora guida<input name="driveHourRate" type="number" min="0" step="0.01" value="${escapeHtml(state.settings.driveHourRate)}" /></label>
+        <label class="field">€/ora lavoro<input name="workHourRate" type="number" min="0" step="0.01" value="${escapeHtml(state.settings.workHourRate)}" /></label>
+        <div class="field full actions"><button class="btn primary" type="submit">Salva tariffe</button></div>
       </form>
-    </section>
-  `;
+    </section>`;
 }
+
+// ── render dispatch ───────────────────────────────────────────────────────────
 
 function render() {
   if (state.activeTab === "route") renderRoute();
-  if (state.activeTab === "saved") renderSavedRoutes();
-  if (state.activeTab === "archive") renderArchive();
-  if (state.activeTab === "result") renderResult();
-  if (state.activeTab === "settings") renderSettings();
+  else if (state.activeTab === "saved") renderSaved();
+  else if (state.activeTab === "archive") renderArchive();
+  else if (state.activeTab === "result") renderResult();
+  else if (state.activeTab === "settings") renderSettings();
 }
+
+// ── route form helpers ────────────────────────────────────────────────────────
+
+function updateRouteFromForm() {
+  const form = document.querySelector("#route-form");
+  if (!form) return;
+  const v = readForm(form);
+  Object.assign(state.route, {
+    scheduledDate: v.scheduledDate,
+    startLabel: v.startLabel, startAddress: v.startAddress,
+    startTime: v.startTime, timingMode: v.timingMode,
+    arrivalLeadMinutes: Number(v.arrivalLeadMinutes || 10),
+    firstArrivalTime: v.firstArrivalTime,
+    endSameAsStart: Boolean(v.endSameAsStart),
+    endLabel: v.endLabel, endAddress: v.endAddress,
+    firstArrivalRequired: v.firstArrivalRequired || "",
+    selectedAddressId: v.selectedAddressId,
+    customCustomer: v.customCustomer, customLocation: v.customLocation,
+    customAddress: v.customAddress, customDuration: Number(v.customDuration || 45),
+    customOpenMorning: v.customOpenMorning, customCloseMorning: v.customCloseMorning,
+    customOpenAfternoon: v.customOpenAfternoon, customCloseAfternoon: v.customCloseAfternoon,
+    transcript: v.transcript || ""
+  });
+}
+
+function addressToStop(address, durationOverride = null) {
+  return {
+    uid: crypto.randomUUID(),
+    addressId: address.id,
+    customer: address.customer, location: address.location,
+    fullAddress: address.fullAddress, notes: address.notes,
+    openMorning: address.openMorning, closeMorning: address.closeMorning,
+    openAfternoon: address.openAfternoon, closeAfternoon: address.closeAfternoon,
+    durationMinutes: Number(durationOverride || address.defaultDuration || 45),
+    lat: address.lat, lng: address.lng, recognized: true
+  };
+}
+
+// ── plan route ────────────────────────────────────────────────────────────────
 
 async function planCurrentRoute() {
   updateRouteFromForm();
-  if (!state.route.stops.length) {
-    showToast("Aggiungi almeno una tappa");
-    return;
-  }
+  if (!state.route.stops.length) { showToast("Aggiungi almeno una tappa"); return; }
   state.planning = true;
   render();
   try {
-    const payload = {
-      start: {
-        label: state.route.startLabel,
-        address: state.route.startAddress
-      },
-      scheduledDate: state.route.scheduledDate,
-      timingMode: state.route.timingMode,
-      arrivalLeadMinutes: state.route.arrivalLeadMinutes,
-      firstArrivalTime: state.route.firstArrivalTime,
-      end: {
-        sameAsStart: state.route.endSameAsStart,
-        label: state.route.endLabel,
-        address: state.route.endAddress
-      },
-      startTime: state.route.startTime,
-      firstArrivalRequired: state.route.firstArrivalRequired,
-      stops: state.route.stops,
-      rates: state.settings
-    };
+    const r = state.route;
     state.result = await api("/api/plan", {
       method: "POST",
-      body: JSON.stringify(payload)
+      body: JSON.stringify({
+        name: r.name || "Percorso giornaliero",
+        scheduledDate: r.scheduledDate,
+        start: { label: r.startLabel, address: r.startAddress },
+        end: { sameAsStart: r.endSameAsStart, label: r.endLabel, address: r.endAddress },
+        startTime: r.startTime,
+        timingMode: r.timingMode,
+        arrivalLeadMinutes: r.arrivalLeadMinutes,
+        firstArrivalTime: r.firstArrivalTime,
+        firstArrivalRequired: r.firstArrivalRequired,
+        stops: r.stops, rates: state.settings
+      })
     });
+    state.manualOrderRows = null;
     await refreshSavedRoutes();
     setActiveTab("result");
     showToast("Percorso calcolato e salvato");
-  } catch (error) {
-    showToast(error.message);
+  } catch (e) {
+    showToast(e.message);
   } finally {
     state.planning = false;
-    render();
+    if (state.activeTab === "route") render();
   }
+}
+
+// ── voice ─────────────────────────────────────────────────────────────────────
+
+function startSpeechRecognition() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { showToast("Riconoscimento vocale non disponibile"); return; }
+  const rec = new SR();
+  rec.lang = "it-IT"; rec.interimResults = false; rec.maxAlternatives = 1;
+  rec.onresult = e => {
+    const t = e.results[0][0].transcript;
+    const ta = document.querySelector("#transcript");
+    if (ta) ta.value = t;
+    state.route.transcript = t;
+    showToast("Voce acquisita");
+  };
+  rec.onerror = () => showToast("Voce non acquisita");
+  rec.start();
 }
 
 async function applyVoiceCommand() {
   updateRouteFromForm();
   if (!state.route.transcript.trim()) return;
-  const parsed = await api("/api/voice/parse", {
-    method: "POST",
-    body: JSON.stringify({ text: state.route.transcript })
-  });
-
-  if (parsed.start) {
-    state.route.startLabel = parsed.start.label || state.route.startLabel;
-    state.route.startAddress = parsed.start.address || state.route.startAddress;
-  }
+  const parsed = await api("/api/voice/parse", { method: "POST", body: JSON.stringify({ text: state.route.transcript }) });
+  if (parsed.start) { state.route.startLabel = parsed.start.label || state.route.startLabel; state.route.startAddress = parsed.start.address || state.route.startAddress; }
   if (parsed.startTime) state.route.startTime = parsed.startTime;
-  if (parsed.end) {
-    state.route.endSameAsStart = false;
-    state.route.endLabel = parsed.end.label || state.route.endLabel;
-    state.route.endAddress = parsed.end.address || state.route.endAddress;
-  }
-  if (parsed.firstArrivalRequired) state.route.firstArrivalRequired = parsed.firstArrivalRequired;
-  for (const stop of parsed.stops || []) addStop(stop);
-
+  if (parsed.end) { state.route.endSameAsStart = false; state.route.endLabel = parsed.end.label || state.route.endLabel; state.route.endAddress = parsed.end.address || state.route.endAddress; }
+  for (const stop of parsed.stops || []) state.route.stops.push({ ...stop, uid: stop.uid || crypto.randomUUID() });
   showToast(parsed.needsConfirmation?.length ? `Da confermare: ${parsed.needsConfirmation.join(", ")}` : "Comando applicato");
   if (parsed.action === "optimize") await planCurrentRoute();
   else render();
 }
 
-function startSpeechRecognition() {
-  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SpeechRecognition) {
-    showToast("Riconoscimento vocale non disponibile");
+// ── contact import ────────────────────────────────────────────────────────────
+
+async function importFromContactPicker() {
+  if (!("contacts" in navigator && navigator.contacts?.select)) {
+    document.querySelector("#vcf-input")?.click();
     return;
   }
-  const recognition = new SpeechRecognition();
-  recognition.lang = "it-IT";
-  recognition.interimResults = false;
-  recognition.maxAlternatives = 1;
-  recognition.onresult = (event) => {
-    const transcript = event.results[0][0].transcript;
-    const textarea = document.querySelector("#transcript");
-    if (textarea) textarea.value = transcript;
-    state.route.transcript = transcript;
-    showToast("Voce acquisita");
-  };
-  recognition.onerror = () => showToast("Voce non acquisita");
-  recognition.start();
+  try {
+    const contacts = await navigator.contacts.select(["name", "address", "tel", "email"], { multiple: true });
+    if (!contacts.length) { showToast("Nessun contatto selezionato"); return; }
+    let added = 0;
+    for (const c of contacts) {
+      const name = c.name?.[0] || "";
+      if (!name) continue;
+      const existing = state.addresses.find(a => a.customer.toLowerCase() === name.toLowerCase());
+      if (existing) continue;
+      const addrObj = c.address?.[0];
+      const fullAddress = addrObj
+        ? [addrObj.streetAddress, addrObj.city, addrObj.postalCode].filter(Boolean).join(", ")
+        : "";
+      const phone = c.tel?.[0]?.value || c.tel?.[0] || "";
+      const email = c.email?.[0] || "";
+      await api("/api/addresses", {
+        method: "POST",
+        body: JSON.stringify({ customer: name, fullAddress: fullAddress || name, phone: String(phone), email: String(email) })
+      });
+      added++;
+    }
+    await refreshAddresses();
+    render();
+    showToast(added ? `${added} contatti importati` : "Nessun nuovo contatto da aggiungere");
+  } catch (e) {
+    showToast("Importazione non riuscita");
+  }
 }
 
+function parseVcf(text) {
+  return text.split(/BEGIN:VCARD/gi).slice(1).flatMap(vcard => {
+    const lines = vcard.split(/\r?\n/);
+    let name = "", phone = "", email = "", street = "", city = "", zip = "";
+    for (const line of lines) {
+      const [key, ...rest] = line.split(":");
+      const val = rest.join(":").trim();
+      const k = key.split(";")[0].toUpperCase();
+      if (k === "FN" && !name) name = val;
+      else if ((k === "TEL" || k.startsWith("TEL;")) && !phone) phone = val;
+      else if ((k === "EMAIL" || k.startsWith("EMAIL;")) && !email) email = val;
+      else if (k === "ADR" || k.startsWith("ADR;")) {
+        const parts = val.split(";");
+        street = parts[2] || ""; city = parts[3] || ""; zip = parts[5] || "";
+      }
+    }
+    if (!name) return [];
+    const fullAddress = [street, zip, city].filter(Boolean).join(", ");
+    return [{ customer: name, fullAddress: fullAddress || name, phone, email }];
+  });
+}
+
+async function importFromVcf(file) {
+  const text = await file.text();
+  const contacts = file.name.endsWith(".csv") ? parseCsv(text) : parseVcf(text);
+  if (!contacts.length) { showToast("Nessun contatto trovato nel file"); return; }
+  let added = 0;
+  for (const c of contacts) {
+    if (!c.customer) continue;
+    const exists = state.addresses.find(a => a.customer.toLowerCase() === c.customer.toLowerCase());
+    if (exists) continue;
+    await api("/api/addresses", { method: "POST", body: JSON.stringify(c) });
+    added++;
+  }
+  await refreshAddresses();
+  render();
+  showToast(`${added} contatti importati da file`);
+}
+
+function parseCsv(text) {
+  const lines = text.split(/\r?\n/).filter(Boolean);
+  if (lines.length < 2) return [];
+  const headers = lines[0].split(",").map(h => h.replace(/^"|"$/g, "").toLowerCase().trim());
+  return lines.slice(1).flatMap(line => {
+    const vals = line.split(",").map(v => v.replace(/^"|"$/g, "").trim());
+    const row = Object.fromEntries(headers.map((h, i) => [h, vals[i] || ""]));
+    const customer = row.name || row.nome || row.customer || row.cliente || "";
+    if (!customer) return [];
+    return [{
+      customer,
+      location: row.sede || row.location || "",
+      fullAddress: row.address || row.indirizzo || row.full_address || customer,
+      phone: row.phone || row.tel || row.telefono || "",
+      email: row.email || ""
+    }];
+  });
+}
+
+// ── save address form ─────────────────────────────────────────────────────────
+
 async function saveAddressForm(form) {
-  const values = readForm(form);
+  const v = readForm(form);
   const payload = {
-    customer: values.customer,
-    location: values.location,
-    fullAddress: values.fullAddress,
-    notes: values.notes,
-    openMorning: values.openMorning,
-    closeMorning: values.closeMorning,
-    openAfternoon: values.openAfternoon,
-    closeAfternoon: values.closeAfternoon,
-    defaultDuration: Number(values.defaultDuration || 45),
-    lat: values.lat ? Number(values.lat) : null,
-    lng: values.lng ? Number(values.lng) : null
+    customer: v.customer, location: v.location, fullAddress: v.fullAddress,
+    phone: v.phone || "", email: v.email || "", notes: v.notes,
+    openMorning: v.openMorning, closeMorning: v.closeMorning,
+    openAfternoon: v.openAfternoon, closeAfternoon: v.closeAfternoon,
+    defaultDuration: Number(v.defaultDuration || 45),
+    lat: v.lat ? Number(v.lat) : null, lng: v.lng ? Number(v.lng) : null
   };
   if (state.addressForm.id) {
     await api(`/api/addresses/${state.addressForm.id}`, { method: "PUT", body: JSON.stringify(payload) });
   } else {
     await api("/api/addresses", { method: "POST", body: JSON.stringify(payload) });
   }
-  state.addressForm = { ...emptyAddressForm };
+  state.addressForm = { ...emptyForm };
   await refreshAddresses();
   render();
-  showToast("Indirizzo salvato");
+  showToast("Contatto salvato");
 }
 
+// ── manual order replan ───────────────────────────────────────────────────────
+
+async function replanWithOrder(manualOrder) {
+  const result = normalizeSavedRoute(state.result);
+  const rows = manualOrder ? (state.manualOrderRows || result.rows) : result.rows;
+  const r = state.route;
+  state.planning = true;
+  render();
+  try {
+    state.result = await api("/api/plan", {
+      method: "POST",
+      body: JSON.stringify({
+        scheduledDate: result.scheduledDate,
+        start: result.start,
+        end: result.end,
+        startTime: result.startTime,
+        timingMode: result.timingMode,
+        arrivalLeadMinutes: result.arrivalLeadMinutes,
+        firstArrivalTime: result.firstArrivalTime,
+        firstArrivalRequired: result.firstArrivalRequired,
+        rates: state.settings,
+        stops: rows.map(row => ({
+          uid: row.stopUid || row.uid || crypto.randomUUID(),
+          addressId: row.addressId,
+          customer: row.customer, location: row.location,
+          fullAddress: row.address, notes: row.notes,
+          openMorning: row.openMorning, closeMorning: row.closeMorning,
+          openAfternoon: row.openAfternoon, closeAfternoon: row.closeAfternoon,
+          durationMinutes: row.durationMinutes, lat: row.lat, lng: row.lng
+        })),
+        manualOrder
+      })
+    });
+    state.manualOrderRows = null;
+    await refreshSavedRoutes();
+    showToast("Percorso ricalcolato");
+  } catch (e) {
+    showToast(e.message);
+  } finally {
+    state.planning = false;
+    render();
+  }
+}
+
+// ── events ────────────────────────────────────────────────────────────────────
+
 function bindEvents() {
-  document.querySelector(".tabs").addEventListener("click", (event) => {
-    const button = event.target.closest("[data-tab]");
-    if (button) {
-      updateRouteFromForm();
-      setActiveTab(button.dataset.tab);
+  document.querySelector(".tabs").addEventListener("click", e => {
+    const b = e.target.closest("[data-tab]");
+    if (b) { updateRouteFromForm(); setActiveTab(b.dataset.tab); }
+  });
+
+  app.addEventListener("input", e => {
+    // stop field updates
+    const sf = e.target.closest("[data-stop]");
+    if (sf) {
+      const [uid, key] = sf.dataset.stop.split(":");
+      const stop = state.route.stops.find(s => s.uid === uid);
+      if (stop) stop[key] = key === "durationMinutes" ? Number(sf.value || 0) : sf.value;
+    }
+    // archive search
+    if (e.target.id === "archive-search") {
+      state.addressSearch = e.target.value;
+      refreshAddresses().then(() => renderArchive());
+    }
+    // navigator preference
+    if (e.target.id === "nav-pref") {
+      state.navigatorPref = e.target.value;
+      localStorage.setItem("navigatorPref", state.navigatorPref);
+      renderResult();
     }
   });
 
-  app.addEventListener("input", (event) => {
-    const field = event.target.closest("[data-stop-field]");
-    if (field) {
-      const [uid, key] = field.dataset.stopField.split(":");
-      const stop = state.route.stops.find((item) => item.uid === uid);
-      if (stop) stop[key] = key === "durationMinutes" ? Number(field.value || 0) : field.value;
-    }
-  });
-
-  app.addEventListener("change", (event) => {
-    if (event.target.name === "endSameAsStart" || event.target.name === "timingMode") {
+  app.addEventListener("change", e => {
+    if (e.target.name === "endSameAsStart" || e.target.name === "timingMode") {
       updateRouteFromForm();
       render();
     }
   });
 
-  app.addEventListener("click", async (event) => {
-    const tabJump = event.target.closest("[data-tab-jump]");
-    if (tabJump) {
-      setActiveTab(tabJump.dataset.tabJump);
-      return;
-    }
+  app.addEventListener("click", async e => {
+    const tabJump = e.target.closest("[data-tab-jump]");
+    if (tabJump) { setActiveTab(tabJump.dataset.tabJump); return; }
 
-    if (event.target.closest("#refresh-routes")) {
+    if (e.target.closest("#refresh-routes")) {
       await refreshSavedRoutes();
-      render();
-      showToast("Giri aggiornati");
+      renderSaved();
+      showToast("Aggiornato");
       return;
     }
 
-    const openRoute = event.target.closest("[data-open-route]");
+    const openRoute = e.target.closest("[data-open-route]");
     if (openRoute) {
+      showToast("Carico giro…");
       try {
-        showToast("Carico giro e meteo");
-        state.result = await api(`/api/routes/${openRoute.dataset.openRoute}`);
-        await refreshSavedRoutes();
+        const raw = await api(`/api/routes/${openRoute.dataset.openRoute}`);
+        state.result = normalizeSavedRoute({ ...raw.payload, id: raw.id, ...raw });
+        state.manualOrderRows = null;
         setActiveTab("result");
-      } catch (error) {
-        showToast(error.message);
+      } catch (err) {
+        showToast(err.message);
       }
       return;
     }
 
-    const removeStop = event.target.closest("[data-remove-stop]");
+    const renameRoute = e.target.closest("[data-rename-route]");
+    if (renameRoute) {
+      const name = window.prompt("Nuovo nome giro:");
+      if (!name) return;
+      await api(`/api/routes/${renameRoute.dataset.renameRoute}`, { method: "PUT", body: JSON.stringify({ name }) });
+      await refreshSavedRoutes();
+      renderSaved();
+      return;
+    }
+
+    const deleteRoute = e.target.closest("[data-delete-route]");
+    if (deleteRoute) {
+      if (!confirm("Eliminare questo giro?")) return;
+      await api(`/api/routes/${deleteRoute.dataset.deleteRoute}`, { method: "DELETE" });
+      await refreshSavedRoutes();
+      renderSaved();
+      return;
+    }
+
+    const removeStop = e.target.closest("[data-remove-stop]");
     if (removeStop) {
-      state.route.stops = state.route.stops.filter((stop) => stop.uid !== removeStop.dataset.removeStop);
+      state.route.stops = state.route.stops.filter(s => s.uid !== removeStop.dataset.removeStop);
       render();
       return;
     }
 
-    if (event.target.closest("#add-saved-stop")) {
+    if (e.target.closest("#add-saved-stop")) {
       updateRouteFromForm();
-      const address = state.addresses.find((item) => String(item.id) === String(state.route.selectedAddressId));
-      if (!address) return showToast("Seleziona un indirizzo");
-      addStop(addressToStop(address));
+      const addr = state.addresses.find(a => String(a.id) === String(state.route.selectedAddressId));
+      if (!addr) { showToast("Seleziona un indirizzo"); return; }
+      state.route.stops.push(addressToStop(addr));
       render();
       return;
     }
 
-    if (event.target.closest("#add-custom-stop")) {
+    if (e.target.closest("#add-custom-stop")) {
       updateRouteFromForm();
-      if (!state.route.customAddress || !state.route.customCustomer) {
-        showToast("Cliente e indirizzo obbligatori");
-        return;
-      }
+      if (!state.route.customAddress || !state.route.customCustomer) { showToast("Cliente e indirizzo obbligatori"); return; }
       const saved = await api("/api/addresses", {
         method: "POST",
         body: JSON.stringify({
-          customer: state.route.customCustomer,
-          location: state.route.customLocation,
+          customer: state.route.customCustomer, location: state.route.customLocation,
           fullAddress: state.route.customAddress,
-          openMorning: state.route.customOpenMorning,
-          closeMorning: state.route.customCloseMorning,
-          openAfternoon: state.route.customOpenAfternoon,
-          closeAfternoon: state.route.customCloseAfternoon,
+          openMorning: state.route.customOpenMorning, closeMorning: state.route.customCloseMorning,
+          openAfternoon: state.route.customOpenAfternoon, closeAfternoon: state.route.customCloseAfternoon,
           defaultDuration: state.route.customDuration
         })
-      });
+      }).catch(() => null);
       await refreshAddresses();
-      addStop({
-        ...addressToStop(saved, state.route.customDuration),
-        customer: state.route.customCustomer,
-        location: state.route.customLocation,
-        fullAddress: state.route.customAddress,
-        durationMinutes: state.route.customDuration,
-        openMorning: state.route.customOpenMorning,
-        closeMorning: state.route.customCloseMorning,
-        openAfternoon: state.route.customOpenAfternoon,
-        closeAfternoon: state.route.customCloseAfternoon,
+      state.route.stops.push({
+        uid: crypto.randomUUID(),
+        addressId: saved?.id, customer: state.route.customCustomer, location: state.route.customLocation,
+        fullAddress: state.route.customAddress, durationMinutes: state.route.customDuration,
+        openMorning: state.route.customOpenMorning, closeMorning: state.route.customCloseMorning,
+        openAfternoon: state.route.customOpenAfternoon, closeAfternoon: state.route.customCloseAfternoon,
         recognized: true
       });
-      Object.assign(state.route, {
-        customCustomer: "",
-        customLocation: "",
-        customAddress: "",
-        customDuration: 45
-      });
+      Object.assign(state.route, { customCustomer: "", customLocation: "", customAddress: "", customDuration: 45 });
       render();
-      showToast("Tappa salvata in archivio");
+      showToast("Tappa aggiunta e salvata");
       return;
     }
 
-    if (event.target.closest("#plan-route")) {
-      await planCurrentRoute();
+    if (e.target.closest("#plan-route")) { await planCurrentRoute(); return; }
+    if (e.target.closest("#listen-command")) { startSpeechRecognition(); return; }
+    if (e.target.closest("#apply-command")) {
+      try { await applyVoiceCommand(); } catch (err) { showToast(err.message); }
       return;
     }
 
-    if (event.target.closest("#listen-command")) {
-      startSpeechRecognition();
-      return;
-    }
-
-    if (event.target.closest("#apply-command")) {
-      try {
-        await applyVoiceCommand();
-      } catch (error) {
-        showToast(error.message);
-      }
-      return;
-    }
-
-    const editAddress = event.target.closest("[data-edit-address]");
-    if (editAddress) {
-      const address = state.addresses.find((item) => String(item.id) === editAddress.dataset.editAddress);
-      state.addressForm = { ...address };
+    const editAddr = e.target.closest("[data-edit-address]");
+    if (editAddr) {
+      const addr = state.addresses.find(a => String(a.id) === editAddr.dataset.editAddress);
+      state.addressForm = { ...emptyForm, ...addr };
       render();
       return;
     }
 
-    const deleteAddress = event.target.closest("[data-delete-address]");
-    if (deleteAddress) {
-      await api(`/api/addresses/${deleteAddress.dataset.deleteAddress}`, { method: "DELETE" });
+    const delAddr = e.target.closest("[data-delete-address]");
+    if (delAddr) {
+      if (!confirm("Eliminare questo contatto?")) return;
+      await api(`/api/addresses/${delAddr.dataset.deleteAddress}`, { method: "DELETE" });
       await refreshAddresses();
       render();
-      showToast("Indirizzo eliminato");
       return;
     }
 
-    if (event.target.closest("#new-address") || event.target.closest("#reset-address-form")) {
-      state.addressForm = { ...emptyAddressForm };
+    if (e.target.closest("#new-address") || e.target.closest("#cancel-address")) {
+      state.addressForm = { ...emptyForm };
       render();
+      return;
+    }
+
+    if (e.target.closest("#import-contacts")) {
+      await importFromContactPicker();
+      return;
+    }
+
+    // manual order controls
+    const moveUp = e.target.closest("[data-move-up]");
+    if (moveUp) {
+      const i = Number(moveUp.dataset.moveUp);
+      const result = normalizeSavedRoute(state.result);
+      const rows = state.manualOrderRows ? [...state.manualOrderRows] : [...result.rows];
+      [rows[i - 1], rows[i]] = [rows[i], rows[i - 1]];
+      state.manualOrderRows = rows;
+      render();
+      return;
+    }
+
+    const moveDown = e.target.closest("[data-move-down]");
+    if (moveDown) {
+      const i = Number(moveDown.dataset.moveDown);
+      const result = normalizeSavedRoute(state.result);
+      const rows = state.manualOrderRows ? [...state.manualOrderRows] : [...result.rows];
+      [rows[i], rows[i + 1]] = [rows[i + 1], rows[i]];
+      state.manualOrderRows = rows;
+      render();
+      return;
+    }
+
+    if (e.target.closest("#replan-order")) { await replanWithOrder(true); return; }
+    if (e.target.closest("#reset-order")) {
+      state.manualOrderRows = null;
+      await replanWithOrder(false);
+      return;
     }
   });
 
-  app.addEventListener("input", async (event) => {
-    if (event.target.id === "archive-search") {
-      state.addressSearch = event.target.value;
-      await refreshAddresses();
-      renderArchive();
+  app.addEventListener("change", e => {
+    if (e.target.id === "vcf-input") {
+      const file = e.target.files?.[0];
+      if (file) importFromVcf(file).catch(() => showToast("Errore lettura file"));
     }
   });
 
-  app.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    if (event.target.id === "address-form") {
-      try {
-        await saveAddressForm(event.target);
-      } catch (error) {
-        showToast(error.message);
-      }
+  app.addEventListener("submit", async e => {
+    e.preventDefault();
+    if (e.target.id === "address-form") {
+      try { await saveAddressForm(e.target); } catch (err) { showToast(err.message); }
     }
-    if (event.target.id === "settings-form") {
-      const values = readForm(event.target);
-      state.settings = await api("/api/settings", {
-        method: "PUT",
-        body: JSON.stringify({
-          kmRate: Number(values.kmRate),
-          driveHourRate: Number(values.driveHourRate),
-          workHourRate: Number(values.workHourRate)
-        })
-      });
+    if (e.target.id === "settings-form") {
+      const v = readForm(e.target);
+      state.settings = await api("/api/settings", { method: "PUT", body: JSON.stringify({ kmRate: Number(v.kmRate), driveHourRate: Number(v.driveHourRate), workHourRate: Number(v.workHourRate) }) });
       showToast("Tariffe salvate");
-      render();
     }
   });
 }
+
+// ── init ──────────────────────────────────────────────────────────────────────
 
 applyTheme();
-window.setInterval(applyTheme, 60_000);
+setInterval(applyTheme, 60_000);
 bindEvents();
+
 if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => {
-    navigator.serviceWorker.register("/service-worker.js").catch(() => {});
-  });
+  window.addEventListener("load", () => navigator.serviceWorker.register("/service-worker.js").catch(() => {}));
 }
-loadInitialData()
-  .then(render)
-  .catch((error) => {
-    app.innerHTML = `<section class="panel"><h2>Errore</h2><div class="empty">${escapeHtml(error.message)}</div></section>`;
-  });
+
+loadInitialData().then(render).catch(err => {
+  app.innerHTML = `<section class="panel"><h2>Errore avvio</h2><div class="empty">${escapeHtml(err.message)}</div></section>`;
+});

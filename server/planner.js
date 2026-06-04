@@ -1,4 +1,4 @@
-import { routeBetween } from "./mapService.js";
+import { routeBetween } from "./googleMapsService.js";
 
 const MAX_EXACT_STOPS = 7;
 

@@ -19,7 +19,7 @@ import {
 } from "./db.js";
 import { loadEnv } from "./env.js";
 import { planRoute } from "./planner.js";
-import { routeShape } from "./mapService.js";
+import { routeShape } from "./googleMapsService.js";
 import { parseVoiceCommand } from "./voiceParser.js";
 import { attachWeather, shouldRefreshWeather } from "./weatherService.js";
 
@@ -105,11 +105,13 @@ async function handleApi(request, response) {
     if (method === "GET" && url.pathname === "/api/health") {
       return sendJson(response, 200, {
         ok: true,
-        mapApiConfigured: Boolean(process.env.MAPQUEST_API_KEY || process.env.OPENROUTESERVICE_API_KEY),
-        mapProviders: {
-          mapQuest: Boolean(process.env.MAPQUEST_API_KEY),
-          openRouteService: Boolean(process.env.OPENROUTESERVICE_API_KEY)
-        }
+        mapApiConfigured: Boolean(process.env.GOOGLE_MAPS_API_KEY)
+      });
+    }
+
+    if (method === "GET" && url.pathname === "/api/config") {
+      return sendJson(response, 200, {
+        googleMapsKey: process.env.GOOGLE_MAPS_API_KEY || ""
       });
     }
 
