@@ -333,18 +333,43 @@ function nearestOrders(stops, context) {
   return [order];
 }
 
-function findNearestRestStop(restStops, lat, lng, maxKm = 3.0) {
+// Perpendicular distance (km) from point P to segment A→B, plus t parameter.
+function perpDistToSegment(pLat, pLng, aLat, aLng, bLat, bLng) {
+  const dLat = bLat - aLat, dLng = bLng - aLng;
+  const len2 = dLat * dLat + dLng * dLng;
+  const t = len2 < 1e-12 ? 0 : Math.max(0, Math.min(1,
+    ((pLat - aLat) * dLat + (pLng - aLng) * dLng) / len2));
+  const projLat = aLat + t * dLat, projLng = aLng + t * dLng;
+  const R = 6371, toRad = d => d * Math.PI / 180;
+  const dlat = toRad(pLat - projLat), dlng = toRad(pLng - projLng);
+  const a = Math.sin(dlat/2)**2 + Math.cos(toRad(projLat)) * Math.cos(toRad(pLat)) * Math.sin(dlng/2)**2;
+  return { perpKm: R * 2 * Math.asin(Math.sqrt(a)), t };
+}
+
+// Find the nearest saved rest stop along the segment [from → to].
+// maxPerpKm = max perpendicular distance from the route line (handles parallel valleys).
+// Falls back to 15 km haversine if no destination is known.
+function findNearestRestStop(restStops, fromLat, fromLng, toLat, toLng, maxPerpKm = 2.0) {
   if (!restStops.length) return null;
-  if (!lat || !lng) return restStops[0];
-  // 1 degree ≈ 111 km; convert maxKm to rough degree threshold
-  const maxDeg = maxKm / 111;
-  let nearest = null, minDist = Infinity;
+  if (!fromLat || !fromLng) return restStops[0];
+  const hasSegment = toLat != null && toLng != null;
+  let best = null, bestDist = Infinity;
   for (const s of restStops) {
     if (!s.lat || !s.lng) continue;
-    const d = Math.hypot(s.lat - lat, s.lng - lng);
-    if (d < minDist && d <= maxDeg) { minDist = d; nearest = s; }
+    let distKm;
+    if (hasSegment) {
+      const { perpKm, t } = perpDistToSegment(s.lat, s.lng, fromLat, fromLng, toLat, toLng);
+      if (perpKm > maxPerpKm || t < -0.05) continue;
+      distKm = perpKm;
+    } else {
+      const R = 6371, toRad = d => d * Math.PI / 180;
+      const dlat = toRad(s.lat - fromLat), dlng = toRad(s.lng - fromLng);
+      distKm = R * 2 * Math.asin(Math.sqrt(Math.sin(dlat/2)**2 + Math.cos(toRad(fromLat)) * Math.cos(toRad(s.lat)) * Math.sin(dlng/2)**2));
+      if (distKm > 15) continue;
+    }
+    if (distKm < bestDist) { bestDist = distKm; best = s; }
   }
-  return nearest;
+  return best;
 }
 
 function shiftRowTimes(row, minutes) {
@@ -425,13 +450,13 @@ async function insertBreaks(rows, options) {
 
   // driveOffset: minutes into the drive-to-row-i where the break is inserted.
   // 0 = at the start of the leg (end of previous stop); >0 = mid-leg.
-  const tryInsert = async (beforeIndex, refLat, refLng, driveOffset = 0) => {
+  const tryInsert = async (beforeIndex, refLat, refLng, toLat, toLng, driveOffset = 0) => {
     if (insertions.some(ins => ins.beforeIndex === beforeIndex && Math.abs((ins.driveOffset||0) - driveOffset) < 5)) {
       cumulative = 0;
       return true;
     }
-    // Prefer saved rest stops (up to 15 km)
-    let spot = findNearestRestStop(restStops, refLat, refLng, 15.0);
+    // Prefer saved stops near the route segment (perpendicular distance ≤ 2 km)
+    let spot = findNearestRestStop(restStops, refLat, refLng, toLat, toLng, 2.0);
     if (!spot && refLat && refLng) {
       spot = await findNearbyRestStop(refLat, refLng).catch(() => null);
     }
@@ -467,7 +492,8 @@ async function insertBreaks(rows, options) {
       const interpLng = (lastLng != null && row.lng != null) ? lastLng + (row.lng - lastLng) * fraction : (row.lng ?? lastLng);
       const breakTime = prevServiceEnd + driveConsumed + needed;
       if (!isValidBreakTime(breakTime)) break;
-      const inserted = await tryInsert(i, interpLat, interpLng, driveConsumed + needed);
+      // Pass destination (row.lat/lng) so saved stops are checked against the segment
+      const inserted = await tryInsert(i, interpLat, interpLng, row.lat, row.lng, driveConsumed + needed);
       if (!inserted) break;
       driveConsumed += needed;
       remainingDrive -= needed;
@@ -483,8 +509,9 @@ async function insertBreaks(rows, options) {
 
     if (cumulative >= REST_MIN && i < rows.length - 1) {
       const breakTime = prevServiceEnd;
+      const nextRow = rows[i + 1];
       if (isValidBreakTime(breakTime)) {
-        await tryInsert(i + 1, row.lat, row.lng, 0);
+        await tryInsert(i + 1, row.lat, row.lng, nextRow?.lat, nextRow?.lng, 0);
       }
     }
     if (cumulative >= REST_MAX) cumulative = Math.floor(REST_MAX / 2);
