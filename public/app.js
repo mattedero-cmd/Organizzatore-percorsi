@@ -383,12 +383,12 @@ function renderRoute() {
     <section class="grid">
       <form class="panel" id="route-form">
         <h2>Nuovo percorso</h2>
-        <div class="form-grid">
+        <div class="form-grid route-fields">
           <label class="field">Data<input name="scheduledDate" type="date" value="${escapeHtml(r.scheduledDate)}" /></label>
-          <label class="field">Partenza (nome)<input name="startLabel" value="${escapeHtml(r.startLabel)}" autocomplete="off" /></label>
-          <label class="field full">Indirizzo partenza<input name="startAddress" value="${escapeHtml(r.startAddress)}" /></label>
           <label class="field">Orario partenza<input name="startTime" type="time" value="${escapeHtml(r.startTime)}" /></label>
-          <label class="field">Regola orario<select name="timingMode">
+          <label class="field full">Partenza (nome)<input name="startLabel" value="${escapeHtml(r.startLabel)}" autocomplete="off" /></label>
+          <label class="field full">Indirizzo partenza<input name="startAddress" value="${escapeHtml(r.startAddress)}" /></label>
+          <label class="field full">Regola orario<select name="timingMode">
             <option value="first_open_minus" ${dm === "first_open_minus" ? "selected" : ""}>Prima dell'apertura</option>
             <option value="arrive_at" ${dm === "arrive_at" ? "selected" : ""}>Arrivo a orario fisso</option>
             <option value="depart_at" ${dm === "depart_at" ? "selected" : ""}>Partenza a orario fisso</option>
