@@ -444,6 +444,8 @@ async function insertBreaks(rows, options) {
     return true;
   };
 
+  console.log("[breaks] dayStart:", formatTime(dayStart), "finalArrival:", formatTime(finalArrival), "lunchTime:", lunchTime ? formatTime(lunchTime) : "none", "rows:", rows.length);
+
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
     const driveMin = row.driveMinutes || 0;
@@ -452,9 +454,9 @@ async function insertBreaks(rows, options) {
     // Opportunità A — prima di guidare verso questa tappa
     if (cumulative > 0 && cumulative + driveMin >= REST_MIN && i > 0) {
       const breakTime = parseTime(rows[i - 1].serviceEndTime);
-      if (isValidBreakTime(breakTime)) {
-        await tryInsert(i, lastLat, lastLng);
-      }
+      const valid = isValidBreakTime(breakTime);
+      console.log(`[breaks] OpA i=${i} cumul=${cumulative} drive=${driveMin} breakTime=${formatTime(breakTime)} valid=${valid}`);
+      if (valid) await tryInsert(i, lastLat, lastLng);
     }
     cumulative += driveMin;
     if (cumulative >= REST_MAX) cumulative = Math.floor(REST_MAX / 2);
@@ -463,15 +465,16 @@ async function insertBreaks(rows, options) {
     cumulative += workMin;
     if (cumulative >= REST_MIN && i < rows.length - 1) {
       const breakTime = parseTime(row.serviceEndTime);
-      if (isValidBreakTime(breakTime)) {
-        await tryInsert(i + 1, row.lat, row.lng);
-      }
+      const valid = isValidBreakTime(breakTime);
+      console.log(`[breaks] OpB i=${i} cumul=${cumulative} work=${workMin} breakTime=${formatTime(breakTime)} valid=${valid}`);
+      if (valid) await tryInsert(i + 1, row.lat, row.lng);
     }
     if (cumulative >= REST_MAX) cumulative = Math.floor(REST_MAX / 2);
 
     lastLat = row.lat;
     lastLng = row.lng;
   }
+  console.log("[breaks] insertions:", insertions.length);
 
   // ── 3. Applica inserzioni ────────────────────────────────────────────────────
   insertions.sort((a, b) => a.beforeIndex - b.beforeIndex);
