@@ -630,6 +630,54 @@ tbody tr:last-child td {
   color: var(--text);
 }
 
+.stop-add-row {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin-top: 12px;
+}
+
+.stop-add-row > div { flex: 1; }
+
+.panel-details {
+  margin-top: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: visible;
+}
+
+.panel-details > summary {
+  cursor: pointer;
+  padding: 8px 12px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  user-select: none;
+}
+
+.panel-details > summary::-webkit-details-marker { display: none; }
+
+.panel-details[open] > summary {
+  border-bottom: 1px solid var(--line);
+}
+
+.panel-details > summary::before {
+  content: "▶";
+  font-size: 0.65rem;
+  margin-right: 6px;
+  transition: transform 0.15s;
+}
+
+.panel-details[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.panel-details > :not(summary) {
+  padding: 0 12px 12px;
+}
+
 .result-list {
   display: grid;
   gap: 10px;

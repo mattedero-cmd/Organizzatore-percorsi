@@ -21,6 +21,19 @@ function minutesLabel(minutes) {
   return `${h} h ${m} min`;
 }
 
+function phoneIcon(type) {
+  if (type === "fisso") return "☎";
+  if (type === "altro") return "📞";
+  return "📱";
+}
+
+function preferredPhone(a) {
+  if (a.phonePreferred === "phone2" && a.phone2) return { number: a.phone2, type: a.phone2Type, name: a.phone2Name };
+  if (a.phone) return { number: a.phone, type: a.phoneType, name: a.phoneName };
+  if (a.phone2) return { number: a.phone2, type: a.phone2Type, name: a.phone2Name };
+  return null;
+}
+
 function addressName(a) {
   return `${a.customer || ""}${a.location ? ` — ${a.location}` : ""}`.trim();
 }
@@ -50,7 +63,10 @@ async function api(path, options = {}) {
 
 const emptyForm = {
   id: null, customer: "", location: "", fullAddress: "",
-  phone: "", email: "", notes: "",
+  phone: "", phoneType: "cell", phoneName: "",
+  phone2: "", phone2Type: "fisso", phone2Name: "",
+  phonePreferred: "phone",
+  email: "", notes: "",
   openMorning: "08:30", closeMorning: "12:30",
   openAfternoon: "14:30", closeAfternoon: "18:00",
   defaultDuration: 45, lat: "", lng: ""
@@ -59,13 +75,17 @@ const emptyForm = {
 const state = {
   activeTab: "route",
   theme: "day",
+  themePref: "auto",
   googleMapsKey: "",
   googleMapsReady: false,
   navigatorPref: localStorage.getItem("navigatorPref") || "google",
   mapApiConfigured: false,
   addresses: [],
+  allAddresses: [],
   savedRoutes: [],
   addressSearch: "",
+  archiveShowAll: false,
+  stopSearchText: "",
   addressForm: { ...emptyForm },
   settings: { kmRate: 0.65, driveHourRate: 22, workHourRate: 60 },
   route: {
@@ -101,8 +121,14 @@ const state = {
 // ── theme ────────────────────────────────────────────────────────────────────
 
 function applyTheme() {
-  const h = new Date().getHours();
-  state.theme = (h >= 19 || h < 7) ? "night" : "day";
+  if (state.themePref === "dark") {
+    state.theme = "night";
+  } else if (state.themePref === "light") {
+    state.theme = "day";
+  } else {
+    const h = new Date().getHours();
+    state.theme = (h >= 19 || h < 7) ? "night" : "day";
+  }
   document.documentElement.dataset.theme = state.theme;
 }
 
@@ -115,12 +141,41 @@ function setActiveTab(tab) {
 // ── data loading ──────────────────────────────────────────────────────────────
 
 async function refreshAddresses() {
+  if (!state.addressSearch && !state.archiveShowAll) {
+    state.addresses = [];
+    return;
+  }
   const q = encodeURIComponent(state.addressSearch);
   state.addresses = await api(`/api/addresses?search=${q}`).catch(() => []);
 }
 
+async function refreshAddressesForRoute() {
+  state.allAddresses = await api("/api/addresses?search=").catch(() => []);
+}
+
+async function refreshAllData() {
+  await Promise.all([refreshAddresses(), refreshAddressesForRoute()]);
+}
+
 async function refreshSavedRoutes() {
   state.savedRoutes = await api("/api/routes").catch(() => []);
+}
+
+async function migrateContactNotes() {
+  const all = await api("/api/addresses?search=").catch(() => []);
+  const emailRe = /[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/;
+  const phoneRe = /(?:\+39[\s.\-]?)?(?:0\d{1,4}[\s.\-]?\d{4,8}|3\d{2}[\s.\-]?\d{6,7})/;
+  for (const addr of all) {
+    const notes = addr.notes || "";
+    if (!notes) continue;
+    const needsEmail = !addr.email && emailRe.test(notes);
+    const needsPhone = !addr.phone && phoneRe.test(notes);
+    if (!needsEmail && !needsPhone) continue;
+    const patch = { ...addr };
+    if (needsEmail) patch.email = notes.match(emailRe)[0];
+    if (needsPhone) patch.phone = notes.match(phoneRe)[0].trim();
+    await api(`/api/addresses/${addr.id}`, { method: "PUT", body: JSON.stringify(patch) }).catch(() => {});
+  }
 }
 
 async function loadInitialData() {
@@ -133,8 +188,12 @@ async function loadInitialData() {
   state.whisperConfigured = health.whisperConfigured || false;
   state.googleMapsKey = config.googleMapsKey || "";
   state.settings = settings;
+  state.navigatorPref = settings.navigatorPref || localStorage.getItem("navigatorPref") || "google";
+  state.themePref = settings.themePref || "auto";
+  applyTheme();
   document.querySelector("#map-status").textContent = state.mapApiConfigured ? "Google Maps" : "Stima locale";
-  await Promise.all([refreshAddresses(), refreshSavedRoutes()]);
+  await Promise.all([refreshAddressesForRoute(), refreshSavedRoutes()]);
+  migrateContactNotes().catch(() => {});
 }
 
 // ── normalize saved route ─────────────────────────────────────────────────────
@@ -222,7 +281,13 @@ async function renderGoogleMap(result) {
   const ready = await loadGoogleMapsScript();
   if (!ready || !window.google?.maps) { el.style.display = "none"; return; }
 
-  const rows = result.rows || [];
+  // Enrich rows with coordinates from allAddresses when missing in payload
+  const rows = (result.rows || []).map(row => {
+    if (row.lat && row.lng) return row;
+    const addr = state.allAddresses.find(a => String(a.id) === String(row.addressId));
+    return addr?.lat ? { ...row, lat: addr.lat, lng: addr.lng } : row;
+  });
+
   const firstCoord = rows.find(r => r.lat) || result.start;
   const center = firstCoord?.lat ? { lat: Number(firstCoord.lat), lng: Number(firstCoord.lng) } : { lat: 46.0, lng: 11.0 };
 
@@ -281,8 +346,18 @@ async function renderGoogleMap(result) {
 
 // ── render: route tab ─────────────────────────────────────────────────────────
 
-function addressOptions() {
-  return state.addresses.map(a => `<option value="${a.id}">${escapeHtml(addressName(a))} | ${escapeHtml(a.fullAddress)}</option>`).join("");
+function renderStopSuggestions() {
+  const q = state.stopSearchText.trim().toLowerCase();
+  if (!q) return "";
+  const matches = state.allAddresses.filter(a =>
+    [a.customer, a.location, a.fullAddress].some(v => (v || "").toLowerCase().includes(q))
+  ).slice(0, 8);
+  if (!matches.length) return `<div class="stop-suggestion-empty">Nessun risultato</div>`;
+  return matches.map(a => `
+    <div class="stop-suggestion-item" data-suggest-id="${a.id}">
+      <span class="stop-suggestion-name">${escapeHtml(addressName(a))}</span>
+      <span class="stop-suggestion-addr">${escapeHtml(a.fullAddress)}</span>
+    </div>`).join("");
 }
 
 function renderStops() {
@@ -323,12 +398,12 @@ function renderRoute() {
     <section class="grid">
       <form class="panel" id="route-form">
         <h2>Nuovo percorso</h2>
-        <div class="form-grid">
+        <div class="form-grid route-fields">
           <label class="field">Data<input name="scheduledDate" type="date" value="${escapeHtml(r.scheduledDate)}" /></label>
-          <label class="field">Partenza (nome)<input name="startLabel" value="${escapeHtml(r.startLabel)}" autocomplete="off" /></label>
-          <label class="field full">Indirizzo partenza<input name="startAddress" value="${escapeHtml(r.startAddress)}" /></label>
           <label class="field">Orario partenza<input name="startTime" type="time" value="${escapeHtml(r.startTime)}" /></label>
-          <label class="field">Regola orario<select name="timingMode">
+          <label class="field full">Partenza (nome)<input name="startLabel" value="${escapeHtml(r.startLabel)}" autocomplete="off" /></label>
+          <label class="field full">Indirizzo partenza<input name="startAddress" value="${escapeHtml(r.startAddress)}" /></label>
+          <label class="field full">Regola orario<select name="timingMode">
             <option value="first_open_minus" ${dm === "first_open_minus" ? "selected" : ""}>Prima dell'apertura</option>
             <option value="arrive_at" ${dm === "arrive_at" ? "selected" : ""}>Arrivo a orario fisso</option>
             <option value="depart_at" ${dm === "depart_at" ? "selected" : ""}>Partenza a orario fisso</option>
@@ -343,51 +418,61 @@ function renderRoute() {
           <label class="field full">Indirizzo arrivo<input name="endAddress" value="${escapeHtml(r.endAddress)}" ${r.endSameAsStart ? "disabled" : ""} /></label>
         </div>
 
-        <h3>Aggiungi da archivio</h3>
-        <div class="form-grid">
-          <label class="field full"><select name="selectedAddressId"><option value="">Seleziona…</option>${addressOptions()}</select></label>
-        </div>
-        <div class="actions"><button type="button" class="btn" id="add-saved-stop">+ Aggiungi</button></div>
-
-        <h3>Nuova tappa</h3>
-        <div class="form-grid">
-          <label class="field">Cliente<input name="customCustomer" value="${escapeHtml(r.customCustomer)}" /></label>
-          <label class="field">Sede<input name="customLocation" value="${escapeHtml(r.customLocation)}" /></label>
-          <label class="field full">Indirizzo completo<input name="customAddress" value="${escapeHtml(r.customAddress)}" /></label>
-          <label class="field">Durata (min)<input name="customDuration" type="number" min="5" step="5" value="${escapeHtml(r.customDuration)}" /></label>
-          <label class="field">Apr. mattina<input name="customOpenMorning" type="time" value="${escapeHtml(r.customOpenMorning)}" /></label>
-          <label class="field">Ch. mattina<input name="customCloseMorning" type="time" value="${escapeHtml(r.customCloseMorning)}" /></label>
-          <label class="field">Apr. pomeriggio<input name="customOpenAfternoon" type="time" value="${escapeHtml(r.customOpenAfternoon)}" /></label>
-          <label class="field">Ch. pomeriggio<input name="customCloseAfternoon" type="time" value="${escapeHtml(r.customCloseAfternoon)}" /></label>
-        </div>
-        <div class="actions">
-          <button type="button" class="btn" id="add-custom-stop">+ Salva e aggiungi</button>
-          <button type="button" class="btn primary" id="plan-route">${state.planning ? "Calcolo in corso…" : "→ Ottimizza e salva"}</button>
+        <div class="stop-add-row">
+          <div style="position:relative;flex:1;">
+            <input id="stop-search" placeholder="Cerca cliente o città…" value="${escapeHtml(state.stopSearchText)}" autocomplete="off" />
+            <input type="hidden" name="selectedAddressId" value="${escapeHtml(state.route.selectedAddressId)}" id="selected-address-id" />
+            <div id="stop-suggestions" class="stop-suggestions">${renderStopSuggestions()}</div>
+          </div>
+          <button type="button" class="btn" id="add-saved-stop">+ Archivio</button>
         </div>
 
-        <div class="row" style="align-items:center;gap:8px;margin-bottom:6px;">
-          <h3 style="margin:0">Comando vocale</h3>
-          <details class="voice-help-wrap">
-            <summary class="btn ghost" style="min-height:28px;padding:0 8px;font-size:0.78rem;list-style:none">❓ Comandi</summary>
-            <div class="voice-help-panel">
-              <ul>
-                <li><b>aggiungi [nome cliente]</b> — aggiunge tappa dall'archivio</li>
-                <li><b>aggiungi X e aggiungi Y</b> — più tappe in un comando</li>
-                <li><b>rimuovi [nome cliente]</b> — rimuove la tappa</li>
-                <li><b>ottimizza</b> · <b>salva e vai</b> — calcola il percorso</li>
-                <li><b>partenza alle 8</b> — cambia orario di partenza</li>
-                <li><b>primo arrivo alle 9:30</b> — orario primo cliente</li>
-                <li><b>in anticipo di 10 minuti</b> — minuti prima apertura</li>
-                <li><b>per il 10 giugno</b> · <b>domani</b> — cambia la data</li>
-                <li><b>parto da [luogo]</b> — cambia punto di partenza</li>
-              </ul>
-            </div>
-          </details>
-        </div>
-        <label class="field"><textarea name="transcript" id="transcript">${escapeHtml(r.transcript)}</textarea></label>
-        <div class="actions">
-          <button type="button" class="btn${state.voiceRecording ? " recording" : ""}" id="listen-command">${state.voiceRecording ? "■ Stop" : "● Avvia"}</button>
-          <button type="button" class="btn" id="apply-command">✓ Applica</button>
+        <details class="panel-details">
+          <summary>+ Nuova tappa manuale</summary>
+          <div class="form-grid route-fields" style="margin-top:8px;">
+            <label class="field">Cliente<input name="customCustomer" value="${escapeHtml(r.customCustomer)}" /></label>
+            <label class="field">Sede<input name="customLocation" value="${escapeHtml(r.customLocation)}" /></label>
+            <label class="field full">Indirizzo completo<input name="customAddress" value="${escapeHtml(r.customAddress)}" /></label>
+            <label class="field">Durata (min)<input name="customDuration" type="number" min="5" step="5" value="${escapeHtml(r.customDuration)}" /></label>
+            <label class="field"></label>
+            <label class="field">Apr. mattina<input name="customOpenMorning" type="time" value="${escapeHtml(r.customOpenMorning)}" /></label>
+            <label class="field">Ch. mattina<input name="customCloseMorning" type="time" value="${escapeHtml(r.customCloseMorning)}" /></label>
+            <label class="field">Apr. pomeriggio<input name="customOpenAfternoon" type="time" value="${escapeHtml(r.customOpenAfternoon)}" /></label>
+            <label class="field">Ch. pomeriggio<input name="customCloseAfternoon" type="time" value="${escapeHtml(r.customCloseAfternoon)}" /></label>
+          </div>
+          <div class="actions" style="margin-top:8px;">
+            <button type="button" class="btn" id="add-custom-stop">+ Salva e aggiungi</button>
+          </div>
+        </details>
+
+        <details class="panel-details">
+          <summary>🎤 Comando vocale
+            <details class="voice-help-wrap" style="display:inline-block;margin-left:8px;">
+              <summary class="btn ghost" style="min-height:24px;padding:0 6px;font-size:0.75rem;list-style:none">❓</summary>
+              <div class="voice-help-panel">
+                <ul>
+                  <li><b>aggiungi [nome cliente]</b> — aggiunge tappa dall'archivio</li>
+                  <li><b>aggiungi X e aggiungi Y</b> — più tappe in un comando</li>
+                  <li><b>rimuovi [nome cliente]</b> — rimuove la tappa</li>
+                  <li><b>ottimizza</b> · <b>salva e vai</b> — calcola il percorso</li>
+                  <li><b>partenza alle 8</b> — cambia orario di partenza</li>
+                  <li><b>primo arrivo alle 9:30</b> — orario primo cliente</li>
+                  <li><b>in anticipo di 10 minuti</b> — minuti prima apertura</li>
+                  <li><b>per il 10 giugno</b> · <b>domani</b> — cambia la data</li>
+                  <li><b>parto da [luogo]</b> — cambia punto di partenza</li>
+                </ul>
+              </div>
+            </details>
+          </summary>
+          <label class="field" style="margin-top:8px;"><textarea name="transcript" id="transcript">${escapeHtml(r.transcript)}</textarea></label>
+          <div class="actions" style="margin-top:6px;">
+            <button type="button" class="btn${state.voiceRecording ? " recording" : ""}" id="listen-command">${state.voiceRecording ? "■ Stop" : "● Avvia"}</button>
+            <button type="button" class="btn" id="apply-command">✓ Applica</button>
+          </div>
+        </details>
+
+        <div class="actions" style="margin-top:12px;">
+          <button type="button" class="btn primary" id="plan-route" style="width:100%">${state.planning ? "Calcolo in corso…" : "→ Ottimizza e salva"}</button>
         </div>
       </form>
 
@@ -432,7 +517,7 @@ function renderSaved() {
 
 function renderArchive() {
   const form = state.addressForm;
-  const addresses = normalizeList(state.addresses);
+  const showingResults = state.archiveShowAll || state.addressSearch;
   app.innerHTML = `
     <section class="grid">
       <div class="panel">
@@ -444,24 +529,31 @@ function renderArchive() {
           </div>
         </div>
         <div class="row" style="gap:8px; margin-bottom:10px;">
-          <input id="archive-search" placeholder="Cerca cliente, sede, indirizzo…" value="${escapeHtml(state.addressSearch)}" style="flex:1" />
+          <input id="archive-search" placeholder="Cerca per nome, città, indirizzo…" value="${escapeHtml(state.addressSearch)}" style="flex:1" autocomplete="off" />
+          ${showingResults
+            ? `<button class="btn" id="hide-all-addresses">× Nascondi</button>`
+            : `<button class="btn" id="show-all-addresses">Mostra tutti</button>`}
         </div>
         <input id="vcf-input" type="file" accept=".vcf,.vcard,.csv" style="display:none" />
         <div class="archive-list">
-          ${state.addresses.map(a => `
+          ${!showingResults
+            ? `<div class="empty" style="grid-column:1/-1">Cerca un contatto per nome o città, oppure premi <b>Mostra tutti</b>.</div>`
+            : state.addresses.map(a => `
             <article class="card archive-card">
               <p class="stop-title">${escapeHtml(addressName(a))}</p>
               <div class="stop-meta">${escapeHtml(a.fullAddress)}</div>
-              ${a.phone ? `<div class="stop-meta">📞 ${escapeHtml(a.phone)}</div>` : ""}
+              ${a.phone ? `<div class="stop-meta">${phoneIcon(a.phoneType)} ${escapeHtml(a.phone)}${a.phoneName ? ` <span class="phone-name-badge">${escapeHtml(a.phoneName)}</span>` : ""}${a.phonePreferred === "phone" && a.phone2 ? " ★" : ""}</div>` : ""}
+              ${a.phone2 ? `<div class="stop-meta">${phoneIcon(a.phone2Type)} ${escapeHtml(a.phone2)}${a.phone2Name ? ` <span class="phone-name-badge">${escapeHtml(a.phone2Name)}</span>` : ""}${a.phonePreferred === "phone2" ? " ★" : ""}</div>` : ""}
               ${a.email ? `<div class="stop-meta">✉ ${escapeHtml(a.email)}</div>` : ""}
               <div class="stop-meta">${[a.openMorning, a.closeMorning].filter(Boolean).join("–") || "—"} / ${[a.openAfternoon, a.closeAfternoon].filter(Boolean).join("–") || "—"}</div>
               <div class="actions">
-                ${a.phone ? `<a class="btn" href="tel:${escapeHtml(a.phone)}">📞</a>` : ""}
+                ${a.phone ? `<a class="btn" href="tel:${escapeHtml(a.phone)}" title="${escapeHtml(a.phoneName || a.phone)}">${phoneIcon(a.phoneType)}</a>` : ""}
+                ${a.phone2 ? `<a class="btn" href="tel:${escapeHtml(a.phone2)}" title="${escapeHtml(a.phone2Name || a.phone2)}">${phoneIcon(a.phone2Type)}</a>` : ""}
                 ${a.email ? `<a class="btn" href="mailto:${escapeHtml(a.email)}">✉</a>` : ""}
                 <button class="btn" data-edit-address="${a.id}">Modifica</button>
                 <button class="btn danger" data-delete-address="${a.id}">×</button>
               </div>
-            </article>`).join("") || `<div class="empty">Nessun contatto trovato.</div>`}
+            </article>`).join("") || `<div class="empty" style="grid-column:1/-1">Nessun contatto trovato.</div>`}
         </div>
       </div>
 
@@ -471,16 +563,54 @@ function renderArchive() {
           <label class="field">Cliente / nome<input name="customer" value="${escapeHtml(form.customer)}" required /></label>
           <label class="field">Sede<input name="location" value="${escapeHtml(form.location)}" /></label>
           <label class="field full">Indirizzo completo<input name="fullAddress" value="${escapeHtml(form.fullAddress)}" required /></label>
-          <label class="field">Telefono<input name="phone" type="tel" value="${escapeHtml(form.phone)}" /></label>
+          <div class="field full phone-group">
+            <div class="phone-label-row">
+              <span class="phone-label">Telefono 1</span>
+              <label class="phone-pref-label"><input type="radio" name="phonePreferred" value="phone" ${form.phonePreferred !== "phone2" ? "checked" : ""} /> Preferito</label>
+            </div>
+            <div class="phone-row">
+              <select name="phoneType" class="phone-type-select">
+                <option value="cell" ${form.phoneType === "cell" ? "selected" : ""}>📱 Cell</option>
+                <option value="fisso" ${form.phoneType === "fisso" ? "selected" : ""}>☎ Fisso</option>
+                <option value="altro" ${form.phoneType === "altro" ? "selected" : ""}>Altro</option>
+              </select>
+              <input name="phone" type="tel" value="${escapeHtml(form.phone)}" placeholder="Numero" style="flex:1" />
+              <input name="phoneName" value="${escapeHtml(form.phoneName)}" placeholder="Nome (es. Mario)" style="flex:1" />
+            </div>
+          </div>
+          <div class="field full phone-group">
+            <div class="phone-label-row">
+              <span class="phone-label">Telefono 2</span>
+              <label class="phone-pref-label"><input type="radio" name="phonePreferred" value="phone2" ${form.phonePreferred === "phone2" ? "checked" : ""} /> Preferito</label>
+            </div>
+            <div class="phone-row">
+              <select name="phone2Type" class="phone-type-select">
+                <option value="cell" ${form.phone2Type === "cell" ? "selected" : ""}>📱 Cell</option>
+                <option value="fisso" ${form.phone2Type === "fisso" ? "selected" : ""}>☎ Fisso</option>
+                <option value="altro" ${form.phone2Type === "altro" ? "selected" : ""}>Altro</option>
+              </select>
+              <input name="phone2" type="tel" value="${escapeHtml(form.phone2)}" placeholder="Numero" style="flex:1" />
+              <input name="phone2Name" value="${escapeHtml(form.phone2Name)}" placeholder="Nome (es. Ufficio)" style="flex:1" />
+            </div>
+          </div>
           <label class="field">Email<input name="email" type="email" value="${escapeHtml(form.email)}" /></label>
-          <label class="field full">Note<textarea name="notes">${escapeHtml(form.notes)}</textarea></label>
+          <label class="field full">Note<textarea name="notes" id="contact-notes">${escapeHtml(form.notes)}</textarea></label>
           <label class="field">Apr. mattina<input name="openMorning" type="time" value="${escapeHtml(form.openMorning)}" /></label>
           <label class="field">Ch. mattina<input name="closeMorning" type="time" value="${escapeHtml(form.closeMorning)}" /></label>
           <label class="field">Apr. pomeriggio<input name="openAfternoon" type="time" value="${escapeHtml(form.openAfternoon)}" /></label>
           <label class="field">Ch. pomeriggio<input name="closeAfternoon" type="time" value="${escapeHtml(form.closeAfternoon)}" /></label>
           <label class="field">Durata abituale (min)<input name="defaultDuration" type="number" min="5" step="5" value="${escapeHtml(form.defaultDuration)}" /></label>
-          <label class="field">Latitudine<input name="lat" type="number" step="0.000001" value="${escapeHtml(form.lat ?? "")}" /></label>
-          <label class="field">Longitudine<input name="lng" type="number" step="0.000001" value="${escapeHtml(form.lng ?? "")}" /></label>
+          <div class="field full">
+            <label>Coordinate GPS</label>
+            <div class="coord-actions">
+              <button type="button" class="btn" id="use-current-pos">📍 Posizione attuale</button>
+              ${state.googleMapsKey ? `<button type="button" class="btn" id="open-map-picker">🗺 Scegli sulla mappa</button>` : ""}
+            </div>
+            <div class="form-grid" style="margin-top:8px;">
+              <label class="field">Latitudine<input name="lat" id="coord-lat" type="number" step="0.000001" value="${escapeHtml(form.lat ?? "")}" /></label>
+              <label class="field">Longitudine<input name="lng" id="coord-lng" type="number" step="0.000001" value="${escapeHtml(form.lng ?? "")}" /></label>
+            </div>
+          </div>
         </div>
         <div class="actions">
           <button class="btn primary" type="submit">Salva</button>
@@ -560,7 +690,10 @@ function renderResult() {
     <section>
       <div class="section-head" style="margin-bottom:10px;">
         <div>
-          <h2>Percorso — ${escapeHtml(result.scheduledDate || "")}</h2>
+          <div class="row" style="align-items:center;gap:8px;">
+            <h2 style="margin:0;">${escapeHtml(result.name || ("Percorso — " + (result.scheduledDate || "")))}</h2>
+            ${result.id ? `<button class="btn" style="padding:2px 8px;font-size:0.85rem;" data-rename-current-route="${result.id}">✎</button>` : ""}
+          </div>
           <div class="stop-meta">${escapeHtml(summary.dayStart)} → ${escapeHtml(summary.dayEnd)} · ${summary.totalKm.toFixed(1)} km · ${euro(summary.totalCost)}</div>
         </div>
         <button class="btn" data-tab-jump="saved">▣ Giri</button>
@@ -569,24 +702,21 @@ function renderResult() {
       ${state.googleMapsKey ? `<div id="route-map" style="height:280px;border-radius:8px;border:1px solid var(--line);margin-bottom:14px;"></div>` : ""}
 
       <div class="nav-panel">
-        <div class="row" style="gap:10px;flex-wrap:wrap;">
-          <select id="nav-pref" style="flex:1;min-width:140px;">
-            <option value="google" ${pref === "google" ? "selected" : ""}>Google Maps</option>
-            <option value="apple" ${pref === "apple" ? "selected" : ""}>Apple Mappe</option>
-          </select>
-          <a class="btn primary" href="${navUrl(result, pref)}" target="_blank" rel="noopener">↗ Apri percorso completo</a>
-        </div>
+        <a class="btn primary" href="${navUrl(result, pref)}" target="_blank" rel="noopener">↗ Apri percorso completo</a>
       </div>
 
       ${renderManualOrder(result)}
 
       <div class="result-list">
         ${rows.map(row => {
-          const addr = state.addresses.find(a => String(a.id) === String(row.addressId));
+          const addr = state.allAddresses.find(a => String(a.id) === String(row.addressId));
+          const pref = preferredPhone(addr || {});
           const phone = addr?.phone || row.phone || "";
+          const phone2 = addr?.phone2 || row.phone2 || "";
           const email = addr?.email || row.email || "";
           const emailSubject = encodeURIComponent(`Appuntamento ${row.customer} - ${result.scheduledDate || ""} ore ${row.arrivalTime}`);
           const stopTitle = `${row.stopNumber}. ${escapeHtml(row.customer)}${row.location ? ` — ${escapeHtml(row.location)}` : ""}`;
+          const phoneBtn = pref ? `<a class="btn" href="tel:${escapeHtml(pref.number)}" title="${escapeHtml(pref.name || pref.number)}">${phoneIcon(pref.type)}</a>` : "";
           return `
           <article class="card result-card">
             <div class="stop-compact-head" data-expand-stop="${row.stopNumber}">
@@ -596,7 +726,7 @@ function renderResult() {
             </div>
             <div class="stop-actions-big">
               <a class="btn primary" href="${stopNavUrl(row, pref)}" target="_blank" rel="noopener">↗ Naviga</a>
-              ${phone ? `<a class="btn" href="tel:${escapeHtml(phone)}">📞</a>` : ""}
+              ${phoneBtn}
               ${email ? `<a class="btn" href="mailto:${escapeHtml(email)}?subject=${emailSubject}">✉</a>` : ""}
             </div>
             <div class="stop-details" data-stop-details="${row.stopNumber}" hidden>
@@ -607,7 +737,8 @@ function renderResult() {
                 <div><div class="metric-label">Intervento</div><strong>${minutesLabel(row.durationMinutes)}</strong></div>
                 <div><div class="metric-label">Fine</div><strong>${escapeHtml(row.serviceEndTime)}</strong></div>
               </div>
-              ${phone ? `<div class="stop-meta">📞 <a href="tel:${escapeHtml(phone)}">${escapeHtml(phone)}</a></div>` : ""}
+              ${phone ? `<div class="stop-meta">${phoneIcon(addr?.phoneType)} <a href="tel:${escapeHtml(phone)}">${escapeHtml(phone)}</a>${addr?.phoneName ? ` <span class="phone-name-badge">${escapeHtml(addr.phoneName)}</span>` : ""}${addr?.phonePreferred !== "phone2" && phone2 ? " ★" : ""}</div>` : ""}
+              ${phone2 ? `<div class="stop-meta">${phoneIcon(addr?.phone2Type)} <a href="tel:${escapeHtml(phone2)}">${escapeHtml(phone2)}</a>${addr?.phone2Name ? ` <span class="phone-name-badge">${escapeHtml(addr.phone2Name)}</span>` : ""}${addr?.phonePreferred === "phone2" ? " ★" : ""}</div>` : ""}
               ${email ? `<div class="stop-meta">✉ <a href="mailto:${escapeHtml(email)}">${escapeHtml(email)}</a></div>` : ""}
               ${row.notes ? `<div class="stop-meta" style="margin-top:6px;font-style:italic">${escapeHtml(row.notes)}</div>` : ""}
               ${warningBadges(row.warnings)}
@@ -647,14 +778,34 @@ function renderResult() {
 // ── render: settings tab ──────────────────────────────────────────────────────
 
 function renderSettings() {
+  const nav = state.navigatorPref;
+  const theme = state.themePref;
   app.innerHTML = `
     <section class="panel">
-      <h2>Tariffe</h2>
-      <form id="settings-form" class="form-grid">
-        <label class="field">€ per km<input name="kmRate" type="number" min="0" step="0.01" value="${escapeHtml(state.settings.kmRate)}" /></label>
-        <label class="field">€/ora guida<input name="driveHourRate" type="number" min="0" step="0.01" value="${escapeHtml(state.settings.driveHourRate)}" /></label>
-        <label class="field">€/ora lavoro<input name="workHourRate" type="number" min="0" step="0.01" value="${escapeHtml(state.settings.workHourRate)}" /></label>
-        <div class="field full actions"><button class="btn primary" type="submit">Salva tariffe</button></div>
+      <h2>Impostazioni</h2>
+      <form id="settings-form">
+        <h3 class="settings-section-title">Tariffe</h3>
+        <div class="form-grid">
+          <label class="field">€ per km<input name="kmRate" type="number" min="0" step="0.01" value="${escapeHtml(state.settings.kmRate)}" /></label>
+          <label class="field">€/ora guida<input name="driveHourRate" type="number" min="0" step="0.01" value="${escapeHtml(state.settings.driveHourRate)}" /></label>
+          <label class="field full">€/ora lavoro<input name="workHourRate" type="number" min="0" step="0.01" value="${escapeHtml(state.settings.workHourRate)}" /></label>
+        </div>
+
+        <h3 class="settings-section-title">Navigatore</h3>
+        <div class="settings-radio-group">
+          <label class="settings-radio"><input type="radio" name="navigatorPref" value="google" ${nav === "google" ? "checked" : ""} /> Google Maps</label>
+          <label class="settings-radio"><input type="radio" name="navigatorPref" value="apple" ${nav === "apple" ? "checked" : ""} /> Apple Mappe</label>
+          <label class="settings-radio"><input type="radio" name="navigatorPref" value="waze" ${nav === "waze" ? "checked" : ""} /> Waze</label>
+        </div>
+
+        <h3 class="settings-section-title">Tema</h3>
+        <div class="settings-radio-group">
+          <label class="settings-radio"><input type="radio" name="themePref" value="auto" ${theme === "auto" ? "checked" : ""} /> 🔄 Automatico (segue l'orario)</label>
+          <label class="settings-radio"><input type="radio" name="themePref" value="light" ${theme === "light" ? "checked" : ""} /> ☀️ Chiaro</label>
+          <label class="settings-radio"><input type="radio" name="themePref" value="dark" ${theme === "dark" ? "checked" : ""} /> 🌙 Scuro</label>
+        </div>
+
+        <div class="actions" style="margin-top:16px;"><button class="btn primary" type="submit">Salva impostazioni</button></div>
       </form>
     </section>`;
 }
@@ -684,7 +835,7 @@ function updateRouteFromForm() {
     endSameAsStart: Boolean(v.endSameAsStart),
     endLabel: v.endLabel, endAddress: v.endAddress,
     firstArrivalRequired: v.firstArrivalRequired || "",
-    selectedAddressId: v.selectedAddressId,
+    selectedAddressId: v.selectedAddressId || state.route.selectedAddressId,
     customCustomer: v.customCustomer, customLocation: v.customLocation,
     customAddress: v.customAddress, customDuration: Number(v.customDuration || 45),
     customOpenMorning: v.customOpenMorning, customCloseMorning: v.customCloseMorning,
@@ -810,7 +961,12 @@ async function toggleVoiceRecording() {
           const ta = document.querySelector("#transcript");
           if (ta) ta.value = text;
           state.route.transcript = text;
-          showToast("Testo acquisito");
+          if (state.whisperConfigured) {
+            showToast("Elaboro il comando…");
+            await applyVoiceCommand();
+          } else {
+            showToast("Testo acquisito — premi Applica");
+          }
         } catch (err) {
           showToast(err.message);
         }
@@ -832,7 +988,8 @@ async function toggleVoiceRecording() {
 async function applyVoiceCommand() {
   updateRouteFromForm();
   if (!state.route.transcript.trim()) return;
-  const parsed = await api("/api/voice/parse", { method: "POST", body: JSON.stringify({ text: state.route.transcript }) });
+  const endpoint = state.whisperConfigured ? "/api/voice/understand" : "/api/voice/parse";
+  const parsed = await api(endpoint, { method: "POST", body: JSON.stringify({ text: state.route.transcript }) });
 
   if (parsed.start) {
     state.route.startLabel = parsed.start.label || state.route.startLabel;
@@ -896,7 +1053,7 @@ async function importFromContactPicker() {
       });
       added++;
     }
-    await refreshAddresses();
+    await refreshAllData();
     render();
     showToast(added ? `${added} contatti importati` : "Nessun nuovo contatto da aggiungere");
   } catch (e) {
@@ -938,7 +1095,7 @@ async function importFromVcf(file) {
     await api("/api/addresses", { method: "POST", body: JSON.stringify(c) });
     added++;
   }
-  await refreshAddresses();
+  await refreshAllData();
   render();
   showToast(`${added} contatti importati da file`);
 }
@@ -968,7 +1125,10 @@ async function saveAddressForm(form) {
   const v = readForm(form);
   const payload = {
     customer: v.customer, location: v.location, fullAddress: v.fullAddress,
-    phone: v.phone || "", email: v.email || "", notes: v.notes,
+    phone: v.phone || "", phoneType: v.phoneType || "cell", phoneName: v.phoneName || "",
+    phone2: v.phone2 || "", phone2Type: v.phone2Type || "fisso", phone2Name: v.phone2Name || "",
+    phonePreferred: v.phonePreferred || "phone",
+    email: v.email || "", notes: v.notes,
     openMorning: v.openMorning, closeMorning: v.closeMorning,
     openAfternoon: v.openAfternoon, closeAfternoon: v.closeAfternoon,
     defaultDuration: Number(v.defaultDuration || 45),
@@ -980,7 +1140,7 @@ async function saveAddressForm(form) {
     await api("/api/addresses", { method: "POST", body: JSON.stringify(payload) });
   }
   state.addressForm = { ...emptyForm };
-  await refreshAddresses();
+  await refreshAllData();
   render();
   showToast("Contatto salvato");
 }
@@ -1029,12 +1189,92 @@ async function replanWithOrder(manualOrder) {
   }
 }
 
+// ── coordinate helpers ────────────────────────────────────────────────────────
+
+function setCoordFields(lat, lng) {
+  const latEl = document.querySelector("#coord-lat");
+  const lngEl = document.querySelector("#coord-lng");
+  if (latEl) latEl.value = Number(lat).toFixed(6);
+  if (lngEl) lngEl.value = Number(lng).toFixed(6);
+}
+
+async function useCurrentPosition() {
+  if (!navigator.geolocation) { showToast("GPS non disponibile su questo dispositivo"); return; }
+  showToast("Lettura GPS…");
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      setCoordFields(pos.coords.latitude, pos.coords.longitude);
+      showToast(`Posizione acquisita: ${pos.coords.latitude.toFixed(5)}, ${pos.coords.longitude.toFixed(5)}`);
+    },
+    () => showToast("Impossibile ottenere la posizione. Controlla i permessi GPS."),
+    { enableHighAccuracy: true, timeout: 10000 }
+  );
+}
+
+
+function openMapPicker() {
+  const latEl = document.querySelector("#coord-lat");
+  const lngEl = document.querySelector("#coord-lng");
+  const startLat = Number(latEl?.value) || 46.07;
+  const startLng = Number(lngEl?.value) || 11.12;
+  let pickedLat = startLat, pickedLng = startLng;
+
+  const modal = document.createElement("div");
+  modal.className = "map-picker-modal";
+  modal.innerHTML = `
+    <div class="map-picker-inner">
+      <div class="map-picker-header">
+        <span>Tocca la mappa per spostare il punto</span>
+        <button class="btn" id="map-picker-cancel">✕ Annulla</button>
+      </div>
+      <div id="map-picker-map"></div>
+      <div class="map-picker-footer">
+        <span id="map-picker-coords" class="stop-meta">${startLat.toFixed(5)}, ${startLng.toFixed(5)}</span>
+        <button class="btn primary" id="map-picker-confirm">✓ Usa questo punto</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+
+  loadGoogleMapsScript().then(ready => {
+    if (!ready) { showToast("Google Maps non disponibile"); modal.remove(); return; }
+    const map = new google.maps.Map(document.getElementById("map-picker-map"), {
+      center: { lat: startLat, lng: startLng }, zoom: 15,
+      mapTypeControl: false, fullscreenControl: false, streetViewControl: false
+    });
+    const marker = new google.maps.Marker({
+      position: { lat: startLat, lng: startLng }, map, draggable: true,
+      title: "Trascina per spostare"
+    });
+    const updateCoords = (lat, lng) => {
+      pickedLat = lat; pickedLng = lng;
+      const el = document.getElementById("map-picker-coords");
+      if (el) el.textContent = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+    };
+    map.addListener("click", e => { marker.setPosition(e.latLng); updateCoords(e.latLng.lat(), e.latLng.lng()); });
+    marker.addListener("dragend", e => updateCoords(e.latLng.lat(), e.latLng.lng()));
+    document.getElementById("map-picker-confirm").onclick = () => {
+      setCoordFields(pickedLat, pickedLng);
+      modal.remove();
+      showToast("Coordinate aggiornate");
+    };
+    document.getElementById("map-picker-cancel").onclick = () => modal.remove();
+  });
+}
+
 // ── events ────────────────────────────────────────────────────────────────────
 
 function bindEvents() {
   document.querySelector(".tabs").addEventListener("click", e => {
     const b = e.target.closest("[data-tab]");
-    if (b) { updateRouteFromForm(); setActiveTab(b.dataset.tab); }
+    if (b) {
+      updateRouteFromForm();
+      // Reset archive state when leaving archive tab
+      if (b.dataset.tab !== "archive") {
+        state.addressSearch = "";
+        state.archiveShowAll = false;
+      }
+      setActiveTab(b.dataset.tab);
+    }
   });
 
   app.addEventListener("input", e => {
@@ -1048,7 +1288,15 @@ function bindEvents() {
     // archive search
     if (e.target.id === "archive-search") {
       state.addressSearch = e.target.value;
-      refreshAddresses().then(() => renderArchive());
+      state.archiveShowAll = Boolean(e.target.value);
+      refreshAllData().then(() => renderArchive());
+    }
+    // stop autocomplete
+    if (e.target.id === "stop-search") {
+      state.stopSearchText = e.target.value;
+      state.route.selectedAddressId = "";
+      const sug = document.querySelector("#stop-suggestions");
+      if (sug) sug.innerHTML = renderStopSuggestions();
     }
     // stop filter
     if (e.target.id === "stop-filter") {
@@ -1064,12 +1312,6 @@ function bindEvents() {
         else aside.insertAdjacentHTML("beforeend", newHtml);
         if (filterInput) filterInput.focus();
       }
-    }
-    // navigator preference
-    if (e.target.id === "nav-pref") {
-      state.navigatorPref = e.target.value;
-      localStorage.setItem("navigatorPref", state.navigatorPref);
-      renderResult();
     }
   });
 
@@ -1092,6 +1334,53 @@ function bindEvents() {
 
     const tabJump = e.target.closest("[data-tab-jump]");
     if (tabJump) { setActiveTab(tabJump.dataset.tabJump); return; }
+
+    // suggestion item selected
+    const sugItem = e.target.closest("[data-suggest-id]");
+    if (sugItem) {
+      const id = sugItem.dataset.suggestId;
+      const addr = state.allAddresses.find(a => String(a.id) === id);
+      if (addr) {
+        state.route.selectedAddressId = id;
+        state.stopSearchText = addressName(addr);
+        const inp = document.querySelector("#stop-search");
+        if (inp) inp.value = state.stopSearchText;
+        const hidden = document.querySelector("#selected-address-id");
+        if (hidden) hidden.value = id;
+        const sug = document.querySelector("#stop-suggestions");
+        if (sug) sug.innerHTML = "";
+      }
+      return;
+    }
+
+    const renameCurrentRoute = e.target.closest("[data-rename-current-route]");
+    if (renameCurrentRoute) {
+      const name = window.prompt("Nuovo nome giro:", state.result?.name || "");
+      if (!name) return;
+      const id = renameCurrentRoute.dataset.renameCurrentRoute;
+      await api(`/api/routes/${id}`, { method: "PUT", body: JSON.stringify({ name }) });
+      if (state.result) state.result.name = name;
+      await refreshSavedRoutes();
+      render();
+      return;
+    }
+
+    // show all archive contacts
+    if (e.target.closest("#show-all-addresses")) {
+      state.archiveShowAll = true;
+      await refreshAllData();
+      renderArchive();
+      return;
+    }
+
+    // hide / reset archive
+    if (e.target.closest("#hide-all-addresses")) {
+      state.archiveShowAll = false;
+      state.addressSearch = "";
+      state.addresses = [];
+      renderArchive();
+      return;
+    }
 
     if (e.target.closest("#refresh-routes")) {
       await refreshSavedRoutes();
@@ -1142,9 +1431,11 @@ function bindEvents() {
 
     if (e.target.closest("#add-saved-stop")) {
       updateRouteFromForm();
-      const addr = state.addresses.find(a => String(a.id) === String(state.route.selectedAddressId));
-      if (!addr) { showToast("Seleziona un indirizzo"); return; }
+      const addr = state.allAddresses.find(a => String(a.id) === String(state.route.selectedAddressId));
+      if (!addr) { showToast("Seleziona prima un contatto dalla lista"); return; }
       state.route.stops.push(addressToStop(addr));
+      state.route.selectedAddressId = "";
+      state.stopSearchText = "";
       render();
       return;
     }
@@ -1162,7 +1453,7 @@ function bindEvents() {
           defaultDuration: state.route.customDuration
         })
       }).catch(() => null);
-      await refreshAddresses();
+      await refreshAllData();
       state.route.stops.push({
         uid: crypto.randomUUID(),
         addressId: saved?.id, customer: state.route.customCustomer, location: state.route.customLocation,
@@ -1186,9 +1477,10 @@ function bindEvents() {
 
     const editAddr = e.target.closest("[data-edit-address]");
     if (editAddr) {
-      const addr = state.addresses.find(a => String(a.id) === editAddr.dataset.editAddress);
+      const addr = state.allAddresses.find(a => String(a.id) === editAddr.dataset.editAddress) || state.addresses.find(a => String(a.id) === editAddr.dataset.editAddress);
       state.addressForm = { ...emptyForm, ...addr };
       render();
+      requestAnimationFrame(() => document.getElementById("address-form")?.scrollIntoView({ behavior: "smooth", block: "start" }));
       return;
     }
 
@@ -1196,7 +1488,7 @@ function bindEvents() {
     if (delAddr) {
       if (!confirm("Eliminare questo contatto?")) return;
       await api(`/api/addresses/${delAddr.dataset.deleteAddress}`, { method: "DELETE" });
-      await refreshAddresses();
+      await refreshAllData();
       render();
       return;
     }
@@ -1206,6 +1498,9 @@ function bindEvents() {
       render();
       return;
     }
+
+    if (e.target.closest("#use-current-pos")) { useCurrentPosition(); return; }
+    if (e.target.closest("#open-map-picker")) { openMapPicker(); return; }
 
     if (e.target.closest("#import-contacts")) {
       await importFromContactPicker();
@@ -1243,6 +1538,22 @@ function bindEvents() {
     }
   });
 
+  // Auto-detect phone/email from notes
+  app.addEventListener("blur", e => {
+    if (e.target.id !== "contact-notes") return;
+    const text = e.target.value || "";
+    const emailField = document.querySelector("#address-form [name=email]");
+    const phoneField = document.querySelector("#address-form [name=phone]");
+    if (emailField && !emailField.value) {
+      const emailMatch = text.match(/[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/);
+      if (emailMatch) { emailField.value = emailMatch[0]; showToast("Email trovata nelle note"); }
+    }
+    if (phoneField && !phoneField.value) {
+      const phoneMatch = text.match(/(?:\+39[\s.-]?)?(?:0\d{1,4}[\s.\-]?\d{4,8}|3\d{2}[\s.\-]?\d{6,7})/);
+      if (phoneMatch) { phoneField.value = phoneMatch[0].trim(); showToast("Telefono trovato nelle note"); }
+    }
+  }, true);
+
   app.addEventListener("change", e => {
     if (e.target.id === "vcf-input") {
       const file = e.target.files?.[0];
@@ -1257,8 +1568,15 @@ function bindEvents() {
     }
     if (e.target.id === "settings-form") {
       const v = readForm(e.target);
-      state.settings = await api("/api/settings", { method: "PUT", body: JSON.stringify({ kmRate: Number(v.kmRate), driveHourRate: Number(v.driveHourRate), workHourRate: Number(v.workHourRate) }) });
-      showToast("Tariffe salvate");
+      state.settings = await api("/api/settings", { method: "PUT", body: JSON.stringify({
+        kmRate: Number(v.kmRate), driveHourRate: Number(v.driveHourRate), workHourRate: Number(v.workHourRate),
+        navigatorPref: v.navigatorPref || "google", themePref: v.themePref || "auto"
+      }) });
+      state.navigatorPref = state.settings.navigatorPref;
+      localStorage.setItem("navigatorPref", state.navigatorPref);
+      state.themePref = state.settings.themePref;
+      applyTheme();
+      showToast("Impostazioni salvate");
     }
   });
 }
