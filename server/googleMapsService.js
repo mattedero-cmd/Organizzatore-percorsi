@@ -119,7 +119,7 @@ function placesScore(place) {
   return rating * Math.log10(reviews + 1);
 }
 
-export async function findNearbyRestStop(lat, lng, radiusM = 2000) {
+export async function findNearbyRestStop(lat, lng, radiusM = 800) {
   if (!lat || !lng) return null;
   const key = API_KEY();
   if (!key) return null;
@@ -127,8 +127,11 @@ export async function findNearbyRestStop(lat, lng, radiusM = 2000) {
   const cacheKey = placesCacheKey(lat, lng);
   if (placesCache.has(cacheKey)) return placesCache.get(cacheKey);
 
+  const EXCLUDE_KEYWORDS = /hotel|alberg|agritur|b&b|bed|hostel|ostello|ristorante|pizzeria|trattoria/i;
+
   try {
-    const url = `${BASE}/place/nearbysearch/json?location=${lat},${lng}&radius=${radiusM}&type=cafe&language=it&key=${key}`;
+    // Search for bars — more relevant for a quick rest stop than generic cafés
+    const url = `${BASE}/place/nearbysearch/json?location=${lat},${lng}&radius=${radiusM}&type=bar&language=it&key=${key}`;
     const res = await fetch(url, { signal: AbortSignal.timeout(6000) });
     const data = await res.json();
     console.log("[Places]", lat.toFixed(4), lng.toFixed(4), "→ status:", data.status, "results:", data.results?.length ?? 0);
@@ -138,7 +141,7 @@ export async function findNearbyRestStop(lat, lng, radiusM = 2000) {
     }
 
     const best = data.results
-      .filter(p => p.rating && p.user_ratings_total >= 5)
+      .filter(p => p.rating && p.user_ratings_total >= 5 && !EXCLUDE_KEYWORDS.test(p.name))
       .sort((a, b) => placesScore(b) - placesScore(a))[0];
 
     if (!best) { placesCache.set(cacheKey, null); return null; }

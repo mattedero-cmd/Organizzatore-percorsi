@@ -240,7 +240,15 @@ function routePoints(result) {
   const points = [];
   const s = result.start;
   if (s) points.push(s.address || s.fullAddress || s.label || "");
-  for (const row of (result.rows || [])) points.push(row.address || `${row.customer} ${row.location || ""}`);
+  for (const row of (result.rows || [])) {
+    if (row.type === "lunch") continue; // lunch has no physical location
+    if (row.type === "rest") {
+      if (row.lat && row.lng) points.push(`${row.lat},${row.lng}`);
+      else if (row.address) points.push(row.address);
+      continue;
+    }
+    points.push(row.address || `${row.customer} ${row.location || ""}`);
+  }
   const e = result.end;
   if (e) points.push(e.address || e.fullAddress || e.label || "");
   return points.filter(Boolean);
@@ -328,19 +336,35 @@ async function renderGoogleMap(result) {
   let startCoord = result.start?.lat ? { lat: Number(result.start.lat), lng: Number(result.start.lng) } : await geocodeAddr(result.start);
   let endCoord = result.end?.lat ? { lat: Number(result.end.lat), lng: Number(result.end.lng) } : await geocodeAddr(result.end);
 
+  const addRestMarker = (lat, lng, title) => {
+    if (!lat || !lng) return;
+    const pos = { lat: Number(lat), lng: Number(lng) };
+    new google.maps.Marker({ position: pos, map, title,
+      label: { text: "☕", fontSize: "14px" },
+      icon: { path: google.maps.SymbolPath.CIRCLE, scale: 10,
+              fillColor: "#7c3aed", fillOpacity: 0.9, strokeColor: "#fff", strokeWeight: 2 }
+    });
+    bounds.extend(pos);
+    hasPoints = true;
+  };
+
   if (startCoord) addMarker(startCoord.lat, startCoord.lng, "P", result.start?.label || "Partenza");
   for (const row of rows) {
-    if (row.type) continue; // skip lunch/rest break rows — not real stops
+    if (row.type === "lunch") continue;
+    if (row.type === "rest") { addRestMarker(row.lat, row.lng, row.customer); continue; }
     addMarker(row.lat, row.lng, String(row.stopNumber), row.customer);
   }
   if (endCoord) addMarker(endCoord.lat, endCoord.lng, "A", result.end?.label || "Arrivo");
 
   if (hasPoints) map.fitBounds(bounds);
 
-  // Draw route using Google Maps Directions Service (browser-side)
+  // Draw route — include rest stops as waypoints so the polyline passes through them
   const allPoints = [];
   if (startCoord) allPoints.push(startCoord);
-  for (const row of rows) if (!row.type && row.lat) allPoints.push({ lat: Number(row.lat), lng: Number(row.lng) });
+  for (const row of rows) {
+    if (row.type === "lunch") continue;
+    if (row.lat && row.lng) allPoints.push({ lat: Number(row.lat), lng: Number(row.lng) });
+  }
   if (endCoord) allPoints.push(endCoord);
 
   const drawFallbackPolyline = () => {
