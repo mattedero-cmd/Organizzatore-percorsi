@@ -38,6 +38,8 @@ function rowToAddress(row) {
     customer: row.customer ?? "",
     location: row.location ?? "",
     fullAddress: row.full_address ?? "",
+    phone: row.phone ?? "",
+    email: row.email ?? "",
     notes: row.notes ?? "",
     openMorning: row.open_morning ?? "",
     closeMorning: row.close_morning ?? "",
@@ -251,12 +253,20 @@ async function tableColumns(tableName) {
 }
 
 async function migratePlannedRoutes() {
-  const columns = await tableColumns("planned_routes");
-  if (!columns.includes("scheduled_date")) {
+  const routeCols = await tableColumns("planned_routes");
+  if (!routeCols.includes("scheduled_date")) {
     await runSql("ALTER TABLE planned_routes ADD COLUMN scheduled_date TEXT DEFAULT '';");
   }
-  if (!columns.includes("weather_captured_at")) {
+  if (!routeCols.includes("weather_captured_at")) {
     await runSql("ALTER TABLE planned_routes ADD COLUMN weather_captured_at TEXT DEFAULT '';");
+  }
+
+  const addrCols = await tableColumns("addresses");
+  if (!addrCols.includes("phone")) {
+    await runSql("ALTER TABLE addresses ADD COLUMN phone TEXT DEFAULT '';");
+  }
+  if (!addrCols.includes("email")) {
+    await runSql("ALTER TABLE addresses ADD COLUMN email TEXT DEFAULT '';");
   }
 }
 
@@ -278,35 +288,24 @@ export async function getAddress(id) {
 }
 
 export async function createAddress(address) {
+  const cols = `customer, location, full_address, phone, email, notes, open_morning, close_morning, open_afternoon, close_afternoon, default_duration, lat, lng`;
+  const vals = `${sqlValue(address.customer || "Senza nome")}, ${sqlValue(address.location || "")}, ${sqlValue(address.fullAddress || address.full_address || "")}, ${sqlValue(address.phone || "")}, ${sqlValue(address.email || "")}, ${sqlValue(address.notes || "")}, ${sqlValue(address.openMorning || address.open_morning || "")}, ${sqlValue(address.closeMorning || address.close_morning || "")}, ${sqlValue(address.openAfternoon || address.open_afternoon || "")}, ${sqlValue(address.closeAfternoon || address.close_afternoon || "")}, ${sqlValue(Number(address.defaultDuration || address.default_duration || 45))}, ${sqlValue(address.lat === undefined ? null : Number(address.lat))}, ${sqlValue(address.lng === undefined ? null : Number(address.lng))}`;
   if (dbMode === "postgres") {
-    const rows = await runSql(`
-      INSERT INTO addresses (customer, location, full_address, notes, open_morning, close_morning, open_afternoon, close_afternoon, default_duration, lat, lng)
-      VALUES (${sqlValue(address.customer || "Senza nome")}, ${sqlValue(address.location || "")}, ${sqlValue(address.fullAddress || address.full_address || "")}, ${sqlValue(address.notes || "")}, ${sqlValue(address.openMorning || address.open_morning || "")}, ${sqlValue(address.closeMorning || address.close_morning || "")}, ${sqlValue(address.openAfternoon || address.open_afternoon || "")}, ${sqlValue(address.closeAfternoon || address.close_afternoon || "")}, ${sqlValue(Number(address.defaultDuration || address.default_duration || 45))}, ${sqlValue(address.lat === undefined ? null : Number(address.lat))}, ${sqlValue(address.lng === undefined ? null : Number(address.lng))})
-      RETURNING *;
-    `, true);
+    const rows = await runSql(`INSERT INTO addresses (${cols}) VALUES (${vals}) RETURNING *;`, true);
     return rowToAddress(rows[0]);
   }
-  await runSql(`
-    INSERT INTO addresses (customer, location, full_address, notes, open_morning, close_morning, open_afternoon, close_afternoon, default_duration, lat, lng)
-    VALUES (${sqlValue(address.customer || "Senza nome")}, ${sqlValue(address.location || "")}, ${sqlValue(address.fullAddress || address.full_address || "")}, ${sqlValue(address.notes || "")}, ${sqlValue(address.openMorning || address.open_morning || "")}, ${sqlValue(address.closeMorning || address.close_morning || "")}, ${sqlValue(address.openAfternoon || address.open_afternoon || "")}, ${sqlValue(address.closeAfternoon || address.close_afternoon || "")}, ${sqlValue(Number(address.defaultDuration || address.default_duration || 45))}, ${sqlValue(address.lat === undefined ? null : Number(address.lat))}, ${sqlValue(address.lng === undefined ? null : Number(address.lng))});
-  `);
+  await runSql(`INSERT INTO addresses (${cols}) VALUES (${vals});`);
   const rows = await runSql("SELECT * FROM addresses ORDER BY id DESC LIMIT 1;", true);
   return rowToAddress(rows[0]);
 }
 
 export async function updateAddress(id, address) {
+  const setClause = `customer = ${sqlValue(address.customer || "Senza nome")}, location = ${sqlValue(address.location || "")}, full_address = ${sqlValue(address.fullAddress || "")}, phone = ${sqlValue(address.phone || "")}, email = ${sqlValue(address.email || "")}, notes = ${sqlValue(address.notes || "")}, open_morning = ${sqlValue(address.openMorning || "")}, close_morning = ${sqlValue(address.closeMorning || "")}, open_afternoon = ${sqlValue(address.openAfternoon || "")}, close_afternoon = ${sqlValue(address.closeAfternoon || "")}, default_duration = ${sqlValue(Number(address.defaultDuration || 45))}, lat = ${sqlValue(address.lat === undefined ? null : Number(address.lat))}, lng = ${sqlValue(address.lng === undefined ? null : Number(address.lng))}`;
   if (dbMode === "postgres") {
-    const rows = await runSql(`
-      UPDATE addresses SET customer = ${sqlValue(address.customer || "Senza nome")}, location = ${sqlValue(address.location || "")}, full_address = ${sqlValue(address.fullAddress || "")}, notes = ${sqlValue(address.notes || "")}, open_morning = ${sqlValue(address.openMorning || "")}, close_morning = ${sqlValue(address.closeMorning || "")}, open_afternoon = ${sqlValue(address.openAfternoon || "")}, close_afternoon = ${sqlValue(address.closeAfternoon || "")}, default_duration = ${sqlValue(Number(address.defaultDuration || 45))}, lat = ${sqlValue(address.lat === undefined ? null : Number(address.lat))}, lng = ${sqlValue(address.lng === undefined ? null : Number(address.lng))}, updated_at = NOW()
-      WHERE id = ${sqlValue(Number(id))}
-      RETURNING *;
-    `, true);
+    const rows = await runSql(`UPDATE addresses SET ${setClause}, updated_at = NOW() WHERE id = ${sqlValue(Number(id))} RETURNING *;`, true);
     return rows[0] ? rowToAddress(rows[0]) : null;
   }
-  await runSql(`
-    UPDATE addresses SET customer = ${sqlValue(address.customer || "Senza nome")}, location = ${sqlValue(address.location || "")}, full_address = ${sqlValue(address.fullAddress || "")}, notes = ${sqlValue(address.notes || "")}, open_morning = ${sqlValue(address.openMorning || "")}, close_morning = ${sqlValue(address.closeMorning || "")}, open_afternoon = ${sqlValue(address.openAfternoon || "")}, close_afternoon = ${sqlValue(address.closeAfternoon || "")}, default_duration = ${sqlValue(Number(address.defaultDuration || 45))}, lat = ${sqlValue(address.lat === undefined ? null : Number(address.lat))}, lng = ${sqlValue(address.lng === undefined ? null : Number(address.lng))}, updated_at = CURRENT_TIMESTAMP
-    WHERE id = ${sqlValue(Number(id))};
-  `);
+  await runSql(`UPDATE addresses SET ${setClause}, updated_at = CURRENT_TIMESTAMP WHERE id = ${sqlValue(Number(id))};`);
   return getAddress(id);
 }
 

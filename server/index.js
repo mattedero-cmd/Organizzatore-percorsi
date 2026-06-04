@@ -19,7 +19,7 @@ import {
 } from "./db.js";
 import { loadEnv } from "./env.js";
 import { planRoute } from "./planner.js";
-import { routeShape } from "./mapService.js";
+import { routeShape } from "./googleMapsService.js";
 import { parseVoiceCommand } from "./voiceParser.js";
 import { attachWeather, shouldRefreshWeather } from "./weatherService.js";
 
@@ -105,11 +105,14 @@ async function handleApi(request, response) {
     if (method === "GET" && url.pathname === "/api/health") {
       return sendJson(response, 200, {
         ok: true,
-        mapApiConfigured: Boolean(process.env.MAPQUEST_API_KEY || process.env.OPENROUTESERVICE_API_KEY),
-        mapProviders: {
-          mapQuest: Boolean(process.env.MAPQUEST_API_KEY),
-          openRouteService: Boolean(process.env.OPENROUTESERVICE_API_KEY)
-        }
+        mapApiConfigured: Boolean(process.env.GOOGLE_MAPS_API_KEY),
+        whisperConfigured: Boolean(process.env.OPENAI_API_KEY)
+      });
+    }
+
+    if (method === "GET" && url.pathname === "/api/config") {
+      return sendJson(response, 200, {
+        googleMapsKey: process.env.GOOGLE_MAPS_API_KEY || ""
       });
     }
 
@@ -150,7 +153,7 @@ async function handleApi(request, response) {
       const body = await parseBody(request);
       const settings = await getSettings();
       let route = await planRoute(body, settings);
-      route = await attachWeather(route);
+      route = await attachWeather(route, { rowTimeoutMs: 3000 });
       const saved = await saveRoute({
         ...route,
         name: body.name || "Percorso giornaliero",
@@ -179,7 +182,10 @@ async function handleApi(request, response) {
       if (!stored) return sendJson(response, 404, { error: "Giro non trovato" });
       let route = { ...stored.payload, id: stored.id };
       if (shouldRefreshWeather(route)) {
-        route = await attachWeather(route);
+        route = await attachWeather(route, {
+          existingWeather: route.weather || [],
+          rowTimeoutMs: 3000
+        });
         await updateRoutePayload(stored.id, route);
       }
       return sendJson(response, 200, route);
@@ -201,6 +207,36 @@ async function handleApi(request, response) {
       const body = await parseBody(request);
       const addresses = await listAddresses("");
       return sendJson(response, 200, parseVoiceCommand(body.text || "", addresses));
+    }
+
+    if (method === "POST" && url.pathname === "/api/voice/transcribe") {
+      if (!process.env.OPENAI_API_KEY) {
+        return sendJson(response, 400, { error: "OPENAI_API_KEY non configurata" });
+      }
+      const chunks = [];
+      await new Promise((resolve, reject) => {
+        request.on("data", chunk => chunks.push(chunk));
+        request.on("end", resolve);
+        request.on("error", reject);
+      });
+      const audioBuffer = Buffer.concat(chunks);
+      if (!audioBuffer.length) return sendJson(response, 400, { error: "Audio vuoto" });
+      const contentType = request.headers["content-type"] || "audio/webm";
+      const form = new FormData();
+      form.append("file", new Blob([audioBuffer], { type: contentType }), "audio.webm");
+      form.append("model", "whisper-1");
+      form.append("language", "it");
+      const oaiRes = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
+        body: form
+      });
+      if (!oaiRes.ok) {
+        const err = await oaiRes.json().catch(() => ({}));
+        return sendJson(response, 500, { error: err.error?.message || "Errore Whisper" });
+      }
+      const data = await oaiRes.json();
+      return sendJson(response, 200, { text: data.text || "" });
     }
 
     return sendJson(response, 404, { error: "Endpoint non trovato" });

@@ -91,7 +91,11 @@ const state = {
   result: null,
   manualOrderRows: null,
   planning: false,
-  stopFilter: ""
+  stopFilter: "",
+  whisperConfigured: false,
+  voiceRecording: false,
+  _mediaRecorder: null,
+  _audioChunks: []
 };
 
 // ── theme ────────────────────────────────────────────────────────────────────
@@ -126,6 +130,7 @@ async function loadInitialData() {
     api("/api/settings").catch(() => state.settings)
   ]);
   state.mapApiConfigured = health.mapApiConfigured || false;
+  state.whisperConfigured = health.whisperConfigured || false;
   state.googleMapsKey = config.googleMapsKey || "";
   state.settings = settings;
   document.querySelector("#map-status").textContent = state.mapApiConfigured ? "Google Maps" : "Stima locale";
@@ -360,10 +365,28 @@ function renderRoute() {
           <button type="button" class="btn primary" id="plan-route">${state.planning ? "Calcolo in corso…" : "→ Ottimizza e salva"}</button>
         </div>
 
-        <h3>Comando vocale</h3>
+        <div class="row" style="align-items:center;gap:8px;margin-bottom:6px;">
+          <h3 style="margin:0">Comando vocale</h3>
+          <details class="voice-help-wrap">
+            <summary class="btn ghost" style="min-height:28px;padding:0 8px;font-size:0.78rem;list-style:none">❓ Comandi</summary>
+            <div class="voice-help-panel">
+              <ul>
+                <li><b>aggiungi [nome cliente]</b> — aggiunge tappa dall'archivio</li>
+                <li><b>aggiungi X e aggiungi Y</b> — più tappe in un comando</li>
+                <li><b>rimuovi [nome cliente]</b> — rimuove la tappa</li>
+                <li><b>ottimizza</b> · <b>salva e vai</b> — calcola il percorso</li>
+                <li><b>partenza alle 8</b> — cambia orario di partenza</li>
+                <li><b>primo arrivo alle 9:30</b> — orario primo cliente</li>
+                <li><b>in anticipo di 10 minuti</b> — minuti prima apertura</li>
+                <li><b>per il 10 giugno</b> · <b>domani</b> — cambia la data</li>
+                <li><b>parto da [luogo]</b> — cambia punto di partenza</li>
+              </ul>
+            </div>
+          </details>
+        </div>
         <label class="field"><textarea name="transcript" id="transcript">${escapeHtml(r.transcript)}</textarea></label>
         <div class="actions">
-          <button type="button" class="btn" id="listen-command">● Avvia voce</button>
+          <button type="button" class="btn${state.voiceRecording ? " recording" : ""}" id="listen-command">${state.voiceRecording ? "■ Stop" : "● Avvia"}</button>
           <button type="button" class="btn" id="apply-command">✓ Applica</button>
         </div>
       </form>
@@ -721,7 +744,31 @@ async function planCurrentRoute() {
 
 // ── voice ─────────────────────────────────────────────────────────────────────
 
-function startSpeechRecognition() {
+function updateVoiceButton() {
+  const btn = document.querySelector("#listen-command");
+  if (!btn) return;
+  if (state.voiceRecording) {
+    btn.textContent = "■ Stop";
+    btn.classList.add("recording");
+  } else {
+    btn.textContent = "● Avvia";
+    btn.classList.remove("recording");
+  }
+}
+
+async function transcribeBlob(blob, mimeType) {
+  showToast("Trascrizione in corso…");
+  const res = await fetch("/api/voice/transcribe", {
+    method: "POST",
+    headers: { "Content-Type": mimeType },
+    body: blob
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Errore trascrizione");
+  return data.text || "";
+}
+
+function startSpeechRecognitionFallback() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SR) { showToast("Riconoscimento vocale non disponibile"); return; }
   const rec = new SR();
@@ -737,15 +784,86 @@ function startSpeechRecognition() {
   rec.start();
 }
 
+async function toggleVoiceRecording() {
+  // Stop ongoing recording
+  if (state.voiceRecording && state._mediaRecorder) {
+    state._mediaRecorder.stop();
+    return;
+  }
+
+  // Use Whisper if configured and MediaRecorder available
+  if (state.whisperConfigured && window.MediaRecorder && navigator.mediaDevices?.getUserMedia) {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      state._audioChunks = [];
+      const mimeType = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg"]
+        .find(t => MediaRecorder.isTypeSupported(t)) || "audio/webm";
+      const mr = new MediaRecorder(stream, { mimeType });
+      mr.ondataavailable = e => { if (e.data.size > 0) state._audioChunks.push(e.data); };
+      mr.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop());
+        state.voiceRecording = false;
+        updateVoiceButton();
+        try {
+          const blob = new Blob(state._audioChunks, { type: mimeType });
+          const text = await transcribeBlob(blob, mimeType);
+          const ta = document.querySelector("#transcript");
+          if (ta) ta.value = text;
+          state.route.transcript = text;
+          showToast("Testo acquisito");
+        } catch (err) {
+          showToast(err.message);
+        }
+      };
+      state._mediaRecorder = mr;
+      mr.start();
+      state.voiceRecording = true;
+      updateVoiceButton();
+      return;
+    } catch {
+      // mic permission denied or not available — fall through
+    }
+  }
+
+  // Fallback: Web Speech API
+  startSpeechRecognitionFallback();
+}
+
 async function applyVoiceCommand() {
   updateRouteFromForm();
   if (!state.route.transcript.trim()) return;
   const parsed = await api("/api/voice/parse", { method: "POST", body: JSON.stringify({ text: state.route.transcript }) });
-  if (parsed.start) { state.route.startLabel = parsed.start.label || state.route.startLabel; state.route.startAddress = parsed.start.address || state.route.startAddress; }
+
+  if (parsed.start) {
+    state.route.startLabel = parsed.start.label || state.route.startLabel;
+    state.route.startAddress = parsed.start.address || state.route.startAddress;
+  }
   if (parsed.startTime) state.route.startTime = parsed.startTime;
-  if (parsed.end) { state.route.endSameAsStart = false; state.route.endLabel = parsed.end.label || state.route.endLabel; state.route.endAddress = parsed.end.address || state.route.endAddress; }
-  for (const stop of parsed.stops || []) state.route.stops.push({ ...stop, uid: stop.uid || crypto.randomUUID() });
-  showToast(parsed.needsConfirmation?.length ? `Da confermare: ${parsed.needsConfirmation.join(", ")}` : "Comando applicato");
+  if (parsed.firstArrivalTime) state.route.firstArrivalTime = parsed.firstArrivalTime;
+  if (parsed.arrivalLeadMinutes != null) state.route.arrivalLeadMinutes = parsed.arrivalLeadMinutes;
+  if (parsed.scheduledDate) state.route.scheduledDate = parsed.scheduledDate;
+  if (parsed.end) {
+    state.route.endSameAsStart = false;
+    state.route.endLabel = parsed.end.label || state.route.endLabel;
+    state.route.endAddress = parsed.end.address || state.route.endAddress;
+  }
+  for (const stop of parsed.stops || []) state.route.stops.push({ ...stop, uid: crypto.randomUUID() });
+  for (const rem of parsed.removeStops || []) {
+    state.route.stops = state.route.stops.filter(s => {
+      if (rem.id && s.addressId && String(s.addressId) === String(rem.id)) return false;
+      const a = `${rem.customer} ${rem.location || ""}`.toLowerCase().trim();
+      const b = `${s.customer} ${s.location || ""}`.toLowerCase().trim();
+      return a !== b;
+    });
+  }
+
+  const msg = parsed.needsConfirmation?.length
+    ? `Da confermare: ${parsed.needsConfirmation.join(", ")}`
+    : parsed.removeStops?.length
+    ? `${parsed.removeStops.length} tappa rimossa`
+    : "Comando applicato";
+  showToast(msg);
+
   if (parsed.action === "optimize") await planCurrentRoute();
   else render();
 }
@@ -1060,7 +1178,7 @@ function bindEvents() {
     }
 
     if (e.target.closest("#plan-route")) { await planCurrentRoute(); return; }
-    if (e.target.closest("#listen-command")) { startSpeechRecognition(); return; }
+    if (e.target.closest("#listen-command")) { toggleVoiceRecording(); return; }
     if (e.target.closest("#apply-command")) {
       try { await applyVoiceCommand(); } catch (err) { showToast(err.message); }
       return;
