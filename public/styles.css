@@ -401,6 +401,22 @@ textarea:focus {
   gap: 10px;
 }
 
+.saved-stops-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.saved-stop-chip {
+  font-size: 0.78rem;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  color: var(--muted);
+  white-space: nowrap;
+}
+
 .archive-card,
 .saved-card {
   display: grid;

@@ -81,6 +81,7 @@ function safeJson(value, fallback = null) {
 }
 
 function rowToRouteSummary(row) {
+  const payload = safeJson(row.payload_json, {});
   return {
     id: row.id,
     name: row.name || "Giro salvato",
@@ -96,7 +97,8 @@ function rowToRouteSummary(row) {
     totalWorkMinutes: Number(row.total_work_minutes || 0),
     totalCost: Number(row.total_cost || 0),
     weatherCapturedAt: row.weather_captured_at || "",
-    createdAt: row.created_at
+    createdAt: row.created_at,
+    plannedStops: (payload.plannedStops || payload.rows || []).filter(s => !s.type).map(s => ({ customer: s.customer || "", location: s.location || "", addressId: s.addressId, stopUid: s.uid || s.stopUid, stopPart: s.stopPart }))
   };
 }
 

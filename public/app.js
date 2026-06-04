@@ -548,6 +548,7 @@ function renderSaved() {
             <p class="stop-title">${escapeHtml(route.name)}</p>
             <div class="stop-meta">${escapeHtml(route.scheduledDate || "Senza data")} · ${escapeHtml(route.startTime || "--:--")} · ${Number(route.totalKm).toFixed(1)} km · ${euro(route.totalCost)}</div>
             <div class="stop-meta">${escapeHtml(route.startLabel || "—")} → ${escapeHtml(route.endLabel || "—")}</div>
+            ${route.plannedStops?.length ? `<div class="saved-stops-list">${route.plannedStops.filter((s, i, arr) => !s.stopPart || s.stopPart === "morning" || arr.findIndex(x => x.addressId === s.addressId) === i).map((s, i) => `<span class="saved-stop-chip">${i + 1}. ${escapeHtml(s.customer)}${s.location ? ` <span style="opacity:.6">— ${escapeHtml(s.location)}</span>` : ""}</span>`).join("")}</div>` : ""}
             <div class="actions">
               <button class="btn primary" data-open-route="${route.id}">→ Apri</button>
               <button class="btn" data-rename-route="${route.id}">✎</button>
@@ -745,7 +746,10 @@ function renderResult() {
           </div>
           <div class="stop-meta">${escapeHtml(summary.dayStart)} → ${escapeHtml(summary.dayEnd)} · ${summary.totalKm.toFixed(1)} km · ${euro(summary.totalCost)}</div>
         </div>
-        <button class="btn" data-tab-jump="saved">▣ Giri</button>
+        <div class="row" style="gap:8px;flex-wrap:wrap;">
+          <button class="btn" data-tab-jump="saved">▣ Giri</button>
+          <button class="btn${result.rows?.some(r => r.type === "lunch") ? " primary" : ""}" id="toggle-lunch-break" title="${result.rows?.some(r => r.type === "lunch") ? "Rimuovi pausa pranzo" : "Aggiungi pausa pranzo"}">🍽 ${result.rows?.some(r => r.type === "lunch") ? "Togli pranzo" : "Aggiungi pranzo"}</button>
+        </div>
       </div>
 
       ${state.googleMapsKey ? `<div id="route-map" style="height:280px;border-radius:8px;border:1px solid var(--line);margin-bottom:14px;"></div>` : ""}
@@ -1444,6 +1448,55 @@ function bindEvents() {
         if (hidden) hidden.value = id;
         const sug = document.querySelector("#stop-suggestions");
         if (sug) sug.innerHTML = "";
+      }
+      return;
+    }
+
+    if (e.target.closest("#toggle-lunch-break")) {
+      if (!state.result) return;
+      const hasLunch = state.result.rows?.some(r => r.type === "lunch");
+      // Toggle lunch break by replanning with inverted setting
+      const result = normalizeSavedRoute(state.result);
+      const customerRows = result.rows.filter(r => !r.type);
+      state.planning = true;
+      render();
+      try {
+        state.result = await api("/api/plan", {
+          method: "POST",
+          body: JSON.stringify({
+            name: result.name || "Percorso giornaliero",
+            scheduledDate: result.scheduledDate,
+            start: result.start,
+            end: result.end,
+            startTime: result.startTime,
+            timingMode: result.timingMode,
+            arrivalLeadMinutes: result.arrivalLeadMinutes,
+            firstArrivalTime: result.firstArrivalTime,
+            firstArrivalRequired: result.firstArrivalRequired,
+            rates: state.settings,
+            manualOrder: true,
+            lunchBreak: !hasLunch,
+            lunchBreakMinutes: state.settings.lunchBreakMinutes || 45,
+            stops: customerRows.filter((r, i, arr) => !r.stopPart || arr.findIndex(x => x.stopUid === r.stopUid) === i).map(row => ({
+              uid: row.stopUid || crypto.randomUUID(),
+              addressId: row.addressId,
+              customer: row.customer, location: row.location,
+              fullAddress: row.address, notes: row.notes,
+              openMorning: row.openMorning, closeMorning: row.closeMorning,
+              openAfternoon: row.openAfternoon, closeAfternoon: row.closeAfternoon,
+              durationMinutes: (row.stopPart === "morning" ? (customerRows.filter(x => x.stopUid === row.stopUid).reduce((t, x) => t + x.durationMinutes, 0)) : row.durationMinutes),
+              lat: row.lat, lng: row.lng
+            }))
+          })
+        });
+        state.manualOrderRows = null;
+        showToast(hasLunch ? "Pausa pranzo rimossa" : "Pausa pranzo aggiunta");
+        setActiveTab("result");
+      } catch (err) {
+        showToast(err.message);
+      } finally {
+        state.planning = false;
+        render();
       }
       return;
     }
