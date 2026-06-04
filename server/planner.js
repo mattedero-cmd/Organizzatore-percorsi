@@ -358,7 +358,7 @@ function shiftRowTimes(row, minutes) {
 
 async function insertBreaks(rows, options) {
   const { lunchBreakEnabled, lunchBreakMinutes = 45, restStops = [] } = options;
-  if (!lunchBreakEnabled && !restStops.length) return { rows, addedMinutes: 0 };
+  if (!lunchBreakEnabled) return { rows, addedMinutes: 0 };
 
   const LUNCH_OPEN = 11 * 60 + 30;
   const LUNCH_CLOSE = 14 * 60;
@@ -534,7 +534,7 @@ export async function planRoute(payload, settings, restStops = []) {
   const lunchBreakEnabled = payload.lunchBreak !== false && (payload.lunchBreak === true || settings.lunchBreakEnabled !== false);
   const lunchBreakMinutes = Number(payload.lunchBreakMinutes ?? settings.lunchBreakMinutes ?? 45);
   const activeRestStops = restStops.filter(s => s.addressType === "rest");
-  const { rows: enrichedRows, addedMinutes } = insertBreaks(best.rows, { lunchBreakEnabled, lunchBreakMinutes, restStops: activeRestStops });
+  const { rows: enrichedRows, addedMinutes } = await insertBreaks(best.rows, { lunchBreakEnabled, lunchBreakMinutes, restStops: activeRestStops });
   best = {
     ...best,
     rows: enrichedRows,
