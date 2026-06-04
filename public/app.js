@@ -513,8 +513,18 @@ function renderArchive() {
           <label class="field">Apr. pomeriggio<input name="openAfternoon" type="time" value="${escapeHtml(form.openAfternoon)}" /></label>
           <label class="field">Ch. pomeriggio<input name="closeAfternoon" type="time" value="${escapeHtml(form.closeAfternoon)}" /></label>
           <label class="field">Durata abituale (min)<input name="defaultDuration" type="number" min="5" step="5" value="${escapeHtml(form.defaultDuration)}" /></label>
-          <label class="field">Latitudine<input name="lat" type="number" step="0.000001" value="${escapeHtml(form.lat ?? "")}" /></label>
-          <label class="field">Longitudine<input name="lng" type="number" step="0.000001" value="${escapeHtml(form.lng ?? "")}" /></label>
+          <div class="field full">
+            <label>Coordinate GPS</label>
+            <div class="coord-actions">
+              <button type="button" class="btn" id="use-current-pos">📍 Posizione attuale</button>
+              ${state.googleMapsKey ? `<button type="button" class="btn" id="open-map-picker">🗺 Scegli sulla mappa</button>` : ""}
+              <button type="button" class="btn" id="geocode-address">🔍 Da indirizzo</button>
+            </div>
+            <div class="form-grid" style="margin-top:8px;">
+              <label class="field">Latitudine<input name="lat" id="coord-lat" type="number" step="0.000001" value="${escapeHtml(form.lat ?? "")}" /></label>
+              <label class="field">Longitudine<input name="lng" id="coord-lng" type="number" step="0.000001" value="${escapeHtml(form.lng ?? "")}" /></label>
+            </div>
+          </div>
         </div>
         <div class="actions">
           <button class="btn primary" type="submit">Salva</button>
@@ -1063,6 +1073,90 @@ async function replanWithOrder(manualOrder) {
   }
 }
 
+// ── coordinate helpers ────────────────────────────────────────────────────────
+
+function setCoordFields(lat, lng) {
+  const latEl = document.querySelector("#coord-lat");
+  const lngEl = document.querySelector("#coord-lng");
+  if (latEl) latEl.value = Number(lat).toFixed(6);
+  if (lngEl) lngEl.value = Number(lng).toFixed(6);
+}
+
+async function useCurrentPosition() {
+  if (!navigator.geolocation) { showToast("GPS non disponibile su questo dispositivo"); return; }
+  showToast("Lettura GPS…");
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      setCoordFields(pos.coords.latitude, pos.coords.longitude);
+      showToast(`Posizione acquisita: ${pos.coords.latitude.toFixed(5)}, ${pos.coords.longitude.toFixed(5)}`);
+    },
+    () => showToast("Impossibile ottenere la posizione. Controlla i permessi GPS."),
+    { enableHighAccuracy: true, timeout: 10000 }
+  );
+}
+
+async function geocodeFromAddress() {
+  const fullAddress = document.querySelector("#address-form [name=fullAddress]")?.value;
+  if (!fullAddress) { showToast("Inserisci prima l'indirizzo completo"); return; }
+  showToast("Ricerca coordinate…");
+  try {
+    const { lat, lng } = await api(`/api/geocode?address=${encodeURIComponent(fullAddress)}`);
+    setCoordFields(lat, lng);
+    showToast(`Coordinate trovate: ${Number(lat).toFixed(5)}, ${Number(lng).toFixed(5)}`);
+  } catch {
+    showToast("Indirizzo non trovato — prova la posizione GPS o il picker mappa");
+  }
+}
+
+function openMapPicker() {
+  const latEl = document.querySelector("#coord-lat");
+  const lngEl = document.querySelector("#coord-lng");
+  const startLat = Number(latEl?.value) || 46.07;
+  const startLng = Number(lngEl?.value) || 11.12;
+  let pickedLat = startLat, pickedLng = startLng;
+
+  const modal = document.createElement("div");
+  modal.className = "map-picker-modal";
+  modal.innerHTML = `
+    <div class="map-picker-inner">
+      <div class="map-picker-header">
+        <span>Tocca la mappa per spostare il punto</span>
+        <button class="btn" id="map-picker-cancel">✕ Annulla</button>
+      </div>
+      <div id="map-picker-map"></div>
+      <div class="map-picker-footer">
+        <span id="map-picker-coords" class="stop-meta">${startLat.toFixed(5)}, ${startLng.toFixed(5)}</span>
+        <button class="btn primary" id="map-picker-confirm">✓ Usa questo punto</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+
+  loadGoogleMapsScript().then(ready => {
+    if (!ready) { showToast("Google Maps non disponibile"); modal.remove(); return; }
+    const map = new google.maps.Map(document.getElementById("map-picker-map"), {
+      center: { lat: startLat, lng: startLng }, zoom: 15,
+      mapTypeControl: false, fullscreenControl: false, streetViewControl: false
+    });
+    const marker = new google.maps.Marker({
+      position: { lat: startLat, lng: startLng }, map, draggable: true,
+      title: "Trascina per spostare"
+    });
+    const updateCoords = (lat, lng) => {
+      pickedLat = lat; pickedLng = lng;
+      const el = document.getElementById("map-picker-coords");
+      if (el) el.textContent = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+    };
+    map.addListener("click", e => { marker.setPosition(e.latLng); updateCoords(e.latLng.lat(), e.latLng.lng()); });
+    marker.addListener("dragend", e => updateCoords(e.latLng.lat(), e.latLng.lng()));
+    document.getElementById("map-picker-confirm").onclick = () => {
+      setCoordFields(pickedLat, pickedLng);
+      modal.remove();
+      showToast("Coordinate aggiornate");
+    };
+    document.getElementById("map-picker-cancel").onclick = () => modal.remove();
+  });
+}
+
 // ── events ────────────────────────────────────────────────────────────────────
 
 function bindEvents() {
@@ -1293,6 +1387,10 @@ function bindEvents() {
       render();
       return;
     }
+
+    if (e.target.closest("#use-current-pos")) { useCurrentPosition(); return; }
+    if (e.target.closest("#open-map-picker")) { openMapPicker(); return; }
+    if (e.target.closest("#geocode-address")) { geocodeFromAddress(); return; }
 
     if (e.target.closest("#import-contacts")) {
       await importFromContactPicker();

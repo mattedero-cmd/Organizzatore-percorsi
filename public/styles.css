@@ -823,3 +823,47 @@ tbody tr:last-child td {
   color: var(--muted);
   font-size: 0.88rem;
 }
+
+.coord-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+
+.map-picker-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+}
+
+.map-picker-inner {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.map-picker-header,
+.map-picker-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+  flex-shrink: 0;
+}
+
+.map-picker-footer {
+  border-bottom: 0;
+  border-top: 1px solid var(--line);
+}
+
+#map-picker-map {
+  flex: 1;
+  min-height: 0;
+}
