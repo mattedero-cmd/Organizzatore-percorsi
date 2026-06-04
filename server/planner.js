@@ -389,29 +389,34 @@ async function insertBreaks(rows, options) {
   }
 
   // Insert rest stops by accumulating drive+work minutes since the last break.
-  // A break is placed before a stop when the drive to it would push cumulative
-  // time over the threshold, OR after a stop when working there pushes it over.
+  // A pre-drive break is inserted only when already active (cumulative > 0).
+  // A post-work break is inserted after a stop pushes cumulative over threshold.
+  // Nothing is inserted if no real place is found (no generic "Sosta" entries).
   {
     let cumulative = 0;
     let lastLat = null, lastLng = null;
 
     const tryInsert = async (beforeIndex, refLat, refLng) => {
-      const alreadyHas = insertions.some(ins => ins.beforeIndex === beforeIndex);
-      if (alreadyHas) return;
+      if (insertions.some(ins => ins.beforeIndex === beforeIndex)) {
+        cumulative = 0;
+        return;
+      }
       let spot = findNearestRestStop(restStops, refLat, refLng);
       if (!spot && refLat && refLng) {
         spot = await findNearbyRestStop(refLat, refLng).catch(() => null);
       }
-      const label = spot
-        ? (spot.rating ? `${spot.customer} · ⭐ ${spot.rating} (${spot.reviewCount})` : spot.customer)
-        : "Sosta";
+      // Only insert if we have a real named place
+      if (!spot) { cumulative = Math.floor(cumulative / 2); return; }
+      const label = spot.rating
+        ? `${spot.customer} · ⭐ ${spot.rating} (${spot.reviewCount})`
+        : spot.customer;
       insertions.push({
         beforeIndex, type: "rest", duration: REST_DUR,
         customer: label,
-        location: spot?.location || "",
-        address: spot?.fullAddress || "",
-        lat: spot?.lat ?? null,
-        lng: spot?.lng ?? null
+        location: spot.location || "",
+        address: spot.fullAddress || "",
+        lat: spot.lat ?? null,
+        lng: spot.lng ?? null
       });
       cumulative = 0;
     };
@@ -421,17 +426,15 @@ async function insertBreaks(rows, options) {
       const driveMin = row.driveMinutes || 0;
       const workMin = row.durationMinutes || 0;
 
-      // Check: does adding this drive segment push us over the threshold?
-      if (cumulative + driveMin >= REST_EVERY - REST_TOL) {
+      // Pre-drive break: only if already active (cumulative > 0) and the drive
+      // would push total over threshold
+      if (cumulative > 0 && cumulative + driveMin >= REST_EVERY - REST_TOL) {
         await tryInsert(i, lastLat, lastLng);
-      } else {
-        cumulative += driveMin;
       }
+      cumulative += driveMin;
 
-      // Accumulate work time at this stop
+      // Post-work break: work at this stop pushes cumulative over threshold
       cumulative += workMin;
-
-      // Check: after finishing work at this stop, are we over threshold?
       if (cumulative >= REST_EVERY - REST_TOL && i < rows.length - 1) {
         await tryInsert(i + 1, row.lat, row.lng);
       }
