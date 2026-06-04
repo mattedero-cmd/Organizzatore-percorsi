@@ -210,6 +210,90 @@ async function handleApi(request, response) {
       return sendJson(response, 200, parseVoiceCommand(body.text || "", addresses));
     }
 
+    if (method === "POST" && url.pathname === "/api/voice/understand") {
+      if (!process.env.OPENAI_API_KEY) {
+        return sendJson(response, 400, { error: "OPENAI_API_KEY non configurata" });
+      }
+      const body = await parseBody(request);
+      const text = body.text || "";
+      const addresses = await listAddresses("");
+      const today = new Date().toISOString().slice(0, 10);
+
+      const addressList = addresses.map(a =>
+        `id:${a.id} | "${a.customer}${a.location ? " — " + a.location : ""}" | ${a.fullAddress}`
+      ).join("\n");
+
+      const systemPrompt = `Sei un assistente per un pianificatore di percorsi di lavoro.
+Oggi è ${today}.
+L'utente parla in italiano e ti dà un comando vocale trascritto.
+Devi interpretarlo e restituire SOLO un oggetto JSON valido (senza markdown, senza commenti).
+
+## Elenco indirizzi disponibili
+${addressList}
+
+## Schema JSON di output
+{
+  "action": "update" | "optimize" | "remove",
+  "scheduledDate": "YYYY-MM-DD" | "",
+  "startTime": "HH:MM" | "",
+  "firstArrivalTime": "HH:MM" | "",
+  "arrivalLeadMinutes": number | null,
+  "start": { "label": string, "address": string } | null,
+  "end": { "label": string, "address": string } | null,
+  "stops": [
+    {
+      "addressId": number,
+      "customer": string,
+      "location": string,
+      "fullAddress": string,
+      "openMorning": string,
+      "closeMorning": string,
+      "openAfternoon": string,
+      "closeAfternoon": string,
+      "durationMinutes": number,
+      "lat": number | null,
+      "lng": number | null,
+      "recognized": true
+    }
+  ],
+  "removeStops": [{ "id": number, "customer": string, "location": string }],
+  "needsConfirmation": []
+}
+
+## Regole
+- Per le tappe: cerca nell'elenco sopra il contatto più simile al nome menzionato. Copia tutti i campi (addressId, customer, location, fullAddress, orari, lat, lng) dall'elenco. Se non trovi corrispondenza, metti recognized: false e lascia addressId null.
+- "ottimizza", "calcola", "salva e vai" → action: "optimize"
+- "rimuovi", "togli", "elimina" → action: "remove" e popola removeStops
+- Se dici "domani" calcola la data corretta rispetto a oggi (${today})
+- Restituisci SOLO il JSON, nessun testo aggiuntivo.`;
+
+      const oaiRes = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`
+        },
+        body: JSON.stringify({
+          model: "gpt-4o-mini",
+          temperature: 0,
+          response_format: { type: "json_object" },
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: text }
+          ]
+        })
+      });
+
+      if (!oaiRes.ok) {
+        const err = await oaiRes.json().catch(() => ({}));
+        return sendJson(response, 500, { error: err.error?.message || "Errore OpenAI" });
+      }
+      const oaiData = await oaiRes.json();
+      const parsed = JSON.parse(oaiData.choices[0].message.content);
+      parsed.transcript = text;
+      return sendJson(response, 200, parsed);
+    }
+
     if (method === "POST" && url.pathname === "/api/voice/transcribe") {
       if (!process.env.OPENAI_API_KEY) {
         return sendJson(response, 400, { error: "OPENAI_API_KEY non configurata" });

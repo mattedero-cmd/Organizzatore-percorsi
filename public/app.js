@@ -956,7 +956,12 @@ async function toggleVoiceRecording() {
           const ta = document.querySelector("#transcript");
           if (ta) ta.value = text;
           state.route.transcript = text;
-          showToast("Testo acquisito");
+          if (state.whisperConfigured) {
+            showToast("Elaboro il comando…");
+            await applyVoiceCommand();
+          } else {
+            showToast("Testo acquisito — premi Applica");
+          }
         } catch (err) {
           showToast(err.message);
         }
@@ -978,7 +983,8 @@ async function toggleVoiceRecording() {
 async function applyVoiceCommand() {
   updateRouteFromForm();
   if (!state.route.transcript.trim()) return;
-  const parsed = await api("/api/voice/parse", { method: "POST", body: JSON.stringify({ text: state.route.transcript }) });
+  const endpoint = state.whisperConfigured ? "/api/voice/understand" : "/api/voice/parse";
+  const parsed = await api(endpoint, { method: "POST", body: JSON.stringify({ text: state.route.transcript }) });
 
   if (parsed.start) {
     state.route.startLabel = parsed.start.label || state.route.startLabel;
