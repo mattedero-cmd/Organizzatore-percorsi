@@ -435,7 +435,7 @@ async function insertBreaks(rows, options) {
     if (!spot && refLat && refLng) {
       spot = await findNearbyRestStop(refLat, refLng).catch(() => null);
     }
-    if (!spot) { cumulative = Math.floor(cumulative / 2); return false; }
+    if (!spot) { return false; } // keep cumulative intact — retry at next opportunity
     const label = spot.rating
       ? `${spot.customer} · ⭐ ${spot.rating} (${spot.reviewCount})`
       : spot.customer;
