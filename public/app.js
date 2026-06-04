@@ -66,6 +66,8 @@ const state = {
   addresses: [],
   savedRoutes: [],
   addressSearch: "",
+  archiveShowAll: false,
+  stopSearchText: "",
   addressForm: { ...emptyForm },
   settings: { kmRate: 0.65, driveHourRate: 22, workHourRate: 60 },
   route: {
@@ -115,6 +117,16 @@ function setActiveTab(tab) {
 // ── data loading ──────────────────────────────────────────────────────────────
 
 async function refreshAddresses() {
+  if (!state.addressSearch && !state.archiveShowAll) {
+    state.addresses = [];
+    return;
+  }
+  const q = encodeURIComponent(state.addressSearch);
+  state.addresses = await api(`/api/addresses?search=${q}`).catch(() => []);
+}
+
+async function refreshAddressesForRoute() {
+  // Always load addresses for route planning (needed for autocomplete)
   const q = encodeURIComponent(state.addressSearch);
   state.addresses = await api(`/api/addresses?search=${q}`).catch(() => []);
 }
@@ -134,7 +146,7 @@ async function loadInitialData() {
   state.googleMapsKey = config.googleMapsKey || "";
   state.settings = settings;
   document.querySelector("#map-status").textContent = state.mapApiConfigured ? "Google Maps" : "Stima locale";
-  await Promise.all([refreshAddresses(), refreshSavedRoutes()]);
+  await Promise.all([refreshAddressesForRoute(), refreshSavedRoutes()]);
 }
 
 // ── normalize saved route ─────────────────────────────────────────────────────
@@ -281,8 +293,18 @@ async function renderGoogleMap(result) {
 
 // ── render: route tab ─────────────────────────────────────────────────────────
 
-function addressOptions() {
-  return state.addresses.map(a => `<option value="${a.id}">${escapeHtml(addressName(a))} | ${escapeHtml(a.fullAddress)}</option>`).join("");
+function renderStopSuggestions() {
+  const q = state.stopSearchText.trim().toLowerCase();
+  if (!q) return "";
+  const matches = state.addresses.filter(a =>
+    [a.customer, a.location, a.fullAddress].some(v => (v || "").toLowerCase().includes(q))
+  ).slice(0, 8);
+  if (!matches.length) return `<div class="stop-suggestion-empty">Nessun risultato</div>`;
+  return matches.map(a => `
+    <div class="stop-suggestion-item" data-suggest-id="${a.id}">
+      <span class="stop-suggestion-name">${escapeHtml(addressName(a))}</span>
+      <span class="stop-suggestion-addr">${escapeHtml(a.fullAddress)}</span>
+    </div>`).join("");
 }
 
 function renderStops() {
@@ -345,7 +367,10 @@ function renderRoute() {
 
         <h3>Aggiungi da archivio</h3>
         <div class="form-grid">
-          <label class="field full"><select name="selectedAddressId"><option value="">Seleziona…</option>${addressOptions()}</select></label>
+          <div class="field full" style="position:relative;">
+            <input id="stop-search" placeholder="Cerca cliente o città…" value="${escapeHtml(state.stopSearchText)}" autocomplete="off" />
+            <div id="stop-suggestions" class="stop-suggestions">${renderStopSuggestions()}</div>
+          </div>
         </div>
         <div class="actions"><button type="button" class="btn" id="add-saved-stop">+ Aggiungi</button></div>
 
@@ -432,6 +457,7 @@ function renderSaved() {
 
 function renderArchive() {
   const form = state.addressForm;
+  const showingResults = state.archiveShowAll || state.addressSearch;
   app.innerHTML = `
     <section class="grid">
       <div class="panel">
@@ -443,11 +469,14 @@ function renderArchive() {
           </div>
         </div>
         <div class="row" style="gap:8px; margin-bottom:10px;">
-          <input id="archive-search" placeholder="Cerca cliente, sede, indirizzo…" value="${escapeHtml(state.addressSearch)}" style="flex:1" />
+          <input id="archive-search" placeholder="Cerca per nome, città, indirizzo…" value="${escapeHtml(state.addressSearch)}" style="flex:1" autocomplete="off" />
+          <button class="btn" id="show-all-addresses">Mostra tutti</button>
         </div>
         <input id="vcf-input" type="file" accept=".vcf,.vcard,.csv" style="display:none" />
         <div class="archive-list">
-          ${state.addresses.map(a => `
+          ${!showingResults
+            ? `<div class="empty" style="grid-column:1/-1">Cerca un contatto per nome o città, oppure premi <b>Mostra tutti</b>.</div>`
+            : state.addresses.map(a => `
             <article class="card archive-card">
               <p class="stop-title">${escapeHtml(addressName(a))}</p>
               <div class="stop-meta">${escapeHtml(a.fullAddress)}</div>
@@ -460,7 +489,7 @@ function renderArchive() {
                 <button class="btn" data-edit-address="${a.id}">Modifica</button>
                 <button class="btn danger" data-delete-address="${a.id}">×</button>
               </div>
-            </article>`).join("") || `<div class="empty">Nessun contatto trovato.</div>`}
+            </article>`).join("") || `<div class="empty" style="grid-column:1/-1">Nessun contatto trovato.</div>`}
         </div>
       </div>
 
@@ -1033,7 +1062,15 @@ async function replanWithOrder(manualOrder) {
 function bindEvents() {
   document.querySelector(".tabs").addEventListener("click", e => {
     const b = e.target.closest("[data-tab]");
-    if (b) { updateRouteFromForm(); setActiveTab(b.dataset.tab); }
+    if (b) {
+      updateRouteFromForm();
+      // Reset archive state when leaving archive tab
+      if (b.dataset.tab !== "archive") {
+        state.addressSearch = "";
+        state.archiveShowAll = false;
+      }
+      setActiveTab(b.dataset.tab);
+    }
   });
 
   app.addEventListener("input", e => {
@@ -1047,7 +1084,15 @@ function bindEvents() {
     // archive search
     if (e.target.id === "archive-search") {
       state.addressSearch = e.target.value;
+      state.archiveShowAll = Boolean(e.target.value);
       refreshAddresses().then(() => renderArchive());
+    }
+    // stop autocomplete
+    if (e.target.id === "stop-search") {
+      state.stopSearchText = e.target.value;
+      state.route.selectedAddressId = "";
+      const sug = document.querySelector("#stop-suggestions");
+      if (sug) sug.innerHTML = renderStopSuggestions();
     }
     // stop filter
     if (e.target.id === "stop-filter") {
@@ -1091,6 +1136,30 @@ function bindEvents() {
 
     const tabJump = e.target.closest("[data-tab-jump]");
     if (tabJump) { setActiveTab(tabJump.dataset.tabJump); return; }
+
+    // suggestion item selected
+    const sugItem = e.target.closest("[data-suggest-id]");
+    if (sugItem) {
+      const id = sugItem.dataset.suggestId;
+      const addr = state.addresses.find(a => String(a.id) === id);
+      if (addr) {
+        state.route.selectedAddressId = id;
+        state.stopSearchText = addressName(addr);
+        const inp = document.querySelector("#stop-search");
+        if (inp) inp.value = state.stopSearchText;
+        const sug = document.querySelector("#stop-suggestions");
+        if (sug) sug.innerHTML = "";
+      }
+      return;
+    }
+
+    // show all archive contacts
+    if (e.target.closest("#show-all-addresses")) {
+      state.archiveShowAll = true;
+      await refreshAddresses();
+      renderArchive();
+      return;
+    }
 
     if (e.target.closest("#refresh-routes")) {
       await refreshSavedRoutes();
@@ -1142,8 +1211,10 @@ function bindEvents() {
     if (e.target.closest("#add-saved-stop")) {
       updateRouteFromForm();
       const addr = state.addresses.find(a => String(a.id) === String(state.route.selectedAddressId));
-      if (!addr) { showToast("Seleziona un indirizzo"); return; }
+      if (!addr) { showToast("Seleziona prima un contatto dalla lista"); return; }
       state.route.stops.push(addressToStop(addr));
+      state.route.selectedAddressId = "";
+      state.stopSearchText = "";
       render();
       return;
     }
