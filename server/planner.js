@@ -388,35 +388,56 @@ async function insertBreaks(rows, options) {
     }
   }
 
-  if (restStops.length || true) { // always check for rest breaks (may use Places API)
-    const dayStart = rows.length > 0 ? (parseTime(rows[0].departureTime) || 7 * 60) : 7 * 60;
-    let lastBreak = dayStart;
+  // Insert rest stops by accumulating drive+work minutes since the last break.
+  // A break is placed before a stop when the drive to it would push cumulative
+  // time over the threshold, OR after a stop when working there pushes it over.
+  {
+    let cumulative = 0;
     let lastLat = null, lastLng = null;
 
-    for (let i = 0; i < rows.length; i++) {
-      const dep = parseTime(rows[i].departureTime);
-      const elapsed = dep - lastBreak;
-      if (elapsed >= REST_EVERY - REST_TOL) {
-        const alreadyHas = insertions.some(ins => ins.beforeIndex === i);
-        if (!alreadyHas) {
-          let spot = findNearestRestStop(restStops, lastLat, lastLng);
-          // Fallback: cerca su Google Places se non ci sono soste salvate
-          if (!spot && lastLat && lastLng) {
-            spot = await findNearbyRestStop(lastLat, lastLng).catch(() => null);
-          }
-          if (spot) {
-            const label = spot.rating ? `${spot.customer} · ⭐ ${spot.rating} (${spot.reviewCount})` : spot.customer;
-            insertions.push({ beforeIndex: i, type: "rest", duration: REST_DUR, customer: label, location: spot.location || spot.vicinity || "", address: spot.fullAddress || spot.vicinity || "", lat: spot.lat, lng: spot.lng });
-            lastBreak = dep;
-          }
-        } else {
-          lastBreak = dep;
-        }
+    const tryInsert = async (beforeIndex, refLat, refLng) => {
+      const alreadyHas = insertions.some(ins => ins.beforeIndex === beforeIndex);
+      if (alreadyHas) return;
+      let spot = findNearestRestStop(restStops, refLat, refLng);
+      if (!spot && refLat && refLng) {
+        spot = await findNearbyRestStop(refLat, refLng).catch(() => null);
       }
-      lastLat = rows[i].lat;
-      lastLng = rows[i].lng;
-      const endTime = parseTime(rows[i].serviceEndTime);
-      if (endTime > lastBreak) lastBreak = endTime;
+      const label = spot
+        ? (spot.rating ? `${spot.customer} · ⭐ ${spot.rating} (${spot.reviewCount})` : spot.customer)
+        : "Sosta";
+      insertions.push({
+        beforeIndex, type: "rest", duration: REST_DUR,
+        customer: label,
+        location: spot?.location || "",
+        address: spot?.fullAddress || "",
+        lat: spot?.lat ?? null,
+        lng: spot?.lng ?? null
+      });
+      cumulative = 0;
+    };
+
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const driveMin = row.driveMinutes || 0;
+      const workMin = row.durationMinutes || 0;
+
+      // Check: does adding this drive segment push us over the threshold?
+      if (cumulative + driveMin >= REST_EVERY - REST_TOL) {
+        await tryInsert(i, lastLat, lastLng);
+      } else {
+        cumulative += driveMin;
+      }
+
+      // Accumulate work time at this stop
+      cumulative += workMin;
+
+      // Check: after finishing work at this stop, are we over threshold?
+      if (cumulative >= REST_EVERY - REST_TOL && i < rows.length - 1) {
+        await tryInsert(i + 1, row.lat, row.lng);
+      }
+
+      lastLat = row.lat;
+      lastLng = row.lng;
     }
   }
 
