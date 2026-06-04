@@ -1394,7 +1394,28 @@ function openMapPicker() {
       });
     };
 
-    map.addListener("click", e => reverseGeocode(e.latLng.lat(), e.latLng.lng()));
+    map.addListener("click", e => {
+      if (e.placeId) {
+        // User tapped a business/POI pin on the map — load full place details
+        e.stop();
+        const svc = new google.maps.places.PlacesService(map);
+        svc.getDetails({
+          placeId: e.placeId,
+          fields: ["name", "formatted_address", "geometry", "address_components",
+                   "formatted_phone_number", "international_phone_number",
+                   "opening_hours", "website"]
+        }, (place, status) => {
+          if (status === google.maps.places.PlacesServiceStatus.OK && place.geometry) {
+            pickedPlace = place;
+            updateMarker(place.geometry.location.lat(), place.geometry.location.lng(),
+              place.name || place.formatted_address);
+            map.setZoom(17);
+          }
+        });
+      } else {
+        reverseGeocode(e.latLng.lat(), e.latLng.lng());
+      }
+    });
     marker.addListener("dragend", e => reverseGeocode(e.latLng.lat(), e.latLng.lng()));
 
     // Places Autocomplete — request all useful fields including phone and opening hours
