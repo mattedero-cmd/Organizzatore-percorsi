@@ -518,7 +518,6 @@ function renderArchive() {
             <div class="coord-actions">
               <button type="button" class="btn" id="use-current-pos">📍 Posizione attuale</button>
               ${state.googleMapsKey ? `<button type="button" class="btn" id="open-map-picker">🗺 Scegli sulla mappa</button>` : ""}
-              <button type="button" class="btn" id="geocode-address">🔍 Da indirizzo</button>
             </div>
             <div class="form-grid" style="margin-top:8px;">
               <label class="field">Latitudine<input name="lat" id="coord-lat" type="number" step="0.000001" value="${escapeHtml(form.lat ?? "")}" /></label>
@@ -1095,18 +1094,6 @@ async function useCurrentPosition() {
   );
 }
 
-async function geocodeFromAddress() {
-  const fullAddress = document.querySelector("#address-form [name=fullAddress]")?.value;
-  if (!fullAddress) { showToast("Inserisci prima l'indirizzo completo"); return; }
-  showToast("Ricerca coordinate…");
-  try {
-    const { lat, lng } = await api(`/api/geocode?address=${encodeURIComponent(fullAddress)}`);
-    setCoordFields(lat, lng);
-    showToast(`Coordinate trovate: ${Number(lat).toFixed(5)}, ${Number(lng).toFixed(5)}`);
-  } catch {
-    showToast("Indirizzo non trovato — prova la posizione GPS o il picker mappa");
-  }
-}
 
 function openMapPicker() {
   const latEl = document.querySelector("#coord-lat");
@@ -1390,7 +1377,6 @@ function bindEvents() {
 
     if (e.target.closest("#use-current-pos")) { useCurrentPosition(); return; }
     if (e.target.closest("#open-map-picker")) { openMapPicker(); return; }
-    if (e.target.closest("#geocode-address")) { geocodeFromAddress(); return; }
 
     if (e.target.closest("#import-contacts")) {
       await importFromContactPicker();

@@ -19,7 +19,7 @@ import {
 } from "./db.js";
 import { loadEnv } from "./env.js";
 import { planRoute } from "./planner.js";
-import { routeShape, resolvePlace } from "./googleMapsService.js";
+import { routeShape } from "./googleMapsService.js";
 import { parseVoiceCommand } from "./voiceParser.js";
 import { attachWeather, shouldRefreshWeather } from "./weatherService.js";
 
@@ -110,13 +110,6 @@ async function handleApi(request, response) {
       });
     }
 
-    if (method === "GET" && url.pathname === "/api/geocode") {
-      const address = url.searchParams.get("address") || "";
-      if (!address) return sendJson(response, 400, { error: "Indirizzo mancante" });
-      const place = await resolvePlace({ address });
-      if (!place?.lat) return sendJson(response, 404, { error: "Indirizzo non trovato" });
-      return sendJson(response, 200, { lat: place.lat, lng: place.lng });
-    }
 
     if (method === "GET" && url.pathname === "/api/config") {
       return sendJson(response, 200, {
