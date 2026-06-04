@@ -131,6 +131,7 @@ export async function findNearbyRestStop(lat, lng, radiusM = 2000) {
     const url = `${BASE}/place/nearbysearch/json?location=${lat},${lng}&radius=${radiusM}&type=cafe&language=it&key=${key}`;
     const res = await fetch(url, { signal: AbortSignal.timeout(6000) });
     const data = await res.json();
+    console.log("[Places]", lat.toFixed(4), lng.toFixed(4), "→ status:", data.status, "results:", data.results?.length ?? 0);
     if (data.status !== "OK" || !data.results?.length) {
       placesCache.set(cacheKey, null);
       return null;
