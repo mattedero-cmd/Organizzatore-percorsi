@@ -418,56 +418,61 @@ function renderRoute() {
           <label class="field full">Indirizzo arrivo<input name="endAddress" value="${escapeHtml(r.endAddress)}" ${r.endSameAsStart ? "disabled" : ""} /></label>
         </div>
 
-        <h3>Aggiungi da archivio</h3>
-        <div class="form-grid">
-          <div class="field full" style="position:relative;">
+        <div class="stop-add-row">
+          <div style="position:relative;flex:1;">
             <input id="stop-search" placeholder="Cerca cliente o città…" value="${escapeHtml(state.stopSearchText)}" autocomplete="off" />
             <input type="hidden" name="selectedAddressId" value="${escapeHtml(state.route.selectedAddressId)}" id="selected-address-id" />
             <div id="stop-suggestions" class="stop-suggestions">${renderStopSuggestions()}</div>
           </div>
-        </div>
-        <div class="actions"><button type="button" class="btn" id="add-saved-stop">+ Aggiungi</button></div>
-
-        <h3>Nuova tappa</h3>
-        <div class="form-grid route-fields">
-          <label class="field">Cliente<input name="customCustomer" value="${escapeHtml(r.customCustomer)}" /></label>
-          <label class="field">Sede<input name="customLocation" value="${escapeHtml(r.customLocation)}" /></label>
-          <label class="field full">Indirizzo completo<input name="customAddress" value="${escapeHtml(r.customAddress)}" /></label>
-          <label class="field">Durata (min)<input name="customDuration" type="number" min="5" step="5" value="${escapeHtml(r.customDuration)}" /></label>
-          <label class="field"></label>
-          <label class="field">Apr. mattina<input name="customOpenMorning" type="time" value="${escapeHtml(r.customOpenMorning)}" /></label>
-          <label class="field">Ch. mattina<input name="customCloseMorning" type="time" value="${escapeHtml(r.customCloseMorning)}" /></label>
-          <label class="field">Apr. pomeriggio<input name="customOpenAfternoon" type="time" value="${escapeHtml(r.customOpenAfternoon)}" /></label>
-          <label class="field">Ch. pomeriggio<input name="customCloseAfternoon" type="time" value="${escapeHtml(r.customCloseAfternoon)}" /></label>
-        </div>
-        <div class="actions">
-          <button type="button" class="btn" id="add-custom-stop">+ Salva e aggiungi</button>
-          <button type="button" class="btn primary" id="plan-route">${state.planning ? "Calcolo in corso…" : "→ Ottimizza e salva"}</button>
+          <button type="button" class="btn" id="add-saved-stop">+ Archivio</button>
         </div>
 
-        <div class="row" style="align-items:center;gap:8px;margin-bottom:6px;">
-          <h3 style="margin:0">Comando vocale</h3>
-          <details class="voice-help-wrap">
-            <summary class="btn ghost" style="min-height:28px;padding:0 8px;font-size:0.78rem;list-style:none">❓ Comandi</summary>
-            <div class="voice-help-panel">
-              <ul>
-                <li><b>aggiungi [nome cliente]</b> — aggiunge tappa dall'archivio</li>
-                <li><b>aggiungi X e aggiungi Y</b> — più tappe in un comando</li>
-                <li><b>rimuovi [nome cliente]</b> — rimuove la tappa</li>
-                <li><b>ottimizza</b> · <b>salva e vai</b> — calcola il percorso</li>
-                <li><b>partenza alle 8</b> — cambia orario di partenza</li>
-                <li><b>primo arrivo alle 9:30</b> — orario primo cliente</li>
-                <li><b>in anticipo di 10 minuti</b> — minuti prima apertura</li>
-                <li><b>per il 10 giugno</b> · <b>domani</b> — cambia la data</li>
-                <li><b>parto da [luogo]</b> — cambia punto di partenza</li>
-              </ul>
-            </div>
-          </details>
-        </div>
-        <label class="field"><textarea name="transcript" id="transcript">${escapeHtml(r.transcript)}</textarea></label>
-        <div class="actions">
-          <button type="button" class="btn${state.voiceRecording ? " recording" : ""}" id="listen-command">${state.voiceRecording ? "■ Stop" : "● Avvia"}</button>
-          <button type="button" class="btn" id="apply-command">✓ Applica</button>
+        <details class="panel-details">
+          <summary>+ Nuova tappa manuale</summary>
+          <div class="form-grid route-fields" style="margin-top:8px;">
+            <label class="field">Cliente<input name="customCustomer" value="${escapeHtml(r.customCustomer)}" /></label>
+            <label class="field">Sede<input name="customLocation" value="${escapeHtml(r.customLocation)}" /></label>
+            <label class="field full">Indirizzo completo<input name="customAddress" value="${escapeHtml(r.customAddress)}" /></label>
+            <label class="field">Durata (min)<input name="customDuration" type="number" min="5" step="5" value="${escapeHtml(r.customDuration)}" /></label>
+            <label class="field"></label>
+            <label class="field">Apr. mattina<input name="customOpenMorning" type="time" value="${escapeHtml(r.customOpenMorning)}" /></label>
+            <label class="field">Ch. mattina<input name="customCloseMorning" type="time" value="${escapeHtml(r.customCloseMorning)}" /></label>
+            <label class="field">Apr. pomeriggio<input name="customOpenAfternoon" type="time" value="${escapeHtml(r.customOpenAfternoon)}" /></label>
+            <label class="field">Ch. pomeriggio<input name="customCloseAfternoon" type="time" value="${escapeHtml(r.customCloseAfternoon)}" /></label>
+          </div>
+          <div class="actions" style="margin-top:8px;">
+            <button type="button" class="btn" id="add-custom-stop">+ Salva e aggiungi</button>
+          </div>
+        </details>
+
+        <details class="panel-details">
+          <summary>🎤 Comando vocale
+            <details class="voice-help-wrap" style="display:inline-block;margin-left:8px;">
+              <summary class="btn ghost" style="min-height:24px;padding:0 6px;font-size:0.75rem;list-style:none">❓</summary>
+              <div class="voice-help-panel">
+                <ul>
+                  <li><b>aggiungi [nome cliente]</b> — aggiunge tappa dall'archivio</li>
+                  <li><b>aggiungi X e aggiungi Y</b> — più tappe in un comando</li>
+                  <li><b>rimuovi [nome cliente]</b> — rimuove la tappa</li>
+                  <li><b>ottimizza</b> · <b>salva e vai</b> — calcola il percorso</li>
+                  <li><b>partenza alle 8</b> — cambia orario di partenza</li>
+                  <li><b>primo arrivo alle 9:30</b> — orario primo cliente</li>
+                  <li><b>in anticipo di 10 minuti</b> — minuti prima apertura</li>
+                  <li><b>per il 10 giugno</b> · <b>domani</b> — cambia la data</li>
+                  <li><b>parto da [luogo]</b> — cambia punto di partenza</li>
+                </ul>
+              </div>
+            </details>
+          </summary>
+          <label class="field" style="margin-top:8px;"><textarea name="transcript" id="transcript">${escapeHtml(r.transcript)}</textarea></label>
+          <div class="actions" style="margin-top:6px;">
+            <button type="button" class="btn${state.voiceRecording ? " recording" : ""}" id="listen-command">${state.voiceRecording ? "■ Stop" : "● Avvia"}</button>
+            <button type="button" class="btn" id="apply-command">✓ Applica</button>
+          </div>
+        </details>
+
+        <div class="actions" style="margin-top:12px;">
+          <button type="button" class="btn primary" id="plan-route" style="width:100%">${state.planning ? "Calcolo in corso…" : "→ Ottimizza e salva"}</button>
         </div>
       </form>
 
