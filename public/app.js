@@ -21,6 +21,19 @@ function minutesLabel(minutes) {
   return `${h} h ${m} min`;
 }
 
+function phoneIcon(type) {
+  if (type === "fisso") return "☎";
+  if (type === "altro") return "📞";
+  return "📱";
+}
+
+function preferredPhone(a) {
+  if (a.phonePreferred === "phone2" && a.phone2) return { number: a.phone2, type: a.phone2Type, name: a.phone2Name };
+  if (a.phone) return { number: a.phone, type: a.phoneType, name: a.phoneName };
+  if (a.phone2) return { number: a.phone2, type: a.phone2Type, name: a.phone2Name };
+  return null;
+}
+
 function addressName(a) {
   return `${a.customer || ""}${a.location ? ` — ${a.location}` : ""}`.trim();
 }
@@ -50,7 +63,9 @@ async function api(path, options = {}) {
 
 const emptyForm = {
   id: null, customer: "", location: "", fullAddress: "",
-  phone: "", phoneType: "cell", phone2: "", phone2Type: "fisso",
+  phone: "", phoneType: "cell", phoneName: "",
+  phone2: "", phone2Type: "fisso", phone2Name: "",
+  phonePreferred: "phone",
   email: "", notes: "",
   openMorning: "08:30", closeMorning: "12:30",
   openAfternoon: "14:30", closeAfternoon: "18:00",
@@ -522,13 +537,13 @@ function renderArchive() {
             <article class="card archive-card">
               <p class="stop-title">${escapeHtml(addressName(a))}</p>
               <div class="stop-meta">${escapeHtml(a.fullAddress)}</div>
-              ${a.phone ? `<div class="stop-meta">📞 ${escapeHtml(a.phone)}${a.phoneType === "fisso" ? " ☎" : ""}</div>` : ""}
-              ${a.phone2 ? `<div class="stop-meta">📞 ${escapeHtml(a.phone2)}${a.phone2Type === "fisso" ? " ☎" : ""}</div>` : ""}
+              ${a.phone ? `<div class="stop-meta">${phoneIcon(a.phoneType)} ${escapeHtml(a.phone)}${a.phoneName ? ` <span class="phone-name-badge">${escapeHtml(a.phoneName)}</span>` : ""}${a.phonePreferred === "phone" && a.phone2 ? " ★" : ""}</div>` : ""}
+              ${a.phone2 ? `<div class="stop-meta">${phoneIcon(a.phone2Type)} ${escapeHtml(a.phone2)}${a.phone2Name ? ` <span class="phone-name-badge">${escapeHtml(a.phone2Name)}</span>` : ""}${a.phonePreferred === "phone2" ? " ★" : ""}</div>` : ""}
               ${a.email ? `<div class="stop-meta">✉ ${escapeHtml(a.email)}</div>` : ""}
               <div class="stop-meta">${[a.openMorning, a.closeMorning].filter(Boolean).join("–") || "—"} / ${[a.openAfternoon, a.closeAfternoon].filter(Boolean).join("–") || "—"}</div>
               <div class="actions">
-                ${a.phone ? `<a class="btn" href="tel:${escapeHtml(a.phone)}">📞</a>` : ""}
-                ${a.phone2 ? `<a class="btn" href="tel:${escapeHtml(a.phone2)}">📞₂</a>` : ""}
+                ${a.phone ? `<a class="btn" href="tel:${escapeHtml(a.phone)}" title="${escapeHtml(a.phoneName || a.phone)}">${phoneIcon(a.phoneType)}</a>` : ""}
+                ${a.phone2 ? `<a class="btn" href="tel:${escapeHtml(a.phone2)}" title="${escapeHtml(a.phone2Name || a.phone2)}">${phoneIcon(a.phone2Type)}</a>` : ""}
                 ${a.email ? `<a class="btn" href="mailto:${escapeHtml(a.email)}">✉</a>` : ""}
                 <button class="btn" data-edit-address="${a.id}">Modifica</button>
                 <button class="btn danger" data-delete-address="${a.id}">×</button>
@@ -543,26 +558,34 @@ function renderArchive() {
           <label class="field">Cliente / nome<input name="customer" value="${escapeHtml(form.customer)}" required /></label>
           <label class="field">Sede<input name="location" value="${escapeHtml(form.location)}" /></label>
           <label class="field full">Indirizzo completo<input name="fullAddress" value="${escapeHtml(form.fullAddress)}" required /></label>
-          <div class="field phone-group">
-            <label class="phone-label">Telefono 1</label>
+          <div class="field full phone-group">
+            <div class="phone-label-row">
+              <span class="phone-label">Telefono 1</span>
+              <label class="phone-pref-label"><input type="radio" name="phonePreferred" value="phone" ${form.phonePreferred !== "phone2" ? "checked" : ""} /> Preferito</label>
+            </div>
             <div class="phone-row">
               <select name="phoneType" class="phone-type-select">
                 <option value="cell" ${form.phoneType === "cell" ? "selected" : ""}>📱 Cell</option>
                 <option value="fisso" ${form.phoneType === "fisso" ? "selected" : ""}>☎ Fisso</option>
                 <option value="altro" ${form.phoneType === "altro" ? "selected" : ""}>Altro</option>
               </select>
-              <input name="phone" type="tel" value="${escapeHtml(form.phone)}" placeholder="Numero" />
+              <input name="phone" type="tel" value="${escapeHtml(form.phone)}" placeholder="Numero" style="flex:1" />
+              <input name="phoneName" value="${escapeHtml(form.phoneName)}" placeholder="Nome (es. Mario)" style="flex:1" />
             </div>
           </div>
-          <div class="field phone-group">
-            <label class="phone-label">Telefono 2</label>
+          <div class="field full phone-group">
+            <div class="phone-label-row">
+              <span class="phone-label">Telefono 2</span>
+              <label class="phone-pref-label"><input type="radio" name="phonePreferred" value="phone2" ${form.phonePreferred === "phone2" ? "checked" : ""} /> Preferito</label>
+            </div>
             <div class="phone-row">
               <select name="phone2Type" class="phone-type-select">
                 <option value="cell" ${form.phone2Type === "cell" ? "selected" : ""}>📱 Cell</option>
                 <option value="fisso" ${form.phone2Type === "fisso" ? "selected" : ""}>☎ Fisso</option>
                 <option value="altro" ${form.phone2Type === "altro" ? "selected" : ""}>Altro</option>
               </select>
-              <input name="phone2" type="tel" value="${escapeHtml(form.phone2)}" placeholder="Numero" />
+              <input name="phone2" type="tel" value="${escapeHtml(form.phone2)}" placeholder="Numero" style="flex:1" />
+              <input name="phone2Name" value="${escapeHtml(form.phone2Name)}" placeholder="Nome (es. Ufficio)" style="flex:1" />
             </div>
           </div>
           <label class="field">Email<input name="email" type="email" value="${escapeHtml(form.email)}" /></label>
@@ -682,14 +705,13 @@ function renderResult() {
       <div class="result-list">
         ${rows.map(row => {
           const addr = state.allAddresses.find(a => String(a.id) === String(row.addressId));
+          const pref = preferredPhone(addr || {});
           const phone = addr?.phone || row.phone || "";
           const phone2 = addr?.phone2 || row.phone2 || "";
           const email = addr?.email || row.email || "";
           const emailSubject = encodeURIComponent(`Appuntamento ${row.customer} - ${result.scheduledDate || ""} ore ${row.arrivalTime}`);
           const stopTitle = `${row.stopNumber}. ${escapeHtml(row.customer)}${row.location ? ` — ${escapeHtml(row.location)}` : ""}`;
-          const phoneBtn = phone && phone2
-            ? `<button class="btn" data-phone-picker="${row.stopNumber}" data-phone1="${escapeHtml(phone)}" data-phone2="${escapeHtml(phone2)}">📞</button>`
-            : phone ? `<a class="btn" href="tel:${escapeHtml(phone)}">📞</a>` : "";
+          const phoneBtn = pref ? `<a class="btn" href="tel:${escapeHtml(pref.number)}" title="${escapeHtml(pref.name || pref.number)}">${phoneIcon(pref.type)}</a>` : "";
           return `
           <article class="card result-card">
             <div class="stop-compact-head" data-expand-stop="${row.stopNumber}">
@@ -710,8 +732,8 @@ function renderResult() {
                 <div><div class="metric-label">Intervento</div><strong>${minutesLabel(row.durationMinutes)}</strong></div>
                 <div><div class="metric-label">Fine</div><strong>${escapeHtml(row.serviceEndTime)}</strong></div>
               </div>
-              ${phone ? `<div class="stop-meta">📞 <a href="tel:${escapeHtml(phone)}">${escapeHtml(phone)}</a></div>` : ""}
-              ${phone2 ? `<div class="stop-meta">📞 <a href="tel:${escapeHtml(phone2)}">${escapeHtml(phone2)}</a></div>` : ""}
+              ${phone ? `<div class="stop-meta">${phoneIcon(addr?.phoneType)} <a href="tel:${escapeHtml(phone)}">${escapeHtml(phone)}</a>${addr?.phoneName ? ` <span class="phone-name-badge">${escapeHtml(addr.phoneName)}</span>` : ""}${addr?.phonePreferred !== "phone2" && phone2 ? " ★" : ""}</div>` : ""}
+              ${phone2 ? `<div class="stop-meta">${phoneIcon(addr?.phone2Type)} <a href="tel:${escapeHtml(phone2)}">${escapeHtml(phone2)}</a>${addr?.phone2Name ? ` <span class="phone-name-badge">${escapeHtml(addr.phone2Name)}</span>` : ""}${addr?.phonePreferred === "phone2" ? " ★" : ""}</div>` : ""}
               ${email ? `<div class="stop-meta">✉ <a href="mailto:${escapeHtml(email)}">${escapeHtml(email)}</a></div>` : ""}
               ${row.notes ? `<div class="stop-meta" style="margin-top:6px;font-style:italic">${escapeHtml(row.notes)}</div>` : ""}
               ${warningBadges(row.warnings)}
@@ -1092,8 +1114,9 @@ async function saveAddressForm(form) {
   const v = readForm(form);
   const payload = {
     customer: v.customer, location: v.location, fullAddress: v.fullAddress,
-    phone: v.phone || "", phoneType: v.phoneType || "cell",
-    phone2: v.phone2 || "", phone2Type: v.phone2Type || "fisso",
+    phone: v.phone || "", phoneType: v.phoneType || "cell", phoneName: v.phoneName || "",
+    phone2: v.phone2 || "", phone2Type: v.phone2Type || "fisso", phone2Name: v.phone2Name || "",
+    phonePreferred: v.phonePreferred || "phone",
     email: v.email || "", notes: v.notes,
     openMorning: v.openMorning, closeMorning: v.closeMorning,
     openAfternoon: v.openAfternoon, closeAfternoon: v.closeAfternoon,
@@ -1328,15 +1351,6 @@ function bindEvents() {
       if (state.result) state.result.name = name;
       await refreshSavedRoutes();
       render();
-      return;
-    }
-
-    const phonePicker = e.target.closest("[data-phone-picker]");
-    if (phonePicker) {
-      const p1 = phonePicker.dataset.phone1;
-      const p2 = phonePicker.dataset.phone2;
-      const choice = window.confirm(`Chiama ${p1}?\n(Annulla per usare ${p2})`);
-      window.location.href = `tel:${choice ? p1 : p2}`;
       return;
     }
 
