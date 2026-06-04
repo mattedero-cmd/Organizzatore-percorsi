@@ -239,23 +239,38 @@ async function renderGoogleMap(result) {
 
   if (hasPoints) map.fitBounds(bounds);
 
-  // Fetch and draw polyline
-  try {
-    const shapePoints = [];
-    if (result.start?.lat) shapePoints.push({ lat: result.start.lat, lng: result.start.lng });
-    for (const row of rows) if (row.lat) shapePoints.push({ lat: row.lat, lng: row.lng });
-    if (result.end?.lat) shapePoints.push({ lat: result.end.lat, lng: result.end.lng });
+  // Draw route using Google Maps Directions Service (browser-side)
+  const allPoints = [];
+  if (result.start?.lat) allPoints.push({ lat: Number(result.start.lat), lng: Number(result.start.lng) });
+  for (const row of rows) if (row.lat) allPoints.push({ lat: Number(row.lat), lng: Number(row.lng) });
+  if (result.end?.lat) allPoints.push({ lat: Number(result.end.lat), lng: Number(result.end.lng) });
 
-    if (shapePoints.length >= 2) {
-      const shape = await api("/api/route-shape", { method: "POST", body: JSON.stringify({ points: shapePoints }) });
-      if (shape.coordinates?.length > 1) {
-        new google.maps.Polyline({
-          path: shape.coordinates.map(([lat, lng]) => ({ lat, lng })),
-          geodesic: true, strokeColor: "#00a99d", strokeOpacity: 0.9, strokeWeight: 4, map
-        });
+  if (allPoints.length >= 2) {
+    const ds = new google.maps.DirectionsService();
+    const dr = new google.maps.DirectionsRenderer({
+      map,
+      suppressMarkers: true,
+      polylineOptions: { strokeColor: "#00a99d", strokeOpacity: 0.9, strokeWeight: 4 }
+    });
+
+    const waypoints = allPoints.slice(1, -1).map(p => ({ location: new google.maps.LatLng(p.lat, p.lng), stopover: true }));
+    ds.route({
+      origin: new google.maps.LatLng(allPoints[0].lat, allPoints[0].lng),
+      destination: new google.maps.LatLng(allPoints[allPoints.length - 1].lat, allPoints[allPoints.length - 1].lng),
+      waypoints,
+      travelMode: google.maps.TravelMode.DRIVING
+    }, (res, status) => {
+      if (status === "OK") {
+        dr.setDirections(res);
+        const route = res.routes[0];
+        if (route) {
+          const b = new google.maps.LatLngBounds();
+          route.legs.forEach(leg => { b.extend(leg.start_location); b.extend(leg.end_location); });
+          map.fitBounds(b);
+        }
       }
-    }
-  } catch { /* map still shows markers */ }
+    });
+  }
 }
 
 // ── render: route tab ─────────────────────────────────────────────────────────
