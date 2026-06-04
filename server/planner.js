@@ -333,14 +333,16 @@ function nearestOrders(stops, context) {
   return [order];
 }
 
-function findNearestRestStop(restStops, lat, lng) {
+function findNearestRestStop(restStops, lat, lng, maxKm = 3.0) {
   if (!restStops.length) return null;
   if (!lat || !lng) return restStops[0];
-  let nearest = restStops[0], minDist = Infinity;
+  // 1 degree ≈ 111 km; convert maxKm to rough degree threshold
+  const maxDeg = maxKm / 111;
+  let nearest = null, minDist = Infinity;
   for (const s of restStops) {
     if (!s.lat || !s.lng) continue;
     const d = Math.hypot(s.lat - lat, s.lng - lng);
-    if (d < minDist) { minDist = d; nearest = s; }
+    if (d < minDist && d <= maxDeg) { minDist = d; nearest = s; }
   }
   return nearest;
 }
@@ -418,13 +420,18 @@ async function insertBreaks(rows, options) {
 
   let cumulative = 0;
   let lastLat = null, lastLng = null;
+  // prevServiceEnd tracks wall-clock time at the end of the last activity (used for mid-leg timing)
+  let prevServiceEnd = dayStart;
 
-  const tryInsert = async (beforeIndex, refLat, refLng) => {
-    if (insertions.some(ins => ins.beforeIndex === beforeIndex)) {
+  // driveOffset: minutes into the drive-to-row-i where the break is inserted.
+  // 0 = at the start of the leg (end of previous stop); >0 = mid-leg.
+  const tryInsert = async (beforeIndex, refLat, refLng, driveOffset = 0) => {
+    if (insertions.some(ins => ins.beforeIndex === beforeIndex && Math.abs((ins.driveOffset||0) - driveOffset) < 5)) {
       cumulative = 0;
-      return true; // slot occupied by lunch, treat as successful break
+      return true;
     }
-    let spot = findNearestRestStop(restStops, refLat, refLng);
+    // Prefer saved rest stops (higher tolerance: 3 km)
+    let spot = findNearestRestStop(restStops, refLat, refLng, 3.0);
     if (!spot && refLat && refLng) {
       spot = await findNearbyRestStop(refLat, refLng).catch(() => null);
     }
@@ -434,6 +441,7 @@ async function insertBreaks(rows, options) {
       : spot.customer;
     insertions.push({
       beforeIndex, type: "rest", duration: REST_DUR,
+      driveOffset,
       customer: label,
       location: spot.location || "",
       address: spot.fullAddress || "",
@@ -444,40 +452,49 @@ async function insertBreaks(rows, options) {
     return true;
   };
 
-  console.log("[breaks] dayStart:", formatTime(dayStart), "finalArrival:", formatTime(finalArrival), "lunchTime:", lunchTime ? formatTime(lunchTime) : "none", "rows:", rows.length);
-
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
-    const driveMin = row.driveMinutes || 0;
+    let remainingDrive = row.driveMinutes || 0;
     const workMin = row.durationMinutes || 0;
+    let driveConsumed = 0; // minutes of this leg already accounted for by mid-leg breaks
 
-    // Opportunità A — prima di guidare verso questa tappa
-    if (cumulative > 0 && cumulative + driveMin >= REST_MIN && i > 0) {
-      const breakTime = parseTime(rows[i - 1].serviceEndTime);
-      const valid = isValidBreakTime(breakTime);
-      console.log(`[breaks] OpA i=${i} cumul=${cumulative} drive=${driveMin} breakTime=${formatTime(breakTime)} valid=${valid}`);
-      if (valid) await tryInsert(i, lastLat, lastLng);
+    // Mid-leg breaks: insert as many as needed while driving toward stop i
+    while (cumulative > 0 && remainingDrive > 0 && cumulative + remainingDrive >= REST_MIN) {
+      const needed = REST_MIN - cumulative; // minutes of driving until break triggers
+      const fraction = needed / (row.driveMinutes || 1);
+      // Interpolate position along the route at the break point
+      const interpLat = (lastLat != null && row.lat != null) ? lastLat + (row.lat - lastLat) * fraction : (row.lat ?? lastLat);
+      const interpLng = (lastLng != null && row.lng != null) ? lastLng + (row.lng - lastLng) * fraction : (row.lng ?? lastLng);
+      const breakTime = prevServiceEnd + driveConsumed + needed;
+      if (!isValidBreakTime(breakTime)) break;
+      const inserted = await tryInsert(i, interpLat, interpLng, driveConsumed + needed);
+      if (!inserted) break;
+      driveConsumed += needed;
+      remainingDrive -= needed;
+      // cumulative was reset to 0 by tryInsert
     }
-    cumulative += driveMin;
+
+    cumulative += remainingDrive;
     if (cumulative >= REST_MAX) cumulative = Math.floor(REST_MAX / 2);
 
-    // Opportunità B — dopo il lavoro in questa tappa
+    // Post-work break: after finishing work at this stop
     cumulative += workMin;
+    prevServiceEnd = parseTime(row.serviceEndTime) || prevServiceEnd;
+
     if (cumulative >= REST_MIN && i < rows.length - 1) {
-      const breakTime = parseTime(row.serviceEndTime);
-      const valid = isValidBreakTime(breakTime);
-      console.log(`[breaks] OpB i=${i} cumul=${cumulative} work=${workMin} breakTime=${formatTime(breakTime)} valid=${valid}`);
-      if (valid) await tryInsert(i + 1, row.lat, row.lng);
+      const breakTime = prevServiceEnd;
+      if (isValidBreakTime(breakTime)) {
+        await tryInsert(i + 1, row.lat, row.lng, 0);
+      }
     }
     if (cumulative >= REST_MAX) cumulative = Math.floor(REST_MAX / 2);
 
     lastLat = row.lat;
     lastLng = row.lng;
   }
-  console.log("[breaks] insertions:", insertions.length);
 
   // ── 3. Applica inserzioni ────────────────────────────────────────────────────
-  insertions.sort((a, b) => a.beforeIndex - b.beforeIndex);
+  insertions.sort((a, b) => a.beforeIndex - b.beforeIndex || (a.driveOffset || 0) - (b.driveOffset || 0));
 
   const result = [];
   let timeShift = 0;
@@ -486,9 +503,10 @@ async function insertBreaks(rows, options) {
   for (let i = 0; i <= rows.length; i++) {
     while (pending.length && pending[0].beforeIndex === i) {
       const brk = pending.shift();
-      const refDep = i < rows.length
+      const baseDep = i < rows.length
         ? parseTime(rows[i].departureTime) + timeShift
         : parseTime(rows[rows.length - 1].serviceEndTime) + timeShift;
+      const refDep = baseDep + (brk.driveOffset || 0);
       const brkEnd = refDep + brk.duration;
       result.push({
         type: brk.type,
