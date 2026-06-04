@@ -369,6 +369,7 @@ function renderRoute() {
         <div class="form-grid">
           <div class="field full" style="position:relative;">
             <input id="stop-search" placeholder="Cerca cliente o città…" value="${escapeHtml(state.stopSearchText)}" autocomplete="off" />
+            <input type="hidden" name="selectedAddressId" value="${escapeHtml(state.route.selectedAddressId)}" id="selected-address-id" />
             <div id="stop-suggestions" class="stop-suggestions">${renderStopSuggestions()}</div>
           </div>
         </div>
@@ -470,7 +471,9 @@ function renderArchive() {
         </div>
         <div class="row" style="gap:8px; margin-bottom:10px;">
           <input id="archive-search" placeholder="Cerca per nome, città, indirizzo…" value="${escapeHtml(state.addressSearch)}" style="flex:1" autocomplete="off" />
-          <button class="btn" id="show-all-addresses">Mostra tutti</button>
+          ${showingResults
+            ? `<button class="btn" id="hide-all-addresses">× Nascondi</button>`
+            : `<button class="btn" id="show-all-addresses">Mostra tutti</button>`}
         </div>
         <input id="vcf-input" type="file" accept=".vcf,.vcard,.csv" style="display:none" />
         <div class="archive-list">
@@ -712,7 +715,7 @@ function updateRouteFromForm() {
     endSameAsStart: Boolean(v.endSameAsStart),
     endLabel: v.endLabel, endAddress: v.endAddress,
     firstArrivalRequired: v.firstArrivalRequired || "",
-    selectedAddressId: v.selectedAddressId,
+    selectedAddressId: v.selectedAddressId || state.route.selectedAddressId,
     customCustomer: v.customCustomer, customLocation: v.customLocation,
     customAddress: v.customAddress, customDuration: Number(v.customDuration || 45),
     customOpenMorning: v.customOpenMorning, customCloseMorning: v.customCloseMorning,
@@ -1147,6 +1150,8 @@ function bindEvents() {
         state.stopSearchText = addressName(addr);
         const inp = document.querySelector("#stop-search");
         if (inp) inp.value = state.stopSearchText;
+        const hidden = document.querySelector("#selected-address-id");
+        if (hidden) hidden.value = id;
         const sug = document.querySelector("#stop-suggestions");
         if (sug) sug.innerHTML = "";
       }
@@ -1157,6 +1162,15 @@ function bindEvents() {
     if (e.target.closest("#show-all-addresses")) {
       state.archiveShowAll = true;
       await refreshAddresses();
+      renderArchive();
+      return;
+    }
+
+    // hide / reset archive
+    if (e.target.closest("#hide-all-addresses")) {
+      state.archiveShowAll = false;
+      state.addressSearch = "";
+      state.addresses = [];
       renderArchive();
       return;
     }
