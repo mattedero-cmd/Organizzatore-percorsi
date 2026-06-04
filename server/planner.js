@@ -1,4 +1,4 @@
-import { routeBetween, findNearbyRestStop } from "./googleMapsService.js";
+import { routeBetween, findNearbyRestStop, resolvePlace } from "./googleMapsService.js";
 
 const MAX_EXACT_STOPS = 7;
 
@@ -524,6 +524,19 @@ export async function planRoute(payload, settings, restStops = []) {
   ];
 
   const stopsWithNodeIndex = stops.map((stop, index) => ({ ...stop, nodeIndex: index + 1 }));
+
+  // Ensure every stop has coordinates so Places API searches the right area.
+  // resolvePlace geocodes from the stop's address when lat/lng are missing/zero.
+  await Promise.all(stopsWithNodeIndex.map(async stop => {
+    if (!stop.lat || !stop.lng) {
+      try {
+        const coord = await resolvePlace(stop);
+        stop.lat = coord.lat;
+        stop.lng = coord.lng;
+      } catch { /* leave as null */ }
+    }
+  }));
+
   const matrix = await buildLegMatrix(nodes);
   const startMinutes = parseTime(payload.startTime || payload.start?.time || "");
   const timingMode = payload.timingMode || "first_open_minus";

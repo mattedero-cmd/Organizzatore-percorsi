@@ -778,18 +778,25 @@ function renderResult() {
           </article>`;
 
           // Special row: rest stop
-          if (row.type === "rest") return `
+          if (row.type === "rest") {
+            const restNavUrl = row.lat && row.lng
+              ? (state.navigatorPref === "apple"
+                  ? `http://maps.apple.com/?ll=${row.lat},${row.lng}&q=${encodeURIComponent(row.customer)}`
+                  : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(row.customer)}&query_place_id=&center=${row.lat},${row.lng}`)
+              : stopNavUrl(row, state.navigatorPref);
+            return `
           <article class="card result-card break-card rest-card">
             <div class="break-row">
               <span class="break-icon">☕</span>
-              <div>
+              <div style="flex:1;min-width:0">
                 <p class="stop-title" style="margin:0">${escapeHtml(row.customer)}${row.location ? ` — ${escapeHtml(row.location)}` : ""}</p>
                 <div class="stop-meta">${escapeHtml(row.serviceStartTime)} – ${escapeHtml(row.serviceEndTime)} · ${minutesLabel(row.durationMinutes)}</div>
                 ${row.address ? `<div class="stop-meta" style="font-size:0.8rem">${escapeHtml(row.address)}</div>` : ""}
               </div>
-              ${row.address ? `<a class="btn" href="${stopNavUrl(row, state.navigatorPref)}" target="_blank" rel="noopener" style="margin-left:auto">↗</a>` : ""}
             </div>
+            <a class="btn primary" href="${restNavUrl}" target="_blank" rel="noopener" style="margin-top:8px;display:block;text-align:center">↗ Naviga</a>
           </article>`;
+          }
 
           const addr = state.allAddresses.find(a => String(a.id) === String(row.addressId));
           const pref = preferredPhone(addr || {});
