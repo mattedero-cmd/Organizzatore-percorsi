@@ -357,19 +357,28 @@ function shiftRowTimes(row, minutes) {
 }
 
 async function insertBreaks(rows, options) {
-  const { lunchBreakEnabled, lunchBreakMinutes = 45, restStops = [] } = options;
-  // nothing to do only if both lunch and rest breaks are explicitly skipped
-  // rest breaks are always attempted (may fall back to Places API)
+  const {
+    lunchBreakEnabled, lunchBreakMinutes = 45, restStops = [],
+    dayStart = 7 * 60,
+    finalArrival = 20 * 60
+  } = options;
 
+  // ── constants ────────────────────────────────────────────────────────────────
   const LUNCH_OPEN = 11 * 60 + 30;
   const LUNCH_CLOSE = 14 * 60;
-  const REST_EVERY = 120;
-  const REST_TOL = 30;
+  const REST_MIN = 110;          // trigger sosta: 2h − 10 min
+  const REST_MAX = 150;          // abbandona finestra: 2h + 30 min
   const REST_DUR = 15;
+  const NO_BREAK_EARLY = 120;    // no sosta nelle prime 2h di giornata
+  const NO_BREAK_BEFORE_HOME = 60;  // no sosta nell'ultima ora prima di casa
+  const EARLIEST_BREAK = 8 * 60;   // no sosta prima delle 08:00
+  const NO_BREAK_BEFORE_LUNCH = 60; // no sosta nell'ora prima del pranzo
+  const NO_BREAK_AFTER_LUNCH = 120; // no sosta nelle 2h dopo il pranzo
 
-  // Determine insertion points (before which row index)
+  // ── insertions list ──────────────────────────────────────────────────────────
   const insertions = [];
 
+  // ── 1. Pausa pranzo ──────────────────────────────────────────────────────────
   if (lunchBreakEnabled) {
     let placed = false;
     for (let i = 0; i < rows.length; i++) {
@@ -388,62 +397,83 @@ async function insertBreaks(rows, options) {
     }
   }
 
-  // Insert rest stops by accumulating drive+work minutes since the last break.
-  // A pre-drive break is inserted only when already active (cumulative > 0).
-  // A post-work break is inserted after a stop pushes cumulative over threshold.
-  // Nothing is inserted if no real place is found (no generic "Sosta" entries).
-  {
-    let cumulative = 0;
-    let lastLat = null, lastLng = null;
+  // ── 2. Soste automatiche ─────────────────────────────────────────────────────
 
-    const tryInsert = async (beforeIndex, refLat, refLng) => {
-      if (insertions.some(ins => ins.beforeIndex === beforeIndex)) {
-        cumulative = 0;
-        return;
-      }
-      let spot = findNearestRestStop(restStops, refLat, refLng);
-      if (!spot && refLat && refLng) {
-        spot = await findNearbyRestStop(refLat, refLng).catch(() => null);
-      }
-      // Only insert if we have a real named place
-      if (!spot) { cumulative = Math.floor(cumulative / 2); return; }
-      const label = spot.rating
-        ? `${spot.customer} · ⭐ ${spot.rating} (${spot.reviewCount})`
-        : spot.customer;
-      insertions.push({
-        beforeIndex, type: "rest", duration: REST_DUR,
-        customer: label,
-        location: spot.location || "",
-        address: spot.fullAddress || "",
-        lat: spot.lat ?? null,
-        lng: spot.lng ?? null
-      });
+  // Orario effettivo della pausa pranzo (per le regole no-break ±pranzo)
+  const lunchIns = insertions.find(ins => ins.type === "lunch");
+  const lunchTime = lunchIns != null
+    ? parseTime(rows[lunchIns.beforeIndex]?.departureTime ?? "") || null
+    : null;
+
+  const isValidBreakTime = (t) => {
+    if (t < EARLIEST_BREAK) return false;
+    if (t < dayStart + NO_BREAK_EARLY) return false;
+    if (t > finalArrival - NO_BREAK_BEFORE_HOME) return false;
+    if (lunchTime != null) {
+      if (t > lunchTime - NO_BREAK_BEFORE_LUNCH) return false;
+      if (t < lunchTime + NO_BREAK_AFTER_LUNCH) return false;
+    }
+    return true;
+  };
+
+  let cumulative = 0;
+  let lastLat = null, lastLng = null;
+
+  const tryInsert = async (beforeIndex, refLat, refLng) => {
+    if (insertions.some(ins => ins.beforeIndex === beforeIndex)) {
       cumulative = 0;
-    };
+      return true; // slot occupied by lunch, treat as successful break
+    }
+    let spot = findNearestRestStop(restStops, refLat, refLng);
+    if (!spot && refLat && refLng) {
+      spot = await findNearbyRestStop(refLat, refLng).catch(() => null);
+    }
+    if (!spot) { cumulative = Math.floor(cumulative / 2); return false; }
+    const label = spot.rating
+      ? `${spot.customer} · ⭐ ${spot.rating} (${spot.reviewCount})`
+      : spot.customer;
+    insertions.push({
+      beforeIndex, type: "rest", duration: REST_DUR,
+      customer: label,
+      location: spot.location || "",
+      address: spot.fullAddress || "",
+      lat: spot.lat ?? null,
+      lng: spot.lng ?? null
+    });
+    cumulative = 0;
+    return true;
+  };
 
-    for (let i = 0; i < rows.length; i++) {
-      const row = rows[i];
-      const driveMin = row.driveMinutes || 0;
-      const workMin = row.durationMinutes || 0;
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const driveMin = row.driveMinutes || 0;
+    const workMin = row.durationMinutes || 0;
 
-      // Pre-drive break: only if already active (cumulative > 0) and the drive
-      // would push total over threshold
-      if (cumulative > 0 && cumulative + driveMin >= REST_EVERY - REST_TOL) {
+    // Opportunità A — prima di guidare verso questa tappa
+    if (cumulative > 0 && cumulative + driveMin >= REST_MIN && i > 0) {
+      const breakTime = parseTime(rows[i - 1].serviceEndTime);
+      if (isValidBreakTime(breakTime)) {
         await tryInsert(i, lastLat, lastLng);
       }
-      cumulative += driveMin;
+    }
+    cumulative += driveMin;
+    if (cumulative >= REST_MAX) cumulative = Math.floor(REST_MAX / 2);
 
-      // Post-work break: work at this stop pushes cumulative over threshold
-      cumulative += workMin;
-      if (cumulative >= REST_EVERY - REST_TOL && i < rows.length - 1) {
+    // Opportunità B — dopo il lavoro in questa tappa
+    cumulative += workMin;
+    if (cumulative >= REST_MIN && i < rows.length - 1) {
+      const breakTime = parseTime(row.serviceEndTime);
+      if (isValidBreakTime(breakTime)) {
         await tryInsert(i + 1, row.lat, row.lng);
       }
-
-      lastLat = row.lat;
-      lastLng = row.lng;
     }
+    if (cumulative >= REST_MAX) cumulative = Math.floor(REST_MAX / 2);
+
+    lastLat = row.lat;
+    lastLng = row.lng;
   }
 
+  // ── 3. Applica inserzioni ────────────────────────────────────────────────────
   insertions.sort((a, b) => a.beforeIndex - b.beforeIndex);
 
   const result = [];
@@ -572,7 +602,11 @@ export async function planRoute(payload, settings, restStops = []) {
   const lunchBreakEnabled = payload.lunchBreak !== false && (payload.lunchBreak === true || settings.lunchBreakEnabled !== false);
   const lunchBreakMinutes = Number(payload.lunchBreakMinutes ?? settings.lunchBreakMinutes ?? 45);
   const activeRestStops = restStops.filter(s => s.addressType === "rest");
-  const { rows: enrichedRows, addedMinutes } = await insertBreaks(best.rows, { lunchBreakEnabled, lunchBreakMinutes, restStops: activeRestStops });
+  const { rows: enrichedRows, addedMinutes } = await insertBreaks(best.rows, {
+    lunchBreakEnabled, lunchBreakMinutes, restStops: activeRestStops,
+    dayStart: parseTime(best.summary.dayStart),
+    finalArrival: parseTime(best.finalLeg.arrivalTime)
+  });
   best = {
     ...best,
     rows: enrichedRows,

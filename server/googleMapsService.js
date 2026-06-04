@@ -140,8 +140,17 @@ export async function findNearbyRestStop(lat, lng, radiusM = 800) {
       return null;
     }
 
+    // Max detour: 2 minutes ≈ 1.7 km at 50 km/h. Keep only bars reachable
+    // with at most a 2-min deviation from the current route position.
+    const MAX_DETOUR_KM = 1.7;
+
     const best = data.results
-      .filter(p => p.rating && p.user_ratings_total >= 5 && !EXCLUDE_KEYWORDS.test(p.name))
+      .filter(p => {
+        if (!p.rating || p.user_ratings_total < 5) return false;
+        if (EXCLUDE_KEYWORDS.test(p.name)) return false;
+        const km = haversineKm({ lat, lng }, { lat: p.geometry.location.lat, lng: p.geometry.location.lng });
+        return km <= MAX_DETOUR_KM;
+      })
       .sort((a, b) => placesScore(b) - placesScore(a))[0];
 
     if (!best) { placesCache.set(cacheKey, null); return null; }
