@@ -414,11 +414,12 @@ function renderRoute() {
         <div class="actions"><button type="button" class="btn" id="add-saved-stop">+ Aggiungi</button></div>
 
         <h3>Nuova tappa</h3>
-        <div class="form-grid">
+        <div class="form-grid route-fields">
           <label class="field">Cliente<input name="customCustomer" value="${escapeHtml(r.customCustomer)}" /></label>
           <label class="field">Sede<input name="customLocation" value="${escapeHtml(r.customLocation)}" /></label>
           <label class="field full">Indirizzo completo<input name="customAddress" value="${escapeHtml(r.customAddress)}" /></label>
           <label class="field">Durata (min)<input name="customDuration" type="number" min="5" step="5" value="${escapeHtml(r.customDuration)}" /></label>
+          <label class="field"></label>
           <label class="field">Apr. mattina<input name="customOpenMorning" type="time" value="${escapeHtml(r.customOpenMorning)}" /></label>
           <label class="field">Ch. mattina<input name="customCloseMorning" type="time" value="${escapeHtml(r.customCloseMorning)}" /></label>
           <label class="field">Apr. pomeriggio<input name="customOpenAfternoon" type="time" value="${escapeHtml(r.customOpenAfternoon)}" /></label>
