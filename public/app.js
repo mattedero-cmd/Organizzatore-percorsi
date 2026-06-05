@@ -456,65 +456,150 @@ function renderStops() {
 function renderRoute() {
   const r = state.route;
   const dm = r.timingMode;
+  const startDisplay = r.startLabel || r.startAddress || "Imposta partenza";
+  const endDisplay = r.endSameAsStart ? (r.startLabel || r.startAddress || "= partenza") : (r.endLabel || r.endAddress || "Imposta arrivo");
   app.innerHTML = `
-    <section class="grid">
-      <form class="panel" id="route-form">
-        <h2>Nuovo percorso</h2>
-        <div class="form-grid route-fields">
-          <label class="field">Data<input name="scheduledDate" type="date" value="${escapeHtml(r.scheduledDate)}" /></label>
-          <label class="field">Orario partenza<input name="startTime" type="time" value="${escapeHtml(r.startTime)}" /></label>
-          <label class="field full">Partenza (nome)<input name="startLabel" value="${escapeHtml(r.startLabel)}" autocomplete="off" /></label>
-          <label class="field full">Indirizzo partenza<input name="startAddress" value="${escapeHtml(r.startAddress)}" /></label>
-          <label class="field full">Regola orario<select name="timingMode">
-            <option value="first_open_minus" ${dm === "first_open_minus" ? "selected" : ""}>Prima dell'apertura</option>
-            <option value="arrive_at" ${dm === "arrive_at" ? "selected" : ""}>Arrivo a orario fisso</option>
-            <option value="depart_at" ${dm === "depart_at" ? "selected" : ""}>Partenza a orario fisso</option>
-          </select></label>
-          <label class="field">Anticipo (min)<input name="arrivalLeadMinutes" type="number" min="0" max="60" step="5" value="${escapeHtml(r.arrivalLeadMinutes)}" ${dm !== "first_open_minus" ? "disabled" : ""} /></label>
-          <label class="field">Arrivo target<input name="firstArrivalTime" type="time" value="${escapeHtml(r.firstArrivalTime)}" ${dm !== "arrive_at" ? "disabled" : ""} /></label>
-          <label class="field checkbox-field full">
-            <input name="endSameAsStart" type="checkbox" ${r.endSameAsStart ? "checked" : ""} />
-            <span>Arrivo finale = partenza</span>
-          </label>
-          <label class="field">Arrivo (nome)<input name="endLabel" value="${escapeHtml(r.endLabel)}" ${r.endSameAsStart ? "disabled" : ""} /></label>
-          <label class="field full">Indirizzo arrivo<input name="endAddress" value="${escapeHtml(r.endAddress)}" ${r.endSameAsStart ? "disabled" : ""} /></label>
-        </div>
+    <form id="route-form" class="rp-form">
 
-        <div class="form-grid route-fields" style="margin-top:12px;">
-          <label class="field checkbox-field">
-            <input name="lunchBreak" type="checkbox" ${r.lunchBreak ? "checked" : ""} id="lunch-break-check" />
-            <span>Pausa pranzo</span>
+      <!-- Sezione 1: Quando -->
+      <div class="rp-section">
+        <div class="rp-when-row">
+          <label class="rp-when-date">
+            <span class="rp-label">Data</span>
+            <input name="scheduledDate" type="date" value="${escapeHtml(r.scheduledDate)}" />
           </label>
-          <label class="field">Durata pranzo (min)<input name="lunchBreakMinutes" type="number" min="15" max="120" step="5" value="${escapeHtml(r.lunchBreakMinutes)}" ${!r.lunchBreak ? "disabled" : ""} id="lunch-break-minutes" /></label>
+          <label class="rp-when-time">
+            <span class="rp-label">Partenza</span>
+            <input name="startTime" type="time" value="${escapeHtml(r.startTime)}" />
+          </label>
         </div>
+      </div>
 
-        <div class="stop-add-row">
-          <div style="position:relative;flex:1;">
+      <!-- Sezione 2: Da / A -->
+      <div class="rp-section">
+        <!-- Partenza -->
+        <div class="rp-endpoint-card" id="rp-start-card">
+          <div class="rp-endpoint-inner" id="rp-start-toggle">
+            <span class="rp-endpoint-icon">🏠</span>
+            <div class="rp-endpoint-info">
+              <span class="rp-endpoint-name">${escapeHtml(startDisplay)}</span>
+            </div>
+            <span class="rp-endpoint-chevron">›</span>
+          </div>
+          <div class="rp-endpoint-edit" id="rp-start-edit">
+            <label class="field">Nome<input name="startLabel" value="${escapeHtml(r.startLabel)}" autocomplete="off" placeholder="es. Casa, Ufficio…" /></label>
+            <label class="field">Indirizzo<input name="startAddress" value="${escapeHtml(r.startAddress)}" placeholder="Via, città…" /></label>
+            <div class="rp-endpoint-actions">
+              <button type="button" class="btn ghost rp-map-btn" data-map-label="startLabel" data-map-address="startAddress">🗺 Mappa</button>
+              <button type="button" class="btn ghost" id="rp-start-archive-btn">📋 Archivio</button>
+            </div>
+            <div class="rp-archive-inline" id="rp-start-archive" style="display:none">
+              <input id="rp-start-archive-search" placeholder="Cerca nell'archivio…" autocomplete="off" />
+              <div class="stop-suggestions" id="rp-start-archive-suggestions"></div>
+            </div>
+          </div>
+        </div>
+        <!-- Arrivo -->
+        <div class="rp-endpoint-card rp-endpoint-card--end" id="rp-end-card">
+          <div class="rp-endpoint-inner" id="rp-end-toggle">
+            <span class="rp-endpoint-icon">🏁</span>
+            <div class="rp-endpoint-info">
+              <span class="rp-endpoint-name">${escapeHtml(endDisplay)}</span>
+            </div>
+            <label class="rp-same-label" onclick="event.stopPropagation()">
+              <input name="endSameAsStart" type="checkbox" ${r.endSameAsStart ? "checked" : ""} />
+              <span>= partenza</span>
+            </label>
+            <span class="rp-endpoint-chevron">›</span>
+          </div>
+          <div class="rp-endpoint-edit" id="rp-end-edit" ${r.endSameAsStart ? 'style="display:none"' : ""}>
+            <label class="field">Nome<input name="endLabel" value="${escapeHtml(r.endLabel)}" autocomplete="off" placeholder="es. Cliente finale…" ${r.endSameAsStart ? "disabled" : ""} /></label>
+            <label class="field">Indirizzo<input name="endAddress" value="${escapeHtml(r.endAddress)}" placeholder="Via, città…" ${r.endSameAsStart ? "disabled" : ""} /></label>
+            <div class="rp-endpoint-actions">
+              <button type="button" class="btn ghost rp-map-btn" data-map-label="endLabel" data-map-address="endAddress" ${r.endSameAsStart ? "disabled" : ""}>🗺 Mappa</button>
+              <button type="button" class="btn ghost" id="rp-end-archive-btn" ${r.endSameAsStart ? "disabled" : ""}>📋 Archivio</button>
+            </div>
+            <div class="rp-archive-inline" id="rp-end-archive" style="display:none">
+              <input id="rp-end-archive-search" placeholder="Cerca nell'archivio…" autocomplete="off" />
+              <div class="stop-suggestions" id="rp-end-archive-suggestions"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sezione 3: Opzioni (collassata) -->
+      <div class="rp-section">
+        <details class="rp-options-details">
+          <summary class="rp-options-summary">Opzioni orario</summary>
+          <div class="rp-options-body">
+            <label class="field">Regola<select name="timingMode">
+              <option value="first_open_minus" ${dm === "first_open_minus" ? "selected" : ""}>Prima dell'apertura</option>
+              <option value="arrive_at" ${dm === "arrive_at" ? "selected" : ""}>Arrivo a orario fisso</option>
+              <option value="depart_at" ${dm === "depart_at" ? "selected" : ""}>Partenza a orario fisso</option>
+            </select></label>
+            <div class="rp-options-row">
+              <label class="field">Anticipo (min)<input name="arrivalLeadMinutes" type="number" min="0" max="60" step="5" value="${escapeHtml(r.arrivalLeadMinutes)}" ${dm !== "first_open_minus" ? "disabled" : ""} /></label>
+              <label class="field">Arrivo target<input name="firstArrivalTime" type="time" value="${escapeHtml(r.firstArrivalTime)}" ${dm !== "arrive_at" ? "disabled" : ""} /></label>
+            </div>
+          </div>
+        </details>
+      </div>
+
+      <!-- Sezione 4: Pausa pranzo -->
+      <div class="rp-section rp-lunch-row">
+        <label class="rp-lunch-check">
+          <input name="lunchBreak" type="checkbox" ${r.lunchBreak ? "checked" : ""} id="lunch-break-check" />
+          <span>🍽 Pausa pranzo</span>
+        </label>
+        <input name="lunchBreakMinutes" type="number" min="15" max="120" step="5"
+          value="${escapeHtml(r.lunchBreakMinutes)}" id="lunch-break-minutes"
+          class="rp-lunch-min" ${!r.lunchBreak ? "style=\"display:none\"" : ""} />
+        <span class="rp-lunch-unit" ${!r.lunchBreak ? 'style="display:none"' : ""}>min</span>
+      </div>
+
+      <!-- Sezione 5: Tappe -->
+      <div class="rp-section rp-stops-section" id="stops-aside">
+        <div class="rp-stops-header">
+          <h2 class="rp-stops-title">Tappe (${state.route.stops.length})</h2>
+          <button type="button" class="btn ghost rp-add-stop-btn" id="rp-add-stop-btn">+</button>
+        </div>
+        <div class="rp-add-stop-panel" id="rp-add-stop-panel" style="display:none">
+          <div style="position:relative;">
             <input id="stop-search" placeholder="Cerca cliente o città…" value="${escapeHtml(state.stopSearchText)}" autocomplete="off" />
             <input type="hidden" name="selectedAddressId" value="${escapeHtml(state.route.selectedAddressId)}" id="selected-address-id" />
             <div id="stop-suggestions" class="stop-suggestions">${renderStopSuggestions()}</div>
           </div>
-          <button type="button" class="btn" id="add-saved-stop">+ Archivio</button>
+          <button type="button" class="btn" id="add-saved-stop">+ Aggiungi da archivio</button>
+          <details class="panel-details" style="margin-top:6px;">
+            <summary>+ Tappa manuale</summary>
+            <div class="form-grid route-fields" style="margin-top:8px;">
+              <label class="field">Cliente<input name="customCustomer" value="${escapeHtml(r.customCustomer)}" /></label>
+              <label class="field">Sede<input name="customLocation" value="${escapeHtml(r.customLocation)}" /></label>
+              <label class="field full">Indirizzo<input name="customAddress" value="${escapeHtml(r.customAddress)}" /></label>
+              <label class="field">Durata (min)<input name="customDuration" type="number" min="5" step="5" value="${escapeHtml(r.customDuration)}" /></label>
+              <label class="field">Apr. mattina<input name="customOpenMorning" type="time" value="${escapeHtml(r.customOpenMorning)}" /></label>
+              <label class="field">Ch. mattina<input name="customCloseMorning" type="time" value="${escapeHtml(r.customCloseMorning)}" /></label>
+              <label class="field">Apr. pom.<input name="customOpenAfternoon" type="time" value="${escapeHtml(r.customOpenAfternoon)}" /></label>
+              <label class="field">Ch. pom.<input name="customCloseAfternoon" type="time" value="${escapeHtml(r.customCloseAfternoon)}" /></label>
+            </div>
+            <div class="actions" style="margin-top:8px;">
+              <button type="button" class="btn" id="add-custom-stop">+ Salva e aggiungi</button>
+            </div>
+          </details>
         </div>
+        <div class="rp-stop-filter-row">
+          <input id="stop-filter" placeholder="Filtra tappe…" value="${escapeHtml(state.stopFilter)}" />
+        </div>
+        ${renderStops()}
+      </div>
 
-        <details class="panel-details">
-          <summary>+ Nuova tappa manuale</summary>
-          <div class="form-grid route-fields" style="margin-top:8px;">
-            <label class="field">Cliente<input name="customCustomer" value="${escapeHtml(r.customCustomer)}" /></label>
-            <label class="field">Sede<input name="customLocation" value="${escapeHtml(r.customLocation)}" /></label>
-            <label class="field full">Indirizzo completo<input name="customAddress" value="${escapeHtml(r.customAddress)}" /></label>
-            <label class="field">Durata (min)<input name="customDuration" type="number" min="5" step="5" value="${escapeHtml(r.customDuration)}" /></label>
-            <label class="field"></label>
-            <label class="field">Apr. mattina<input name="customOpenMorning" type="time" value="${escapeHtml(r.customOpenMorning)}" /></label>
-            <label class="field">Ch. mattina<input name="customCloseMorning" type="time" value="${escapeHtml(r.customCloseMorning)}" /></label>
-            <label class="field">Apr. pomeriggio<input name="customOpenAfternoon" type="time" value="${escapeHtml(r.customOpenAfternoon)}" /></label>
-            <label class="field">Ch. pomeriggio<input name="customCloseAfternoon" type="time" value="${escapeHtml(r.customCloseAfternoon)}" /></label>
-          </div>
-          <div class="actions" style="margin-top:8px;">
-            <button type="button" class="btn" id="add-custom-stop">+ Salva e aggiungi</button>
-          </div>
-        </details>
+      <!-- Pulsante sticky -->
+      <div class="rp-plan-sticky">
+        <button type="button" class="btn primary" id="plan-route" style="width:100%">${state.planning ? "Calcolo in corso…" : "→ Ottimizza e salva"}</button>
+      </div>
 
+      <!-- Comando vocale (in fondo, non prominente) -->
+      <div class="rp-section">
         <details class="panel-details">
           <summary>🎤 Comando vocale
             <details class="voice-help-wrap" style="display:inline-block;margin-left:8px;">
@@ -540,22 +625,135 @@ function renderRoute() {
             <button type="button" class="btn" id="apply-command">✓ Applica</button>
           </div>
         </details>
+      </div>
 
-        <div class="actions" style="margin-top:12px;">
-          <button type="button" class="btn primary" id="plan-route" style="width:100%">${state.planning ? "Calcolo in corso…" : "→ Ottimizza e salva"}</button>
-        </div>
-      </form>
+    </form>`;
 
-      <aside class="panel" id="stops-aside">
-        <div class="section-head" style="margin-bottom:10px;">
-          <h2 style="margin-bottom:0">Tappe (${state.route.stops.length})</h2>
-        </div>
-        <div class="row" style="gap:8px;margin-bottom:10px;">
-          <input id="stop-filter" placeholder="Cerca tappa per nome o città…" value="${escapeHtml(state.stopFilter)}" style="flex:1" />
-        </div>
-        ${renderStops()}
-      </aside>
-    </section>`;
+  // Bind inline expand/collapse for endpoint cards
+  const bindEndpointCard = (toggleId, editId) => {
+    const toggle = document.getElementById(toggleId);
+    const edit = document.getElementById(editId);
+    if (!toggle || !edit) return;
+    toggle.addEventListener("click", () => {
+      const open = edit.style.display !== "none";
+      edit.style.display = open ? "none" : "block";
+      toggle.closest(".rp-endpoint-card").classList.toggle("rp-endpoint-expanded", !open);
+    });
+  };
+  bindEndpointCard("rp-start-toggle", "rp-start-edit");
+  bindEndpointCard("rp-end-toggle", "rp-end-edit");
+
+  // Add stop panel toggle
+  const addStopBtn = document.getElementById("rp-add-stop-btn");
+  const addStopPanel = document.getElementById("rp-add-stop-panel");
+  if (addStopBtn && addStopPanel) {
+    addStopBtn.addEventListener("click", () => {
+      const open = addStopPanel.style.display !== "none";
+      addStopPanel.style.display = open ? "none" : "block";
+    });
+  }
+
+  // Lunch break inline toggle
+  const lunchCheck = document.getElementById("lunch-break-check");
+  const lunchMin = document.getElementById("lunch-break-minutes");
+  const lunchUnit = document.querySelector(".rp-lunch-unit");
+  if (lunchCheck) {
+    lunchCheck.addEventListener("change", () => {
+      if (lunchMin) lunchMin.style.display = lunchCheck.checked ? "" : "none";
+      if (lunchUnit) lunchUnit.style.display = lunchCheck.checked ? "" : "none";
+    });
+  }
+
+  // Map picker buttons for start/end
+  document.querySelectorAll(".rp-map-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const labelName = btn.dataset.mapLabel;
+      const addrName = btn.dataset.mapAddress;
+      const form = document.getElementById("route-form");
+      openMapPickerForField({
+        labelEl: form.querySelector(`[name="${labelName}"]`),
+        addressEl: form.querySelector(`[name="${addrName}"]`)
+      });
+    });
+  });
+
+  // Archive inline search for start
+  const startArchiveBtn = document.getElementById("rp-start-archive-btn");
+  const startArchivePanel = document.getElementById("rp-start-archive");
+  const startArchiveSearch = document.getElementById("rp-start-archive-search");
+  const startArchiveSug = document.getElementById("rp-start-archive-suggestions");
+  if (startArchiveBtn) {
+    startArchiveBtn.addEventListener("click", () => {
+      startArchivePanel.style.display = startArchivePanel.style.display === "none" ? "block" : "none";
+      if (startArchivePanel.style.display !== "none") startArchiveSearch.focus();
+    });
+  }
+  if (startArchiveSearch) {
+    startArchiveSearch.addEventListener("input", () => {
+      const q = startArchiveSearch.value.toLowerCase();
+      const matches = state.allAddresses.filter(a => {
+        const n = (a.customer + " " + (a.location || "") + " " + (a.fullAddress || "")).toLowerCase();
+        return q && n.includes(q);
+      }).slice(0, 8);
+      startArchiveSug.innerHTML = matches.map(a =>
+        `<div class="stop-suggestion-item" data-rp-addr-start="${escapeHtml(a.id)}">${escapeHtml(addressName(a))}<span class="stop-meta">${escapeHtml(a.fullAddress || "")}</span></div>`
+      ).join("");
+    });
+    startArchiveSug.addEventListener("click", e => {
+      const item = e.target.closest("[data-rp-addr-start]");
+      if (!item) return;
+      const addr = state.allAddresses.find(a => String(a.id) === item.dataset.rpAddrStart);
+      if (!addr) return;
+      const form = document.getElementById("route-form");
+      const lEl = form.querySelector("[name=startLabel]");
+      const aEl = form.querySelector("[name=startAddress]");
+      if (lEl) lEl.value = addr.customer || "";
+      if (aEl) aEl.value = addr.fullAddress || "";
+      startArchivePanel.style.display = "none";
+      startArchiveSearch.value = "";
+      startArchiveSug.innerHTML = "";
+      document.getElementById("rp-start-card").querySelector(".rp-endpoint-name").textContent = addr.customer || addr.fullAddress || "";
+    });
+  }
+
+  // Archive inline search for end
+  const endArchiveBtn = document.getElementById("rp-end-archive-btn");
+  const endArchivePanel = document.getElementById("rp-end-archive");
+  const endArchiveSearch = document.getElementById("rp-end-archive-search");
+  const endArchiveSug = document.getElementById("rp-end-archive-suggestions");
+  if (endArchiveBtn) {
+    endArchiveBtn.addEventListener("click", () => {
+      endArchivePanel.style.display = endArchivePanel.style.display === "none" ? "block" : "none";
+      if (endArchivePanel.style.display !== "none") endArchiveSearch.focus();
+    });
+  }
+  if (endArchiveSearch) {
+    endArchiveSearch.addEventListener("input", () => {
+      const q = endArchiveSearch.value.toLowerCase();
+      const matches = state.allAddresses.filter(a => {
+        const n = (a.customer + " " + (a.location || "") + " " + (a.fullAddress || "")).toLowerCase();
+        return q && n.includes(q);
+      }).slice(0, 8);
+      endArchiveSug.innerHTML = matches.map(a =>
+        `<div class="stop-suggestion-item" data-rp-addr-end="${escapeHtml(a.id)}">${escapeHtml(addressName(a))}<span class="stop-meta">${escapeHtml(a.fullAddress || "")}</span></div>`
+      ).join("");
+    });
+    endArchiveSug.addEventListener("click", e => {
+      const item = e.target.closest("[data-rp-addr-end]");
+      if (!item) return;
+      const addr = state.allAddresses.find(a => String(a.id) === item.dataset.rpAddrEnd);
+      if (!addr) return;
+      const form = document.getElementById("route-form");
+      const lEl = form.querySelector("[name=endLabel]");
+      const aEl = form.querySelector("[name=endAddress]");
+      if (lEl) lEl.value = addr.customer || "";
+      if (aEl) aEl.value = addr.fullAddress || "";
+      endArchivePanel.style.display = "none";
+      endArchiveSearch.value = "";
+      endArchiveSug.innerHTML = "";
+      document.getElementById("rp-end-card").querySelector(".rp-endpoint-name").textContent = addr.customer || addr.fullAddress || "";
+    });
+  }
 }
 
 // ── weekly hours helper ───────────────────────────────────────────────────────
@@ -1749,6 +1947,100 @@ function openMapPicker() {
     };
 
     document.getElementById("map-picker-cancel").onclick = () => modal.remove();
+  });
+}
+
+// ── openMapPickerForField ─────────────────────────────────────────────────────
+
+function openMapPickerForField({ labelEl, addressEl, latEl, lngEl }) {
+  const startLat = Number(latEl?.value) || 46.07;
+  const startLng = Number(lngEl?.value) || 11.12;
+  let pickedLat = startLat, pickedLng = startLng;
+  let pickedPlace = null;
+
+  const modal = document.createElement("div");
+  modal.className = "map-picker-modal";
+  modal.innerHTML = `
+    <div class="map-picker-inner">
+      <div class="map-picker-header">
+        <input id="map-picker-field-search" class="map-picker-search" type="text" placeholder="Cerca un posto, indirizzo…" autocomplete="off" />
+        <button class="btn" id="map-picker-field-cancel">✕</button>
+      </div>
+      <div id="map-picker-field-map"></div>
+      <div class="map-picker-footer">
+        <span id="map-picker-field-label" class="stop-meta">Tocca la mappa o cerca un luogo</span>
+        <button class="btn primary" id="map-picker-field-confirm">✓ Usa</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+
+  loadGoogleMapsScript().then(ready => {
+    if (!ready) { showToast("Google Maps non disponibile"); modal.remove(); return; }
+
+    const map = new google.maps.Map(document.getElementById("map-picker-field-map"), {
+      center: { lat: startLat, lng: startLng }, zoom: 15,
+      mapTypeControl: false, fullscreenControl: false, streetViewControl: false
+    });
+    const marker = new google.maps.Marker({ position: { lat: startLat, lng: startLng }, map, draggable: true });
+    const labelSpan = document.getElementById("map-picker-field-label");
+
+    const updateMarker = (lat, lng, label) => {
+      pickedLat = lat; pickedLng = lng;
+      marker.setPosition({ lat, lng }); map.panTo({ lat, lng });
+      if (labelSpan) labelSpan.textContent = label || `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+    };
+    const reverseGeocode = (lat, lng) => {
+      new google.maps.Geocoder().geocode({ location: { lat, lng } }, (res, st) => {
+        const addr = st === "OK" && res[0] ? res[0].formatted_address : `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+        updateMarker(lat, lng, addr); pickedPlace = null;
+      });
+    };
+    map.addListener("click", e => {
+      if (e.placeId) {
+        e.stop();
+        new google.maps.places.PlacesService(map).getDetails({
+          placeId: e.placeId,
+          fields: ["name", "formatted_address", "geometry"]
+        }, (place, status) => {
+          if (status === google.maps.places.PlacesServiceStatus.OK && place.geometry) {
+            pickedPlace = place;
+            updateMarker(place.geometry.location.lat(), place.geometry.location.lng(), place.name || place.formatted_address);
+            map.setZoom(17);
+          }
+        });
+      } else {
+        reverseGeocode(e.latLng.lat(), e.latLng.lng());
+      }
+    });
+    marker.addListener("dragend", e => reverseGeocode(e.latLng.lat(), e.latLng.lng()));
+
+    const searchInput = document.getElementById("map-picker-field-search");
+    const autocomplete = new google.maps.places.Autocomplete(searchInput, {
+      fields: ["name", "formatted_address", "geometry"],
+      componentRestrictions: { country: "it" }
+    });
+    autocomplete.addListener("place_changed", () => {
+      const place = autocomplete.getPlace();
+      if (!place.geometry?.location) { showToast("Luogo non trovato"); return; }
+      pickedPlace = place;
+      updateMarker(place.geometry.location.lat(), place.geometry.location.lng(), place.name || place.formatted_address);
+      map.setZoom(17);
+    });
+
+    document.getElementById("map-picker-field-confirm").onclick = () => {
+      if (latEl) latEl.value = Number(pickedLat).toFixed(6);
+      if (lngEl) lngEl.value = Number(pickedLng).toFixed(6);
+      if (pickedPlace) {
+        if (labelEl) labelEl.value = pickedPlace.name || "";
+        if (addressEl) addressEl.value = pickedPlace.formatted_address || "";
+        showToast("Dati compilati dalla mappa");
+      } else {
+        if (addressEl && labelSpan) addressEl.value = labelSpan.textContent || "";
+        showToast("Coordinate aggiornate");
+      }
+      modal.remove();
+    };
+    document.getElementById("map-picker-field-cancel").onclick = () => modal.remove();
   });
 }
 
