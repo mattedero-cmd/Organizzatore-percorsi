@@ -1056,31 +1056,33 @@ function renderWeeklyHoursSection(weeklyHours) {
     const closed = h.closed ? "checked" : "";
     const cont = h.continuous ? "checked" : "";
     const dis = h.closed ? "disabled" : "";
-    return `<tr class="wh-row" data-day="${d}">
-      <td class="wh-day">${DAYS_IT[d]}</td>
-      <td class="wh-cb"><input type="checkbox" class="wh-closed" ${closed} title="Chiuso" /></td>
-      <td class="wh-cb"><input type="checkbox" class="wh-cont" ${cont} ${dis} title="Continuato" /></td>
-      <td><input type="time" class="wh-om" value="${h.openMorning || ""}" ${dis} /></td>
-      <td><input type="time" class="wh-cm" value="${h.closeMorning || ""}" ${dis || (h.continuous ? "disabled" : "")} /></td>
-      <td><input type="time" class="wh-oa" value="${h.openAfternoon || ""}" ${dis || (h.continuous ? "disabled" : "")} /></td>
-      <td><input type="time" class="wh-ca" value="${h.closeAfternoon || ""}" ${dis} /></td>
-    </tr>`;
+    const disC = (h.closed || h.continuous) ? "disabled" : "";
+    return `<div class="wh-row" data-day="${d}">
+      <div class="wh-row-top">
+        <span class="wh-dn">${DAYS_IT[d]}</span>
+        <label class="wh-toggle"><input type="checkbox" class="wh-closed" ${closed}> Chiuso</label>
+        <label class="wh-toggle"><input type="checkbox" class="wh-cont" ${cont} ${dis}> Cont.</label>
+      </div>
+      <div class="wh-row-times"${h.closed ? ' style="display:none"' : ''}>
+        <div class="wh-range">
+          <input type="time" class="wh-om" value="${h.openMorning || ""}" ${dis}>
+          <span>–</span>
+          <input type="time" class="wh-cm" value="${h.closeMorning || ""}" ${disC}>
+        </div>
+        <div class="wh-range">
+          <input type="time" class="wh-oa" value="${h.openAfternoon || ""}" ${disC}>
+          <span>–</span>
+          <input type="time" class="wh-ca" value="${h.closeAfternoon || ""}" ${dis}>
+        </div>
+      </div>
+    </div>`;
   }).join("");
   return `<div class="field full">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
       <label class="wh-label" style="margin-bottom:0">Orari settimanali</label>
-      <button type="button" class="btn ghost wh-fill-all" id="wh-fill-all-btn" title="Copia orari Lunedì a tutti i giorni aperti">↧ Applica a tutti</button>
+      <button type="button" class="btn ghost wh-fill-all" id="wh-fill-all-btn">↧ Applica a tutti</button>
     </div>
-    <div class="wh-table-wrap">
-      <table class="wh-table">
-        <colgroup>
-          <col class="col-day" /><col class="col-cb" /><col class="col-cb" />
-          <col class="col-time" /><col class="col-time" /><col class="col-time" /><col class="col-time" />
-        </colgroup>
-        <thead><tr><th></th><th>Ch.</th><th>Ct.</th><th>Ap.</th><th>Cm.</th><th>Ap2</th><th>Ch2</th></tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
-    </div>
+    <div class="wh-days-wrap">${rows}</div>
   </div>`;
 }
 
@@ -2215,12 +2217,12 @@ function openMapPicker() {
           }
 
           // Re-render weekly hours table with imported data
-          const whContainer = document.querySelector("#address-form .wh-table-wrap");
+          const whContainer = document.querySelector("#address-form .wh-days-wrap");
           if (whContainer) {
             const tempDiv = document.createElement("div");
             tempDiv.innerHTML = renderWeeklyHoursSection(byDay);
-            const newTable = tempDiv.querySelector(".wh-table-wrap");
-            if (newTable) whContainer.replaceWith(newTable);
+            const newWrap = tempDiv.querySelector(".wh-days-wrap");
+            if (newWrap) whContainer.replaceWith(newWrap);
           }
 
           // Special hours: check if any day differs from the typical pattern
@@ -2732,6 +2734,8 @@ function bindEvents() {
       if (row) {
         const closed = row.querySelector(".wh-closed")?.checked;
         const cont = row.querySelector(".wh-cont")?.checked;
+        const times = row.querySelector(".wh-row-times");
+        if (times) times.style.display = closed ? "none" : "";
         row.querySelector(".wh-cont") && (row.querySelector(".wh-cont").disabled = closed);
         row.querySelector(".wh-om") && (row.querySelector(".wh-om").disabled = closed);
         row.querySelector(".wh-cm") && (row.querySelector(".wh-cm").disabled = closed || cont);

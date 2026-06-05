@@ -422,6 +422,7 @@ textarea:focus {
 .saved-card {
   display: grid;
   gap: 8px;
+  min-width: 0;
 }
 .opening-status {
   font-size: 0.8rem;
@@ -1364,7 +1365,7 @@ tbody tr:last-child td {
   font-size: 0.8rem;
 }
 
-/* ── weekly hours table ───────────────────────────────────────────────────── */
+/* ── weekly hours ──────────────────────────────────────────────────────────── */
 .wh-label {
   font-size: 0.82rem;
   font-weight: 600;
@@ -1373,76 +1374,85 @@ tbody tr:last-child td {
   display: block;
 }
 
-.wh-table-wrap {
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
+.wh-days-wrap {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
 }
 
-.wh-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.74rem;
-  table-layout: fixed;
+.wh-row {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--line);
 }
-/*
-  day=22px | ch=18px | cont=20px(+2 gap) | ap=22% | cm=22% | ap2=22% | ch2=22%
-  The 4 time columns share the remaining width equally via percentage.
-  2px left-padding on cont gives the visual gap between ch and cont.
-  3px left-padding on ap gives the visual gap between cont and first time col.
-*/
-.wh-table col.col-day  { width: 22px; }
-.wh-table col.col-cb   { width: 18px; }
-.wh-table col.col-cb:nth-child(3) { width: 20px; }
-.wh-table col.col-time { width: 52px; }
-.wh-table th {
-  text-align: center;
-  padding: 1px 0 3px;
-  font-weight: 600;
+.wh-row:last-child { border-bottom: none; }
+
+.wh-row-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.wh-dn {
+  font-weight: 700;
+  font-size: 0.82rem;
+  width: 28px;
+  flex-shrink: 0;
+  color: var(--text);
+}
+
+.wh-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.78rem;
+  cursor: pointer;
+  user-select: none;
   color: var(--muted);
-  font-size: 0.62rem;
-  white-space: nowrap;
-  overflow: hidden;
 }
-.wh-table th:first-child { text-align: left; }
-.wh-table td {
-  padding: 1px 0;
-  vertical-align: middle;
+
+.wh-toggle input[type=checkbox] {
+  accent-color: var(--primary);
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  flex-shrink: 0;
 }
-/* 2px gap before Cont (3rd col), 3px gap before Ap. (4th col), 1px between time cols */
-.wh-table th:nth-child(3), .wh-table td:nth-child(3) { padding-left: 2px; }
-.wh-table th:nth-child(4), .wh-table td:nth-child(4) { padding-left: 3px; }
-.wh-table th:nth-child(n+5), .wh-table td:nth-child(n+5) { padding-left: 1px; }
-.wh-day {
-  font-weight: 600;
-  font-size: 0.72rem;
-  overflow: hidden;
+
+.wh-row-times {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding-left: 36px;
 }
-.wh-cb {
-  text-align: center;
-  padding: 0;
+
+.wh-range {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.82rem;
+  color: var(--muted);
 }
-.wh-table input[type=time] {
-  width: 100%;
-  min-width: 0;
-  padding: 2px 0;
-  font-size: 0.66rem;
-  text-align: center;
+
+.wh-range input[type=time] {
+  width: 80px;
+  font-size: 0.8rem;
+  padding: 3px 4px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text);
 }
+
+.wh-range input[type=time]:disabled {
+  opacity: 0.35;
+}
+
 .wh-fill-all {
   font-size: 0.75rem;
   padding: 3px 8px;
   min-height: 28px;
-  margin-bottom: 6px;
-}
-
-.wh-table input[type=time]:disabled {
-  opacity: 0.35;
-}
-
-.wh-table input[type=checkbox] {
-  accent-color: var(--primary);
-  width: 14px;
-  height: 14px;
 }
 
 .phone-name-badge {
