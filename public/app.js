@@ -210,7 +210,7 @@ function renderMenu() {
         navigatorPref: v.navigatorPref || "google",
         themePref: v.themePref || "auto",
         lunchBreakMinutes: Number(v.lunchBreakMinutes || 45),
-        lunchBreakEnabled: v.lunchBreakEnabled === "on" || v.lunchBreakEnabled === true,
+        lunchBreakEnabled: v.lunchBreakEnabled === "on",
         defaultStartLabel: v.defaultStartLabel || "",
         defaultStartAddress: v.defaultStartAddress || "",
         restIntervalMin: Number(v.restIntervalMin || 120),
@@ -631,6 +631,11 @@ function navUrl(result, pref) {
   if (pref === "apple") {
     const stops = pts.map(p => encodeURIComponent(p)).join("+to:");
     return `http://maps.apple.com/?daddr=${stops}`;
+  }
+  if (pref === "waze") {
+    // Waze only supports a single destination; use the last stop before home
+    const dest = pts[pts.length - 1];
+    return `https://waze.com/ul?q=${encodeURIComponent(dest)}&navigate=yes`;
   }
   const origin = encodeURIComponent(pts[0]);
   const dest = encodeURIComponent(pts[pts.length - 1]);
@@ -1556,14 +1561,14 @@ function renderResult() {
           }
 
           const addr = state.allAddresses.find(a => String(a.id) === String(row.addressId));
-          const pref = preferredPhone(addr || {});
+          const prefPhone = preferredPhone(addr || {});
           const phone = addr?.phone || row.phone || "";
           const phone2 = addr?.phone2 || row.phone2 || "";
           const email = addr?.email || row.email || "";
           const emailSubject = encodeURIComponent(`Appuntamento ${row.customer} - ${result.scheduledDate || ""} ore ${row.arrivalTime}`);
           const partBadge = row.stopPart === "morning" ? `<span class="badge" style="background:color-mix(in srgb,#3b82f6 15%,var(--surface));color:#1d4ed8">mattina</span> ` : row.stopPart === "afternoon" ? `<span class="badge" style="background:color-mix(in srgb,#f97316 15%,var(--surface));color:#c2410c">pomeriggio</span> ` : "";
           const stopTitle = `${row.stopNumber}. ${escapeHtml(row.customer)}${row.location ? ` — ${escapeHtml(row.location)}` : ""}`;
-          const phoneBtn = pref ? `<a class="btn icon-btn" href="tel:${escapeHtml(pref.number)}" title="${escapeHtml(pref.number)}">${phoneIcon(pref.type)}</a>` : "";
+          const phoneBtn = prefPhone ? `<a class="btn icon-btn" href="tel:${escapeHtml(prefPhone.number)}" title="${escapeHtml(prefPhone.number)}">${phoneIcon(prefPhone.type)}</a>` : "";
           const warnLevel = worstWarningLevel(row.warnings);
           const cardClass = warnLevel === "error" ? " card-error" : warnLevel === "warn" ? " card-warn" : "";
           const warnMsg = warnLevel ? (row.warnings.find(w => w.level === warnLevel || (warnLevel==="error" && /(chiusa|dopo|oltre)/.test(w.msg||w)))?.msg || "") : "";
@@ -2719,7 +2724,7 @@ function bindEvents() {
         body: JSON.stringify({
           customer: state.route.customCustomer, location: state.route.customLocation,
           fullAddress: state.route.customAddress,
-          weekly_hours: wh ? JSON.stringify(wh) : null,
+          weeklyHours: wh || null,
           defaultDuration: state.route.customDuration
         })
       }).catch(() => null);
@@ -2974,7 +2979,7 @@ function bindEvents() {
             lunchBreakMinutes: raw.lunchBreakMinutes || state.route.lunchBreakMinutes,
             stops
           };
-          setActiveTab("plan");
+          setActiveTab("route");
           await planCurrentRoute();
         } catch (err) {
           showToast(err.message);
