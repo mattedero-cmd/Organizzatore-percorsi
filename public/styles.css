@@ -562,6 +562,63 @@ tbody tr:last-child td {
   opacity: 0.75;
 }
 
+.stop-compact-title {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.stop-compact-title .stop-title {
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.stop-compact-addr {
+  font-size: 0.8rem;
+  margin-top: 2px;
+}
+
+/* ── compact timing row inside expanded stop ─────────────────────────────── */
+.stop-times-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 6px;
+}
+
+.stop-times-row span {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  font-size: 0.88rem;
+}
+
+.st-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--muted);
+  letter-spacing: 0.03em;
+}
+
+.stop-contact-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.88rem;
+  padding: 2px 0;
+}
+
+.stop-notes {
+  font-style: italic;
+  margin-top: 4px;
+  font-size: 0.82rem;
+}
+
 .stop-weather-line {
   display: flex;
   align-items: center;
@@ -586,10 +643,11 @@ tbody tr:last-child td {
 
 .stop-details {
   border-top: 1px solid var(--line);
-  margin-top: 10px;
-  padding-top: 10px;
-  display: grid;
-  gap: 6px;
+  margin-top: 8px;
+  padding-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
 }
 
 .stop-details[hidden] {
@@ -1077,22 +1135,53 @@ tbody tr:last-child td {
 
 /* ── stop detail extra (weekly hours + weather in expanded card) ────────────*/
 .stop-detail-extra {
-  margin-top: 10px;
+  margin-top: 8px;
   border-top: 1px solid var(--line);
-  padding-top: 8px;
+  padding-top: 6px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 6px;
 }
 
 .stop-detail-section {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+  font-size: 0.84rem;
 }
 
 .stop-weather-full {
-  font-size: 0.9rem;
+  font-size: 0.84rem;
+}
+
+.wh-inline {
+  border-collapse: collapse;
+  font-size: 0.8rem;
+  margin-top: 2px;
+}
+
+.wh-inline td {
+  padding: 1px 8px 1px 0;
+  vertical-align: middle;
+}
+
+.wh-inline .wh-day {
+  font-weight: 700;
+  min-width: 28px;
+}
+
+.wh-inline .wh-hours {
+  color: var(--text);
+}
+
+.wh-inline .muted {
+  color: var(--muted);
+}
+
+.wh-inline tr.wh-today td {
+  font-weight: 800;
+  color: var(--primary);
 }
 
 .wh-compact td {

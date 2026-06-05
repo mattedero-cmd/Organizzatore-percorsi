@@ -808,24 +808,27 @@ function stopDetailExtra(result, row, addr) {
   const w = (result.weather || []).find(x => Number(x.stopNumber) === Number(row.stopNumber));
   if (w) {
     const temp = w.temperatureC != null ? `${Math.round(w.temperatureC)}°C` : "--";
-    const humidity = w.humidity != null ? ` · ${w.humidity}% umid.` : "";
-    const wind = w.windKmh != null ? ` · 💨 ${Math.round(w.windKmh)} km/h` : "";
+    const humidity = w.humidity != null ? ` ${w.humidity}% umid.` : "";
+    const wind = w.windKmh != null ? ` 💨${Math.round(w.windKmh)}km/h` : "";
     const alerts = (w.warnings || []).map(s => `<span class="badge warning">${escapeHtml(s)}</span>`).join(" ");
-    parts.push(`<div class="stop-detail-section"><div class="metric-label">Meteo previsto</div><div class="stop-weather-full">${weatherIcon(w)} <strong>${temp}</strong> ${escapeHtml(w.description || "")}${humidity}${wind}${alerts ? " " + alerts : ""}</div></div>`);
+    parts.push(`<div class="stop-detail-section"><span class="st-label">Meteo</span> <span class="stop-weather-full">${weatherIcon(w)} <strong>${temp}</strong> ${escapeHtml(w.description || "")}${humidity}${wind}${alerts ? " " + alerts : ""}</span></div>`);
   }
 
   // Full weekly hours
   const wh = addr?.weeklyHours || row.weeklyHours;
   if (wh) {
+    const scheduledDow = result.scheduledDate ? new Date(result.scheduledDate + "T12:00:00").getDay() : -1;
     const dayRows = [1,2,3,4,5,6,0].map(d => {
       const h = wh[d] || wh[String(d)] || { closed: true };
-      const isToday = result.scheduledDate && new Date(result.scheduledDate + "T12:00:00").getDay() === d;
-      const style = isToday ? " style=\"font-weight:700;\"" : "";
-      if (h.closed) return `<tr${style}><td class="wh-day">${DAYS_IT[d]}</td><td colspan="3" class="stop-meta">Chiuso</td></tr>`;
-      if (h.continuous) return `<tr${style}><td class="wh-day">${DAYS_IT[d]}</td><td class="stop-meta">${h.openMorning}–${h.closeAfternoon}</td><td colspan="2" class="stop-meta" style="opacity:.5">continuato</td></tr>`;
-      return `<tr${style}><td class="wh-day">${DAYS_IT[d]}</td><td class="stop-meta">${(h.openMorning && h.closeMorning) ? `${h.openMorning}–${h.closeMorning}` : "—"}</td><td class="stop-meta">/</td><td class="stop-meta">${(h.openAfternoon && h.closeAfternoon) ? `${h.openAfternoon}–${h.closeAfternoon}` : "—"}</td></tr>`;
+      const isToday = d === scheduledDow;
+      const style = isToday ? " class=\"wh-today\"" : "";
+      if (h.closed) return `<tr${style}><td class="wh-day">${DAYS_IT[d]}</td><td class="wh-hours muted">Chiuso</td></tr>`;
+      if (h.continuous) return `<tr${style}><td class="wh-day">${DAYS_IT[d]}</td><td class="wh-hours">${h.openMorning}–${h.closeAfternoon} <span class="muted">cont.</span></td></tr>`;
+      const am = (h.openMorning && h.closeMorning) ? `${h.openMorning}–${h.closeMorning}` : "";
+      const pm = (h.openAfternoon && h.closeAfternoon) ? `${h.openAfternoon}–${h.closeAfternoon}` : "";
+      return `<tr${style}><td class="wh-day">${DAYS_IT[d]}</td><td class="wh-hours">${[am, pm].filter(Boolean).join(" / ") || "—"}</td></tr>`;
     }).join("");
-    parts.push(`<div class="stop-detail-section"><div class="metric-label">Orari settimanali</div><table class="wh-table wh-compact"><tbody>${dayRows}</tbody></table></div>`);
+    parts.push(`<div class="stop-detail-section"><span class="st-label">Orari</span><table class="wh-inline"><tbody>${dayRows}</tbody></table></div>`);
   }
 
   return parts.length ? `<div class="stop-detail-extra">${parts.join("")}</div>` : "";
@@ -970,11 +973,17 @@ function renderResult() {
           const phoneBtn = pref ? `<a class="btn" href="tel:${escapeHtml(pref.number)}" title="${escapeHtml(pref.name || pref.number)}">${phoneIcon(pref.type)}</a>` : "";
           const warnLevel = worstWarningLevel(row.warnings);
           const cardClass = warnLevel === "error" ? " card-error" : warnLevel === "warn" ? " card-warn" : "";
+          const errorBadge = warnLevel === "error"
+            ? `<span class="badge badge-error" style="margin-top:3px;display:inline-block">${escapeHtml(row.warnings.find(w => (w.level||"") === "error" || /(chiusa|dopo|oltre)/.test(w.msg||w))?.msg || "⚠")}</span>`
+            : warnLevel === "warn"
+            ? `<span class="badge badge-warn" style="margin-top:3px;display:inline-block">${escapeHtml(row.warnings.find(w => (w.level||"") === "warn")?.msg || "⚠")}</span>`
+            : "";
           return `
           <article class="card result-card${cardClass}">
             <div class="stop-compact-head" data-expand-stop="${row.stopNumber}${row.stopPart ? "-" + row.stopPart : ""}">
-              <div>${partBadge}<p class="stop-title" style="display:inline">${stopTitle}</p>${warnLevel === "error" ? ` <span class="badge badge-error" style="margin-left:4px">${escapeHtml((row.warnings.find(w => (w.level||"") === "error" || /(chiusa|dopo|oltre)/.test(w.msg||w))?.msg || "⚠"))}</span>` : ""}</div>
-              <div class="stop-meta" style="font-size:0.82rem">${escapeHtml(row.address)}</div>
+              <div class="stop-compact-title">${partBadge}<span class="stop-title">${stopTitle}</span></div>
+              ${errorBadge}
+              <div class="stop-meta stop-compact-addr">${escapeHtml(row.address)}</div>
               ${weatherCompact(result, row.stopNumber)}
             </div>
             <div class="stop-actions-big">
@@ -983,17 +992,17 @@ function renderResult() {
               ${email && !row.stopPart ? `<a class="btn" href="mailto:${escapeHtml(email)}?subject=${emailSubject}">✉</a>` : ""}
             </div>
             <div class="stop-details" data-stop-details="${row.stopNumber}${row.stopPart ? "-" + row.stopPart : ""}" hidden>
-              <div class="result-times" style="margin-bottom:10px;">
-                ${row.stopPart !== "afternoon" ? `<div><div class="metric-label">Partenza</div><strong>${escapeHtml(row.departureTime)}</strong></div>` : ""}
-                ${row.stopPart !== "afternoon" ? `<div><div class="metric-label">Guida</div><strong>${minutesLabel(row.driveMinutes)} · ${row.km.toFixed(1)} km</strong></div>` : ""}
-                <div><div class="metric-label">${row.stopPart === "afternoon" ? "Riprende" : "Arrivo"}</div><strong>${escapeHtml(row.stopPart === "afternoon" ? row.serviceStartTime : row.arrivalTime)}</strong></div>
-                <div><div class="metric-label">Intervento</div><strong>${minutesLabel(row.durationMinutes)}</strong></div>
-                <div><div class="metric-label">Fine</div><strong>${escapeHtml(row.serviceEndTime)}</strong></div>
+              <div class="stop-times-row">
+                ${row.stopPart !== "afternoon" ? `<span><span class="st-label">Partenza</span> <strong>${escapeHtml(row.departureTime)}</strong></span>` : ""}
+                ${row.stopPart !== "afternoon" ? `<span><span class="st-label">Guida</span> <strong>${minutesLabel(row.driveMinutes)} · ${row.km.toFixed(1)} km</strong></span>` : ""}
+                <span><span class="st-label">${row.stopPart === "afternoon" ? "Riprende" : "Arrivo"}</span> <strong>${escapeHtml(row.stopPart === "afternoon" ? row.serviceStartTime : row.arrivalTime)}</strong></span>
+                <span><span class="st-label">Interv.</span> <strong>${minutesLabel(row.durationMinutes)}</strong></span>
+                <span><span class="st-label">Fine</span> <strong>${escapeHtml(row.serviceEndTime)}</strong></span>
               </div>
-              ${phone && !row.stopPart ? `<div class="stop-meta">${phoneIcon(addr?.phoneType)} <a href="tel:${escapeHtml(phone)}">${escapeHtml(phone)}</a>${addr?.phoneName ? ` <span class="phone-name-badge">${escapeHtml(addr.phoneName)}</span>` : ""}${addr?.phonePreferred !== "phone2" && phone2 ? " ★" : ""}</div>` : ""}
-              ${phone2 && !row.stopPart ? `<div class="stop-meta">${phoneIcon(addr?.phone2Type)} <a href="tel:${escapeHtml(phone2)}">${escapeHtml(phone2)}</a>${addr?.phone2Name ? ` <span class="phone-name-badge">${escapeHtml(addr.phone2Name)}</span>` : ""}${addr?.phonePreferred === "phone2" ? " ★" : ""}</div>` : ""}
-              ${email && !row.stopPart ? `<div class="stop-meta">✉ <a href="mailto:${escapeHtml(email)}">${escapeHtml(email)}</a></div>` : ""}
-              ${row.notes && !row.stopPart ? `<div class="stop-meta" style="margin-top:6px;font-style:italic">${escapeHtml(row.notes)}</div>` : ""}
+              ${phone && !row.stopPart ? `<div class="stop-contact-row">${phoneIcon(addr?.phoneType)} <a href="tel:${escapeHtml(phone)}">${escapeHtml(phone)}</a>${addr?.phoneName ? ` <span class="phone-name-badge">${escapeHtml(addr.phoneName)}</span>` : ""}${addr?.phonePreferred !== "phone2" && phone2 ? " ★" : ""}</div>` : ""}
+              ${phone2 && !row.stopPart ? `<div class="stop-contact-row">${phoneIcon(addr?.phone2Type)} <a href="tel:${escapeHtml(phone2)}">${escapeHtml(phone2)}</a>${addr?.phone2Name ? ` <span class="phone-name-badge">${escapeHtml(addr.phone2Name)}</span>` : ""}${addr?.phonePreferred === "phone2" ? " ★" : ""}</div>` : ""}
+              ${email && !row.stopPart ? `<div class="stop-contact-row">✉ <a href="mailto:${escapeHtml(email)}">${escapeHtml(email)}</a></div>` : ""}
+              ${row.notes && !row.stopPart ? `<div class="stop-meta stop-notes">${escapeHtml(row.notes)}</div>` : ""}
               ${warningBadges(row.warnings)}
               ${!row.stopPart ? stopDetailExtra(result, row, addr) : ""}
             </div>
@@ -1003,10 +1012,10 @@ function renderResult() {
         <article class="card result-card">
           <p class="stop-title">↩ ${escapeHtml(result.end?.label || "Arrivo finale")}</p>
           <div class="stop-meta">${escapeHtml(result.end?.address || result.end?.fullAddress || "")}</div>
-          <div class="result-times" style="margin-top:8px;">
-            <div><div class="metric-label">Partenza</div><strong>${escapeHtml(finalLeg.departureTime)}</strong></div>
-            <div><div class="metric-label">Guida</div><strong>${minutesLabel(finalLeg.driveMinutes)} · ${finalLeg.km.toFixed(1)} km</strong></div>
-            <div><div class="metric-label">Arrivo</div><strong>${escapeHtml(finalLeg.arrivalTime)}</strong></div>
+          <div class="stop-times-row" style="border:none;margin:0;padding-top:4px;">
+            <span><span class="st-label">Partenza</span> <strong>${escapeHtml(finalLeg.departureTime)}</strong></span>
+            <span><span class="st-label">Guida</span> <strong>${minutesLabel(finalLeg.driveMinutes)} · ${finalLeg.km.toFixed(1)} km</strong></span>
+            <span><span class="st-label">Arrivo</span> <strong>${escapeHtml(finalLeg.arrivalTime)}</strong></span>
           </div>
         </article>
       </div>
