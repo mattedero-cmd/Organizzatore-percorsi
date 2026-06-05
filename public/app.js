@@ -1149,11 +1149,12 @@ function renderSaved() {
               <div class="saved-card-btns">
                 <button class="btn primary saved-open-btn" data-open-route="${route.id}">Apri</button>
                 <button class="btn icon-btn" data-rename-route="${route.id}" title="Rinomina">✎</button>
+                <button class="btn icon-btn" data-duplicate-route="${route.id}" title="Duplica">⎘</button>
                 <button class="btn danger icon-btn" data-delete-route="${route.id}" title="Elimina">×</button>
               </div>
             </div>
             <div class="saved-card-meta">
-              <span>${escapeHtml(route.scheduledDate || "—")}</span>
+              <input type="date" class="saved-date-input" data-reschedule-route="${route.id}" value="${escapeHtml(route.scheduledDate || "")}" title="Cambia data e ricalcola" />
               <span>${escapeHtml(route.startTime || "--:--")}</span>
               <span>${Number(route.totalKm).toFixed(1)} km</span>
               <span>${euro(route.totalCost)}</span>
@@ -2563,6 +2564,23 @@ function bindEvents() {
       return;
     }
 
+    const duplicateRoute = e.target.closest("[data-duplicate-route]");
+    if (duplicateRoute) {
+      try {
+        const id = duplicateRoute.dataset.duplicateRoute;
+        const raw = await api(`/api/routes/${id}`);
+        const { id: _id, ...payload } = raw;
+        const newName = (raw.name || "Giro") + " (copia)";
+        await api("/api/routes", { method: "POST", body: JSON.stringify({ ...payload, name: newName }) });
+        await refreshSavedRoutes();
+        renderSaved();
+        showToast("Giro duplicato");
+      } catch (err) {
+        showToast(err.message);
+      }
+      return;
+    }
+
     const removeStop = e.target.closest("[data-remove-stop]");
     if (removeStop) {
       state.route.stops = state.route.stops.filter(s => s.uid !== removeStop.dataset.removeStop);
@@ -2735,6 +2753,39 @@ function bindEvents() {
     if (e.target.id === "vcf-input") {
       const file = e.target.files?.[0];
       if (file) importFromVcf(file).catch(() => showToast("Errore lettura file"));
+    }
+
+    const reschedule = e.target.closest("[data-reschedule-route]");
+    if (reschedule) {
+      const id = reschedule.dataset.rescheduleRoute;
+      const newDate = reschedule.value;
+      if (!newDate) return;
+      (async () => {
+        try {
+          showToast("Ricalcolo in corso…");
+          const raw = await api(`/api/routes/${id}`);
+          const stops = (raw.plannedStops || raw.payload?.plannedStops || []).map(s => ({ ...s, uid: s.uid || crypto.randomUUID() }));
+          state.route = {
+            ...state.route,
+            name: raw.name || state.route.name,
+            scheduledDate: newDate,
+            startLabel: raw.start?.label || raw.startLabel || state.route.startLabel,
+            startAddress: raw.start?.address || raw.startAddress || state.route.startAddress,
+            endSameAsStart: raw.end?.sameAsStart ?? state.route.endSameAsStart,
+            endLabel: raw.end?.label || raw.endLabel || state.route.endLabel,
+            endAddress: raw.end?.address || raw.endAddress || state.route.endAddress,
+            startTime: raw.startTime || state.route.startTime,
+            timingMode: raw.timingMode || state.route.timingMode,
+            lunchBreak: raw.lunchBreak ?? state.route.lunchBreak,
+            lunchBreakMinutes: raw.lunchBreakMinutes || state.route.lunchBreakMinutes,
+            stops
+          };
+          setActiveTab("plan");
+          await planCurrentRoute();
+        } catch (err) {
+          showToast(err.message);
+        }
+      })();
     }
   });
 

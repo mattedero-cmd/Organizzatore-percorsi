@@ -454,6 +454,17 @@ textarea:focus {
   flex-wrap: wrap;
   font-size: 0.8rem;
   color: var(--muted);
+  align-items: center;
+}
+.saved-date-input {
+  min-height: 28px;
+  padding: 2px 6px;
+  font-size: 0.78rem;
+  width: auto;
+  border-color: var(--line);
+  color: var(--text);
+  border-radius: 6px;
+  flex-shrink: 0;
 }
 .saved-card-route {
   font-size: 0.82rem;
@@ -1341,33 +1352,40 @@ tbody tr:last-child td {
 .wh-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.78rem;
-  table-layout: auto;
+  font-size: 0.76rem;
+  table-layout: fixed;
 }
-
+/* column widths: day 28px | ch 22px | cont 22px | 4×time auto */
+.wh-table colgroup { display: none; }
 .wh-table th {
-  text-align: left;
-  padding: 2px 2px 4px;
+  text-align: center;
+  padding: 2px 1px 4px;
   font-weight: 600;
   color: var(--muted);
-  font-size: 0.68rem;
+  font-size: 0.66rem;
   white-space: nowrap;
 }
+.wh-table th:first-child { text-align: left; }
 .wh-table td {
-  padding: 2px 2px;
+  padding: 2px 1px;
   vertical-align: middle;
   white-space: nowrap;
 }
-
 .wh-day {
   font-weight: 600;
-  min-width: 32px;
+  width: 28px;
+  font-size: 0.76rem;
 }
-
+.wh-cb {
+  width: 22px;
+  text-align: center;
+}
 .wh-table input[type=time] {
-  width: 68px;
-  padding: 2px 2px;
-  font-size: 0.73rem;
+  width: 100%;
+  min-width: 0;
+  padding: 2px 1px;
+  font-size: 0.7rem;
+  text-align: center;
 }
 .wh-fill-all {
   font-size: 0.75rem;
@@ -1417,12 +1435,15 @@ tbody tr:last-child td {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
+  overflow: hidden;
 }
 .rp-when-date,
 .rp-when-time {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  min-width: 0;
+  overflow: hidden;
 }
 .rp-label {
   font-size: 0.75rem;
@@ -1432,6 +1453,9 @@ tbody tr:last-child td {
 .rp-when-date input,
 .rp-when-time input {
   width: 100%;
+  min-width: 0;
+  font-size: 0.9rem;
+  padding: 8px 6px;
 }
 
 /* Endpoint cards (Da / A) */
