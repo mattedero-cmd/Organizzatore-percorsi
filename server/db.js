@@ -80,7 +80,10 @@ function rowToSettings(row) {
     restIntervalMin: Number(row.rest_interval_min ?? 120),
     restMaxDeviationMin: Number(row.rest_max_deviation_min ?? 40),
     restDurationMin: Number(row.rest_duration_min ?? 15),
-    driveMarkupMinPerHour: Number(row.drive_markup_min_per_hour ?? 10)
+    driveMarkupMinPerHour: Number(row.drive_markup_min_per_hour ?? 10),
+    earliestBreakTime: row.earliest_break_time ?? "08:00",
+    maxDetourKm: Number(row.max_detour_km ?? 1.7),
+    maxReturnTime: row.max_return_time ?? ""
   };
 }
 
@@ -191,6 +194,37 @@ export async function initDb(rootDir) {
       payload_json TEXT NOT NULL,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
+    CREATE TABLE IF NOT EXISTS users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      username TEXT NOT NULL UNIQUE,
+      password_hash TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE TABLE IF NOT EXISTS sessions (
+      token TEXT PRIMARY KEY,
+      user_id INTEGER NOT NULL,
+      expires_at TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE TABLE IF NOT EXISTS user_settings (
+      user_id INTEGER PRIMARY KEY,
+      km_rate REAL NOT NULL DEFAULT 0.65,
+      drive_hour_rate REAL NOT NULL DEFAULT 22,
+      work_hour_rate REAL NOT NULL DEFAULT 60,
+      navigator_pref TEXT DEFAULT 'google',
+      theme_pref TEXT DEFAULT 'auto',
+      lunch_break_minutes INTEGER DEFAULT 45,
+      lunch_break_enabled INTEGER DEFAULT 1,
+      default_start_label TEXT DEFAULT '',
+      default_start_address TEXT DEFAULT '',
+      rest_interval_min INTEGER DEFAULT 120,
+      rest_max_deviation_min INTEGER DEFAULT 40,
+      rest_duration_min INTEGER DEFAULT 15,
+      drive_markup_min_per_hour REAL DEFAULT 10,
+      earliest_break_time TEXT DEFAULT '08:00',
+      max_detour_km REAL DEFAULT 1.7,
+      max_return_time TEXT DEFAULT ''
+    );
     INSERT OR IGNORE INTO settings (id, km_rate, drive_hour_rate, work_hour_rate)
     VALUES (1, 0.65, 22, 60);
   `);
@@ -199,13 +233,7 @@ export async function initDb(rootDir) {
   await migrateWeeklyHours();
   await migrateIntesaFriday();
   await migrateSettingsColumns();
-
-  const count = await runSql("SELECT COUNT(*) AS count FROM addresses;", true);
-  if (Number(count[0]?.count ?? 0) === 0) {
-    await createAddress({ customer: "Mediolanum", location: "Riva del Garda", fullAddress: "Viale Rovereto 44, 38066 Riva del Garda TN", notes: "Esempio modificabile", openMorning: "08:30", closeMorning: "12:30", openAfternoon: "14:30", closeAfternoon: "18:00", defaultDuration: 60, lat: 45.889, lng: 10.843 });
-    await createAddress({ customer: "Intesa Sanpaolo", location: "Trento", fullAddress: "Via Mantova 19, 38122 Trento TN", notes: "Esempio modificabile", openMorning: "08:20", closeMorning: "13:20", openAfternoon: "14:30", closeAfternoon: "16:30", defaultDuration: 45, lat: 46.067, lng: 11.122 });
-    await createAddress({ customer: "Fineco", location: "Rovereto", fullAddress: "Corso Rosmini 58, 38068 Rovereto TN", notes: "Esempio modificabile", openMorning: "08:30", closeMorning: "12:30", openAfternoon: "14:00", closeAfternoon: "17:30", defaultDuration: 90, lat: 45.890, lng: 11.040 });
-  }
+  await migrateAuth();
 
   return databasePath;
 }
@@ -252,6 +280,37 @@ async function initPostgresDb() {
       payload_json TEXT NOT NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+    CREATE TABLE IF NOT EXISTS users (
+      id SERIAL PRIMARY KEY,
+      username TEXT NOT NULL UNIQUE,
+      password_hash TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS sessions (
+      token TEXT PRIMARY KEY,
+      user_id INTEGER NOT NULL,
+      expires_at TIMESTAMPTZ NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS user_settings (
+      user_id INTEGER PRIMARY KEY,
+      km_rate DOUBLE PRECISION NOT NULL DEFAULT 0.65,
+      drive_hour_rate DOUBLE PRECISION NOT NULL DEFAULT 22,
+      work_hour_rate DOUBLE PRECISION NOT NULL DEFAULT 60,
+      navigator_pref TEXT DEFAULT 'google',
+      theme_pref TEXT DEFAULT 'auto',
+      lunch_break_minutes INTEGER DEFAULT 45,
+      lunch_break_enabled INTEGER DEFAULT 1,
+      default_start_label TEXT DEFAULT '',
+      default_start_address TEXT DEFAULT '',
+      rest_interval_min INTEGER DEFAULT 120,
+      rest_max_deviation_min INTEGER DEFAULT 40,
+      rest_duration_min INTEGER DEFAULT 15,
+      drive_markup_min_per_hour DOUBLE PRECISION DEFAULT 10,
+      earliest_break_time TEXT DEFAULT '08:00',
+      max_detour_km DOUBLE PRECISION DEFAULT 1.7,
+      max_return_time TEXT DEFAULT ''
+    );
     INSERT INTO settings (id, km_rate, drive_hour_rate, work_hour_rate)
     VALUES (1, 0.65, 22, 60)
     ON CONFLICT (id) DO NOTHING;
@@ -261,13 +320,7 @@ async function initPostgresDb() {
   await migrateWeeklyHours();
   await migrateIntesaFriday();
   await migrateSettingsColumns();
-
-  const count = await runSql("SELECT COUNT(*) AS count FROM addresses;", true);
-  if (Number(count[0]?.count ?? 0) === 0) {
-    await createAddress({ customer: "Mediolanum", location: "Riva del Garda", fullAddress: "Viale Rovereto 44, 38066 Riva del Garda TN", notes: "Esempio modificabile", openMorning: "08:30", closeMorning: "12:30", openAfternoon: "14:30", closeAfternoon: "18:00", defaultDuration: 60, lat: 45.889, lng: 10.843 });
-    await createAddress({ customer: "Intesa Sanpaolo", location: "Trento", fullAddress: "Via Mantova 19, 38122 Trento TN", notes: "Esempio modificabile", openMorning: "08:20", closeMorning: "13:20", openAfternoon: "14:30", closeAfternoon: "16:30", defaultDuration: 45, lat: 46.067, lng: 11.122 });
-    await createAddress({ customer: "Fineco", location: "Rovereto", fullAddress: "Corso Rosmini 58, 38068 Rovereto TN", notes: "Esempio modificabile", openMorning: "08:30", closeMorning: "12:30", openAfternoon: "14:00", closeAfternoon: "17:30", defaultDuration: 90, lat: 45.890, lng: 11.040 });
-  }
+  await migrateAuth();
 }
 
 async function tableColumns(tableName) {
@@ -362,9 +415,30 @@ export async function migrateSettingsColumns() {
   for (const col of cols) {
     try { await runSql(`ALTER TABLE settings ADD COLUMN ${col};`); } catch {}
   }
+  const newSettingsCols = [
+    "earliest_break_time TEXT DEFAULT '08:00'",
+    "max_detour_km REAL DEFAULT 1.7",
+    "max_return_time TEXT DEFAULT ''"
+  ];
+  for (const col of newSettingsCols) {
+    try { await runSql(`ALTER TABLE settings ADD COLUMN ${col};`); } catch {}
+  }
   const addrCols = await tableColumns("addresses");
   if (!addrCols.includes("place_id")) {
     await runSql("ALTER TABLE addresses ADD COLUMN place_id TEXT DEFAULT NULL;");
+  }
+}
+
+async function migrateAuth() {
+  // Add user_id to addresses
+  const addrCols = await tableColumns("addresses");
+  if (!addrCols.includes("user_id")) {
+    await runSql("ALTER TABLE addresses ADD COLUMN user_id INTEGER;");
+  }
+  // Add user_id to planned_routes
+  const routeCols = await tableColumns("planned_routes");
+  if (!routeCols.includes("user_id")) {
+    await runSql("ALTER TABLE planned_routes ADD COLUMN user_id INTEGER;");
   }
 }
 
@@ -394,26 +468,29 @@ async function migrateWeeklyHours() {
   }
 }
 
-export async function listAddresses(search = "") {
+export async function listAddresses(search = "", userId = null) {
   const term = String(search || "").trim().toLowerCase();
+  const userFilter = userId != null ? ` AND user_id = ${sqlValue(Number(userId))}` : "";
   if (dbMode === "postgres") {
-    const where = term ? `WHERE lower(concat_ws(' ', customer, location, full_address, notes)) LIKE ${sqlValue(`%${term}%`)}` : "";
+    const where = term ? `WHERE lower(concat_ws(' ', customer, location, full_address, notes)) LIKE ${sqlValue(`%${term}%`)}${userFilter}` : (userFilter ? `WHERE 1=1${userFilter}` : "");
     const rows = await runSql(`SELECT * FROM addresses ${where} ORDER BY lower(customer), lower(location);`, true);
     return rows.map(rowToAddress);
   }
-  const where = term ? `WHERE lower(customer || ' ' || location || ' ' || full_address || ' ' || notes) LIKE ${sqlValue(`%${term}%`)}` : "";
+  const where = term ? `WHERE lower(customer || ' ' || location || ' ' || full_address || ' ' || notes) LIKE ${sqlValue(`%${term}%`)}${userFilter}` : (userFilter ? `WHERE 1=1${userFilter}` : "");
   const rows = await runSql(`SELECT * FROM addresses ${where} ORDER BY customer COLLATE NOCASE, location COLLATE NOCASE;`, true);
   return rows.map(rowToAddress);
 }
 
-export async function getAddress(id) {
-  const rows = await runSql(`SELECT * FROM addresses WHERE id = ${sqlValue(Number(id))};`, true);
+export async function getAddress(id, userId = null) {
+  const userFilter = userId != null ? ` AND user_id = ${sqlValue(Number(userId))}` : "";
+  const rows = await runSql(`SELECT * FROM addresses WHERE id = ${sqlValue(Number(id))}${userFilter};`, true);
   return rows[0] ? rowToAddress(rows[0]) : null;
 }
 
-export async function createAddress(address) {
-  const cols = `customer, location, full_address, address_type, phone, phone_type, phone_name, phone2, phone2_type, phone2_name, phone_preferred, email, notes, open_morning, close_morning, open_afternoon, close_afternoon, default_duration, weekly_hours, lat, lng, place_id`;
-  const vals = `${sqlValue(address.customer || "Senza nome")}, ${sqlValue(address.location || "")}, ${sqlValue(address.fullAddress || address.full_address || "")}, ${sqlValue(address.addressType || "customer")}, ${sqlValue(address.phone || "")}, ${sqlValue(address.phoneType || "cell")}, ${sqlValue(address.phoneName || "")}, ${sqlValue(address.phone2 || "")}, ${sqlValue(address.phone2Type || "fisso")}, ${sqlValue(address.phone2Name || "")}, ${sqlValue(address.phonePreferred || "phone")}, ${sqlValue(address.email || "")}, ${sqlValue(address.notes || "")}, ${sqlValue(address.openMorning || address.open_morning || "")}, ${sqlValue(address.closeMorning || address.close_morning || "")}, ${sqlValue(address.openAfternoon || address.open_afternoon || "")}, ${sqlValue(address.closeAfternoon || address.close_afternoon || "")}, ${sqlValue(Number(address.defaultDuration || address.default_duration || 45))}, ${sqlValue(address.weeklyHours ? JSON.stringify(address.weeklyHours) : null)}, ${sqlValue(address.lat === undefined ? null : Number(address.lat))}, ${sqlValue(address.lng === undefined ? null : Number(address.lng))}, ${sqlValue(address.placeId || address.place_id || null)}`;
+export async function createAddress(address, userId = null) {
+  const userIdVal = userId != null ? sqlValue(Number(userId)) : "NULL";
+  const cols = `customer, location, full_address, address_type, phone, phone_type, phone_name, phone2, phone2_type, phone2_name, phone_preferred, email, notes, open_morning, close_morning, open_afternoon, close_afternoon, default_duration, weekly_hours, lat, lng, place_id, user_id`;
+  const vals = `${sqlValue(address.customer || "Senza nome")}, ${sqlValue(address.location || "")}, ${sqlValue(address.fullAddress || address.full_address || "")}, ${sqlValue(address.addressType || "customer")}, ${sqlValue(address.phone || "")}, ${sqlValue(address.phoneType || "cell")}, ${sqlValue(address.phoneName || "")}, ${sqlValue(address.phone2 || "")}, ${sqlValue(address.phone2Type || "fisso")}, ${sqlValue(address.phone2Name || "")}, ${sqlValue(address.phonePreferred || "phone")}, ${sqlValue(address.email || "")}, ${sqlValue(address.notes || "")}, ${sqlValue(address.openMorning || address.open_morning || "")}, ${sqlValue(address.closeMorning || address.close_morning || "")}, ${sqlValue(address.openAfternoon || address.open_afternoon || "")}, ${sqlValue(address.closeAfternoon || address.close_afternoon || "")}, ${sqlValue(Number(address.defaultDuration || address.default_duration || 45))}, ${sqlValue(address.weeklyHours ? JSON.stringify(address.weeklyHours) : null)}, ${sqlValue(address.lat === undefined ? null : Number(address.lat))}, ${sqlValue(address.lng === undefined ? null : Number(address.lng))}, ${sqlValue(address.placeId || address.place_id || null)}, ${userIdVal}`;
   if (dbMode === "postgres") {
     const rows = await runSql(`INSERT INTO addresses (${cols}) VALUES (${vals}) RETURNING *;`, true);
     return rowToAddress(rows[0]);
@@ -423,105 +500,184 @@ export async function createAddress(address) {
   return rowToAddress(rows[0]);
 }
 
-export async function updateAddress(id, address) {
+export async function updateAddress(id, address, userId = null) {
+  const userFilter = userId != null ? ` AND user_id = ${sqlValue(Number(userId))}` : "";
   const setClause = `customer = ${sqlValue(address.customer || "Senza nome")}, location = ${sqlValue(address.location || "")}, full_address = ${sqlValue(address.fullAddress || "")}, address_type = ${sqlValue(address.addressType || "customer")}, phone = ${sqlValue(address.phone || "")}, phone_type = ${sqlValue(address.phoneType || "cell")}, phone_name = ${sqlValue(address.phoneName || "")}, phone2 = ${sqlValue(address.phone2 || "")}, phone2_type = ${sqlValue(address.phone2Type || "fisso")}, phone2_name = ${sqlValue(address.phone2Name || "")}, phone_preferred = ${sqlValue(address.phonePreferred || "phone")}, email = ${sqlValue(address.email || "")}, notes = ${sqlValue(address.notes || "")}, open_morning = ${sqlValue(address.openMorning || "")}, close_morning = ${sqlValue(address.closeMorning || "")}, open_afternoon = ${sqlValue(address.openAfternoon || "")}, close_afternoon = ${sqlValue(address.closeAfternoon || "")}, default_duration = ${sqlValue(Number(address.defaultDuration || 45))}, weekly_hours = ${sqlValue(address.weeklyHours ? JSON.stringify(address.weeklyHours) : null)}, lat = ${sqlValue(address.lat === undefined ? null : Number(address.lat))}, lng = ${sqlValue(address.lng === undefined ? null : Number(address.lng))}, place_id = ${sqlValue(address.placeId !== undefined ? address.placeId : (address.place_id ?? null))}`;
   if (dbMode === "postgres") {
-    const rows = await runSql(`UPDATE addresses SET ${setClause}, updated_at = NOW() WHERE id = ${sqlValue(Number(id))} RETURNING *;`, true);
+    const rows = await runSql(`UPDATE addresses SET ${setClause}, updated_at = NOW() WHERE id = ${sqlValue(Number(id))}${userFilter} RETURNING *;`, true);
     return rows[0] ? rowToAddress(rows[0]) : null;
   }
-  await runSql(`UPDATE addresses SET ${setClause}, updated_at = CURRENT_TIMESTAMP WHERE id = ${sqlValue(Number(id))};`);
-  return getAddress(id);
+  await runSql(`UPDATE addresses SET ${setClause}, updated_at = CURRENT_TIMESTAMP WHERE id = ${sqlValue(Number(id))}${userFilter};`);
+  return getAddress(id, userId);
 }
 
-export async function deleteAddress(id) {
-  await runSql(`DELETE FROM addresses WHERE id = ${sqlValue(Number(id))};`);
+export async function deleteAddress(id, userId = null) {
+  const userFilter = userId != null ? ` AND user_id = ${sqlValue(Number(userId))}` : "";
+  await runSql(`DELETE FROM addresses WHERE id = ${sqlValue(Number(id))}${userFilter};`);
   return { ok: true };
 }
 
-export async function getSettings() {
-  const rows = await runSql("SELECT * FROM settings WHERE id = 1;", true);
+export async function getSettings(userId) {
+  const rows = await runSql(`SELECT * FROM user_settings WHERE user_id = ${sqlValue(Number(userId))};`, true);
   return rowToSettings(rows[0] || {});
 }
 
-export async function updateSettings(settings) {
-  const navPref = sqlValue(settings.navigatorPref || "google");
-  const themePref = sqlValue(settings.themePref || "auto");
-  const lunchMinutes = sqlValue(Number(settings.lunchBreakMinutes ?? 45));
-  const lunchEnabled = sqlValue(settings.lunchBreakEnabled === false ? 0 : 1);
-  const dsl = sqlValue(settings.defaultStartLabel || "");
-  const dsa = sqlValue(settings.defaultStartAddress || "");
-  const rim = sqlValue(Number(settings.restIntervalMin ?? 120));
-  const rdm = sqlValue(Number(settings.restMaxDeviationMin ?? 40));
-  const rdu = sqlValue(Number(settings.restDurationMin ?? 15));
-  const drm = sqlValue(Number(settings.driveMarkupMinPerHour ?? 10));
-  const km = sqlValue(Number(settings.kmRate ?? 0.65));
-  const dhr = sqlValue(Number(settings.driveHourRate ?? 22));
-  const whr = sqlValue(Number(settings.workHourRate ?? 60));
+export async function updateSettings(userId, settings) {
+  const vals = {
+    km_rate: Number(settings.kmRate ?? 0.65),
+    drive_hour_rate: Number(settings.driveHourRate ?? 22),
+    work_hour_rate: Number(settings.workHourRate ?? 60),
+    navigator_pref: settings.navigatorPref || "google",
+    theme_pref: settings.themePref || "auto",
+    lunch_break_minutes: Number(settings.lunchBreakMinutes ?? 45),
+    lunch_break_enabled: settings.lunchBreakEnabled === false ? 0 : 1,
+    default_start_label: settings.defaultStartLabel || "",
+    default_start_address: settings.defaultStartAddress || "",
+    rest_interval_min: Number(settings.restIntervalMin ?? 120),
+    rest_max_deviation_min: Number(settings.restMaxDeviationMin ?? 40),
+    rest_duration_min: Number(settings.restDurationMin ?? 15),
+    drive_markup_min_per_hour: Number(settings.driveMarkupMinPerHour ?? 10),
+    earliest_break_time: settings.earliestBreakTime || "08:00",
+    max_detour_km: Number(settings.maxDetourKm ?? 1.7),
+    max_return_time: settings.maxReturnTime || ""
+  };
+  const cols = Object.keys(vals).join(", ");
+  const sqlVals = Object.values(vals).map(v => typeof v === "string" ? sqlValue(v) : String(v)).join(", ");
+  const updates = Object.entries(vals).map(([k, v]) => `${k} = ${typeof v === "string" ? sqlValue(v) : String(v)}`).join(", ");
   if (dbMode === "postgres") {
-    await runSql(`
-      INSERT INTO settings (id, km_rate, drive_hour_rate, work_hour_rate, navigator_pref, theme_pref, lunch_break_minutes, lunch_break_enabled, default_start_label, default_start_address, rest_interval_min, rest_max_deviation_min, rest_duration_min, drive_markup_min_per_hour)
-      VALUES (1, ${km}, ${dhr}, ${whr}, ${navPref}, ${themePref}, ${lunchMinutes}, ${lunchEnabled}, ${dsl}, ${dsa}, ${rim}, ${rdm}, ${rdu}, ${drm})
-      ON CONFLICT (id) DO UPDATE SET km_rate=EXCLUDED.km_rate, drive_hour_rate=EXCLUDED.drive_hour_rate, work_hour_rate=EXCLUDED.work_hour_rate, navigator_pref=EXCLUDED.navigator_pref, theme_pref=EXCLUDED.theme_pref, lunch_break_minutes=EXCLUDED.lunch_break_minutes, lunch_break_enabled=EXCLUDED.lunch_break_enabled, default_start_label=EXCLUDED.default_start_label, default_start_address=EXCLUDED.default_start_address, rest_interval_min=EXCLUDED.rest_interval_min, rest_max_deviation_min=EXCLUDED.rest_max_deviation_min, rest_duration_min=EXCLUDED.rest_duration_min, drive_markup_min_per_hour=EXCLUDED.drive_markup_min_per_hour;
-    `);
-    return getSettings();
+    await runSql(`INSERT INTO user_settings (user_id, ${cols}) VALUES (${sqlValue(Number(userId))}, ${sqlVals}) ON CONFLICT (user_id) DO UPDATE SET ${updates};`);
+  } else {
+    await runSql(`INSERT OR REPLACE INTO user_settings (user_id, ${cols}) VALUES (${sqlValue(Number(userId))}, ${sqlVals});`);
   }
-  await runSql(`UPDATE settings SET km_rate=${km}, drive_hour_rate=${dhr}, work_hour_rate=${whr}, navigator_pref=${navPref}, theme_pref=${themePref}, lunch_break_minutes=${lunchMinutes}, lunch_break_enabled=${lunchEnabled}, default_start_label=${dsl}, default_start_address=${dsa}, rest_interval_min=${rim}, rest_max_deviation_min=${rdm}, rest_duration_min=${rdu}, drive_markup_min_per_hour=${drm} WHERE id = 1;`);
-  return getSettings();
+  return getSettings(userId);
 }
 
-export async function saveRoute(route) {
+export async function saveRoute(route, userId = null) {
+  const userIdVal = userId != null ? sqlValue(Number(userId)) : "NULL";
   if (dbMode === "postgres") {
     const rows = await runSql(`
-      INSERT INTO planned_routes (name, scheduled_date, start_label, start_address, end_label, end_address, start_time, first_arrival_required, total_km, total_drive_minutes, total_work_minutes, total_cost, weather_captured_at, payload_json)
-      VALUES (${sqlValue(route.name || "")}, ${sqlValue(route.scheduledDate || route.scheduled_date || "")}, ${sqlValue(route.startLabel || "")}, ${sqlValue(route.startAddress || "")}, ${sqlValue(route.endLabel || "")}, ${sqlValue(route.endAddress || "")}, ${sqlValue(route.startTime || "")}, ${sqlValue(route.firstArrivalRequired || "")}, ${sqlValue(Number(route.summary?.totalKm || 0))}, ${sqlValue(Number(route.summary?.totalDriveMinutes || 0))}, ${sqlValue(Number(route.summary?.totalWorkMinutes || 0))}, ${sqlValue(Number(route.summary?.totalCost || 0))}, ${sqlValue(route.weatherCapturedAt || "")}, ${sqlValue(JSON.stringify(route))})
+      INSERT INTO planned_routes (name, scheduled_date, start_label, start_address, end_label, end_address, start_time, first_arrival_required, total_km, total_drive_minutes, total_work_minutes, total_cost, weather_captured_at, payload_json, user_id)
+      VALUES (${sqlValue(route.name || "")}, ${sqlValue(route.scheduledDate || route.scheduled_date || "")}, ${sqlValue(route.startLabel || "")}, ${sqlValue(route.startAddress || "")}, ${sqlValue(route.endLabel || "")}, ${sqlValue(route.endAddress || "")}, ${sqlValue(route.startTime || "")}, ${sqlValue(route.firstArrivalRequired || "")}, ${sqlValue(Number(route.summary?.totalKm || 0))}, ${sqlValue(Number(route.summary?.totalDriveMinutes || 0))}, ${sqlValue(Number(route.summary?.totalWorkMinutes || 0))}, ${sqlValue(Number(route.summary?.totalCost || 0))}, ${sqlValue(route.weatherCapturedAt || "")}, ${sqlValue(JSON.stringify(route))}, ${userIdVal})
       RETURNING id;
     `, true);
     return { id: rows[0]?.id };
   }
   await runSql(`
-    INSERT INTO planned_routes (name, scheduled_date, start_label, start_address, end_label, end_address, start_time, first_arrival_required, total_km, total_drive_minutes, total_work_minutes, total_cost, weather_captured_at, payload_json)
-    VALUES (${sqlValue(route.name || "")}, ${sqlValue(route.scheduledDate || route.scheduled_date || "")}, ${sqlValue(route.startLabel || "")}, ${sqlValue(route.startAddress || "")}, ${sqlValue(route.endLabel || "")}, ${sqlValue(route.endAddress || "")}, ${sqlValue(route.startTime || "")}, ${sqlValue(route.firstArrivalRequired || "")}, ${sqlValue(Number(route.summary?.totalKm || 0))}, ${sqlValue(Number(route.summary?.totalDriveMinutes || 0))}, ${sqlValue(Number(route.summary?.totalWorkMinutes || 0))}, ${sqlValue(Number(route.summary?.totalCost || 0))}, ${sqlValue(route.weatherCapturedAt || "")}, ${sqlValue(JSON.stringify(route))});
+    INSERT INTO planned_routes (name, scheduled_date, start_label, start_address, end_label, end_address, start_time, first_arrival_required, total_km, total_drive_minutes, total_work_minutes, total_cost, weather_captured_at, payload_json, user_id)
+    VALUES (${sqlValue(route.name || "")}, ${sqlValue(route.scheduledDate || route.scheduled_date || "")}, ${sqlValue(route.startLabel || "")}, ${sqlValue(route.startAddress || "")}, ${sqlValue(route.endLabel || "")}, ${sqlValue(route.endAddress || "")}, ${sqlValue(route.startTime || "")}, ${sqlValue(route.firstArrivalRequired || "")}, ${sqlValue(Number(route.summary?.totalKm || 0))}, ${sqlValue(Number(route.summary?.totalDriveMinutes || 0))}, ${sqlValue(Number(route.summary?.totalWorkMinutes || 0))}, ${sqlValue(Number(route.summary?.totalCost || 0))}, ${sqlValue(route.weatherCapturedAt || "")}, ${sqlValue(JSON.stringify(route))}, ${userIdVal});
   `);
   const rows = await runSql("SELECT id FROM planned_routes ORDER BY id DESC LIMIT 1;", true);
   return { id: rows[0]?.id };
 }
 
-export async function listRoutes() {
+export async function listRoutes(userId = null) {
+  const userFilter = userId != null ? `WHERE user_id = ${sqlValue(Number(userId))}` : "";
   if (dbMode === "postgres") {
-    const rows = await runSql(`SELECT * FROM planned_routes ORDER BY COALESCE(NULLIF(scheduled_date, ''), created_at::date::text) DESC, id DESC;`, true);
+    const rows = await runSql(`SELECT * FROM planned_routes ${userFilter} ORDER BY COALESCE(NULLIF(scheduled_date, ''), created_at::date::text) DESC, id DESC;`, true);
     return rows.map(rowToRouteSummary);
   }
-  const rows = await runSql(`SELECT * FROM planned_routes ORDER BY COALESCE(NULLIF(scheduled_date, ''), created_at) DESC, id DESC;`, true);
+  const rows = await runSql(`SELECT * FROM planned_routes ${userFilter} ORDER BY COALESCE(NULLIF(scheduled_date, ''), created_at) DESC, id DESC;`, true);
   return rows.map(rowToRouteSummary);
 }
 
-export async function getRoute(id) {
-  const rows = await runSql(`SELECT * FROM planned_routes WHERE id = ${sqlValue(Number(id))};`, true);
+export async function getRoute(id, userId = null) {
+  const userFilter = userId != null ? ` AND user_id = ${sqlValue(Number(userId))}` : "";
+  const rows = await runSql(`SELECT * FROM planned_routes WHERE id = ${sqlValue(Number(id))}${userFilter};`, true);
   return rows[0] ? rowToRoute(rows[0]) : null;
 }
 
-export async function updateRoutePayload(id, route) {
+export async function updateRoutePayload(id, route, userId = null) {
+  const userFilter = userId != null ? ` AND user_id = ${sqlValue(Number(userId))}` : "";
   await runSql(`
     UPDATE planned_routes SET scheduled_date = ${sqlValue(route.scheduledDate || "")}, total_km = ${sqlValue(Number(route.summary?.totalKm || 0))}, total_drive_minutes = ${sqlValue(Number(route.summary?.totalDriveMinutes || 0))}, total_work_minutes = ${sqlValue(Number(route.summary?.totalWorkMinutes || 0))}, total_cost = ${sqlValue(Number(route.summary?.totalCost || 0))}, weather_captured_at = ${sqlValue(route.weatherCapturedAt || "")}, payload_json = ${sqlValue(JSON.stringify(route))}
-    WHERE id = ${sqlValue(Number(id))};
+    WHERE id = ${sqlValue(Number(id))}${userFilter};
   `);
-  return getRoute(id);
+  return getRoute(id, userId);
 }
 
-export async function renameRoute(id, name) {
+export async function renameRoute(id, name, userId = null) {
   const nextName = String(name || "").trim() || "Giro salvato";
-  const stored = await getRoute(id);
+  const stored = await getRoute(id, userId);
   if (!stored) return null;
   const payload = { ...(stored.payload || {}), name: nextName };
+  const userFilter = userId != null ? ` AND user_id = ${sqlValue(Number(userId))}` : "";
 
   await runSql(`
     UPDATE planned_routes SET name = ${sqlValue(nextName)}, payload_json = ${sqlValue(JSON.stringify(payload))}
-    WHERE id = ${sqlValue(Number(id))};
+    WHERE id = ${sqlValue(Number(id))}${userFilter};
   `);
-  return getRoute(id);
+  return getRoute(id, userId);
 }
 
-export async function deleteRoute(id) {
-  await runSql(`DELETE FROM planned_routes WHERE id = ${sqlValue(Number(id))};`);
+export async function deleteRoute(id, userId = null) {
+  const userFilter = userId != null ? ` AND user_id = ${sqlValue(Number(userId))}` : "";
+  await runSql(`DELETE FROM planned_routes WHERE id = ${sqlValue(Number(id))}${userFilter};`);
   return { ok: true };
+}
+
+// ── auth DB functions ─────────────────────────────────────────────────────────
+
+export async function createUser(username, passwordHash) {
+  if (dbMode === "postgres") {
+    const rows = await runSql(`INSERT INTO users (username, password_hash) VALUES (${sqlValue(username)}, ${sqlValue(passwordHash)}) RETURNING id, username, created_at;`, true);
+    return rows[0] ? { id: rows[0].id, username: rows[0].username } : null;
+  }
+  await runSql(`INSERT INTO users (username, password_hash) VALUES (${sqlValue(username)}, ${sqlValue(passwordHash)});`);
+  const rows = await runSql("SELECT id, username FROM users ORDER BY id DESC LIMIT 1;", true);
+  return rows[0] ? { id: rows[0].id, username: rows[0].username } : null;
+}
+
+export async function findUserByUsername(username) {
+  const rows = await runSql(`SELECT * FROM users WHERE lower(username) = lower(${sqlValue(username)});`, true);
+  return rows[0] || null;
+}
+
+export async function findUserById(id) {
+  const rows = await runSql(`SELECT id, username FROM users WHERE id = ${sqlValue(Number(id))};`, true);
+  return rows[0] || null;
+}
+
+export async function createSession(token, userId) {
+  const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+  await runSql(`INSERT INTO sessions (token, user_id, expires_at) VALUES (${sqlValue(token)}, ${sqlValue(Number(userId))}, ${sqlValue(expiresAt)});`);
+}
+
+export async function getSession(token) {
+  if (!token) return null;
+  const rows = await runSql(`SELECT user_id, expires_at FROM sessions WHERE token = ${sqlValue(token)};`, true);
+  if (!rows[0]) return null;
+  if (new Date(rows[0].expires_at) < new Date()) {
+    await runSql(`DELETE FROM sessions WHERE token = ${sqlValue(token)};`);
+    return null;
+  }
+  return Number(rows[0].user_id);
+}
+
+export async function deleteSession(token) {
+  if (!token) return;
+  await runSql(`DELETE FROM sessions WHERE token = ${sqlValue(token)};`);
+}
+
+export async function hasAnyUser() {
+  const rows = await runSql("SELECT COUNT(*) AS count FROM users;", true);
+  return Number(rows[0]?.count ?? 0) > 0;
+}
+
+export async function assignOrphanedData(userId) {
+  await runSql(`UPDATE addresses SET user_id = ${sqlValue(Number(userId))} WHERE user_id IS NULL;`);
+  await runSql(`UPDATE planned_routes SET user_id = ${sqlValue(Number(userId))} WHERE user_id IS NULL;`);
+  // Migrate old settings to user_settings if not yet done
+  const existing = await runSql(`SELECT user_id FROM user_settings WHERE user_id = ${sqlValue(Number(userId))};`, true);
+  if (!existing.length) {
+    const oldRows = await runSql("SELECT * FROM settings WHERE id = 1;", true);
+    const s = oldRows[0] || {};
+    if (dbMode === "postgres") {
+      await runSql(`INSERT INTO user_settings (user_id, km_rate, drive_hour_rate, work_hour_rate, navigator_pref, theme_pref, lunch_break_minutes, lunch_break_enabled, default_start_label, default_start_address, rest_interval_min, rest_max_deviation_min, rest_duration_min, drive_markup_min_per_hour, earliest_break_time, max_detour_km, max_return_time)
+        VALUES (${sqlValue(Number(userId))}, ${s.km_rate ?? 0.65}, ${s.drive_hour_rate ?? 22}, ${s.work_hour_rate ?? 60}, ${sqlValue(s.navigator_pref ?? 'google')}, ${sqlValue(s.theme_pref ?? 'auto')}, ${s.lunch_break_minutes ?? 45}, ${s.lunch_break_enabled ?? 1}, ${sqlValue(s.default_start_label ?? '')}, ${sqlValue(s.default_start_address ?? '')}, ${s.rest_interval_min ?? 120}, ${s.rest_max_deviation_min ?? 40}, ${s.rest_duration_min ?? 15}, ${s.drive_markup_min_per_hour ?? 10}, ${sqlValue(s.earliest_break_time ?? '08:00')}, ${s.max_detour_km ?? 1.7}, ${sqlValue(s.max_return_time ?? '')})
+        ON CONFLICT (user_id) DO NOTHING;`);
+    } else {
+      await runSql(`INSERT OR IGNORE INTO user_settings (user_id, km_rate, drive_hour_rate, work_hour_rate, navigator_pref, theme_pref, lunch_break_minutes, lunch_break_enabled, default_start_label, default_start_address, rest_interval_min, rest_max_deviation_min, rest_duration_min, drive_markup_min_per_hour, earliest_break_time, max_detour_km, max_return_time)
+        VALUES (${sqlValue(Number(userId))}, ${s.km_rate ?? 0.65}, ${s.drive_hour_rate ?? 22}, ${s.work_hour_rate ?? 60}, ${sqlValue(s.navigator_pref ?? 'google')}, ${sqlValue(s.theme_pref ?? 'auto')}, ${s.lunch_break_minutes ?? 45}, ${s.lunch_break_enabled ?? 1}, ${sqlValue(s.default_start_label ?? '')}, ${sqlValue(s.default_start_address ?? '')}, ${s.rest_interval_min ?? 120}, ${s.rest_max_deviation_min ?? 40}, ${s.rest_duration_min ?? 15}, ${s.drive_markup_min_per_hour ?? 10}, ${sqlValue(s.earliest_break_time ?? '08:00')}, ${s.max_detour_km ?? 1.7}, ${sqlValue(s.max_return_time ?? '')});`);
+    }
+  }
 }

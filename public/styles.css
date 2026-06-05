@@ -1913,3 +1913,68 @@ tbody tr:last-child td {
   animation: spin 0.8s linear infinite;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── auth screen ─────────────────────────────────────────────────────────── */
+.auth-screen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100dvh;
+  padding: 20px;
+  background: var(--bg);
+}
+.auth-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 28px 24px;
+  width: 100%;
+  max-width: 360px;
+}
+.auth-logo {
+  font-size: 1.3rem;
+  font-weight: 700;
+  text-align: center;
+  margin-bottom: 4px;
+}
+.auth-subtitle {
+  font-size: 0.85rem;
+  color: var(--muted);
+  text-align: center;
+  margin: 0 0 20px;
+}
+.auth-tabs {
+  display: flex;
+  gap: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 20px;
+}
+.auth-tab {
+  flex: 1;
+  padding: 8px;
+  border: none;
+  background: none;
+  font-size: 0.875rem;
+  cursor: pointer;
+  color: var(--muted);
+}
+.auth-tab.active {
+  background: var(--primary);
+  color: #fff;
+  font-weight: 600;
+}
+.auth-form .field { margin-bottom: 12px; }
+.auth-error {
+  color: #dc2626;
+  font-size: 0.82rem;
+  min-height: 1.2em;
+  margin: 4px 0 8px;
+}
+.auth-hint {
+  font-size: 0.78rem;
+  color: var(--muted);
+  text-align: center;
+  margin-top: 8px;
+}

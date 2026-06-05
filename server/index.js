@@ -16,8 +16,17 @@ import {
   getRoute,
   updateRoutePayload,
   renameRoute,
-  deleteRoute
+  deleteRoute,
+  createUser,
+  findUserByUsername,
+  findUserById,
+  createSession,
+  getSession,
+  deleteSession,
+  hasAnyUser,
+  assignOrphanedData
 } from "./db.js";
+import { hashPassword, verifyPassword, generateToken } from "./auth.js";
 import { loadEnv } from "./env.js";
 import { isOpenAtTime } from "./googleMapsService.js";
 import { planRoute } from "./planner.js";
@@ -74,6 +83,26 @@ function parseBody(request) {
   });
 }
 
+function parseCookies(header) {
+  if (!header) return {};
+  return Object.fromEntries(
+    header.split(';')
+      .map(c => c.trim().split('='))
+      .filter(p => p.length >= 2)
+      .map(([k, ...v]) => [k.trim(), decodeURIComponent(v.join('=').trim())])
+  );
+}
+
+function sessionCookie(token) {
+  const secure = process.env.NODE_ENV === "production" ? "; Secure" : "";
+  return `session=${token}; HttpOnly; Path=/; SameSite=Strict; Max-Age=2592000${secure}`;
+}
+
+async function authenticate(request) {
+  const cookies = parseCookies(request.headers.cookie);
+  return getSession(cookies.session || "");
+}
+
 function serveStatic(request, response) {
   const url = new URL(request.url, `http://${request.headers.host}`);
   const pathname = decodeURIComponent(url.pathname === "/" ? "/index.html" : url.pathname);
@@ -112,40 +141,116 @@ async function handleApi(request, response) {
       });
     }
 
-
     if (method === "GET" && url.pathname === "/api/config") {
       return sendJson(response, 200, {
         googleMapsKey: process.env.GOOGLE_MAPS_API_KEY || ""
       });
     }
 
+    // ── Auth routes (no session required) ────────────────────────────────────
+    if (url.pathname.startsWith("/api/auth/")) {
+      if (method === "GET" && url.pathname === "/api/auth/me") {
+        const userId = await authenticate(request);
+        if (!userId) {
+          const noUsers = !(await hasAnyUser());
+          return sendJson(response, 401, { error: "Non autenticato", setup: noUsers });
+        }
+        const user = await findUserById(userId);
+        if (!user) return sendJson(response, 401, { error: "Utente non trovato" });
+        return sendJson(response, 200, { id: user.id, username: user.username });
+      }
+
+      if (method === "POST" && url.pathname === "/api/auth/setup") {
+        if (await hasAnyUser()) return sendJson(response, 403, { error: "Setup già completato" });
+        const body = await parseBody(request);
+        const { username, password } = body;
+        if (!username || !password || password.length < 6) return sendJson(response, 400, { error: "Username e password (min 6 caratteri) obbligatori" });
+        const hash = await hashPassword(password);
+        const user = await createUser(username.trim(), hash);
+        if (!user) return sendJson(response, 500, { error: "Errore creazione utente" });
+        await assignOrphanedData(user.id);
+        const token = generateToken();
+        await createSession(token, user.id);
+        response.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Set-Cookie": sessionCookie(token) });
+        response.end(JSON.stringify({ id: user.id, username: user.username }));
+        return;
+      }
+
+      if (method === "POST" && url.pathname === "/api/auth/register") {
+        const body = await parseBody(request);
+        const { username, password } = body;
+        if (!username || !password || password.length < 6) return sendJson(response, 400, { error: "Username e password (min 6 caratteri) obbligatori" });
+        const existing = await findUserByUsername(username.trim());
+        if (existing) return sendJson(response, 409, { error: "Username già in uso" });
+        const hash = await hashPassword(password);
+        const user = await createUser(username.trim(), hash);
+        if (!user) return sendJson(response, 500, { error: "Errore creazione utente" });
+        const token = generateToken();
+        await createSession(token, user.id);
+        response.writeHead(201, { "Content-Type": "application/json; charset=utf-8", "Set-Cookie": sessionCookie(token) });
+        response.end(JSON.stringify({ id: user.id, username: user.username }));
+        return;
+      }
+
+      if (method === "POST" && url.pathname === "/api/auth/login") {
+        const body = await parseBody(request);
+        const { username, password } = body;
+        if (!username || !password) return sendJson(response, 400, { error: "Username e password obbligatori" });
+        const user = await findUserByUsername(username.trim());
+        if (!user || !(await verifyPassword(password, user.password_hash))) {
+          return sendJson(response, 401, { error: "Credenziali non valide" });
+        }
+        const token = generateToken();
+        await createSession(token, user.id);
+        response.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Set-Cookie": sessionCookie(token) });
+        response.end(JSON.stringify({ id: user.id, username: user.username }));
+        return;
+      }
+
+      if (method === "POST" && url.pathname === "/api/auth/logout") {
+        const cookies = parseCookies(request.headers.cookie);
+        await deleteSession(cookies.session || "");
+        const secure = process.env.NODE_ENV === "production" ? "; Secure" : "";
+        response.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Set-Cookie": `session=; HttpOnly; Path=/; SameSite=Strict; Max-Age=0${secure}` });
+        response.end(JSON.stringify({ ok: true }));
+        return;
+      }
+    }
+
+    // ── All routes below require authentication ───────────────────────────────
+    const userId = await authenticate(request);
+    if (!userId) {
+      const noUsers = !(await hasAnyUser());
+      return sendJson(response, 401, { error: "Non autenticato", setup: noUsers });
+    }
+
     if (method === "GET" && url.pathname === "/api/addresses") {
-      const addresses = await listAddresses(url.searchParams.get("search") || "");
+      const addresses = await listAddresses(url.searchParams.get("search") || "", userId);
       return sendJson(response, 200, addresses);
     }
 
     if (method === "POST" && url.pathname === "/api/addresses") {
       const body = await parseBody(request);
       if (!body.fullAddress) return sendJson(response, 400, { error: "Indirizzo completo obbligatorio" });
-      const address = await createAddress(body);
+      const address = await createAddress(body, userId);
       return sendJson(response, 201, address);
     }
 
     const addressMatch = url.pathname.match(/^\/api\/addresses\/(\d+)$/);
     if (addressMatch && method === "PUT") {
       const body = await parseBody(request);
-      const address = await updateAddress(addressMatch[1], body);
+      const address = await updateAddress(addressMatch[1], body, userId);
       return sendJson(response, 200, address);
     }
 
     if (addressMatch && method === "DELETE") {
-      await deleteAddress(addressMatch[1]);
+      await deleteAddress(addressMatch[1], userId);
       return sendJson(response, 200, { ok: true });
     }
 
     const openingMatch = url.pathname.match(/^\/api\/addresses\/(\d+)\/opening$/);
     if (openingMatch && method === "GET") {
-      const addr = await getAddress(openingMatch[1]);
+      const addr = await getAddress(openingMatch[1], userId);
       if (!addr) return sendJson(response, 404, { error: "Non trovato" });
       const apiKey = process.env.GOOGLE_MAPS_API_KEY || "";
       if (!apiKey) return sendJson(response, 503, { error: "API non configurata" });
@@ -179,18 +284,18 @@ async function handleApi(request, response) {
     }
 
     if (method === "GET" && url.pathname === "/api/settings") {
-      return sendJson(response, 200, await getSettings());
+      return sendJson(response, 200, await getSettings(userId));
     }
 
     if (method === "PUT" && url.pathname === "/api/settings") {
       const body = await parseBody(request);
-      return sendJson(response, 200, await updateSettings(body));
+      return sendJson(response, 200, await updateSettings(userId, body));
     }
 
     if (method === "POST" && url.pathname === "/api/plan") {
       const body = await parseBody(request);
-      const settings = await getSettings();
-      const allAddresses = await listAddresses("");
+      const settings = await getSettings(userId);
+      const allAddresses = await listAddresses("", userId);
       let route = await planRoute(body, settings, allAddresses);
       route = await attachWeather(route, { rowTimeoutMs: 3000 });
       const saved = await saveRoute({
@@ -201,7 +306,7 @@ async function handleApi(request, response) {
         startAddress: body.start?.address || body.start?.fullAddress || "",
         endLabel: route.end?.label || "",
         endAddress: route.end?.address || route.end?.fullAddress || ""
-      });
+      }, userId);
       route.id = saved.id;
       return sendJson(response, 200, route);
     }
@@ -212,7 +317,7 @@ async function handleApi(request, response) {
     }
 
     if (method === "GET" && url.pathname === "/api/routes") {
-      return sendJson(response, 200, await listRoutes());
+      return sendJson(response, 200, await listRoutes(userId));
     }
 
     if (method === "POST" && url.pathname === "/api/routes") {
@@ -225,13 +330,13 @@ async function handleApi(request, response) {
         startAddress: body.start?.address || body.startAddress || "",
         endLabel: body.end?.label || body.endLabel || "",
         endAddress: body.end?.address || body.endAddress || ""
-      });
+      }, userId);
       return sendJson(response, 201, saved);
     }
 
     const routeMatch = url.pathname.match(/^\/api\/routes\/(\d+)$/);
     if (routeMatch && method === "GET") {
-      const stored = await getRoute(routeMatch[1]);
+      const stored = await getRoute(routeMatch[1], userId);
       if (!stored) return sendJson(response, 404, { error: "Giro non trovato" });
       let route = { ...stored.payload, id: stored.id };
       if (shouldRefreshWeather(route)) {
@@ -239,26 +344,26 @@ async function handleApi(request, response) {
           existingWeather: route.weather || [],
           rowTimeoutMs: 3000
         });
-        await updateRoutePayload(stored.id, route);
+        await updateRoutePayload(stored.id, route, userId);
       }
       return sendJson(response, 200, route);
     }
 
     if (routeMatch && method === "PUT") {
       const body = await parseBody(request);
-      const route = await renameRoute(routeMatch[1], body.name || "");
+      const route = await renameRoute(routeMatch[1], body.name || "", userId);
       if (!route) return sendJson(response, 404, { error: "Giro non trovato" });
       return sendJson(response, 200, route);
     }
 
     if (routeMatch && method === "DELETE") {
-      await deleteRoute(routeMatch[1]);
+      await deleteRoute(routeMatch[1], userId);
       return sendJson(response, 200, { ok: true });
     }
 
     if (method === "POST" && url.pathname === "/api/voice/parse") {
       const body = await parseBody(request);
-      const addresses = await listAddresses("");
+      const addresses = await listAddresses("", userId);
       return sendJson(response, 200, parseVoiceCommand(body.text || "", addresses));
     }
 
@@ -268,7 +373,7 @@ async function handleApi(request, response) {
       }
       const body = await parseBody(request);
       const text = body.text || "";
-      const addresses = await listAddresses("");
+      const addresses = await listAddresses("", userId);
       const today = new Date().toISOString().slice(0, 10);
 
       const addressList = addresses.map(a =>

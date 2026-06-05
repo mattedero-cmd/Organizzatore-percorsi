@@ -70,6 +70,11 @@ async function api(path, options = {}) {
     ...options
   });
   const payload = await res.json().catch(() => ({}));
+  if (res.status === 401) {
+    state.user = null;
+    renderAuthScreen(false);
+    throw new Error("Sessione scaduta. Effettua di nuovo il login.");
+  }
   if (!res.ok) throw new Error(payload.error || `Errore ${res.status}`);
   return payload;
 }
@@ -90,6 +95,7 @@ const emptyForm = {
 };
 
 const state = {
+  user: null,
   activeTab: "route",
   menuOpen: false, menuSection: null,
   theme: "day",
@@ -200,6 +206,12 @@ function renderMenu() {
     });
     ov.querySelector("#bsheet-back")?.addEventListener("click", () => { state.menuSection = null; refreshSheet(); });
     ov.querySelector("#bsheet-close")?.addEventListener("click", () => closeMenu());
+    ov.querySelector("#logout-btn")?.addEventListener("click", async () => {
+      await fetch("/api/auth/logout", { method: "POST" });
+      state.user = null;
+      closeMenu();
+      renderAuthScreen(false);
+    });
     ov.querySelector("#settings-form")?.addEventListener("submit", async e => {
       e.preventDefault();
       const v = readForm(e.target);
@@ -311,7 +323,11 @@ function renderMenuRoot() {
       <span class="bsheet-menu-icon">ℹ️</span>
       <span class="bsheet-menu-label">Info app</span>
       <span class="bsheet-menu-arrow">›</span>
-    </button>`;
+    </button>
+    <div style="padding: 12px 16px; border-top: 1px solid var(--line); margin-top: 8px;">
+      <div style="font-size:0.8rem;color:var(--muted);margin-bottom:8px;">Connesso come <strong>${escapeHtml(state.user?.username || "")}</strong></div>
+      <button class="btn" id="logout-btn" style="width:100%">Esci (logout)</button>
+    </div>`;
 }
 
 function renderMenuSection(section) {
@@ -2958,7 +2974,115 @@ function bindEvents() {
   });
 }
 
+// ── auth screen ───────────────────────────────────────────────────────────────
+
+function renderLoginForm() {
+  return `<form class="auth-form">
+    <label class="field">Username<input name="username" autocomplete="username" required /></label>
+    <label class="field">Password<input name="password" type="password" autocomplete="current-password" required /></label>
+    <p class="auth-error"></p>
+    <button class="btn primary" type="submit" style="width:100%">Accedi</button>
+  </form>`;
+}
+
+function renderRegisterForm() {
+  return `<form class="auth-form">
+    <label class="field">Username<input name="username" autocomplete="username" required /></label>
+    <label class="field">Password<input name="password" type="password" autocomplete="new-password" minlength="6" required /></label>
+    <p class="auth-error"></p>
+    <button class="btn primary" type="submit" style="width:100%">Crea account</button>
+    <p class="auth-hint">Minimo 6 caratteri per la password</p>
+  </form>`;
+}
+
+function renderSetupForm() {
+  return `<form class="auth-form">
+    <label class="field">Username<input name="username" autocomplete="username" required /></label>
+    <label class="field">Password<input name="password" type="password" autocomplete="new-password" minlength="6" required /></label>
+    <p class="auth-error"></p>
+    <button class="btn primary" type="submit" style="width:100%">Configura e accedi</button>
+    <p class="auth-hint">I tuoi dati esistenti verranno associati a questo account.</p>
+  </form>`;
+}
+
+function renderAuthScreen(isSetup = false) {
+  let activeTab = isSetup ? "setup" : "login";
+
+  const renderInner = () => {
+    app.innerHTML = `
+      <div class="auth-screen">
+        <div class="auth-card">
+          <div class="auth-logo">📍 Percorsi Lavoro</div>
+          ${isSetup
+            ? `<p class="auth-subtitle">Prima configurazione — crea il tuo account</p>`
+            : `<div class="auth-tabs">
+                <button class="auth-tab ${activeTab === 'login' ? 'active' : ''}" data-tab="login">Accedi</button>
+                <button class="auth-tab ${activeTab === 'register' ? 'active' : ''}" data-tab="register">Registrati</button>
+              </div>`
+          }
+          ${activeTab === "setup" ? renderSetupForm() : activeTab === "login" ? renderLoginForm() : renderRegisterForm()}
+        </div>
+      </div>`;
+
+    app.querySelectorAll(".auth-tab").forEach(btn => {
+      btn.addEventListener("click", () => {
+        activeTab = btn.dataset.tab;
+        renderInner();
+      });
+    });
+
+    const form = app.querySelector(".auth-form");
+    if (form) {
+      form.addEventListener("submit", async e => {
+        e.preventDefault();
+        const errEl = form.querySelector(".auth-error");
+        const btn = form.querySelector("[type=submit]");
+        const data = Object.fromEntries(new FormData(form));
+        btn.disabled = true;
+        try {
+          const endpoint = isSetup ? "/api/auth/setup" : activeTab === "login" ? "/api/auth/login" : "/api/auth/register";
+          const res = await fetch(endpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ username: data.username, password: data.password })
+          });
+          const result = await res.json();
+          if (!res.ok) throw new Error(result.error || "Errore");
+          state.user = result;
+          await initApp();
+        } catch (err) {
+          if (errEl) errEl.textContent = err.message;
+        } finally {
+          btn.disabled = false;
+        }
+      });
+    }
+  };
+
+  renderInner();
+}
+
 // ── init ──────────────────────────────────────────────────────────────────────
+
+async function initApp() {
+  await loadInitialData();
+  render();
+}
+
+async function init() {
+  try {
+    const meRes = await fetch('/api/auth/me');
+    const me = await meRes.json().catch(() => ({}));
+    if (!meRes.ok) {
+      renderAuthScreen(me.setup === true);
+      return;
+    }
+    state.user = me;
+    await initApp();
+  } catch {
+    renderAuthScreen(false);
+  }
+}
 
 applyTheme();
 setInterval(applyTheme, 60_000);
@@ -2968,6 +3092,6 @@ if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => navigator.serviceWorker.register("/service-worker.js").catch(() => {}));
 }
 
-loadInitialData().then(render).catch(err => {
+init().catch(err => {
   app.innerHTML = `<section class="panel"><h2>Errore avvio</h2><div class="empty">${escapeHtml(err.message)}</div></section>`;
 });
