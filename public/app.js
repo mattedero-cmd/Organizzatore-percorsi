@@ -814,21 +814,21 @@ function stopDetailExtra(result, row, addr) {
     parts.push(`<div class="stop-detail-section"><span class="st-label">Meteo</span> <span class="stop-weather-full">${weatherIcon(w)} <strong>${temp}</strong> ${escapeHtml(w.description || "")}${humidity}${wind}${alerts ? " " + alerts : ""}</span></div>`);
   }
 
-  // Full weekly hours
+  // Full weekly hours — 3 cols: day | am | pm
   const wh = addr?.weeklyHours || row.weeklyHours;
   if (wh) {
     const scheduledDow = result.scheduledDate ? new Date(result.scheduledDate + "T12:00:00").getDay() : -1;
     const dayRows = [1,2,3,4,5,6,0].map(d => {
       const h = wh[d] || wh[String(d)] || { closed: true };
       const isToday = d === scheduledDow;
-      const style = isToday ? " class=\"wh-today\"" : "";
-      if (h.closed) return `<tr${style}><td class="wh-day">${DAYS_IT[d]}</td><td class="wh-hours muted">Chiuso</td></tr>`;
-      if (h.continuous) return `<tr${style}><td class="wh-day">${DAYS_IT[d]}</td><td class="wh-hours">${h.openMorning}–${h.closeAfternoon} <span class="muted">cont.</span></td></tr>`;
-      const am = (h.openMorning && h.closeMorning) ? `${h.openMorning}–${h.closeMorning}` : "";
+      const tr = isToday ? `<tr class="wh-today">` : `<tr>`;
+      if (h.closed) return `${tr}<td class="wh-day">${DAYS_IT[d]}</td><td class="wh-hours wh-muted" colspan="2">Chiuso</td></tr>`;
+      if (h.continuous) return `${tr}<td class="wh-day">${DAYS_IT[d]}</td><td class="wh-hours" colspan="2">${h.openMorning}–${h.closeAfternoon}</td></tr>`;
+      const am = (h.openMorning && h.closeMorning) ? `${h.openMorning}–${h.closeMorning}` : "—";
       const pm = (h.openAfternoon && h.closeAfternoon) ? `${h.openAfternoon}–${h.closeAfternoon}` : "";
-      return `<tr${style}><td class="wh-day">${DAYS_IT[d]}</td><td class="wh-hours">${[am, pm].filter(Boolean).join(" / ") || "—"}</td></tr>`;
+      return `${tr}<td class="wh-day">${DAYS_IT[d]}</td><td class="wh-hours">${am}</td><td class="wh-hours wh-muted">${pm}</td></tr>`;
     }).join("");
-    parts.push(`<div class="stop-detail-section"><span class="st-label">Orari</span><table class="wh-inline"><tbody>${dayRows}</tbody></table></div>`);
+    parts.push(`<div class="stop-detail-section"><span class="st-label">Orari settimanali</span><table class="wh-inline"><colgroup><col class="wh-col-day"><col class="wh-col-am"><col class="wh-col-pm"></colgroup><tbody>${dayRows}</tbody></table></div>`);
   }
 
   return parts.length ? `<div class="stop-detail-extra">${parts.join("")}</div>` : "";

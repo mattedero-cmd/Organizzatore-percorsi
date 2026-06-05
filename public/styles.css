@@ -584,17 +584,18 @@ tbody tr:last-child td {
 .stop-times-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px 14px;
-  padding: 6px 0;
+  gap: 4px 12px;
+  padding: 5px 0;
   border-bottom: 1px solid var(--line);
-  margin-bottom: 6px;
+  margin-bottom: 4px;
 }
 
 .stop-times-row span {
   display: flex;
   align-items: baseline;
-  gap: 4px;
-  font-size: 0.88rem;
+  gap: 3px;
+  font-size: 0.85rem;
+  white-space: nowrap;
 }
 
 .st-label {
@@ -760,7 +761,9 @@ tbody tr:last-child td {
 
 .result-card {
   display: grid;
-  gap: 10px;
+  gap: 8px;
+  overflow: hidden;
+  min-width: 0;
 }
 
 .break-card {
@@ -1135,51 +1138,63 @@ tbody tr:last-child td {
 
 /* ── stop detail extra (weekly hours + weather in expanded card) ────────────*/
 .stop-detail-extra {
-  margin-top: 8px;
+  margin-top: 6px;
   border-top: 1px solid var(--line);
   padding-top: 6px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 5px;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .stop-detail-section {
   display: flex;
-  align-items: baseline;
-  gap: 6px;
-  flex-wrap: wrap;
-  font-size: 0.84rem;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 0.82rem;
+  min-width: 0;
 }
 
 .stop-weather-full {
-  font-size: 0.84rem;
+  font-size: 0.82rem;
 }
 
+/* compact weekly hours 3-column: day | am | pm */
 .wh-inline {
   border-collapse: collapse;
-  font-size: 0.8rem;
-  margin-top: 2px;
+  font-size: 0.78rem;
+  width: 100%;
+  table-layout: fixed;
 }
 
+.wh-inline col.wh-col-day  { width: 32px; }
+.wh-inline col.wh-col-am   { width: 50%; }
+.wh-inline col.wh-col-pm   { width: 50%; }
+
 .wh-inline td {
-  padding: 1px 8px 1px 0;
+  padding: 1px 4px 1px 0;
   vertical-align: middle;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .wh-inline .wh-day {
   font-weight: 700;
-  min-width: 28px;
+  color: var(--muted);
 }
 
 .wh-inline .wh-hours {
   color: var(--text);
 }
 
-.wh-inline .muted {
+.wh-inline .wh-muted {
   color: var(--muted);
 }
 
-.wh-inline tr.wh-today td {
+.wh-inline tr.wh-today .wh-day,
+.wh-inline tr.wh-today .wh-hours {
   font-weight: 800;
   color: var(--primary);
 }
