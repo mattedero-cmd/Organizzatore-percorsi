@@ -73,7 +73,13 @@ function rowToSettings(row) {
     navigatorPref: row.navigator_pref ?? "google",
     themePref: row.theme_pref ?? "auto",
     lunchBreakMinutes: Number(row.lunch_break_minutes ?? 45),
-    lunchBreakEnabled: row.lunch_break_enabled === undefined || row.lunch_break_enabled === null ? true : Boolean(Number(row.lunch_break_enabled))
+    lunchBreakEnabled: row.lunch_break_enabled === undefined || row.lunch_break_enabled === null ? true : Boolean(Number(row.lunch_break_enabled)),
+    defaultStartLabel: row.default_start_label ?? "",
+    defaultStartAddress: row.default_start_address ?? "",
+    restIntervalMin: Number(row.rest_interval_min ?? 120),
+    restMaxDeviationMin: Number(row.rest_max_deviation_min ?? 40),
+    restDurationMin: Number(row.rest_duration_min ?? 15),
+    driveMarkupMinPerHour: Number(row.drive_markup_min_per_hour ?? 10)
   };
 }
 
@@ -191,6 +197,7 @@ export async function initDb(rootDir) {
   await migratePlannedRoutes();
   await migrateWeeklyHours();
   await migrateIntesaFriday();
+  await migrateSettingsColumns();
 
   const count = await runSql("SELECT COUNT(*) AS count FROM addresses;", true);
   if (Number(count[0]?.count ?? 0) === 0) {
@@ -252,6 +259,7 @@ async function initPostgresDb() {
   await migratePlannedRoutes();
   await migrateWeeklyHours();
   await migrateIntesaFriday();
+  await migrateSettingsColumns();
 
   const count = await runSql("SELECT COUNT(*) AS count FROM addresses;", true);
   if (Number(count[0]?.count ?? 0) === 0) {
@@ -348,6 +356,14 @@ async function migrateIntesaFriday() {
   }
 }
 
+export async function migrateSettingsColumns() {
+  const cols = ["default_start_label TEXT DEFAULT ''", "default_start_address TEXT DEFAULT ''", "rest_interval_min INTEGER DEFAULT 120", "rest_max_deviation_min INTEGER DEFAULT 40", "rest_duration_min INTEGER DEFAULT 15", "drive_markup_min_per_hour INTEGER DEFAULT 10"];
+  for (const col of cols) {
+    const name = col.split(" ")[0];
+    try { await runSql(`ALTER TABLE settings ADD COLUMN ${col};`); } catch {}
+  }
+}
+
 async function migrateWeeklyHours() {
   // One-shot: convert old open_morning/close_morning/open_afternoon/close_afternoon
   // into weekly_hours for addresses that don't have it yet.
@@ -428,15 +444,24 @@ export async function updateSettings(settings) {
   const themePref = sqlValue(settings.themePref || "auto");
   const lunchMinutes = sqlValue(Number(settings.lunchBreakMinutes ?? 45));
   const lunchEnabled = sqlValue(settings.lunchBreakEnabled === false ? 0 : 1);
+  const dsl = sqlValue(settings.defaultStartLabel || "");
+  const dsa = sqlValue(settings.defaultStartAddress || "");
+  const rim = sqlValue(Number(settings.restIntervalMin ?? 120));
+  const rdm = sqlValue(Number(settings.restMaxDeviationMin ?? 40));
+  const rdu = sqlValue(Number(settings.restDurationMin ?? 15));
+  const drm = sqlValue(Number(settings.driveMarkupMinPerHour ?? 10));
+  const km = sqlValue(Number(settings.kmRate ?? 0.65));
+  const dhr = sqlValue(Number(settings.driveHourRate ?? 22));
+  const whr = sqlValue(Number(settings.workHourRate ?? 60));
   if (dbMode === "postgres") {
     await runSql(`
-      INSERT INTO settings (id, km_rate, drive_hour_rate, work_hour_rate, navigator_pref, theme_pref, lunch_break_minutes, lunch_break_enabled)
-      VALUES (1, ${sqlValue(Number(settings.kmRate ?? 0.65))}, ${sqlValue(Number(settings.driveHourRate ?? 22))}, ${sqlValue(Number(settings.workHourRate ?? 60))}, ${navPref}, ${themePref}, ${lunchMinutes}, ${lunchEnabled})
-      ON CONFLICT (id) DO UPDATE SET km_rate = EXCLUDED.km_rate, drive_hour_rate = EXCLUDED.drive_hour_rate, work_hour_rate = EXCLUDED.work_hour_rate, navigator_pref = EXCLUDED.navigator_pref, theme_pref = EXCLUDED.theme_pref, lunch_break_minutes = EXCLUDED.lunch_break_minutes, lunch_break_enabled = EXCLUDED.lunch_break_enabled;
+      INSERT INTO settings (id, km_rate, drive_hour_rate, work_hour_rate, navigator_pref, theme_pref, lunch_break_minutes, lunch_break_enabled, default_start_label, default_start_address, rest_interval_min, rest_max_deviation_min, rest_duration_min, drive_markup_min_per_hour)
+      VALUES (1, ${km}, ${dhr}, ${whr}, ${navPref}, ${themePref}, ${lunchMinutes}, ${lunchEnabled}, ${dsl}, ${dsa}, ${rim}, ${rdm}, ${rdu}, ${drm})
+      ON CONFLICT (id) DO UPDATE SET km_rate=EXCLUDED.km_rate, drive_hour_rate=EXCLUDED.drive_hour_rate, work_hour_rate=EXCLUDED.work_hour_rate, navigator_pref=EXCLUDED.navigator_pref, theme_pref=EXCLUDED.theme_pref, lunch_break_minutes=EXCLUDED.lunch_break_minutes, lunch_break_enabled=EXCLUDED.lunch_break_enabled, default_start_label=EXCLUDED.default_start_label, default_start_address=EXCLUDED.default_start_address, rest_interval_min=EXCLUDED.rest_interval_min, rest_max_deviation_min=EXCLUDED.rest_max_deviation_min, rest_duration_min=EXCLUDED.rest_duration_min, drive_markup_min_per_hour=EXCLUDED.drive_markup_min_per_hour;
     `);
     return getSettings();
   }
-  await runSql(`UPDATE settings SET km_rate = ${sqlValue(Number(settings.kmRate ?? 0.65))}, drive_hour_rate = ${sqlValue(Number(settings.driveHourRate ?? 22))}, work_hour_rate = ${sqlValue(Number(settings.workHourRate ?? 60))}, navigator_pref = ${navPref}, theme_pref = ${themePref}, lunch_break_minutes = ${lunchMinutes}, lunch_break_enabled = ${lunchEnabled} WHERE id = 1;`);
+  await runSql(`UPDATE settings SET km_rate=${km}, drive_hour_rate=${dhr}, work_hour_rate=${whr}, navigator_pref=${navPref}, theme_pref=${themePref}, lunch_break_minutes=${lunchMinutes}, lunch_break_enabled=${lunchEnabled}, default_start_label=${dsl}, default_start_address=${dsa}, rest_interval_min=${rim}, rest_max_deviation_min=${rdm}, rest_duration_min=${rdu}, drive_markup_min_per_hour=${drm} WHERE id = 1;`);
   return getSettings();
 }
 

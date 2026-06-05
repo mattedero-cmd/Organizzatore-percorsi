@@ -24,9 +24,9 @@ function minutesToHours(minutes) {
   return Math.round((minutes / 60) * 100) / 100;
 }
 
-function addDriveBuffer(baseMinutes) {
+function addDriveBuffer(baseMinutes, markupMinPerHour = 10) {
   const minutes = Number(baseMinutes || 0);
-  return Math.max(1, Math.ceil(minutes + (minutes / 60) * 10));
+  return Math.max(1, Math.ceil(minutes + (minutes / 60) * markupMinPerHour));
 }
 
 function normalizeStop(stop, index, dayOfWeek = null) {
@@ -193,7 +193,7 @@ async function buildLegMatrix(nodes) {
       const pair = pairs[cursor];
       cursor += 1;
       const leg = await routeBetween(nodes[pair.from], nodes[pair.to]);
-      const adjustedDriveMinutes = addDriveBuffer(leg.driveMinutes);
+      const adjustedDriveMinutes = addDriveBuffer(leg.driveMinutes, settings?.driveMarkupMinPerHour ?? 10);
       matrix.set(`${pair.from}:${pair.to}`, {
         ...leg,
         baseDriveMinutes: leg.driveMinutes,
@@ -450,9 +450,11 @@ async function insertBreaks(rows, options) {
   // ── constants ────────────────────────────────────────────────────────────────
   const LUNCH_OPEN = 11 * 60 + 30;
   const LUNCH_CLOSE = 14 * 60;
-  const REST_MIN = 110;          // trigger sosta: 2h − 10 min
-  const REST_MAX = 150;          // abbandona finestra: 2h + 30 min
-  const REST_DUR = 15;
+  const interval = Number(options?.restIntervalMin ?? 120);
+  const deviation = Number(options?.restMaxDeviationMin ?? 40);
+  const REST_MIN = interval - Math.floor(deviation / 4);
+  const REST_MAX = interval + Math.floor(deviation * 3 / 4);
+  const REST_DUR = Number(options?.restDurationMin ?? 15);
   const NO_BREAK_EARLY = 120;    // no sosta nelle prime 2h di giornata
   const NO_BREAK_BEFORE_HOME = 60;  // no sosta nell'ultima ora prima di casa
   const EARLIEST_BREAK = 8 * 60;   // no sosta prima delle 08:00
@@ -713,7 +715,10 @@ export async function planRoute(payload, settings, restStops = []) {
   const { rows: enrichedRows, addedMinutes } = await insertBreaks(best.rows, {
     lunchBreakEnabled, lunchBreakMinutes, restStops: activeRestStops,
     dayStart: parseTime(best.summary.dayStart),
-    finalArrival: parseTime(best.finalLeg.arrivalTime)
+    finalArrival: parseTime(best.finalLeg.arrivalTime),
+    restIntervalMin: settings?.restIntervalMin ?? 120,
+    restMaxDeviationMin: settings?.restMaxDeviationMin ?? 40,
+    restDurationMin: settings?.restDurationMin ?? 15
   });
   best = {
     ...best,

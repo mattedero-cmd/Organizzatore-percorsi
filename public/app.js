@@ -470,6 +470,14 @@ async function loadInitialData() {
   state.themePref = settings.themePref || "auto";
   state.route.lunchBreak = settings.lunchBreakEnabled !== false;
   state.route.lunchBreakMinutes = settings.lunchBreakMinutes || 45;
+  if (settings.defaultStartLabel || settings.defaultStartAddress) {
+    state.route.startLabel = settings.defaultStartLabel || state.route.startLabel;
+    state.route.startAddress = settings.defaultStartAddress || state.route.startAddress;
+    if (state.route.endSameAsStart) {
+      state.route.endLabel = state.route.startLabel;
+      state.route.endAddress = state.route.startAddress;
+    }
+  }
   applyTheme();
   document.querySelector("#map-status").textContent = state.mapApiConfigured ? "Google Maps" : "Stima locale";
   await Promise.all([refreshAddressesForRoute(), refreshSavedRoutes()]);
@@ -1037,8 +1045,8 @@ function renderWeeklyHoursSection(weeklyHours) {
     const dis = h.closed ? "disabled" : "";
     return `<tr class="wh-row" data-day="${d}">
       <td class="wh-day">${DAYS_IT[d]}</td>
-      <td><label><input type="checkbox" class="wh-closed" ${closed} /> Ch.</label></td>
-      <td><label><input type="checkbox" class="wh-cont" ${cont} ${dis} /> Cont.</label></td>
+      <td class="wh-cb"><input type="checkbox" class="wh-closed" ${closed} title="Chiuso" /></td>
+      <td class="wh-cb"><input type="checkbox" class="wh-cont" ${cont} ${dis} title="Continuato" /></td>
       <td><input type="time" class="wh-om" value="${h.openMorning || ""}" ${dis} /></td>
       <td><input type="time" class="wh-cm" value="${h.closeMorning || ""}" ${dis || (h.continuous ? "disabled" : "")} /></td>
       <td><input type="time" class="wh-oa" value="${h.openAfternoon || ""}" ${dis || (h.continuous ? "disabled" : "")} /></td>
@@ -1592,7 +1600,6 @@ function render() {
   else if (state.activeTab === "saved") renderSaved();
   else if (state.activeTab === "archive") renderArchive();
   else if (state.activeTab === "result") renderResult();
-  else if (state.activeTab === "settings") renderSettings();
 }
 
 // ── route form helpers ────────────────────────────────────────────────────────
@@ -2735,22 +2742,6 @@ function bindEvents() {
     e.preventDefault();
     if (e.target.id === "address-form") {
       try { await saveAddressForm(e.target); } catch (err) { showToast(err.message); }
-    }
-    if (e.target.id === "settings-form") {
-      const v = readForm(e.target);
-      state.settings = await api("/api/settings", { method: "PUT", body: JSON.stringify({
-        kmRate: Number(v.kmRate), driveHourRate: Number(v.driveHourRate), workHourRate: Number(v.workHourRate),
-        navigatorPref: v.navigatorPref || "google", themePref: v.themePref || "auto",
-        lunchBreakMinutes: Number(v.lunchBreakMinutes || 45),
-        lunchBreakEnabled: v.lunchBreakEnabled === "on" || v.lunchBreakEnabled === true
-      }) });
-      state.navigatorPref = state.settings.navigatorPref;
-      localStorage.setItem("navigatorPref", state.navigatorPref);
-      state.themePref = state.settings.themePref;
-      state.route.lunchBreak = state.settings.lunchBreakEnabled !== false;
-      state.route.lunchBreakMinutes = state.settings.lunchBreakMinutes || 45;
-      applyTheme();
-      showToast("Impostazioni salvate");
     }
   });
 }

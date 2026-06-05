@@ -1,4 +1,4 @@
-const CACHE_NAME = "percorsi-lavoro-v77";
+const CACHE_NAME = "percorsi-lavoro-v78";
 const STATIC_ASSETS = [
   "/?v=20260605-53",
   "/index.html?v=20260605-53",
