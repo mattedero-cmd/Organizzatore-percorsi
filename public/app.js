@@ -45,6 +45,21 @@ function showToast(message) {
   showToast._t = setTimeout(() => toastEl.classList.remove("show"), 2800);
 }
 
+function showSpinner(msg = "Calcolo in corso…") {
+  let el = document.getElementById("loading-overlay");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "loading-overlay";
+    document.body.appendChild(el);
+  }
+  el.innerHTML = `<div class="loading-box"><div class="loading-spinner"></div><p>${msg}</p></div>`;
+  el.style.display = "flex";
+}
+function hideSpinner() {
+  const el = document.getElementById("loading-overlay");
+  if (el) el.style.display = "none";
+}
+
 function readForm(form) {
   return Object.fromEntries(new FormData(form).entries());
 }
@@ -1212,7 +1227,7 @@ function renderSaved() {
                 <button class="btn danger saved-card-btn" data-delete-route="${route.id}" title="Elimina">× Elimina</button>
               </div>
             </div>
-            ${route.plannedStops?.length ? `<div class="saved-stops-list">${route.plannedStops.filter((s, i, arr) => !s.stopPart || s.stopPart === "morning" || arr.findIndex(x => x.addressId === s.addressId) === i).map((s, i) => { const isRest = s.addressType === "rest"; const label = isRest ? s.customer : `${s.customer}${s.location ? ` — ${escapeHtml(s.location)}` : ""}`; return `<span class="saved-stop-chip">${i + 1}. ${escapeHtml(s.customer)}${!isRest && s.location ? ` — ${escapeHtml(s.location)}` : ""}</span>`; }).join("")}</div>` : ""}
+            ${route.plannedStops?.length ? `<div class="saved-stops-list">${route.plannedStops.filter((s, i, arr) => !s.stopPart || s.stopPart === "morning" || arr.findIndex(x => x.addressId === s.addressId) === i).map((s, i) => { const isRest = s.addressType === "rest" || s.customer?.includes("⭐") || s.customer?.includes("★"); return `<span class="saved-stop-chip">${i + 1}. ${escapeHtml(s.customer)}${!isRest && s.location ? ` — ${escapeHtml(s.location)}` : ""}</span>`; }).join("")}</div>` : ""}
           </article>`).join("") || `<div class="empty">Nessun giro salvato.</div>`}
       </div>
     </section>`;
@@ -1523,7 +1538,7 @@ function renderResult() {
           const emailSubject = encodeURIComponent(`Appuntamento ${row.customer} - ${result.scheduledDate || ""} ore ${row.arrivalTime}`);
           const partBadge = row.stopPart === "morning" ? `<span class="badge" style="background:color-mix(in srgb,#3b82f6 15%,var(--surface));color:#1d4ed8">mattina</span> ` : row.stopPart === "afternoon" ? `<span class="badge" style="background:color-mix(in srgb,#f97316 15%,var(--surface));color:#c2410c">pomeriggio</span> ` : "";
           const stopTitle = `${row.stopNumber}. ${escapeHtml(row.customer)}${row.location ? ` — ${escapeHtml(row.location)}` : ""}`;
-          const phoneBtn = pref ? `<a class="btn" href="tel:${escapeHtml(pref.number)}" title="${escapeHtml(pref.name || pref.number)}">${phoneIcon(pref.type)}</a>` : "";
+          const phoneBtn = pref ? `<a class="btn rc-phone-btn" href="tel:${escapeHtml(pref.number)}" title="${escapeHtml(pref.name || pref.number)}">${phoneIcon(pref.type)} ${escapeHtml(pref.number)}</a>` : "";
           const warnLevel = worstWarningLevel(row.warnings);
           const cardClass = warnLevel === "error" ? " card-error" : warnLevel === "warn" ? " card-warn" : "";
           const warnMsg = warnLevel ? (row.warnings.find(w => w.level === warnLevel || (warnLevel==="error" && /(chiusa|dopo|oltre)/.test(w.msg||w)))?.msg || "") : "";
@@ -1705,6 +1720,7 @@ async function planCurrentRoute() {
   updateRouteFromForm();
   if (!state.route.stops.length) { showToast("Aggiungi almeno una tappa"); return; }
   state.planning = true;
+  showSpinner("Calcolo percorso…");
   render();
   try {
     const r = state.route;
@@ -1725,12 +1741,15 @@ async function planCurrentRoute() {
       })
     });
     state.manualOrderRows = null;
+    state.route.stops = [];
+    state.route.name = "";
     await refreshSavedRoutes();
     setActiveTab("result");
     showToast("Percorso calcolato e salvato");
   } catch (e) {
     showToast(e.message);
   } finally {
+    hideSpinner();
     state.planning = false;
     if (state.activeTab === "route") render();
   }
@@ -2474,7 +2493,15 @@ function bindEvents() {
   });
 
   app.addEventListener("click", async e => {
-    // accordion expand/collapse for result stop cards
+    // expand button (⋯) — explicit handler so the button works
+    const expandBtn = e.target.closest(".rc-expand-btn");
+    if (expandBtn) {
+      const id = expandBtn.dataset.expandStop;
+      const details = document.querySelector(`[data-stop-details="${id}"]`);
+      if (details) details.hidden = !details.hidden;
+      return;
+    }
+    // accordion expand/collapse by clicking the head row (not on a link or button)
     const expandHead = e.target.closest("[data-expand-stop]");
     if (expandHead && !e.target.closest("a, button")) {
       const id = expandHead.dataset.expandStop;
@@ -2511,6 +2538,7 @@ function bindEvents() {
       const result = normalizeSavedRoute(state.result);
       const customerRows = result.rows.filter(r => !r.type);
       state.planning = true;
+      showSpinner(hasLunch ? "Rimozione pranzo…" : "Aggiunta pranzo…");
       render();
       try {
         state.result = await api("/api/plan", {
@@ -2533,7 +2561,7 @@ function bindEvents() {
               uid: row.stopUid || crypto.randomUUID(),
               addressId: row.addressId,
               customer: row.customer, location: row.location,
-              fullAddress: row.address, notes: row.notes,
+              fullAddress: row.fullAddress || row.address, notes: row.notes,
               openMorning: row.openMorning, closeMorning: row.closeMorning,
               openAfternoon: row.openAfternoon, closeAfternoon: row.closeAfternoon,
               durationMinutes: (row.stopPart === "morning" ? (customerRows.filter(x => x.stopUid === row.stopUid).reduce((t, x) => t + x.durationMinutes, 0)) : row.durationMinutes),
@@ -2547,6 +2575,7 @@ function bindEvents() {
       } catch (err) {
         showToast(err.message);
       } finally {
+        hideSpinner();
         state.planning = false;
         render();
       }
