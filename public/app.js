@@ -446,7 +446,7 @@ function renderStops() {
       </div>
       <div class="form-grid three">
         <label class="field">Durata (min)<input type="number" min="5" step="5" value="${escapeHtml(stop.durationMinutes)}" data-stop="${stop.uid}:durationMinutes" /></label>
-        <div class="field">${stopHoursHint(stop, r.scheduledDate)}</div>
+        <div class="field">${stopHoursHint(stop, state.route.scheduledDate)}</div>
         <div class="field"><span class="badge ${stop.recognized ? "ok" : "warning"}">${stop.recognized ? "Archivio" : "Da confermare"}</span></div>
       </div>
     </article>`;
