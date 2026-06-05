@@ -314,9 +314,10 @@ textarea:focus {
 }
 
 .icon-btn {
-  width: 42px;
-  min-width: 42px;
+  width: 36px;
+  min-width: 36px;
   padding: 0;
+  font-size: 0.9rem;
 }
 
 .route-strip {
@@ -453,37 +454,39 @@ textarea:focus {
 }
 .saved-card-btns {
   display: flex;
-  gap: 4px;
+  gap: 3px;
   flex-shrink: 0;
+  flex-wrap: nowrap;
 }
 .saved-open-btn {
-  font-size: 0.82rem;
-  padding: 4px 10px;
-  min-height: 32px;
+  font-size: 0.8rem;
+  padding: 3px 8px;
+  min-height: 30px;
 }
 .saved-card-meta {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   flex-wrap: wrap;
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   color: var(--muted);
   align-items: center;
 }
 .saved-date-input {
   min-height: 28px;
-  padding: 2px 6px;
-  font-size: 0.78rem;
-  width: auto;
+  padding: 2px 4px;
+  font-size: 0.75rem;
+  max-width: 120px;
   border-color: var(--line);
   color: var(--text);
   border-radius: 6px;
   flex-shrink: 0;
 }
 .saved-card-route {
-  font-size: 0.82rem;
+  font-size: 0.8rem;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  min-width: 0;
 }
 
 .section-head {
@@ -1365,39 +1368,43 @@ tbody tr:last-child td {
 .wh-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.76rem;
+  font-size: 0.74rem;
   table-layout: fixed;
 }
-/* column widths: day 28px | ch 22px | cont 22px | 4×time auto */
-.wh-table colgroup { display: none; }
+/* col widths enforced via colgroup: day 22px | ch 18px | cont 18px | 4×time equal */
+.wh-table col.col-day  { width: 22px; }
+.wh-table col.col-cb   { width: 18px; }
+.wh-table col.col-time { width: auto; }
 .wh-table th {
   text-align: center;
-  padding: 2px 1px 4px;
+  padding: 2px 0 4px;
   font-weight: 600;
   color: var(--muted);
-  font-size: 0.66rem;
+  font-size: 0.62rem;
   white-space: nowrap;
+  overflow: hidden;
 }
 .wh-table th:first-child { text-align: left; }
 .wh-table td {
-  padding: 2px 1px;
+  padding: 2px 0;
   vertical-align: middle;
-  white-space: nowrap;
 }
 .wh-day {
   font-weight: 600;
-  width: 28px;
-  font-size: 0.76rem;
+  width: 22px;
+  font-size: 0.72rem;
+  overflow: hidden;
 }
 .wh-cb {
-  width: 22px;
+  width: 18px;
   text-align: center;
+  padding: 0;
 }
 .wh-table input[type=time] {
   width: 100%;
   min-width: 0;
-  padding: 2px 1px;
-  font-size: 0.7rem;
+  padding: 2px 0;
+  font-size: 0.68rem;
   text-align: center;
 }
 .wh-fill-all {
@@ -1445,8 +1452,7 @@ tbody tr:last-child td {
 
 /* Sezione Quando */
 .rp-when-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+  display: flex;
   gap: 8px;
   overflow: hidden;
 }
@@ -1456,19 +1462,25 @@ tbody tr:last-child td {
   flex-direction: column;
   gap: 4px;
   min-width: 0;
-  overflow: hidden;
 }
+.rp-when-date { flex: 0 0 auto; }
+.rp-when-time { flex: 0 0 auto; }
 .rp-label {
   font-size: 0.75rem;
   color: var(--muted);
   font-weight: 500;
 }
-.rp-when-date input,
-.rp-when-time input {
-  width: 100%;
+.rp-when-date input {
+  width: 130px;
   min-width: 0;
-  font-size: 0.9rem;
-  padding: 8px 6px;
+  font-size: 0.85rem;
+  padding: 6px 4px;
+}
+.rp-when-time input {
+  width: 90px;
+  min-width: 0;
+  font-size: 0.85rem;
+  padding: 6px 4px;
 }
 
 /* Endpoint cards (Da / A) */
@@ -1651,40 +1663,52 @@ tbody tr:last-child td {
   background: rgba(0,0,0,0.45);
   display: flex;
   flex-direction: column;
-  justify-content: flex-end;
+  justify-content: flex-start;
 }
 .bsheet {
   background: var(--surface);
-  border-radius: 16px 16px 0 0;
-  padding: 12px 0 24px;
+  border-radius: 0 0 18px 18px;
+  padding: 0 0 20px;
   max-height: 92vh;
   overflow-y: auto;
-  animation: bsheet-up 0.22s ease;
+  animation: bsheet-down 0.26s cubic-bezier(0.22, 1, 0.36, 1);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.18);
 }
-@keyframes bsheet-up {
-  from { transform: translateY(100%); }
-  to   { transform: translateY(0); }
+@keyframes bsheet-down {
+  from { transform: translateY(-100%); opacity: 0; }
+  to   { transform: translateY(0);     opacity: 1; }
 }
-.bsheet-handle {
-  width: 40px; height: 4px;
-  background: var(--line-strong);
-  border-radius: 2px;
-  margin: 0 auto 12px;
-}
+.bsheet-handle { display: none; }
 .bsheet-header {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 0 16px 12px;
+  padding: 14px 16px 12px;
   border-bottom: 1px solid var(--line);
   margin-bottom: 4px;
+  position: sticky;
+  top: 0;
+  background: var(--surface);
+  z-index: 1;
 }
 .bsheet-back {
   background: none; border: none; font-size: 1.2rem;
   cursor: pointer; color: var(--primary); padding: 4px;
 }
 .bsheet-title {
-  font-size: 1rem; font-weight: 600; margin: 0;
+  font-size: 1rem; font-weight: 600; margin: 0; flex: 1;
+}
+.bsheet-close {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  width: 32px; height: 32px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.1rem;
+  cursor: pointer;
+  color: var(--text);
+  flex-shrink: 0;
+  line-height: 1;
 }
 .bsheet-menu-item {
   display: flex;

@@ -171,6 +171,7 @@ function renderMenu() {
     btn.addEventListener("click", () => { state.menuSection = btn.dataset.menuGo; renderMenu(); });
   });
   overlay.querySelector("#bsheet-back")?.addEventListener("click", () => { state.menuSection = null; renderMenu(); });
+  overlay.querySelector("#bsheet-close")?.addEventListener("click", () => closeMenu());
   overlay.querySelector("#settings-form")?.addEventListener("submit", async e => {
     e.preventDefault();
     const v = readForm(e.target);
@@ -219,9 +220,17 @@ function renderMenu() {
   });
 }
 
+function menuHeader(title, showBack = false) {
+  return `<div class="bsheet-header">
+    ${showBack ? `<button class="bsheet-back" id="bsheet-back">‹</button>` : ""}
+    <h2 class="bsheet-title">${title}</h2>
+    <button class="bsheet-close" id="bsheet-close" aria-label="Chiudi">×</button>
+  </div>`;
+}
+
 function renderMenuRoot() {
   return `
-    <div class="bsheet-handle"></div>
+    ${menuHeader("Menu")}
     <button class="bsheet-menu-item" data-menu-go="settings">
       <span class="bsheet-menu-icon">⚙️</span>
       <span class="bsheet-menu-label">Impostazioni</span>
@@ -260,11 +269,7 @@ function renderMenuSettings() {
       ${unit ? `<span class="stop-meta">${unit}</span>` : ""}
     </div>`;
   return `
-    <div class="bsheet-handle"></div>
-    <div class="bsheet-header">
-      <button class="bsheet-back" id="bsheet-back">‹</button>
-      <h2 class="bsheet-title">Impostazioni</h2>
-    </div>
+    ${menuHeader("Impostazioni", true)}
     <div class="bsheet-section-body">
       <form id="settings-form">
         <h3>Partenza predefinita</h3>
@@ -342,11 +347,7 @@ function renderMenuGuide() {
       <div class="bsheet-guide-body">${content}</div>
     </details>`;
   return `
-    <div class="bsheet-handle"></div>
-    <div class="bsheet-header">
-      <button class="bsheet-back" id="bsheet-back">‹</button>
-      <h2 class="bsheet-title">Guida</h2>
-    </div>
+    ${menuHeader("Guida", true)}
     <div class="bsheet-section-body">
       ${section("🗓 Come creare un giro", `
         <ol>
@@ -404,11 +405,7 @@ function renderMenuGuide() {
 
 function renderMenuInfo() {
   return `
-    <div class="bsheet-handle"></div>
-    <div class="bsheet-header">
-      <button class="bsheet-back" id="bsheet-back">‹</button>
-      <h2 class="bsheet-title">Info app</h2>
-    </div>
+    ${menuHeader("Info app", true)}
     <div class="bsheet-section-body">
       <p class="stop-meta" style="margin-bottom:8px;">Percorsi lavoro — Versione 1.0</p>
       <p class="stop-meta">Pianificazione giornaliera giri commerciali con ottimizzazione automatica del percorso, gestione orari di apertura, soste automatiche e stima costi.</p>
@@ -1060,7 +1057,11 @@ function renderWeeklyHoursSection(weeklyHours) {
     </div>
     <div class="wh-table-wrap">
       <table class="wh-table">
-        <thead><tr><th></th><th>Ch.</th><th>Cont.</th><th>Apertura</th><th>Ch.matt.</th><th>Apr.pm</th><th>Chiusura</th></tr></thead>
+        <colgroup>
+          <col class="col-day" /><col class="col-cb" /><col class="col-cb" />
+          <col class="col-time" /><col class="col-time" /><col class="col-time" /><col class="col-time" />
+        </colgroup>
+        <thead><tr><th></th><th>Ch.</th><th>Ct.</th><th>Ap.</th><th>Cm.</th><th>Ap2</th><th>Ch2</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
     </div>
