@@ -230,6 +230,38 @@ function renderMenu() {
         }
       });
     });
+
+    const startSearch = ov.querySelector("#settings-start-search");
+    const startSugg = ov.querySelector("#settings-start-sugg");
+    if (startSearch && startSugg) {
+      startSearch.addEventListener("input", () => {
+        const q = startSearch.value.toLowerCase().trim();
+        if (!q) { startSugg.style.display = "none"; startSugg.innerHTML = ""; return; }
+        const allFiltered = state.allAddresses
+          .filter(a => (a.customer + " " + (a.location || "") + " " + (a.fullAddress || "")).toLowerCase().includes(q));
+        const priority = allFiltered.filter(a => a.addressType === "favorite" || a.addressType === "rest");
+        const rest = allFiltered.filter(a => a.addressType !== "favorite" && a.addressType !== "rest");
+        const matches = [...priority, ...rest].slice(0, 8);
+        startSugg.innerHTML = matches.map(a => `<div class="stop-suggestion" data-settings-start="${a.id}">
+          ${a.addressType === "favorite" ? "⭐ " : a.addressType === "rest" ? "☕ " : "👤 "}${escapeHtml(a.customer)}${a.location ? ` — ${escapeHtml(a.location)}` : ""}
+          <br><small class="stop-meta">${escapeHtml(a.fullAddress || "")}</small>
+        </div>`).join("");
+        startSugg.style.display = matches.length ? "block" : "none";
+      });
+      startSugg.addEventListener("click", e => {
+        const item = e.target.closest("[data-settings-start]");
+        if (!item) return;
+        const a = state.allAddresses.find(x => String(x.id) === item.dataset.settingsStart);
+        if (!a) return;
+        const lbl = ov.querySelector("#settings-start-label");
+        const addr = ov.querySelector("#settings-start-address");
+        if (lbl) lbl.value = a.customer + (a.location ? ` — ${a.location}` : "");
+        if (addr) addr.value = a.fullAddress || "";
+        startSugg.style.display = "none";
+        startSugg.innerHTML = "";
+        startSearch.value = "";
+      });
+    }
   };
 
   overlay.addEventListener("click", e => { if (e.target === overlay) closeMenu(); });
@@ -290,8 +322,12 @@ function renderMenuSettings() {
       <form id="settings-form">
         <h3>Partenza predefinita</h3>
         <div class="form-grid">
-          <label class="field">Nome<input name="defaultStartLabel" value="${escapeHtml(s.defaultStartLabel || "")}" placeholder="Casa, Ufficio…" /></label>
-          <label class="field full">Indirizzo<input name="defaultStartAddress" value="${escapeHtml(s.defaultStartAddress || "")}" placeholder="Via, città…" /></label>
+          <label class="field">Nome<input name="defaultStartLabel" id="settings-start-label" value="${escapeHtml(s.defaultStartLabel || "")}" placeholder="Casa, Ufficio…" /></label>
+          <label class="field full">Indirizzo<input name="defaultStartAddress" id="settings-start-address" value="${escapeHtml(s.defaultStartAddress || "")}" placeholder="Via, città…" /></label>
+        </div>
+        <div style="position:relative;margin-top:6px;">
+          <input id="settings-start-search" placeholder="Cerca nell'archivio (preferiti, soste…)" autocomplete="off" style="width:100%;font-size:0.82rem;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--text);" />
+          <div id="settings-start-sugg" class="stop-suggestions" style="display:none;"></div>
         </div>
 
         <h3>Tariffe</h3>
@@ -780,6 +816,16 @@ function renderRoute() {
             <input name="startTime" type="time" value="${escapeHtml(r.startTime)}" />
           </label>
         </div>
+        <div style="margin-top:8px;">
+          <label class="rp-label" style="display:block;margin-bottom:4px;">Modalità arrivo</label>
+          <select name="timingMode" style="width:100%;font-size:0.85rem;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--text);">
+            <option value="first_open_minus" ${dm === "first_open_minus" ? "selected" : ""}>⏰ Prima dell'apertura</option>
+            <option value="arrive_at" ${dm === "arrive_at" ? "selected" : ""}>🎯 Arrivo a orario fisso</option>
+            <option value="depart_at" ${dm === "depart_at" ? "selected" : ""}>🚀 Partenza a orario fisso</option>
+          </select>
+        </div>
+        ${dm === "first_open_minus" ? `<div style="margin-top:6px;"><label class="field">Anticipo (min)<input name="arrivalLeadMinutes" type="number" min="0" max="60" step="5" value="${escapeHtml(r.arrivalLeadMinutes)}" /></label></div>` : ""}
+        ${dm === "arrive_at" ? `<div style="margin-top:6px;"><label class="field">Arrivo target<input name="firstArrivalTime" type="time" value="${escapeHtml(r.firstArrivalTime)}" /></label></div>` : ""}
       </div>
 
       <!-- Sezione 2: Da / A -->
@@ -824,24 +870,6 @@ function renderRoute() {
         </div>
       </div>
 
-      <!-- Sezione 3: Opzioni (collassata) -->
-      <div class="rp-section">
-        <details class="rp-options-details">
-          <summary class="rp-options-summary">Opzioni orario</summary>
-          <div class="rp-options-body">
-            <label class="field">Regola<select name="timingMode">
-              <option value="first_open_minus" ${dm === "first_open_minus" ? "selected" : ""}>Prima dell'apertura</option>
-              <option value="arrive_at" ${dm === "arrive_at" ? "selected" : ""}>Arrivo a orario fisso</option>
-              <option value="depart_at" ${dm === "depart_at" ? "selected" : ""}>Partenza a orario fisso</option>
-            </select></label>
-            <div class="rp-options-row">
-              <label class="field">Anticipo (min)<input name="arrivalLeadMinutes" type="number" min="0" max="60" step="5" value="${escapeHtml(r.arrivalLeadMinutes)}" ${dm !== "first_open_minus" ? "disabled" : ""} /></label>
-              <label class="field">Arrivo target<input name="firstArrivalTime" type="time" value="${escapeHtml(r.firstArrivalTime)}" ${dm !== "arrive_at" ? "disabled" : ""} /></label>
-            </div>
-          </div>
-        </details>
-      </div>
-
       <!-- Sezione 4: Pausa pranzo -->
       <div class="rp-section rp-lunch-row">
         <label class="rp-lunch-check">
@@ -869,9 +897,14 @@ function renderRoute() {
           </div>
           <div id="rp-manual-stop-panel" style="display:none">
             <div class="form-grid route-fields" style="margin-top:8px;">
-              <label class="field">Cliente<input name="customCustomer" value="${escapeHtml(r.customCustomer)}" /></label>
+              <label class="field">Cliente<input name="customCustomer" id="rp-custom-customer" value="${escapeHtml(r.customCustomer)}" /></label>
               <label class="field">Sede<input name="customLocation" value="${escapeHtml(r.customLocation)}" /></label>
-              <label class="field full">Indirizzo<input name="customAddress" value="${escapeHtml(r.customAddress)}" /></label>
+              <label class="field full">
+                Indirizzo<input name="customAddress" id="rp-custom-address" value="${escapeHtml(r.customAddress)}" />
+              </label>
+              ${state.googleMapsKey ? `<div class="field full" style="padding-top:0"><button type="button" class="btn" id="rp-custom-map-btn">🗺 Scegli sulla mappa</button></div>` : ""}
+              <input type="hidden" id="rp-custom-lat" value="" />
+              <input type="hidden" id="rp-custom-lng" value="" />
               <label class="field">Durata (min)<input name="customDuration" type="number" min="5" step="5" value="${escapeHtml(r.customDuration)}" /></label>
             </div>
             ${renderWeeklyHoursSection(r.customWeeklyHours || null)}
@@ -1179,7 +1212,7 @@ function renderSaved() {
                 <button class="btn danger saved-card-btn" data-delete-route="${route.id}" title="Elimina">× Elimina</button>
               </div>
             </div>
-            ${route.plannedStops?.length ? `<div class="saved-stops-list">${route.plannedStops.filter((s, i, arr) => !s.stopPart || s.stopPart === "morning" || arr.findIndex(x => x.addressId === s.addressId) === i).map((s, i) => `<span class="saved-stop-chip">${i + 1}. ${escapeHtml(s.customer)}${s.location ? ` — ${escapeHtml(s.location)}` : ""}</span>`).join("")}</div>` : ""}
+            ${route.plannedStops?.length ? `<div class="saved-stops-list">${route.plannedStops.filter((s, i, arr) => !s.stopPart || s.stopPart === "morning" || arr.findIndex(x => x.addressId === s.addressId) === i).map((s, i) => { const isRest = s.addressType === "rest"; const label = isRest ? s.customer : `${s.customer}${s.location ? ` — ${escapeHtml(s.location)}` : ""}`; return `<span class="saved-stop-chip">${i + 1}. ${escapeHtml(s.customer)}${!isRest && s.location ? ` — ${escapeHtml(s.location)}` : ""}</span>`; }).join("")}</div>` : ""}
           </article>`).join("") || `<div class="empty">Nessun giro salvato.</div>`}
       </div>
     </section>`;
@@ -1268,8 +1301,9 @@ function renderArchive() {
             </div>
           </div>
           <label class="field">Tipo contatto<select name="addressType">
-            <option value="customer" ${form.addressType !== "rest" ? "selected" : ""}>👤 Cliente</option>
+            <option value="customer" ${!form.addressType || form.addressType === "customer" ? "selected" : ""}>👤 Cliente</option>
             <option value="rest" ${form.addressType === "rest" ? "selected" : ""}>☕ Sosta (bar/autogrill)</option>
+            <option value="favorite" ${form.addressType === "favorite" ? "selected" : ""}>⭐ Preferito (casa, ecc.)</option>
           </select></label>
           <label class="field">Email<input name="email" type="email" value="${escapeHtml(form.email)}" /></label>
           <label class="field full">Note<textarea name="notes" id="contact-notes">${escapeHtml(form.notes)}</textarea></label>
@@ -2706,6 +2740,15 @@ function bindEvents() {
 
     if (e.target.closest("#use-current-pos")) { useCurrentPosition(); return; }
     if (e.target.closest("#open-map-picker")) { openMapPicker(); return; }
+    if (e.target.closest("#rp-custom-map-btn")) {
+      openMapPickerForField({
+        labelEl: document.querySelector("#rp-custom-customer"),
+        addressEl: document.querySelector("#rp-custom-address"),
+        latEl: document.querySelector("#rp-custom-lat"),
+        lngEl: document.querySelector("#rp-custom-lng")
+      });
+      return;
+    }
 
     // Weekly hours: toggle disabled state
     if (e.target.closest("#wh-fill-all-btn")) {
