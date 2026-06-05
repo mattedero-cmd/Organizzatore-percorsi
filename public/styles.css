@@ -436,33 +436,33 @@ textarea:focus {
 }
 .opening-badge { font-weight: 600; }
 .opening-hours-today { color: var(--text-muted, #666); }
-.saved-card-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  justify-content: space-between;
-  min-width: 0;
-}
 .saved-card-name {
   font-weight: 600;
-  font-size: 0.92rem;
+  font-size: 0.95rem;
   margin: 0;
-  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  flex: 1;
+}
+.saved-card-info {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  font-size: 0.8rem;
+  color: var(--muted);
 }
 .saved-card-btns {
-  display: flex;
-  gap: 4px;
-  flex-shrink: 0;
-  align-items: center;
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 1fr;
+  gap: 6px;
 }
-.saved-open-btn {
-  font-size: 0.8rem;
-  padding: 4px 10px;
-  min-height: 30px;
+.saved-card-btn {
+  font-size: 0.82rem;
+  padding: 6px 4px;
+  min-height: 34px;
+  text-align: center;
+  justify-content: center;
 }
 .saved-card-meta {
   display: flex;
@@ -1384,40 +1384,42 @@ tbody tr:last-child td {
   font-size: 0.74rem;
   table-layout: fixed;
 }
-/* col-day 22px | col-cb 18px each | col-time equal share of remaining */
+/*
+  day=22px | ch=18px | cont=20px(+2 gap) | ap=22% | cm=22% | ap2=22% | ch2=22%
+  The 4 time columns share the remaining width equally via percentage.
+  2px left-padding on cont gives the visual gap between ch and cont.
+  3px left-padding on ap gives the visual gap between cont and first time col.
+*/
 .wh-table col.col-day  { width: 22px; }
 .wh-table col.col-cb   { width: 18px; }
-.wh-table col.col-time { width: auto; }
+.wh-table col.col-cb:nth-child(3) { width: 20px; }
+.wh-table col.col-time { width: 22%; }
 .wh-table th {
   text-align: center;
-  padding: 1px 1px 3px;
+  padding: 1px 0 3px;
   font-weight: 600;
   color: var(--muted);
   font-size: 0.62rem;
   white-space: nowrap;
   overflow: hidden;
 }
-.wh-table th:first-child { text-align: left; padding-left: 0; }
-/* 1px gap between time columns, 3px gap before Ap (after Cont) */
-.wh-table th:nth-child(4),
-.wh-table td:nth-child(4) { padding-left: 3px; }
-.wh-table th:nth-child(n+5),
-.wh-table td:nth-child(n+5) { padding-left: 1px; }
+.wh-table th:first-child { text-align: left; }
 .wh-table td {
   padding: 1px 0;
   vertical-align: middle;
 }
+/* 2px gap before Cont (3rd col), 3px gap before Ap. (4th col), 1px between time cols */
+.wh-table th:nth-child(3), .wh-table td:nth-child(3) { padding-left: 2px; }
+.wh-table th:nth-child(4), .wh-table td:nth-child(4) { padding-left: 3px; }
+.wh-table th:nth-child(n+5), .wh-table td:nth-child(n+5) { padding-left: 1px; }
 .wh-day {
   font-weight: 600;
-  width: 22px;
   font-size: 0.72rem;
   overflow: hidden;
-  padding-right: 0;
 }
 .wh-cb {
-  width: 18px;
   text-align: center;
-  padding: 0 0 0 2px;
+  padding: 0;
 }
 .wh-table input[type=time] {
   width: 100%;
@@ -1425,7 +1427,6 @@ tbody tr:last-child td {
   padding: 2px 0;
   font-size: 0.66rem;
   text-align: center;
-  max-width: 60px;
 }
 .wh-fill-all {
   font-size: 0.75rem;

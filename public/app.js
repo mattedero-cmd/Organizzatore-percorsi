@@ -1161,22 +1161,20 @@ function renderSaved() {
       <div class="saved-list">
         ${state.savedRoutes.map(route => `
           <article class="card saved-card">
-            <div class="saved-card-head">
-              <p class="saved-card-name">${escapeHtml(route.name)}</p>
-              <div class="saved-card-btns">
-                <button class="btn primary saved-open-btn" data-open-route="${route.id}">Apri</button>
-                <button class="btn icon-btn" data-rename-route="${route.id}" title="Rinomina">✎</button>
-                <button class="btn icon-btn" data-duplicate-route="${route.id}" title="Duplica">⎘</button>
-                <button class="btn danger icon-btn" data-delete-route="${route.id}" title="Elimina">×</button>
-              </div>
-            </div>
-            <div class="saved-card-meta">
+            <p class="saved-card-name">${escapeHtml(route.name)}</p>
+            <div class="saved-card-info">
               <input type="date" class="saved-date-input" data-reschedule-route="${route.id}" value="${escapeHtml(route.scheduledDate || "")}" title="Cambia data e ricalcola" />
               <span>${escapeHtml(route.startTime || "--:--")}</span>
               <span>${Number(route.totalKm).toFixed(1)} km</span>
               <span>${euro(route.totalCost)}</span>
             </div>
             <div class="stop-meta saved-card-route">${escapeHtml(route.startLabel || "—")} → ${escapeHtml(route.endLabel || "—")}</div>
+            <div class="saved-card-btns">
+              <button class="btn primary saved-card-btn" data-open-route="${route.id}">Apri</button>
+              <button class="btn saved-card-btn" data-rename-route="${route.id}" title="Rinomina">✎</button>
+              <button class="btn saved-card-btn" data-duplicate-route="${route.id}" title="Duplica">⎘</button>
+              <button class="btn danger saved-card-btn" data-delete-route="${route.id}" title="Elimina">×</button>
+            </div>
             ${route.plannedStops?.length ? `<div class="saved-stops-list">${route.plannedStops.filter((s, i, arr) => !s.stopPart || s.stopPart === "morning" || arr.findIndex(x => x.addressId === s.addressId) === i).map((s, i) => `<span class="saved-stop-chip">${i + 1}. ${escapeHtml(s.customer)}${s.location ? ` — ${escapeHtml(s.location)}` : ""}</span>`).join("")}</div>` : ""}
           </article>`).join("") || `<div class="empty">Nessun giro salvato.</div>`}
       </div>
@@ -2807,16 +2805,38 @@ function bindEvents() {
       (async () => {
         try {
           showToast("Ricalcolo in corso…");
+          const res = state.result;
+          // Extract stops from result rows (regular stops have no type field)
+          const stopsFromRows = (res?.rows || [])
+            .filter(r => !r.type)
+            .map(r => ({
+              uid: r.uid || crypto.randomUUID(),
+              addressId: r.addressId || null,
+              customer: r.customer, location: r.location,
+              fullAddress: r.fullAddress || r.address || "",
+              lat: r.lat, lng: r.lng,
+              durationMinutes: r.durationMinutes,
+              weeklyHours: r.weeklyHours || null,
+              openMorning: r.openMorning, closeMorning: r.closeMorning,
+              openAfternoon: r.openAfternoon, closeAfternoon: r.closeAfternoon,
+              notes: r.notes || ""
+            }));
+          const stops = stopsFromRows.length ? stopsFromRows
+            : (res?.plannedStops || []).map(s => ({ ...s, uid: s.uid || crypto.randomUUID() }));
+          if (!stops.length) { showToast("Nessuna tappa da ricalcolare"); return; }
           state.route = {
             ...state.route,
             scheduledDate: newDate,
-            stops: (state.result?.plannedStops || state.result?.rows?.filter(r => r.type === "stop").map(r => ({
-              uid: r.uid || crypto.randomUUID(),
-              customer: r.customer, location: r.location, fullAddress: r.fullAddress || r.address,
-              lat: r.lat, lng: r.lng, durationMinutes: r.durationMinutes,
-              weeklyHours: r.weeklyHours, openMorning: r.openMorning, closeMorning: r.closeMorning,
-              openAfternoon: r.openAfternoon, closeAfternoon: r.closeAfternoon, addressId: r.addressId
-            })) || state.route.stops)
+            name: res?.name || state.route.name,
+            startLabel: res?.start?.label || res?.startLabel || state.route.startLabel,
+            startAddress: res?.start?.address || res?.startAddress || state.route.startAddress,
+            endSameAsStart: res?.end?.sameAsStart ?? state.route.endSameAsStart,
+            endLabel: res?.end?.label || res?.endLabel || state.route.endLabel,
+            endAddress: res?.end?.address || res?.endAddress || state.route.endAddress,
+            startTime: res?.startTime || state.route.startTime,
+            lunchBreak: res?.lunchBreak ?? state.route.lunchBreak,
+            lunchBreakMinutes: res?.lunchBreakMinutes || state.route.lunchBreakMinutes,
+            stops
           };
           await planCurrentRoute();
         } catch (err) {
