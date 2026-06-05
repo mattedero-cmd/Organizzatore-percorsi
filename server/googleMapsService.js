@@ -170,7 +170,7 @@ async function fetchPlaceDetails(placeId, key) {
 // MAX_DETOUR_KM: max perpendicular distance from the segment (≈ 2 min at 50 km/h).
 // breakTimeMin: minutes from midnight for the planned break time (optional).
 // scheduledDate: YYYY-MM-DD string (optional, to determine day of week).
-export async function findNearbyRestStop(lat, lng, segFromLat, segFromLng, segToLat, segToLng, radiusM = 15000, breakTimeMin = null, scheduledDate = null) {
+export async function findNearbyRestStop(lat, lng, segFromLat, segFromLng, segToLat, segToLng, radiusM = 15000, breakTimeMin = null, scheduledDate = null, maxDetourKm = 1.7) {
   if (!lat || !lng) return null;
   const key = API_KEY();
   if (!key) return null;
@@ -179,7 +179,7 @@ export async function findNearbyRestStop(lat, lng, segFromLat, segFromLng, segTo
   if (placesCache.has(cacheKey)) return placesCache.get(cacheKey);
 
   const EXCLUDE_KEYWORDS = /hotel|alberg|agritur|b&b|bed|hostel|ostello|ristorante|pizzeria|trattoria/i;
-  const MAX_DETOUR_KM = 1.7; // ≈ 2 min at 50 km/h
+  const MAX_DETOUR_KM = maxDetourKm;
 
   const hasSegment = segFromLat != null && segToLat != null;
   const checkHours = breakTimeMin != null && scheduledDate != null;
@@ -251,6 +251,87 @@ export async function findNearbyRestStop(lat, lng, segFromLat, segFromLng, segTo
       placeId: chosen.place_id || null,
       openAtBreak: chosenOpenAtBreak,
       addressType: "rest",
+      fromPlaces: true
+    };
+    placesCache.set(cacheKey, result);
+    return result;
+  } catch {
+    placesCache.set(cacheKey, null);
+    return null;
+  }
+}
+
+export async function findNearbyRestaurant(lat, lng, segFromLat, segFromLng, segToLat, segToLng, radiusM = 8000, lunchTimeMin = null, scheduledDate = null) {
+  if (!lat || !lng) return null;
+  const key = API_KEY();
+  if (!key) return null;
+
+  const cacheKey = `restaurant_${placesCacheKey(lat, lng)}`;
+  if (placesCache.has(cacheKey)) return placesCache.get(cacheKey);
+
+  const EXCLUDE_KEYWORDS = /hotel|alberg|catering|banquet|spa|resort/i;
+  const MAX_DETOUR_KM = 2.5;
+
+  const hasSegment = segFromLat != null && segToLat != null;
+  const checkHours = lunchTimeMin != null && scheduledDate != null;
+  const targetDay = checkHours ? (() => {
+    const [y, m, d] = scheduledDate.split("-").map(Number);
+    return new Date(y, m - 1, d).getDay();
+  })() : null;
+
+  try {
+    const url = `${BASE}/place/nearbysearch/json?location=${lat},${lng}&radius=${radiusM}&type=restaurant&language=it&keyword=mensa+trattoria+osteria+ristorante&key=${key}`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(6000) });
+    const data = await res.json();
+    console.log("[Places/restaurant]", lat.toFixed(4), lng.toFixed(4), "→ status:", data.status, "results:", data.results?.length ?? 0);
+    if (data.status !== "OK" || !data.results?.length) {
+      placesCache.set(cacheKey, null);
+      return null;
+    }
+
+    const candidates = data.results
+      .filter(p => {
+        if (!p.rating || p.rating < 3.8 || p.user_ratings_total < 10) return false;
+        if (EXCLUDE_KEYWORDS.test(p.name)) return false;
+        if (p.price_level != null && p.price_level > 2) return false;
+        const pLat = p.geometry.location.lat, pLng = p.geometry.location.lng;
+        const km = hasSegment
+          ? perpKmToSegment(pLat, pLng, segFromLat, segFromLng, segToLat, segToLng)
+          : haversineKm({ lat, lng }, { lat: pLat, lng: pLng });
+        return km <= MAX_DETOUR_KM;
+      })
+      .sort((a, b) => placesScore(b) - placesScore(a))
+      .slice(0, 5);
+
+    if (!candidates.length) { placesCache.set(cacheKey, null); return null; }
+
+    let chosen = candidates[0];
+    let chosenOpenAtBreak = null;
+
+    if (checkHours) {
+      const withHours = await Promise.all(candidates.map(async p => {
+        const oh = await fetchPlaceDetails(p.place_id, key);
+        const openAtBreak = isOpenAtTime(oh?.periods ?? null, targetDay, lunchTimeMin);
+        return { p, openAtBreak };
+      }));
+      const open = withHours.filter(x => x.openAtBreak === true);
+      const unknown = withHours.filter(x => x.openAtBreak === null);
+      if (open.length) { chosen = open[0].p; chosenOpenAtBreak = true; }
+      else if (unknown.length) { chosen = unknown[0].p; chosenOpenAtBreak = null; }
+      else { chosen = withHours[0].p; chosenOpenAtBreak = false; }
+    }
+
+    const result = {
+      customer: chosen.name,
+      location: chosen.vicinity || "",
+      fullAddress: chosen.vicinity || "",
+      lat: chosen.geometry.location.lat,
+      lng: chosen.geometry.location.lng,
+      rating: chosen.rating,
+      reviewCount: chosen.user_ratings_total,
+      placeId: chosen.place_id || null,
+      openAtBreak: chosenOpenAtBreak,
+      addressType: "restaurant",
       fromPlaces: true
     };
     placesCache.set(cacheKey, result);

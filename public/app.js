@@ -216,6 +216,9 @@ function renderMenu() {
         restIntervalMin: Number(v.restIntervalMin || 120),
         restMaxDeviationMin: Number(v.restMaxDeviationMin || 40),
         restDurationMin: Number(v.restDurationMin || 15),
+        earliestBreakTime: v.earliestBreakTime || "08:00",
+        maxDetourKm: Number(v.maxDetourKm || 1.7),
+        maxReturnTime: v.maxReturnTime || "",
         driveMarkupMinPerHour: Number(v.driveMarkupMinPerHour || 10)
       };
       state.settings = await api("/api/settings", { method: "PUT", body: JSON.stringify(newSettings) });
@@ -258,7 +261,7 @@ function renderMenu() {
         const rest = allFiltered.filter(a => a.addressType !== "favorite" && a.addressType !== "rest");
         const matches = [...priority, ...rest].slice(0, 8);
         startSugg.innerHTML = matches.map(a => `<div class="stop-suggestion" data-settings-start="${a.id}">
-          ${a.addressType === "favorite" ? "⭐ " : a.addressType === "rest" ? "☕ " : "👤 "}${escapeHtml(a.customer)}${a.location ? ` — ${escapeHtml(a.location)}` : ""}
+          ${a.addressType === "favorite" ? "⭐ " : a.addressType === "rest" ? "☕ " : a.addressType === "restaurant" ? "🍽 " : "👤 "}${escapeHtml(a.customer)}${a.location ? ` — ${escapeHtml(a.location)}` : ""}
           <br><small class="stop-meta">${escapeHtml(a.fullAddress || "")}</small>
         </div>`).join("");
         startSugg.style.display = matches.length ? "block" : "none";
@@ -331,50 +334,57 @@ function renderMenuSettings() {
       </div>
       ${unit ? `<span class="stop-meta">${unit}</span>` : ""}
     </div>`;
+  const stepperDec = (name, val, min, max, step, unit = "") => `
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+      <div class="settings-stepper">
+        <button type="button" data-stepper="${name}" data-dir="-1" data-step="${step}">−</button>
+        <input name="${name}" type="number" min="${min}" max="${max}" step="${step}" value="${val}" style="width:52px;" />
+        <button type="button" data-stepper="${name}" data-dir="1" data-step="${step}">+</button>
+      </div>
+      ${unit ? `<span class="stop-meta">${unit}</span>` : ""}
+    </div>`;
   return `
     ${menuHeader("Impostazioni", true)}
     <div class="bsheet-section-body">
       <form id="settings-form">
-        <h3>Partenza predefinita</h3>
+
+        <h3 class="settings-section-title">📍 Partenza e rientro</h3>
         <div class="form-grid">
           <label class="field">Nome<input name="defaultStartLabel" id="settings-start-label" value="${escapeHtml(s.defaultStartLabel || "")}" placeholder="Casa, Ufficio…" /></label>
           <label class="field full">Indirizzo<input name="defaultStartAddress" id="settings-start-address" value="${escapeHtml(s.defaultStartAddress || "")}" placeholder="Via, città…" /></label>
         </div>
         <div style="position:relative;margin-top:6px;">
-          <input id="settings-start-search" placeholder="Cerca nell'archivio (preferiti, soste…)" autocomplete="off" style="width:100%;font-size:0.82rem;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--text);" />
+          <input id="settings-start-search" placeholder="Cerca nell'archivio (preferiti, ristoranti…)" autocomplete="off" style="width:100%;font-size:0.82rem;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--text);" />
           <div id="settings-start-sugg" class="stop-suggestions" style="display:none;"></div>
         </div>
+        <label class="field" style="margin-top:10px;">Rientro massimo
+          <input name="maxReturnTime" type="time" value="${escapeHtml(s.maxReturnTime || "")}" placeholder="es. 18:30" />
+        </label>
 
-        <h3>Tariffe</h3>
-        <div class="form-grid">
-          <label class="field">€ per km<input name="kmRate" type="number" min="0" step="0.01" value="${escapeHtml(s.kmRate)}" /></label>
-          <label class="field">€/ora guida<input name="driveHourRate" type="number" min="0" step="0.01" value="${escapeHtml(s.driveHourRate)}" /></label>
-          <label class="field full">€/ora lavoro<input name="workHourRate" type="number" min="0" step="0.01" value="${escapeHtml(s.workHourRate)}" /></label>
-        </div>
-
-        <h3>Soste automatiche</h3>
+        <h3 class="settings-section-title">☕ Soste automatiche</h3>
         <div class="form-grid">
           <div class="field">
-            <span class="field-label">Intervallo soste</span>
-            ${stepper("restIntervalMin", s.restIntervalMin || 120, 60, 240, 10, "minuti")}
+            <span class="field-label">Intervallo</span>
+            ${stepper("restIntervalMin", s.restIntervalMin || 120, 60, 240, 10, "min")}
           </div>
           <div class="field">
-            <span class="field-label">Tolleranza (finestra)</span>
-            ${stepper("restMaxDeviationMin", s.restMaxDeviationMin || 40, 10, 90, 5, "minuti ±")}
+            <span class="field-label">Tolleranza finestra</span>
+            ${stepper("restMaxDeviationMin", s.restMaxDeviationMin || 40, 10, 90, 5, "min ±")}
           </div>
           <div class="field">
             <span class="field-label">Durata sosta</span>
-            ${stepper("restDurationMin", s.restDurationMin || 15, 5, 60, 5, "minuti")}
+            ${stepper("restDurationMin", s.restDurationMin || 15, 5, 60, 5, "min")}
+          </div>
+          <label class="field">Prima sosta non prima delle
+            <input name="earliestBreakTime" type="time" value="${escapeHtml(s.earliestBreakTime || "08:00")}" />
+          </label>
+          <div class="field">
+            <span class="field-label">Deviazione massima</span>
+            ${stepperDec("maxDetourKm", s.maxDetourKm !== undefined ? s.maxDetourKm : 1.7, 0.5, 10, 0.5, "km")}
           </div>
         </div>
 
-        <h3>Tempi di guida</h3>
-        <div class="field">
-          <span class="field-label">Maggiorazione stimata</span>
-          ${stepper("driveMarkupMinPerHour", s.driveMarkupMinPerHour !== undefined ? s.driveMarkupMinPerHour : 10, 0, 30, 1, "min/h")}
-        </div>
-
-        <h3>Pianificazione</h3>
+        <h3 class="settings-section-title">🍽 Pausa pranzo</h3>
         <div class="form-grid">
           <label class="field checkbox-field full">
             <input type="checkbox" name="lunchBreakEnabled" ${s.lunchBreakEnabled !== false ? "checked" : ""} />
@@ -382,18 +392,32 @@ function renderMenuSettings() {
           </label>
           <div class="field">
             <span class="field-label">Durata pranzo</span>
-            ${stepper("lunchBreakMinutes", s.lunchBreakMinutes || 45, 15, 120, 5, "minuti")}
+            ${stepper("lunchBreakMinutes", s.lunchBreakMinutes || 45, 15, 120, 5, "min")}
           </div>
         </div>
+        <p class="stop-meta" style="margin-top:4px;">Cerca prima tra i ristoranti salvati in archivio, poi su Maps. Aggiungi indirizzi con tipo "🍽 Ristorante" per dargli priorità.</p>
 
-        <h3>Navigatore</h3>
+        <h3 class="settings-section-title">🚗 Guida</h3>
+        <div class="field">
+          <span class="field-label">Maggiorazione stimata traffico</span>
+          ${stepper("driveMarkupMinPerHour", s.driveMarkupMinPerHour !== undefined ? s.driveMarkupMinPerHour : 10, 0, 30, 1, "min/h")}
+        </div>
+
+        <h3 class="settings-section-title">💰 Tariffe</h3>
+        <div class="form-grid">
+          <label class="field">€ per km<input name="kmRate" type="number" min="0" step="0.01" value="${escapeHtml(s.kmRate)}" /></label>
+          <label class="field">€/ora guida<input name="driveHourRate" type="number" min="0" step="0.01" value="${escapeHtml(s.driveHourRate)}" /></label>
+          <label class="field full">€/ora lavoro<input name="workHourRate" type="number" min="0" step="0.01" value="${escapeHtml(s.workHourRate)}" /></label>
+        </div>
+
+        <h3 class="settings-section-title">🧭 App</h3>
+        <p class="stop-meta" style="margin-bottom:6px;">Navigatore</p>
         <div class="settings-radio-group">
           <label class="settings-radio"><input type="radio" name="navigatorPref" value="google" ${nav === "google" ? "checked" : ""} /> Google Maps</label>
           <label class="settings-radio"><input type="radio" name="navigatorPref" value="apple" ${nav === "apple" ? "checked" : ""} /> Apple Mappe</label>
           <label class="settings-radio"><input type="radio" name="navigatorPref" value="waze" ${nav === "waze" ? "checked" : ""} /> Waze</label>
         </div>
-
-        <h3>Tema</h3>
+        <p class="stop-meta" style="margin:10px 0 6px;">Tema</p>
         <div class="settings-radio-group">
           <label class="settings-radio"><input type="radio" name="themePref" value="auto" ${theme === "auto" ? "checked" : ""} /> 🔄 Automatico</label>
           <label class="settings-radio"><input type="radio" name="themePref" value="light" ${theme === "light" ? "checked" : ""} /> ☀️ Chiaro</label>
@@ -1318,6 +1342,7 @@ function renderArchive() {
           <label class="field">Tipo contatto<select name="addressType">
             <option value="customer" ${!form.addressType || form.addressType === "customer" ? "selected" : ""}>👤 Cliente</option>
             <option value="rest" ${form.addressType === "rest" ? "selected" : ""}>☕ Sosta (bar/autogrill)</option>
+            <option value="restaurant" ${form.addressType === "restaurant" ? "selected" : ""}>🍽 Ristorante (pranzo)</option>
             <option value="favorite" ${form.addressType === "favorite" ? "selected" : ""}>⭐ Preferito (casa, ecc.)</option>
           </select></label>
           <label class="field">Email<input name="email" type="email" value="${escapeHtml(form.email)}" /></label>

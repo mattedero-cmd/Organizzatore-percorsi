@@ -1,4 +1,4 @@
-import { routeBetween, findNearbyRestStop, resolvePlace } from "./googleMapsService.js";
+import { routeBetween, findNearbyRestStop, findNearbyRestaurant, resolvePlace } from "./googleMapsService.js";
 
 const MAX_EXACT_STOPS = 7;
 
@@ -442,7 +442,8 @@ function shiftRowTimes(row, minutes) {
 
 async function insertBreaks(rows, options) {
   const {
-    lunchBreakEnabled, lunchBreakMinutes = 45, restStops = [],
+    lunchBreakEnabled, lunchBreakMinutes = 45,
+    restStops = [], restaurantStops = [],
     dayStart = 7 * 60,
     finalArrival = 20 * 60,
     scheduledDate = null
@@ -456,22 +457,39 @@ async function insertBreaks(rows, options) {
   const REST_MIN = interval - Math.floor(deviation / 4);
   const REST_MAX = interval + Math.floor(deviation * 3 / 4);
   const REST_DUR = Number(options?.restDurationMin ?? 15);
-  const NO_BREAK_EARLY = 120;    // no sosta nelle prime 2h di giornata
-  const NO_BREAK_BEFORE_HOME = 60;  // no sosta nell'ultima ora prima di casa
-  const EARLIEST_BREAK = 8 * 60;   // no sosta prima delle 08:00
-  const NO_BREAK_BEFORE_LUNCH = 60; // no sosta nell'ora prima del pranzo
-  const NO_BREAK_AFTER_LUNCH = 120; // no sosta nelle 2h dopo il pranzo
+  const NO_BREAK_EARLY = 120;
+  const NO_BREAK_BEFORE_HOME = 60;
+  const EARLIEST_BREAK = options?.earliestBreakTime ?? (8 * 60);
+  const NO_BREAK_BEFORE_LUNCH = 60;
+  const NO_BREAK_AFTER_LUNCH = 120;
+  const maxDetourKm = Number(options?.maxDetourKm ?? 1.7);
 
   // ── insertions list ──────────────────────────────────────────────────────────
   const insertions = [];
 
   // ── 1. Pausa pranzo ──────────────────────────────────────────────────────────
+  const makeLunchEntry = async (beforeIndex, refRow, nextRow, lunchTimeMin) => {
+    const fromRow = refRow || (beforeIndex > 0 ? rows[beforeIndex - 1] : null);
+    const toRow = nextRow || (beforeIndex < rows.length ? rows[beforeIndex] : null);
+    // Try saved restaurants first, then Places search
+    const saved = findNearestRestStop(restaurantStops, fromRow?.lat, fromRow?.lng, toRow?.lat, toRow?.lng, 3.0);
+    const spot = saved || (fromRow?.lat
+      ? await findNearbyRestaurant(fromRow.lat, fromRow.lng, fromRow.lat, fromRow.lng, toRow?.lat, toRow?.lng, 8000, lunchTimeMin, scheduledDate).catch(() => null)
+      : null);
+    const label = spot?.rating ? `${spot.customer} · ⭐ ${spot.rating} (${spot.reviewCount})` : spot?.customer;
+    return spot
+      ? { beforeIndex, type: "lunch", duration: lunchBreakMinutes,
+          customer: label, location: spot.location || "", address: spot.fullAddress || "",
+          lat: spot.lat ?? null, lng: spot.lng ?? null, placeId: spot.placeId ?? null }
+      : { beforeIndex, type: "lunch", duration: lunchBreakMinutes, customer: "Pausa pranzo" };
+  };
+
   if (lunchBreakEnabled) {
     let placed = false;
     for (let i = 0; i < rows.length; i++) {
       const dep = parseTime(rows[i].departureTime);
       if (dep >= LUNCH_OPEN && dep <= LUNCH_CLOSE) {
-        insertions.push({ beforeIndex: i, type: "lunch", duration: lunchBreakMinutes, customer: "Pausa pranzo" });
+        insertions.push(await makeLunchEntry(i, rows[i - 1] ?? null, rows[i], dep));
         placed = true;
         break;
       }
@@ -479,7 +497,7 @@ async function insertBreaks(rows, options) {
     if (!placed && rows.length > 0) {
       const lastEnd = parseTime(rows[rows.length - 1].serviceEndTime);
       if (lastEnd >= LUNCH_OPEN && lastEnd <= LUNCH_CLOSE) {
-        insertions.push({ beforeIndex: rows.length, type: "lunch", duration: lunchBreakMinutes, customer: "Pausa pranzo" });
+        insertions.push(await makeLunchEntry(rows.length, rows[rows.length - 1], null, lastEnd));
       }
     }
   }
@@ -518,7 +536,7 @@ async function insertBreaks(rows, options) {
     // Prefer saved stops near the route segment (perpendicular distance ≤ 2 km)
     let spot = findNearestRestStop(restStops, refLat, refLng, toLat, toLng, 2.0);
     if (!spot && refLat && refLng) {
-      spot = await findNearbyRestStop(refLat, refLng, fromLat, fromLng, toLat, toLng, 15000, breakTimeMin, scheduledDate).catch(() => null);
+      spot = await findNearbyRestStop(refLat, refLng, fromLat, fromLng, toLat, toLng, 15000, breakTimeMin, scheduledDate, maxDetourKm).catch(() => null);
     }
     if (!spot) { return false; } // keep cumulative intact — retry at next opportunity
     const label = spot.rating
@@ -719,13 +737,20 @@ export async function planRoute(payload, settings, restStops = []) {
   const lunchBreakEnabled = payload.lunchBreak !== false && (payload.lunchBreak === true || settings.lunchBreakEnabled !== false);
   const lunchBreakMinutes = Number(payload.lunchBreakMinutes ?? settings.lunchBreakMinutes ?? 45);
   const activeRestStops = restStops.filter(s => s.addressType === "rest");
+  const activeRestaurantStops = restStops.filter(s => s.addressType === "restaurant");
+  const maxReturnTime = settings?.maxReturnTime ? parseTime(settings.maxReturnTime) : null;
+  const actualFinalArrival = parseTime(best.finalLeg.arrivalTime);
   const { rows: enrichedRows, addedMinutes } = await insertBreaks(best.rows, {
-    lunchBreakEnabled, lunchBreakMinutes, restStops: activeRestStops,
+    lunchBreakEnabled, lunchBreakMinutes,
+    restStops: activeRestStops,
+    restaurantStops: activeRestaurantStops,
     dayStart: parseTime(best.summary.dayStart),
-    finalArrival: parseTime(best.finalLeg.arrivalTime),
+    finalArrival: maxReturnTime != null ? Math.min(actualFinalArrival, maxReturnTime) : actualFinalArrival,
     restIntervalMin: settings?.restIntervalMin ?? 120,
     restMaxDeviationMin: settings?.restMaxDeviationMin ?? 40,
     restDurationMin: settings?.restDurationMin ?? 15,
+    earliestBreakTime: settings?.earliestBreakTime != null ? parseTime(settings.earliestBreakTime) : (8 * 60),
+    maxDetourKm: settings?.maxDetourKm ?? 1.7,
     scheduledDate
   });
   best = {
