@@ -152,7 +152,12 @@ function closeMenu() {
   state.menuOpen = false;
   state.menuSection = null;
   const existing = document.getElementById("bsheet-overlay");
-  if (existing) existing.remove();
+  if (!existing) return;
+  existing.classList.remove("opening");
+  existing.classList.add("closing");
+  existing.addEventListener("animationend", () => existing.remove(), { once: true });
+  // fallback if animation doesn't fire
+  setTimeout(() => existing.remove(), 350);
 }
 
 function renderMenu() {
@@ -161,63 +166,74 @@ function renderMenu() {
   if (!state.menuOpen) return;
 
   const overlay = document.createElement("div");
-  overlay.className = "bsheet-overlay";
+  overlay.className = "bsheet-overlay opening";
   overlay.id = "bsheet-overlay";
   overlay.innerHTML = `<div class="bsheet" id="bsheet">${state.menuSection ? renderMenuSection(state.menuSection) : renderMenuRoot()}</div>`;
   document.body.appendChild(overlay);
 
-  overlay.addEventListener("click", e => { if (e.target === overlay) closeMenu(); });
-  overlay.querySelectorAll("[data-menu-go]").forEach(btn => {
-    btn.addEventListener("click", () => { state.menuSection = btn.dataset.menuGo; renderMenu(); });
-  });
-  overlay.querySelector("#bsheet-back")?.addEventListener("click", () => { state.menuSection = null; renderMenu(); });
-  overlay.querySelector("#bsheet-close")?.addEventListener("click", () => closeMenu());
-  overlay.querySelector("#settings-form")?.addEventListener("submit", async e => {
-    e.preventDefault();
-    const v = readForm(e.target);
-    const newSettings = {
-      kmRate: Number(v.kmRate),
-      driveHourRate: Number(v.driveHourRate),
-      workHourRate: Number(v.workHourRate),
-      navigatorPref: v.navigatorPref || "google",
-      themePref: v.themePref || "auto",
-      lunchBreakMinutes: Number(v.lunchBreakMinutes || 45),
-      lunchBreakEnabled: v.lunchBreakEnabled === "on" || v.lunchBreakEnabled === true,
-      defaultStartLabel: v.defaultStartLabel || "",
-      defaultStartAddress: v.defaultStartAddress || "",
-      restIntervalMin: Number(v.restIntervalMin || 120),
-      restMaxDeviationMin: Number(v.restMaxDeviationMin || 40),
-      restDurationMin: Number(v.restDurationMin || 15),
-      driveMarkupMinPerHour: Number(v.driveMarkupMinPerHour || 10)
-    };
-    state.settings = await api("/api/settings", { method: "PUT", body: JSON.stringify(newSettings) });
-    state.navigatorPref = state.settings.navigatorPref;
-    localStorage.setItem("navigatorPref", state.navigatorPref);
-    state.themePref = state.settings.themePref;
-    state.route.lunchBreak = state.settings.lunchBreakEnabled !== false;
-    state.route.lunchBreakMinutes = state.settings.lunchBreakMinutes || 45;
-    if (state.settings.defaultStartLabel || state.settings.defaultStartAddress) {
-      state.route.startLabel = state.settings.defaultStartLabel || state.route.startLabel;
-      state.route.startAddress = state.settings.defaultStartAddress || state.route.startAddress;
-    }
-    applyTheme();
-    showToast("Impostazioni salvate");
-    closeMenu();
-  });
-  // stepper buttons
-  overlay.querySelectorAll("[data-stepper]").forEach(btn => {
-    btn.addEventListener("click", () => {
-      const name = btn.dataset.stepper;
-      const dir = Number(btn.dataset.dir);
-      const step = Number(btn.dataset.step || 1);
-      const input = overlay.querySelector(`[name="${name}"]`);
-      if (input) {
-        const min = Number(input.min || 0);
-        const max = Number(input.max || 9999);
-        input.value = Math.min(max, Math.max(min, Number(input.value) + dir * step));
-      }
+  const refreshSheet = () => {
+    const sheet = document.getElementById("bsheet");
+    if (sheet) sheet.innerHTML = state.menuSection ? renderMenuSection(state.menuSection) : renderMenuRoot();
+    bindSheetEvents();
+  };
+
+  const bindSheetEvents = () => {
+    const ov = document.getElementById("bsheet-overlay");
+    if (!ov) return;
+    ov.querySelectorAll("[data-menu-go]").forEach(btn => {
+      btn.addEventListener("click", () => { state.menuSection = btn.dataset.menuGo; refreshSheet(); });
     });
-  });
+    ov.querySelector("#bsheet-back")?.addEventListener("click", () => { state.menuSection = null; refreshSheet(); });
+    ov.querySelector("#bsheet-close")?.addEventListener("click", () => closeMenu());
+    ov.querySelector("#settings-form")?.addEventListener("submit", async e => {
+      e.preventDefault();
+      const v = readForm(e.target);
+      const newSettings = {
+        kmRate: Number(v.kmRate),
+        driveHourRate: Number(v.driveHourRate),
+        workHourRate: Number(v.workHourRate),
+        navigatorPref: v.navigatorPref || "google",
+        themePref: v.themePref || "auto",
+        lunchBreakMinutes: Number(v.lunchBreakMinutes || 45),
+        lunchBreakEnabled: v.lunchBreakEnabled === "on" || v.lunchBreakEnabled === true,
+        defaultStartLabel: v.defaultStartLabel || "",
+        defaultStartAddress: v.defaultStartAddress || "",
+        restIntervalMin: Number(v.restIntervalMin || 120),
+        restMaxDeviationMin: Number(v.restMaxDeviationMin || 40),
+        restDurationMin: Number(v.restDurationMin || 15),
+        driveMarkupMinPerHour: Number(v.driveMarkupMinPerHour || 10)
+      };
+      state.settings = await api("/api/settings", { method: "PUT", body: JSON.stringify(newSettings) });
+      state.navigatorPref = state.settings.navigatorPref;
+      localStorage.setItem("navigatorPref", state.navigatorPref);
+      state.themePref = state.settings.themePref;
+      state.route.lunchBreak = state.settings.lunchBreakEnabled !== false;
+      state.route.lunchBreakMinutes = state.settings.lunchBreakMinutes || 45;
+      if (state.settings.defaultStartLabel || state.settings.defaultStartAddress) {
+        state.route.startLabel = state.settings.defaultStartLabel || state.route.startLabel;
+        state.route.startAddress = state.settings.defaultStartAddress || state.route.startAddress;
+      }
+      applyTheme();
+      showToast("Impostazioni salvate");
+      closeMenu();
+    });
+    ov.querySelectorAll("[data-stepper]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const name = btn.dataset.stepper;
+        const dir = Number(btn.dataset.dir);
+        const step = Number(btn.dataset.step || 1);
+        const input = ov.querySelector(`[name="${name}"]`);
+        if (input) {
+          const min = Number(input.min || 0);
+          const max = Number(input.max || 9999);
+          input.value = Math.min(max, Math.max(min, Number(input.value) + dir * step));
+        }
+      });
+    });
+  };
+
+  overlay.addEventListener("click", e => { if (e.target === overlay) closeMenu(); });
+  bindSheetEvents();
 }
 
 function menuHeader(title, showBack = false) {

@@ -438,15 +438,13 @@ textarea:focus {
 .opening-hours-today { color: var(--text-muted, #666); }
 .saved-card-head {
   display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  justify-content: space-between;
+  flex-direction: column;
+  gap: 6px;
 }
 .saved-card-name {
   font-weight: 600;
   font-size: 0.95rem;
   margin: 0;
-  flex: 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -454,14 +452,15 @@ textarea:focus {
 }
 .saved-card-btns {
   display: flex;
-  gap: 3px;
-  flex-shrink: 0;
+  gap: 6px;
   flex-wrap: nowrap;
+  align-items: center;
 }
 .saved-open-btn {
-  font-size: 0.8rem;
-  padding: 3px 8px;
-  min-height: 30px;
+  font-size: 0.82rem;
+  padding: 4px 14px;
+  min-height: 32px;
+  flex: 1;
 }
 .saved-card-meta {
   display: flex;
@@ -1371,10 +1370,10 @@ tbody tr:last-child td {
   font-size: 0.74rem;
   table-layout: fixed;
 }
-/* col widths enforced via colgroup: day 22px | ch 18px | cont 18px | 4×time equal */
+/* col-day 22px | col-cb 20px each | col-time 25% of remaining space */
 .wh-table col.col-day  { width: 22px; }
-.wh-table col.col-cb   { width: 18px; }
-.wh-table col.col-time { width: auto; }
+.wh-table col.col-cb   { width: 20px; }
+.wh-table col.col-time { width: 25%; }
 .wh-table th {
   text-align: center;
   padding: 2px 0 4px;
@@ -1404,9 +1403,13 @@ tbody tr:last-child td {
   width: 100%;
   min-width: 0;
   padding: 2px 0;
-  font-size: 0.68rem;
+  font-size: 0.66rem;
   text-align: center;
+  max-width: 58px;
 }
+/* extra gap between Ch and Cont columns */
+.wh-table col.col-cb + col.col-cb { padding-left: 4px; }
+.wh-table td.wh-cb + td.wh-cb { padding-left: 4px; }
 .wh-fill-all {
   font-size: 0.75rem;
   padding: 3px 8px;
@@ -1671,12 +1674,21 @@ tbody tr:last-child td {
   padding: 0 0 20px;
   max-height: 92vh;
   overflow-y: auto;
-  animation: bsheet-down 0.26s cubic-bezier(0.22, 1, 0.36, 1);
   box-shadow: 0 8px 32px rgba(0,0,0,0.18);
 }
+.bsheet-overlay.opening .bsheet {
+  animation: bsheet-down 0.38s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.bsheet-overlay.closing .bsheet {
+  animation: bsheet-up-out 0.28s cubic-bezier(0.4, 0, 1, 1) forwards;
+}
 @keyframes bsheet-down {
-  from { transform: translateY(-100%); opacity: 0; }
+  from { transform: translateY(-105%); opacity: 0; }
   to   { transform: translateY(0);     opacity: 1; }
+}
+@keyframes bsheet-up-out {
+  from { transform: translateY(0);      opacity: 1; }
+  to   { transform: translateY(-105%);  opacity: 0; }
 }
 .bsheet-handle { display: none; }
 .bsheet-header {

@@ -215,6 +215,20 @@ async function handleApi(request, response) {
       return sendJson(response, 200, await listRoutes());
     }
 
+    if (method === "POST" && url.pathname === "/api/routes") {
+      const body = await parseBody(request);
+      const saved = await saveRoute({
+        ...body,
+        name: body.name || "Giro copiato",
+        scheduledDate: body.scheduledDate || body.scheduled_date || "",
+        startLabel: body.start?.label || body.startLabel || "",
+        startAddress: body.start?.address || body.startAddress || "",
+        endLabel: body.end?.label || body.endLabel || "",
+        endAddress: body.end?.address || body.endAddress || ""
+      });
+      return sendJson(response, 201, saved);
+    }
+
     const routeMatch = url.pathname.match(/^\/api\/routes\/(\d+)$/);
     if (routeMatch && method === "GET") {
       const stored = await getRoute(routeMatch[1]);
