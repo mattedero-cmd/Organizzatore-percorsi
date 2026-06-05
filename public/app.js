@@ -1538,7 +1538,7 @@ function renderResult() {
           const emailSubject = encodeURIComponent(`Appuntamento ${row.customer} - ${result.scheduledDate || ""} ore ${row.arrivalTime}`);
           const partBadge = row.stopPart === "morning" ? `<span class="badge" style="background:color-mix(in srgb,#3b82f6 15%,var(--surface));color:#1d4ed8">mattina</span> ` : row.stopPart === "afternoon" ? `<span class="badge" style="background:color-mix(in srgb,#f97316 15%,var(--surface));color:#c2410c">pomeriggio</span> ` : "";
           const stopTitle = `${row.stopNumber}. ${escapeHtml(row.customer)}${row.location ? ` — ${escapeHtml(row.location)}` : ""}`;
-          const phoneBtn = pref ? `<a class="btn rc-phone-btn" href="tel:${escapeHtml(pref.number)}" title="${escapeHtml(pref.name || pref.number)}">${phoneIcon(pref.type)} ${escapeHtml(pref.number)}</a>` : "";
+          const phoneBtn = pref ? `<a class="btn icon-btn" href="tel:${escapeHtml(pref.number)}" title="${escapeHtml(pref.number)}">${phoneIcon(pref.type)}</a>` : "";
           const warnLevel = worstWarningLevel(row.warnings);
           const cardClass = warnLevel === "error" ? " card-error" : warnLevel === "warn" ? " card-warn" : "";
           const warnMsg = warnLevel ? (row.warnings.find(w => w.level === warnLevel || (warnLevel==="error" && /(chiusa|dopo|oltre)/.test(w.msg||w)))?.msg || "") : "";
@@ -1563,7 +1563,6 @@ function renderResult() {
               ${!isAfternoon ? `<a class="btn primary rc-nav-btn" href="${stopNavUrl(row, state.navigatorPref)}" target="_blank" rel="noopener">↗ Naviga</a>` : ""}
               ${phoneBtn}
               ${email && !row.stopPart ? `<a class="btn icon-btn" href="mailto:${escapeHtml(email)}?subject=${emailSubject}" title="${escapeHtml(email)}">✉</a>` : ""}
-              <button class="btn icon-btn rc-expand-btn" data-expand-stop="${expandId}" title="Dettagli">⋯</button>
             </div>
             <div class="rc-details" data-stop-details="${expandId}" hidden>
               <div class="rc-timing-strip">
@@ -1572,8 +1571,8 @@ function renderResult() {
                 <span>✓ ${escapeHtml(row.serviceEndTime)}</span>
                 ${!isAfternoon ? `<span class="rc-ts-muted">⬆ ${escapeHtml(row.departureTime)}</span>` : ""}
               </div>
-              ${phone && !row.stopPart ? `<div class="rc-contact">${phoneIcon(addr?.phoneType)} <a href="tel:${escapeHtml(phone)}">${escapeHtml(phone)}</a>${addr?.phoneName ? ` <span class="phone-name-badge">${escapeHtml(addr.phoneName)}</span>` : ""}${addr?.phonePreferred !== "phone2" && phone2 ? " ★" : ""}</div>` : ""}
-              ${phone2 && !row.stopPart ? `<div class="rc-contact">${phoneIcon(addr?.phone2Type)} <a href="tel:${escapeHtml(phone2)}">${escapeHtml(phone2)}</a>${addr?.phone2Name ? ` <span class="phone-name-badge">${escapeHtml(addr.phone2Name)}</span>` : ""}${addr?.phonePreferred === "phone2" ? " ★" : ""}</div>` : ""}
+              ${phone && !row.stopPart ? `<div class="rc-contact rc-contact--phone">${phoneIcon(addr?.phoneType)} <a href="tel:${escapeHtml(phone)}">${escapeHtml(phone)}</a>${addr?.phoneName ? ` <span class="phone-name-badge">${escapeHtml(addr.phoneName)}</span>` : ""}${addr?.phonePreferred !== "phone2" && phone2 ? " ★" : ""}</div>` : ""}
+              ${phone2 && !row.stopPart ? `<div class="rc-contact rc-contact--phone">${phoneIcon(addr?.phone2Type)} <a href="tel:${escapeHtml(phone2)}">${escapeHtml(phone2)}</a>${addr?.phone2Name ? ` <span class="phone-name-badge">${escapeHtml(addr.phone2Name)}</span>` : ""}${addr?.phonePreferred === "phone2" ? " ★" : ""}</div>` : ""}
               ${email && !row.stopPart ? `<div class="rc-contact">✉ <a href="mailto:${escapeHtml(email)}">${escapeHtml(email)}</a></div>` : ""}
               ${row.notes && !row.stopPart ? `<div class="rc-notes">${escapeHtml(row.notes)}</div>` : ""}
               ${warnLevel ? warningBadges(row.warnings) : ""}
