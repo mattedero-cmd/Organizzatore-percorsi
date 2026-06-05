@@ -446,10 +446,7 @@ function renderStops() {
       </div>
       <div class="form-grid three">
         <label class="field">Durata (min)<input type="number" min="5" step="5" value="${escapeHtml(stop.durationMinutes)}" data-stop="${stop.uid}:durationMinutes" /></label>
-        <label class="field">Apr. mattina<input type="time" value="${escapeHtml(stop.openMorning || "")}" data-stop="${stop.uid}:openMorning" /></label>
-        <label class="field">Ch. mattina<input type="time" value="${escapeHtml(stop.closeMorning || "")}" data-stop="${stop.uid}:closeMorning" /></label>
-        <label class="field">Apr. pomeriggio<input type="time" value="${escapeHtml(stop.openAfternoon || "")}" data-stop="${stop.uid}:openAfternoon" /></label>
-        <label class="field">Ch. pomeriggio<input type="time" value="${escapeHtml(stop.closeAfternoon || "")}" data-stop="${stop.uid}:closeAfternoon" /></label>
+        <div class="field">${stopHoursHint(stop, r.scheduledDate)}</div>
         <div class="field"><span class="badge ${stop.recognized ? "ok" : "warning"}">${stop.recognized ? "Archivio" : "Da confermare"}</span></div>
       </div>
     </article>`;
@@ -591,6 +588,26 @@ function renderWeeklyHoursSection(weeklyHours) {
       </table>
     </div>
   </div>`;
+}
+
+function stopHoursHint(stop, scheduledDate) {
+  const wh = stop.weeklyHours;
+  if (!wh) {
+    const parts = [];
+    if (stop.openMorning && stop.closeMorning) parts.push(`${stop.openMorning}–${stop.closeMorning}`);
+    if (stop.openAfternoon && stop.closeAfternoon) parts.push(`${stop.openAfternoon}–${stop.closeAfternoon}`);
+    const txt = parts.join(" / ") || "Orari non impostati";
+    return `<span class="stop-meta">${txt}</span>`;
+  }
+  const dow = scheduledDate ? new Date(scheduledDate + "T12:00:00").getDay() : new Date().getDay();
+  const day = wh[dow] || wh[String(dow)];
+  if (!day) return `<span class="stop-meta">—</span>`;
+  if (day.closed) return `<span class="badge badge-error">Chiuso ${DAYS_IT[dow]}</span>`;
+  if (day.continuous) return `<span class="stop-meta">${day.openMorning}–${day.closeAfternoon} <span style="opacity:.6">(cont.)</span></span>`;
+  const parts = [];
+  if (day.openMorning && day.closeMorning) parts.push(`${day.openMorning}–${day.closeMorning}`);
+  if (day.openAfternoon && day.closeAfternoon) parts.push(`${day.openAfternoon}–${day.closeAfternoon}`);
+  return `<span class="stop-meta">${DAYS_IT[dow]}: ${parts.join(" / ") || "—"}</span>`;
 }
 
 function weeklyHoursSummary(a) {
@@ -784,6 +801,36 @@ function weatherIcon(w) {
   return "☀";
 }
 
+function stopDetailExtra(result, row, addr) {
+  const parts = [];
+
+  // Full weather
+  const w = (result.weather || []).find(x => Number(x.stopNumber) === Number(row.stopNumber));
+  if (w) {
+    const temp = w.temperatureC != null ? `${Math.round(w.temperatureC)}°C` : "--";
+    const humidity = w.humidity != null ? ` · ${w.humidity}% umid.` : "";
+    const wind = w.windKmh != null ? ` · 💨 ${Math.round(w.windKmh)} km/h` : "";
+    const alerts = (w.warnings || []).map(s => `<span class="badge warning">${escapeHtml(s)}</span>`).join(" ");
+    parts.push(`<div class="stop-detail-section"><div class="metric-label">Meteo previsto</div><div class="stop-weather-full">${weatherIcon(w)} <strong>${temp}</strong> ${escapeHtml(w.description || "")}${humidity}${wind}${alerts ? " " + alerts : ""}</div></div>`);
+  }
+
+  // Full weekly hours
+  const wh = addr?.weeklyHours || row.weeklyHours;
+  if (wh) {
+    const dayRows = [1,2,3,4,5,6,0].map(d => {
+      const h = wh[d] || wh[String(d)] || { closed: true };
+      const isToday = result.scheduledDate && new Date(result.scheduledDate + "T12:00:00").getDay() === d;
+      const style = isToday ? " style=\"font-weight:700;\"" : "";
+      if (h.closed) return `<tr${style}><td class="wh-day">${DAYS_IT[d]}</td><td colspan="3" class="stop-meta">Chiuso</td></tr>`;
+      if (h.continuous) return `<tr${style}><td class="wh-day">${DAYS_IT[d]}</td><td class="stop-meta">${h.openMorning}–${h.closeAfternoon}</td><td colspan="2" class="stop-meta" style="opacity:.5">continuato</td></tr>`;
+      return `<tr${style}><td class="wh-day">${DAYS_IT[d]}</td><td class="stop-meta">${(h.openMorning && h.closeMorning) ? `${h.openMorning}–${h.closeMorning}` : "—"}</td><td class="stop-meta">/</td><td class="stop-meta">${(h.openAfternoon && h.closeAfternoon) ? `${h.openAfternoon}–${h.closeAfternoon}` : "—"}</td></tr>`;
+    }).join("");
+    parts.push(`<div class="stop-detail-section"><div class="metric-label">Orari settimanali</div><table class="wh-table wh-compact"><tbody>${dayRows}</tbody></table></div>`);
+  }
+
+  return parts.length ? `<div class="stop-detail-extra">${parts.join("")}</div>` : "";
+}
+
 function weatherPill(result, stopNumber) {
   const w = (result.weather || []).find(x => Number(x.stopNumber) === Number(stopNumber));
   if (!w) return "";
@@ -803,7 +850,19 @@ function weatherCompact(result, stopNumber) {
 
 function warningBadges(warnings) {
   if (!warnings?.length) return `<span class="badge ok">OK</span>`;
-  return warnings.map(w => `<span class="badge warning">${escapeHtml(w)}</span>`).join(" ");
+  return warnings.map(w => {
+    const msg = w.msg || w;
+    const level = w.level || (/(chiusa|dopo|oltre)/.test(msg) ? "error" : "warn");
+    const cls = level === "error" ? "badge-error" : level === "warn" ? "badge-warn" : "badge";
+    return `<span class="badge ${cls}">${escapeHtml(msg)}</span>`;
+  }).join(" ");
+}
+
+function worstWarningLevel(warnings) {
+  if (!warnings?.length) return null;
+  if (warnings.some(w => (w.level || "") === "error" || /(chiusa|dopo|oltre)/.test(w.msg || w))) return "error";
+  if (warnings.some(w => (w.level || "") === "warn")) return "warn";
+  return null;
 }
 
 function renderManualOrder(result) {
@@ -893,7 +952,10 @@ function renderResult() {
                 ${row.address ? `<div class="stop-meta" style="font-size:0.8rem">${escapeHtml(row.address)}</div>` : ""}
               </div>
             </div>
-            <a class="btn primary" href="${restNavUrl}" target="_blank" rel="noopener" style="margin-top:8px;display:block;text-align:center">↗ Naviga</a>
+            <div style="display:flex;gap:8px;margin-top:8px;">
+              <a class="btn primary" href="${restNavUrl}" target="_blank" rel="noopener" style="flex:1;text-align:center">↗ Naviga</a>
+              ${row.lat && row.lng ? `<a class="btn" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(row.customer + " " + (row.location || ""))}&center=${row.lat},${row.lng}" target="_blank" rel="noopener" title="Vedi su Google Maps">🔍 Maps</a>` : ""}
+            </div>
           </article>`;
           }
 
@@ -906,10 +968,12 @@ function renderResult() {
           const partBadge = row.stopPart === "morning" ? `<span class="badge" style="background:color-mix(in srgb,#3b82f6 15%,var(--surface));color:#1d4ed8">mattina</span> ` : row.stopPart === "afternoon" ? `<span class="badge" style="background:color-mix(in srgb,#f97316 15%,var(--surface));color:#c2410c">pomeriggio</span> ` : "";
           const stopTitle = `${row.stopNumber}. ${escapeHtml(row.customer)}${row.location ? ` — ${escapeHtml(row.location)}` : ""}`;
           const phoneBtn = pref ? `<a class="btn" href="tel:${escapeHtml(pref.number)}" title="${escapeHtml(pref.name || pref.number)}">${phoneIcon(pref.type)}</a>` : "";
+          const warnLevel = worstWarningLevel(row.warnings);
+          const cardClass = warnLevel === "error" ? " card-error" : warnLevel === "warn" ? " card-warn" : "";
           return `
-          <article class="card result-card">
+          <article class="card result-card${cardClass}">
             <div class="stop-compact-head" data-expand-stop="${row.stopNumber}${row.stopPart ? "-" + row.stopPart : ""}">
-              <div>${partBadge}<p class="stop-title" style="display:inline">${stopTitle}</p></div>
+              <div>${partBadge}<p class="stop-title" style="display:inline">${stopTitle}</p>${warnLevel === "error" ? ` <span class="badge badge-error" style="margin-left:4px">${escapeHtml((row.warnings.find(w => (w.level||"") === "error" || /(chiusa|dopo|oltre)/.test(w.msg||w))?.msg || "⚠"))}</span>` : ""}</div>
               <div class="stop-meta" style="font-size:0.82rem">${escapeHtml(row.address)}</div>
               ${weatherCompact(result, row.stopNumber)}
             </div>
@@ -931,6 +995,7 @@ function renderResult() {
               ${email && !row.stopPart ? `<div class="stop-meta">✉ <a href="mailto:${escapeHtml(email)}">${escapeHtml(email)}</a></div>` : ""}
               ${row.notes && !row.stopPart ? `<div class="stop-meta" style="margin-top:6px;font-style:italic">${escapeHtml(row.notes)}</div>` : ""}
               ${warningBadges(row.warnings)}
+              ${!row.stopPart ? stopDetailExtra(result, row, addr) : ""}
             </div>
           </article>`;
         }).join("")}
@@ -956,7 +1021,11 @@ function renderResult() {
         <div class="metric"><div class="metric-label">Costo lavoro</div><div class="metric-value">${euro(summary.costWork)}</div></div>
         <div class="metric"><div class="metric-label">Totale</div><div class="metric-value">${euro(summary.totalCost)}</div></div>
       </div>
-      ${(summary.warnings || []).map(w => `<span class="badge warning" style="margin-top:8px;display:inline-flex;">${escapeHtml(w)}</span>`).join(" ")}
+      ${(summary.warnings || []).map(w => {
+        const msg = w.msg || w;
+        const level = w.level || (/(chiusa|dopo|oltre)/.test(msg) ? "error" : "warn");
+        return `<span class="badge ${level === "error" ? "badge-error" : "badge-warn"}" style="margin-top:8px;display:inline-flex;">${escapeHtml(msg)}</span>`;
+      }).join(" ")}
     </section>`;
 
   if (state.googleMapsKey) {

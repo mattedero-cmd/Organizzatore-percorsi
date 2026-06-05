@@ -1044,6 +1044,62 @@ tbody tr:last-child td {
   order: -1;
 }
 
+/* ── warning badge levels ─────────────────────────────────────────────────── */
+.badge-error {
+  background: color-mix(in srgb, #ef4444 18%, var(--surface));
+  color: #b91c1c;
+  border: 1px solid color-mix(in srgb, #ef4444 35%, transparent);
+  border-radius: 6px;
+  padding: 2px 7px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.badge-warn {
+  background: color-mix(in srgb, #f59e0b 18%, var(--surface));
+  color: #b45309;
+  border: 1px solid color-mix(in srgb, #f59e0b 35%, transparent);
+  border-radius: 6px;
+  padding: 2px 7px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.card-error {
+  border-left: 4px solid #ef4444 !important;
+}
+
+.card-warn {
+  border-left: 4px solid #f59e0b !important;
+}
+
+/* ── stop detail extra (weekly hours + weather in expanded card) ────────────*/
+.stop-detail-extra {
+  margin-top: 10px;
+  border-top: 1px solid var(--line);
+  padding-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.stop-detail-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.stop-weather-full {
+  font-size: 0.9rem;
+}
+
+.wh-compact td {
+  padding: 2px 6px 2px 0;
+  font-size: 0.8rem;
+}
+
 /* ── weekly hours table ───────────────────────────────────────────────────── */
 .wh-label {
   font-size: 0.82rem;

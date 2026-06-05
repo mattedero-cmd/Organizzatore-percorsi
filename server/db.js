@@ -190,6 +190,7 @@ export async function initDb(rootDir) {
 
   await migratePlannedRoutes();
   await migrateWeeklyHours();
+  await migrateIntesaFriday();
 
   const count = await runSql("SELECT COUNT(*) AS count FROM addresses;", true);
   if (Number(count[0]?.count ?? 0) === 0) {
@@ -250,6 +251,7 @@ async function initPostgresDb() {
 
   await migratePlannedRoutes();
   await migrateWeeklyHours();
+  await migrateIntesaFriday();
 
   const count = await runSql("SELECT COUNT(*) AS count FROM addresses;", true);
   if (Number(count[0]?.count ?? 0) === 0) {
@@ -326,6 +328,23 @@ async function migratePlannedRoutes() {
   }
   if (!settingsCols.includes("lunch_break_enabled")) {
     await runSql("ALTER TABLE settings ADD COLUMN lunch_break_enabled INTEGER DEFAULT 1;");
+  }
+}
+
+async function migrateIntesaFriday() {
+  // Intesa San Paolo: venerdì (day=5) chiude alle 16:25 invece dell'orario standard
+  const rows = await runSql("SELECT id, weekly_hours FROM addresses WHERE lower(customer) LIKE '%intesa%' AND weekly_hours IS NOT NULL;", true);
+  for (const row of rows) {
+    let wh;
+    try { wh = JSON.parse(row.weekly_hours); } catch { continue; }
+    const fri = wh[5] || wh["5"];
+    if (!fri || fri.closed) continue;
+    // Only patch if Friday closeAfternoon is not already 16:25
+    if (fri.closeAfternoon === "16:25") continue;
+    fri.closeAfternoon = "16:25";
+    if (fri.closeMorning && !fri.continuous) {} // leave morning unchanged
+    wh[5] = fri; wh["5"] = fri;
+    await runSql(`UPDATE addresses SET weekly_hours = ${sqlValue(JSON.stringify(wh))} WHERE id = ${sqlValue(Number(row.id))};`);
   }
 }
 

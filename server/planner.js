@@ -116,8 +116,14 @@ function scheduleStop(arrival, stop) {
   const windows = getWindows(stop);
   const warnings = [];
 
+  if (stop.closedToday) {
+    return { split: false, serviceStart: arrival, serviceEnd: arrival + stop.durationMinutes, waitMinutes: 0,
+      warnings: [{ msg: "sede chiusa in questo giorno", level: "error" }] };
+  }
+
   if (windows.length === 0) {
-    return { split: false, serviceStart: arrival, serviceEnd: arrival + stop.durationMinutes, waitMinutes: 0, warnings: ["orari non indicati"] };
+    return { split: false, serviceStart: arrival, serviceEnd: arrival + stop.durationMinutes, waitMinutes: 0,
+      warnings: [{ msg: "orari non indicati", level: "info" }] };
   }
 
   for (let wi = 0; wi < windows.length; wi++) {
@@ -125,7 +131,7 @@ function scheduleStop(arrival, stop) {
     if (arrival <= win.end) {
       const serviceStart = Math.max(arrival, win.start);
       const waitMinutes = Math.max(0, serviceStart - arrival);
-      if (arrival < win.start) warnings.push("arrivo prima dell'apertura");
+      if (arrival < win.start) warnings.push({ msg: "arrivo prima dell'apertura", level: "warn" });
 
       if (serviceStart + stop.durationMinutes <= win.end) {
         return { split: false, serviceStart, serviceEnd: serviceStart + stop.durationMinutes, waitMinutes, warnings };
@@ -151,11 +157,12 @@ function scheduleStop(arrival, stop) {
         }
       }
 
-      warnings.push(`intervento oltre chiusura ${win.label.toLowerCase()}`);
+      warnings.push({ msg: `intervento oltre chiusura ${win.label.toLowerCase()}`, level: "error" });
     }
   }
 
-  return { split: false, serviceStart: arrival, serviceEnd: arrival + stop.durationMinutes, waitMinutes: 0, warnings: [...new Set([...warnings, "sede chiusa o orario incompatibile"])] };
+  return { split: false, serviceStart: arrival, serviceEnd: arrival + stop.durationMinutes, waitMinutes: 0,
+    warnings: [...warnings, { msg: "arrivo dopo l'orario di chiusura", level: "error" }] };
 }
 
 function permute(items) {
@@ -247,17 +254,23 @@ function evaluateOrder(order, context) {
     const warnings = [];
 
     if (index === 0 && targetArrival !== null) {
-      if (arrival < targetArrival) warnings.push("arrivo prima dell'orario target");
-      if (arrival > targetArrival) warnings.push("arrivo dopo l'orario target");
+      if (arrival < targetArrival) warnings.push({ msg: "arrivo prima dell'orario target", level: "warn" });
+      if (arrival > targetArrival) warnings.push({ msg: "arrivo dopo l'orario target", level: "warn" });
     }
 
     const scheduled = scheduleStop(
       index === 0 && targetArrival !== null ? Math.max(arrival, targetArrival) : arrival,
       stop
     );
-    let rowWarnings = [...new Set([...warnings, ...scheduled.warnings])];
+    // Deduplicate by msg
+    const seen = new Set();
+    let rowWarnings = [...warnings, ...scheduled.warnings].filter(w => {
+      const key = w.msg || w;
+      if (seen.has(key)) return false;
+      seen.add(key); return true;
+    });
     if (index === 0 && timingMode === "first_open_minus") {
-      rowWarnings = rowWarnings.filter((w) => w !== "arrivo prima dell'apertura");
+      rowWarnings = rowWarnings.filter((w) => (w.msg || w) !== "arrivo prima dell'apertura");
     }
 
     const baseRow = {
@@ -317,7 +330,7 @@ function evaluateOrder(order, context) {
   const costDrive = (totalDriveMinutes / 60) * rates.driveHourRate;
   const costWork = (totalWorkMinutes / 60) * rates.workHourRate;
   const totalCost = costKm + costDrive + costWork;
-  const warningPenalty = allWarnings.filter((warning) => /chiusa|dopo|oltre/.test(warning)).length * 500;
+  const warningPenalty = allWarnings.filter((w) => (w.level || w) === "error" || /chiusa|dopo|oltre/.test(w.msg || w)).length * 500;
   const waitPenalty = totalWaitMinutes * 0.4;
   const score = totalDriveMinutes + totalKm * 1.2 + warningPenalty + waitPenalty;
 
@@ -346,7 +359,7 @@ function evaluateOrder(order, context) {
       costDrive: Number(costDrive.toFixed(2)),
       costWork: Number(costWork.toFixed(2)),
       totalCost: Number(totalCost.toFixed(2)),
-      warnings: [...new Set(allWarnings)]
+      warnings: allWarnings.filter((w, i, arr) => arr.findIndex(x => (x.msg || x) === (w.msg || w)) === i)
     },
     score
   };
