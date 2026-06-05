@@ -76,6 +76,7 @@ const emptyForm = {
 
 const state = {
   activeTab: "route",
+  menuOpen: false, menuSection: null,
   theme: "day",
   themePref: "auto",
   googleMapsKey: "",
@@ -139,6 +140,280 @@ function setActiveTab(tab) {
   state.activeTab = tab;
   document.querySelectorAll(".tab").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
   render();
+}
+
+function openMenu(section = null) {
+  state.menuOpen = true;
+  state.menuSection = section;
+  renderMenu();
+}
+
+function closeMenu() {
+  state.menuOpen = false;
+  state.menuSection = null;
+  const existing = document.getElementById("bsheet-overlay");
+  if (existing) existing.remove();
+}
+
+function renderMenu() {
+  const existing = document.getElementById("bsheet-overlay");
+  if (existing) existing.remove();
+  if (!state.menuOpen) return;
+
+  const overlay = document.createElement("div");
+  overlay.className = "bsheet-overlay";
+  overlay.id = "bsheet-overlay";
+  overlay.innerHTML = `<div class="bsheet" id="bsheet">${state.menuSection ? renderMenuSection(state.menuSection) : renderMenuRoot()}</div>`;
+  document.body.appendChild(overlay);
+
+  overlay.addEventListener("click", e => { if (e.target === overlay) closeMenu(); });
+  overlay.querySelectorAll("[data-menu-go]").forEach(btn => {
+    btn.addEventListener("click", () => { state.menuSection = btn.dataset.menuGo; renderMenu(); });
+  });
+  overlay.querySelector("#bsheet-back")?.addEventListener("click", () => { state.menuSection = null; renderMenu(); });
+  overlay.querySelector("#settings-form")?.addEventListener("submit", async e => {
+    e.preventDefault();
+    const v = readForm(e.target);
+    const newSettings = {
+      kmRate: Number(v.kmRate),
+      driveHourRate: Number(v.driveHourRate),
+      workHourRate: Number(v.workHourRate),
+      navigatorPref: v.navigatorPref || "google",
+      themePref: v.themePref || "auto",
+      lunchBreakMinutes: Number(v.lunchBreakMinutes || 45),
+      lunchBreakEnabled: v.lunchBreakEnabled === "on" || v.lunchBreakEnabled === true,
+      defaultStartLabel: v.defaultStartLabel || "",
+      defaultStartAddress: v.defaultStartAddress || "",
+      restIntervalMin: Number(v.restIntervalMin || 120),
+      restMaxDeviationMin: Number(v.restMaxDeviationMin || 40),
+      restDurationMin: Number(v.restDurationMin || 15),
+      driveMarkupMinPerHour: Number(v.driveMarkupMinPerHour || 10)
+    };
+    state.settings = await api("/api/settings", { method: "PUT", body: JSON.stringify(newSettings) });
+    state.navigatorPref = state.settings.navigatorPref;
+    localStorage.setItem("navigatorPref", state.navigatorPref);
+    state.themePref = state.settings.themePref;
+    state.route.lunchBreak = state.settings.lunchBreakEnabled !== false;
+    state.route.lunchBreakMinutes = state.settings.lunchBreakMinutes || 45;
+    if (state.settings.defaultStartLabel || state.settings.defaultStartAddress) {
+      state.route.startLabel = state.settings.defaultStartLabel || state.route.startLabel;
+      state.route.startAddress = state.settings.defaultStartAddress || state.route.startAddress;
+    }
+    applyTheme();
+    showToast("Impostazioni salvate");
+    closeMenu();
+  });
+  // stepper buttons
+  overlay.querySelectorAll("[data-stepper]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const name = btn.dataset.stepper;
+      const dir = Number(btn.dataset.dir);
+      const step = Number(btn.dataset.step || 1);
+      const input = overlay.querySelector(`[name="${name}"]`);
+      if (input) {
+        const min = Number(input.min || 0);
+        const max = Number(input.max || 9999);
+        input.value = Math.min(max, Math.max(min, Number(input.value) + dir * step));
+      }
+    });
+  });
+}
+
+function renderMenuRoot() {
+  return `
+    <div class="bsheet-handle"></div>
+    <button class="bsheet-menu-item" data-menu-go="settings">
+      <span class="bsheet-menu-icon">⚙️</span>
+      <span class="bsheet-menu-label">Impostazioni</span>
+      <span class="bsheet-menu-arrow">›</span>
+    </button>
+    <button class="bsheet-menu-item" data-menu-go="guide">
+      <span class="bsheet-menu-icon">📖</span>
+      <span class="bsheet-menu-label">Guida</span>
+      <span class="bsheet-menu-arrow">›</span>
+    </button>
+    <button class="bsheet-menu-item" data-menu-go="info">
+      <span class="bsheet-menu-icon">ℹ️</span>
+      <span class="bsheet-menu-label">Info app</span>
+      <span class="bsheet-menu-arrow">›</span>
+    </button>`;
+}
+
+function renderMenuSection(section) {
+  if (section === "settings") return renderMenuSettings();
+  if (section === "guide") return renderMenuGuide();
+  if (section === "info") return renderMenuInfo();
+  return renderMenuRoot();
+}
+
+function renderMenuSettings() {
+  const s = state.settings;
+  const nav = s.navigatorPref || "google";
+  const theme = s.themePref || "auto";
+  const stepper = (name, val, min, max, step, unit = "") => `
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+      <div class="settings-stepper">
+        <button type="button" data-stepper="${name}" data-dir="-1" data-step="${step}">−</button>
+        <input name="${name}" type="number" min="${min}" max="${max}" step="${step}" value="${val}" />
+        <button type="button" data-stepper="${name}" data-dir="1" data-step="${step}">+</button>
+      </div>
+      ${unit ? `<span class="stop-meta">${unit}</span>` : ""}
+    </div>`;
+  return `
+    <div class="bsheet-handle"></div>
+    <div class="bsheet-header">
+      <button class="bsheet-back" id="bsheet-back">‹</button>
+      <h2 class="bsheet-title">Impostazioni</h2>
+    </div>
+    <div class="bsheet-section-body">
+      <form id="settings-form">
+        <h3>Partenza predefinita</h3>
+        <div class="form-grid">
+          <label class="field">Nome<input name="defaultStartLabel" value="${escapeHtml(s.defaultStartLabel || "")}" placeholder="Casa, Ufficio…" /></label>
+          <label class="field full">Indirizzo<input name="defaultStartAddress" value="${escapeHtml(s.defaultStartAddress || "")}" placeholder="Via, città…" /></label>
+        </div>
+
+        <h3>Tariffe</h3>
+        <div class="form-grid">
+          <label class="field">€ per km<input name="kmRate" type="number" min="0" step="0.01" value="${escapeHtml(s.kmRate)}" /></label>
+          <label class="field">€/ora guida<input name="driveHourRate" type="number" min="0" step="0.01" value="${escapeHtml(s.driveHourRate)}" /></label>
+          <label class="field full">€/ora lavoro<input name="workHourRate" type="number" min="0" step="0.01" value="${escapeHtml(s.workHourRate)}" /></label>
+        </div>
+
+        <h3>Soste automatiche</h3>
+        <div class="form-grid">
+          <div class="field">
+            <span class="field-label">Intervallo soste</span>
+            ${stepper("restIntervalMin", s.restIntervalMin || 120, 60, 240, 10, "minuti")}
+          </div>
+          <div class="field">
+            <span class="field-label">Tolleranza (finestra)</span>
+            ${stepper("restMaxDeviationMin", s.restMaxDeviationMin || 40, 10, 90, 5, "minuti ±")}
+          </div>
+          <div class="field">
+            <span class="field-label">Durata sosta</span>
+            ${stepper("restDurationMin", s.restDurationMin || 15, 5, 60, 5, "minuti")}
+          </div>
+        </div>
+
+        <h3>Tempi di guida</h3>
+        <div class="field">
+          <span class="field-label">Maggiorazione stimata</span>
+          ${stepper("driveMarkupMinPerHour", s.driveMarkupMinPerHour !== undefined ? s.driveMarkupMinPerHour : 10, 0, 30, 1, "min/h")}
+        </div>
+
+        <h3>Pianificazione</h3>
+        <div class="form-grid">
+          <label class="field checkbox-field full">
+            <input type="checkbox" name="lunchBreakEnabled" ${s.lunchBreakEnabled !== false ? "checked" : ""} />
+            <span>Pausa pranzo di default</span>
+          </label>
+          <div class="field">
+            <span class="field-label">Durata pranzo</span>
+            ${stepper("lunchBreakMinutes", s.lunchBreakMinutes || 45, 15, 120, 5, "minuti")}
+          </div>
+        </div>
+
+        <h3>Navigatore</h3>
+        <div class="settings-radio-group">
+          <label class="settings-radio"><input type="radio" name="navigatorPref" value="google" ${nav === "google" ? "checked" : ""} /> Google Maps</label>
+          <label class="settings-radio"><input type="radio" name="navigatorPref" value="apple" ${nav === "apple" ? "checked" : ""} /> Apple Mappe</label>
+          <label class="settings-radio"><input type="radio" name="navigatorPref" value="waze" ${nav === "waze" ? "checked" : ""} /> Waze</label>
+        </div>
+
+        <h3>Tema</h3>
+        <div class="settings-radio-group">
+          <label class="settings-radio"><input type="radio" name="themePref" value="auto" ${theme === "auto" ? "checked" : ""} /> 🔄 Automatico</label>
+          <label class="settings-radio"><input type="radio" name="themePref" value="light" ${theme === "light" ? "checked" : ""} /> ☀️ Chiaro</label>
+          <label class="settings-radio"><input type="radio" name="themePref" value="dark" ${theme === "dark" ? "checked" : ""} /> 🌙 Scuro</label>
+        </div>
+
+        <div class="actions" style="margin-top:20px;">
+          <button class="btn primary" type="submit" style="width:100%">Salva impostazioni</button>
+        </div>
+      </form>
+    </div>`;
+}
+
+function renderMenuGuide() {
+  const section = (title, content) => `
+    <details class="bsheet-guide-section">
+      <summary class="bsheet-guide-summary">${title} <span>›</span></summary>
+      <div class="bsheet-guide-body">${content}</div>
+    </details>`;
+  return `
+    <div class="bsheet-handle"></div>
+    <div class="bsheet-header">
+      <button class="bsheet-back" id="bsheet-back">‹</button>
+      <h2 class="bsheet-title">Guida</h2>
+    </div>
+    <div class="bsheet-section-body">
+      ${section("🗓 Come creare un giro", `
+        <ol>
+          <li>Nella tab <b>Nuovo percorso</b>, imposta la <b>data</b> e l'<b>orario di partenza</b>.</li>
+          <li>Seleziona il punto di partenza con 📋 (archivio) o 🗺 (mappa). Se uguale al giorno prima, rimane quello salvato.</li>
+          <li>Cerca le tappe nella barra di ricerca e premi <b>+ Aggiungi</b> per inserirle.</li>
+          <li>Puoi aggiungere tappe manuali (non in archivio) aprendo la sezione <b>+ Manuale</b>.</li>
+          <li>Premi <b>→ Ottimizza e salva</b>: il percorso viene calcolato nell'ordine ottimale rispettando gli orari di apertura.</li>
+          <li>Il risultato mostra tutti gli orari stimati di arrivo, guida e lavoro.</li>
+        </ol>
+      `)}
+      ${section("📇 Gestione contatti", `
+        <ul>
+          <li>Vai su <b>Archivio → + Nuovo</b> per aggiungere un contatto.</li>
+          <li>Compila gli <b>orari settimanali</b>: supporta orario continuato, chiusure giornaliere e orari diversi per giorno.</li>
+          <li>Usa <b>📱 Importa</b> per importare contatti dalla rubrica telefonica con gli orari Google.</li>
+          <li>I numeri che iniziano con <b>3</b> vengono riconosciuti come cellulare, con <b>0</b> come fisso.</li>
+          <li>Contatti con tipo <b>☕ Sosta</b> vengono usati come punti di pausa automatici durante il giro.</li>
+        </ul>
+      `)}
+      ${section("☕ Soste automatiche", `
+        <ul>
+          <li>Il sistema inserisce soste ogni <b>~2 ore</b> di guida cumulata (configurabile in Impostazioni).</li>
+          <li>Per soste in luoghi specifici, aggiungi contatti di tipo <b>☕ Sosta</b> nell'archivio.</li>
+          <li>Senza soste in archivio, il sistema cerca automaticamente punti di sosta tramite Google Maps.</li>
+          <li>Regole automatiche: nessuna sosta nelle <b>prime 2 ore</b>, nell'<b>ultima ora prima del rientro</b>, né nell'ora prima o nelle 2 ore dopo il pranzo.</li>
+          <li>Toccando una sosta nel risultato si apre la scheda Google del luogo.</li>
+        </ul>
+      `)}
+      ${section("🎤 Comandi vocali", `
+        <p>Apri il pannello 🎤 in fondo al form e premi <b>● Avvia</b>. Puoi dire:</p>
+        <ul>
+          <li><code>aggiungi [nome cliente]</code> — aggiunge una tappa dall'archivio</li>
+          <li><code>aggiungi X e aggiungi Y</code> — più tappe in un comando</li>
+          <li><code>rimuovi [nome cliente]</code> — rimuove la tappa</li>
+          <li><code>ottimizza</code> / <code>salva e vai</code> — calcola il percorso</li>
+          <li><code>partenza alle 8</code> — cambia orario di partenza</li>
+          <li><code>per il 10 giugno</code> / <code>domani</code> — cambia la data</li>
+          <li><code>parto da [luogo]</code> — cambia il punto di partenza</li>
+          <li><code>in anticipo di 10 minuti</code> — imposta minuti di anticipo arrivo</li>
+        </ul>
+      `)}
+      ${section("📊 Leggere i risultati", `
+        <ul>
+          <li>Ogni tappa mostra: <b>orario di arrivo</b>, km e minuti di guida, durata visita.</li>
+          <li>Bordo <b style="color:#ef4444">rosso</b> = errore (sede chiusa oggi, arrivo fuori orario).</li>
+          <li>Bordo <b style="color:#f59e0b">ambra</b> = avviso (arrivo in anticipo, attesa apertura).</li>
+          <li>Tocca <b>⋯</b> su una tappa per vedere orari settimanali, meteo e avvisi dettagliati.</li>
+          <li>Il pulsante <b>↗ Naviga</b> apre il navigatore scelto nelle impostazioni.</li>
+          <li>Puoi riordinare le tappe manualmente con i pulsanti ↑ ↓ prima di ricalcolare.</li>
+        </ul>
+      `)}
+    </div>`;
+}
+
+function renderMenuInfo() {
+  return `
+    <div class="bsheet-handle"></div>
+    <div class="bsheet-header">
+      <button class="bsheet-back" id="bsheet-back">‹</button>
+      <h2 class="bsheet-title">Info app</h2>
+    </div>
+    <div class="bsheet-section-body">
+      <p class="stop-meta" style="margin-bottom:8px;">Percorsi lavoro — Versione 1.0</p>
+      <p class="stop-meta">Pianificazione giornaliera giri commerciali con ottimizzazione automatica del percorso, gestione orari di apertura, soste automatiche e stima costi.</p>
+      <p class="stop-meta" style="margin-top:12px;">Google Maps${state.mapApiConfigured ? " ✓ attivo" : " — non configurato (usa stime locali)"}. Whisper${state.whisperConfigured ? " ✓ attivo" : " — non configurato"}.</p>
+    </div>`;
 }
 
 // ── data loading ──────────────────────────────────────────────────────────────
@@ -2068,6 +2343,7 @@ function openMapPickerForField({ labelEl, addressEl, latEl, lngEl, onConfirm }) 
 // ── events ────────────────────────────────────────────────────────────────────
 
 function bindEvents() {
+  document.getElementById("menu-btn")?.addEventListener("click", () => openMenu());
   document.querySelector(".tabs").addEventListener("click", e => {
     const b = e.target.closest("[data-tab]");
     if (b) {

@@ -8,10 +8,10 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="Percorsi lavoro" />
     <title>Percorsi lavoro</title>
-    <link rel="manifest" href="/manifest.webmanifest?v=20260604-50" />
+    <link rel="manifest" href="/manifest.webmanifest?v=20260605-53" />
     <link rel="apple-touch-icon" href="/icons/icon-180.svg" />
     <link rel="icon" href="/icons/icon-192.svg" />
-    <link rel="stylesheet" href="/styles.css?v=20260604-50" />
+    <link rel="stylesheet" href="/styles.css?v=20260605-53" />
   </head>
   <body>
     <div class="shell">
@@ -20,7 +20,10 @@
           <p class="eyebrow">Pianificazione giornaliera</p>
           <h1>Percorsi lavoro</h1>
         </div>
-        <div class="status" id="map-status">Locale</div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div class="status" id="map-status">Locale</div>
+          <button id="menu-btn" class="menu-btn" aria-label="Menu">&#9776;</button>
+        </div>
       </header>
 
       <nav class="tabs" aria-label="Sezioni app">
@@ -28,13 +31,12 @@
         <button class="tab" data-tab="saved">Giri salvati</button>
         <button class="tab" data-tab="archive">Archivio</button>
         <button class="tab" data-tab="result">Percorso</button>
-        <button class="tab" data-tab="settings">Impostazioni</button>
       </nav>
 
       <main id="app" class="app"></main>
     </div>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script type="module" src="/app.js?v=20260604-50"></script>
+    <script type="module" src="/app.js?v=20260605-53"></script>
   </body>
 </html>
