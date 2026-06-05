@@ -1,10 +1,10 @@
-const CACHE_NAME = "percorsi-lavoro-v74";
+const CACHE_NAME = "percorsi-lavoro-v75";
 const STATIC_ASSETS = [
-  "/?v=20260604-50",
-  "/index.html?v=20260604-50",
-  "/styles.css?v=20260604-50",
-  "/app.js?v=20260604-50",
-  "/manifest.webmanifest?v=20260604-50",
+  "/?v=20260605-51",
+  "/index.html?v=20260605-51",
+  "/styles.css?v=20260605-51",
+  "/app.js?v=20260605-51",
+  "/manifest.webmanifest?v=20260605-51",
   "/icons/icon-180.svg",
   "/icons/icon-192.svg",
   "/icons/icon-512.svg"

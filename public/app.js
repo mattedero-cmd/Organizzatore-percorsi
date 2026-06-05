@@ -479,50 +479,40 @@ function renderRoute() {
       <div class="rp-section">
         <!-- Partenza -->
         <div class="rp-endpoint-card" id="rp-start-card">
-          <div class="rp-endpoint-inner" id="rp-start-toggle">
+          <div class="rp-ep-row">
             <span class="rp-endpoint-icon">🏠</span>
-            <div class="rp-endpoint-info">
-              <span class="rp-endpoint-name">${escapeHtml(startDisplay)}</span>
+            <span class="rp-endpoint-name" id="rp-start-name">${escapeHtml(startDisplay)}</span>
+            <div class="rp-ep-actions">
+              <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(r.startAddress || r.startLabel || "")}" target="_blank" rel="noopener" class="btn ghost rp-ep-nav" title="Apri in Maps">↗</a>
+              <button type="button" class="btn ghost" id="rp-start-archive-btn" title="Scegli dall'archivio">📋</button>
             </div>
-            <span class="rp-endpoint-chevron">›</span>
           </div>
-          <div class="rp-endpoint-edit" id="rp-start-edit">
-            <label class="field">Nome<input name="startLabel" value="${escapeHtml(r.startLabel)}" autocomplete="off" placeholder="es. Casa, Ufficio…" /></label>
-            <label class="field">Indirizzo<input name="startAddress" value="${escapeHtml(r.startAddress)}" placeholder="Via, città…" /></label>
-            <div class="rp-endpoint-actions">
-              <button type="button" class="btn ghost rp-map-btn" data-map-label="startLabel" data-map-address="startAddress">🗺 Mappa</button>
-              <button type="button" class="btn ghost" id="rp-start-archive-btn">📋 Archivio</button>
-            </div>
-            <div class="rp-archive-inline" id="rp-start-archive" style="display:none">
-              <input id="rp-start-archive-search" placeholder="Cerca nell'archivio…" autocomplete="off" />
-              <div class="stop-suggestions" id="rp-start-archive-suggestions"></div>
-            </div>
+          <input type="hidden" name="startLabel" id="rp-start-label-h" value="${escapeHtml(r.startLabel)}" />
+          <input type="hidden" name="startAddress" id="rp-start-addr-h" value="${escapeHtml(r.startAddress)}" />
+          <div class="rp-archive-inline" id="rp-start-archive" style="display:none">
+            <input id="rp-start-archive-search" placeholder="Cerca nell'archivio…" autocomplete="off" />
+            <div class="stop-suggestions" id="rp-start-archive-suggestions"></div>
           </div>
         </div>
         <!-- Arrivo -->
         <div class="rp-endpoint-card rp-endpoint-card--end" id="rp-end-card">
-          <div class="rp-endpoint-inner" id="rp-end-toggle">
+          <div class="rp-ep-row">
             <span class="rp-endpoint-icon">🏁</span>
-            <div class="rp-endpoint-info">
-              <span class="rp-endpoint-name">${escapeHtml(endDisplay)}</span>
-            </div>
+            <span class="rp-endpoint-name" id="rp-end-name">${escapeHtml(endDisplay)}</span>
             <label class="rp-same-label" onclick="event.stopPropagation()">
-              <input name="endSameAsStart" type="checkbox" ${r.endSameAsStart ? "checked" : ""} />
+              <input name="endSameAsStart" type="checkbox" id="rp-end-same" ${r.endSameAsStart ? "checked" : ""} />
               <span>= partenza</span>
             </label>
-            <span class="rp-endpoint-chevron">›</span>
+            <div class="rp-ep-actions" id="rp-end-ep-actions"${r.endSameAsStart ? ' style="display:none"' : ""}>
+              <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(r.endAddress || r.endLabel || "")}" target="_blank" rel="noopener" class="btn ghost rp-ep-nav" title="Apri in Maps">↗</a>
+              <button type="button" class="btn ghost" id="rp-end-archive-btn" title="Scegli dall'archivio">📋</button>
+            </div>
           </div>
-          <div class="rp-endpoint-edit" id="rp-end-edit" ${r.endSameAsStart ? 'style="display:none"' : ""}>
-            <label class="field">Nome<input name="endLabel" value="${escapeHtml(r.endLabel)}" autocomplete="off" placeholder="es. Cliente finale…" ${r.endSameAsStart ? "disabled" : ""} /></label>
-            <label class="field">Indirizzo<input name="endAddress" value="${escapeHtml(r.endAddress)}" placeholder="Via, città…" ${r.endSameAsStart ? "disabled" : ""} /></label>
-            <div class="rp-endpoint-actions">
-              <button type="button" class="btn ghost rp-map-btn" data-map-label="endLabel" data-map-address="endAddress" ${r.endSameAsStart ? "disabled" : ""}>🗺 Mappa</button>
-              <button type="button" class="btn ghost" id="rp-end-archive-btn" ${r.endSameAsStart ? "disabled" : ""}>📋 Archivio</button>
-            </div>
-            <div class="rp-archive-inline" id="rp-end-archive" style="display:none">
-              <input id="rp-end-archive-search" placeholder="Cerca nell'archivio…" autocomplete="off" />
-              <div class="stop-suggestions" id="rp-end-archive-suggestions"></div>
-            </div>
+          <input type="hidden" name="endLabel" id="rp-end-label-h" value="${escapeHtml(r.endLabel)}" />
+          <input type="hidden" name="endAddress" id="rp-end-addr-h" value="${escapeHtml(r.endAddress)}" />
+          <div class="rp-archive-inline" id="rp-end-archive" style="display:none">
+            <input id="rp-end-archive-search" placeholder="Cerca nell'archivio…" autocomplete="off" />
+            <div class="stop-suggestions" id="rp-end-archive-suggestions"></div>
           </div>
         </div>
       </div>
@@ -559,19 +549,18 @@ function renderRoute() {
 
       <!-- Sezione 5: Tappe -->
       <div class="rp-section rp-stops-section" id="stops-aside">
-        <div class="rp-stops-header">
-          <h2 class="rp-stops-title">Tappe (${state.route.stops.length})</h2>
-          <button type="button" class="btn ghost rp-add-stop-btn" id="rp-add-stop-btn">+</button>
-        </div>
-        <div class="rp-add-stop-panel" id="rp-add-stop-panel" style="display:none">
+        <h2 class="rp-stops-title">Tappe (${state.route.stops.length})</h2>
+        <div class="rp-add-stop-panel" id="rp-add-stop-panel">
           <div style="position:relative;">
-            <input id="stop-search" placeholder="Cerca cliente o città…" value="${escapeHtml(state.stopSearchText)}" autocomplete="off" />
+            <input id="stop-search" placeholder="Cerca e aggiungi tappa…" value="${escapeHtml(state.stopSearchText)}" autocomplete="off" />
             <input type="hidden" name="selectedAddressId" value="${escapeHtml(state.route.selectedAddressId)}" id="selected-address-id" />
             <div id="stop-suggestions" class="stop-suggestions">${renderStopSuggestions()}</div>
           </div>
-          <button type="button" class="btn" id="add-saved-stop">+ Aggiungi da archivio</button>
-          <details class="panel-details" style="margin-top:6px;">
-            <summary>+ Tappa manuale</summary>
+          <div class="rp-add-stop-actions">
+            <button type="button" class="btn" id="add-saved-stop">+ Aggiungi</button>
+            <button type="button" class="btn ghost" id="rp-manual-stop-toggle">+ Manuale</button>
+          </div>
+          <div id="rp-manual-stop-panel" style="display:none">
             <div class="form-grid route-fields" style="margin-top:8px;">
               <label class="field">Cliente<input name="customCustomer" value="${escapeHtml(r.customCustomer)}" /></label>
               <label class="field">Sede<input name="customLocation" value="${escapeHtml(r.customLocation)}" /></label>
@@ -585,9 +574,9 @@ function renderRoute() {
             <div class="actions" style="margin-top:8px;">
               <button type="button" class="btn" id="add-custom-stop">+ Salva e aggiungi</button>
             </div>
-          </details>
+          </div>
         </div>
-        <div class="rp-stop-filter-row">
+        <div class="rp-stop-filter-row" ${state.route.stops.length ? "" : 'style="display:none"'}>
           <input id="stop-filter" placeholder="Filtra tappe…" value="${escapeHtml(state.stopFilter)}" />
         </div>
         ${renderStops()}
@@ -629,27 +618,12 @@ function renderRoute() {
 
     </form>`;
 
-  // Bind inline expand/collapse for endpoint cards
-  const bindEndpointCard = (toggleId, editId) => {
-    const toggle = document.getElementById(toggleId);
-    const edit = document.getElementById(editId);
-    if (!toggle || !edit) return;
-    toggle.addEventListener("click", () => {
-      const open = edit.style.display !== "none";
-      edit.style.display = open ? "none" : "block";
-      toggle.closest(".rp-endpoint-card").classList.toggle("rp-endpoint-expanded", !open);
-    });
-  };
-  bindEndpointCard("rp-start-toggle", "rp-start-edit");
-  bindEndpointCard("rp-end-toggle", "rp-end-edit");
-
-  // Add stop panel toggle
-  const addStopBtn = document.getElementById("rp-add-stop-btn");
-  const addStopPanel = document.getElementById("rp-add-stop-panel");
-  if (addStopBtn && addStopPanel) {
-    addStopBtn.addEventListener("click", () => {
-      const open = addStopPanel.style.display !== "none";
-      addStopPanel.style.display = open ? "none" : "block";
+  // Manual stop panel toggle
+  const manualToggle = document.getElementById("rp-manual-stop-toggle");
+  const manualPanel = document.getElementById("rp-manual-stop-panel");
+  if (manualToggle && manualPanel) {
+    manualToggle.addEventListener("click", () => {
+      manualPanel.style.display = manualPanel.style.display === "none" ? "block" : "none";
     });
   }
 
@@ -677,83 +651,66 @@ function renderRoute() {
     });
   });
 
-  // Archive inline search for start
-  const startArchiveBtn = document.getElementById("rp-start-archive-btn");
-  const startArchivePanel = document.getElementById("rp-start-archive");
-  const startArchiveSearch = document.getElementById("rp-start-archive-search");
-  const startArchiveSug = document.getElementById("rp-start-archive-suggestions");
-  if (startArchiveBtn) {
-    startArchiveBtn.addEventListener("click", () => {
-      startArchivePanel.style.display = startArchivePanel.style.display === "none" ? "block" : "none";
-      if (startArchivePanel.style.display !== "none") startArchiveSearch.focus();
+  // Archive inline search helper
+  const bindArchiveSearch = ({ btnId, panelId, searchId, sugId, labelHiddenId, addrHiddenId, nameDisplayId, mapsLinkSelector, dataAttr, onSelect }) => {
+    const btn = document.getElementById(btnId);
+    const panel = document.getElementById(panelId);
+    const search = document.getElementById(searchId);
+    const sug = document.getElementById(sugId);
+    if (!btn || !panel || !search || !sug) return;
+    btn.addEventListener("click", () => {
+      panel.style.display = panel.style.display === "none" ? "block" : "none";
+      if (panel.style.display !== "none") search.focus();
     });
-  }
-  if (startArchiveSearch) {
-    startArchiveSearch.addEventListener("input", () => {
-      const q = startArchiveSearch.value.toLowerCase();
+    search.addEventListener("input", () => {
+      const q = search.value.toLowerCase();
       const matches = state.allAddresses.filter(a => {
         const n = (a.customer + " " + (a.location || "") + " " + (a.fullAddress || "")).toLowerCase();
         return q && n.includes(q);
       }).slice(0, 8);
-      startArchiveSug.innerHTML = matches.map(a =>
-        `<div class="stop-suggestion-item" data-rp-addr-start="${escapeHtml(a.id)}">${escapeHtml(addressName(a))}<span class="stop-meta">${escapeHtml(a.fullAddress || "")}</span></div>`
+      sug.innerHTML = matches.map(a =>
+        `<div class="stop-suggestion-item" data-${dataAttr}="${escapeHtml(a.id)}">${escapeHtml(addressName(a))}<span class="stop-meta">${escapeHtml(a.fullAddress || "")}</span></div>`
       ).join("");
     });
-    startArchiveSug.addEventListener("click", e => {
-      const item = e.target.closest("[data-rp-addr-start]");
+    sug.addEventListener("click", e => {
+      const item = e.target.closest(`[data-${dataAttr}]`);
       if (!item) return;
-      const addr = state.allAddresses.find(a => String(a.id) === item.dataset.rpAddrStart);
+      const addr = state.allAddresses.find(a => String(a.id) === item.dataset[dataAttr.replace(/-([a-z])/g, (_, c) => c.toUpperCase())]);
       if (!addr) return;
-      const form = document.getElementById("route-form");
-      const lEl = form.querySelector("[name=startLabel]");
-      const aEl = form.querySelector("[name=startAddress]");
-      if (lEl) lEl.value = addr.customer || "";
-      if (aEl) aEl.value = addr.fullAddress || "";
-      startArchivePanel.style.display = "none";
-      startArchiveSearch.value = "";
-      startArchiveSug.innerHTML = "";
-      document.getElementById("rp-start-card").querySelector(".rp-endpoint-name").textContent = addr.customer || addr.fullAddress || "";
+      const labelH = document.getElementById(labelHiddenId);
+      const addrH = document.getElementById(addrHiddenId);
+      const nameEl = document.getElementById(nameDisplayId);
+      if (labelH) labelH.value = addr.customer || "";
+      if (addrH) addrH.value = addr.fullAddress || "";
+      if (nameEl) nameEl.textContent = addr.customer || addr.fullAddress || "";
+      // Update state immediately
+      if (onSelect) onSelect(addr);
+      // Update Maps link
+      const mapsLink = document.querySelector(mapsLinkSelector);
+      if (mapsLink) mapsLink.href = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addr.fullAddress || "")}`;
+      panel.style.display = "none";
+      search.value = "";
+      sug.innerHTML = "";
     });
-  }
+  };
 
-  // Archive inline search for end
-  const endArchiveBtn = document.getElementById("rp-end-archive-btn");
-  const endArchivePanel = document.getElementById("rp-end-archive");
-  const endArchiveSearch = document.getElementById("rp-end-archive-search");
-  const endArchiveSug = document.getElementById("rp-end-archive-suggestions");
-  if (endArchiveBtn) {
-    endArchiveBtn.addEventListener("click", () => {
-      endArchivePanel.style.display = endArchivePanel.style.display === "none" ? "block" : "none";
-      if (endArchivePanel.style.display !== "none") endArchiveSearch.focus();
-    });
-  }
-  if (endArchiveSearch) {
-    endArchiveSearch.addEventListener("input", () => {
-      const q = endArchiveSearch.value.toLowerCase();
-      const matches = state.allAddresses.filter(a => {
-        const n = (a.customer + " " + (a.location || "") + " " + (a.fullAddress || "")).toLowerCase();
-        return q && n.includes(q);
-      }).slice(0, 8);
-      endArchiveSug.innerHTML = matches.map(a =>
-        `<div class="stop-suggestion-item" data-rp-addr-end="${escapeHtml(a.id)}">${escapeHtml(addressName(a))}<span class="stop-meta">${escapeHtml(a.fullAddress || "")}</span></div>`
-      ).join("");
-    });
-    endArchiveSug.addEventListener("click", e => {
-      const item = e.target.closest("[data-rp-addr-end]");
-      if (!item) return;
-      const addr = state.allAddresses.find(a => String(a.id) === item.dataset.rpAddrEnd);
-      if (!addr) return;
-      const form = document.getElementById("route-form");
-      const lEl = form.querySelector("[name=endLabel]");
-      const aEl = form.querySelector("[name=endAddress]");
-      if (lEl) lEl.value = addr.customer || "";
-      if (aEl) aEl.value = addr.fullAddress || "";
-      endArchivePanel.style.display = "none";
-      endArchiveSearch.value = "";
-      endArchiveSug.innerHTML = "";
-      document.getElementById("rp-end-card").querySelector(".rp-endpoint-name").textContent = addr.customer || addr.fullAddress || "";
-    });
-  }
+  bindArchiveSearch({
+    btnId: "rp-start-archive-btn", panelId: "rp-start-archive",
+    searchId: "rp-start-archive-search", sugId: "rp-start-archive-suggestions",
+    labelHiddenId: "rp-start-label-h", addrHiddenId: "rp-start-addr-h",
+    nameDisplayId: "rp-start-name", mapsLinkSelector: "#rp-start-card .rp-ep-nav",
+    dataAttr: "rp-addr-start",
+    onSelect: addr => { state.route.startLabel = addr.customer || ""; state.route.startAddress = addr.fullAddress || ""; }
+  });
+
+  bindArchiveSearch({
+    btnId: "rp-end-archive-btn", panelId: "rp-end-archive",
+    searchId: "rp-end-archive-search", sugId: "rp-end-archive-suggestions",
+    labelHiddenId: "rp-end-label-h", addrHiddenId: "rp-end-addr-h",
+    nameDisplayId: "rp-end-name", mapsLinkSelector: "#rp-end-card .rp-ep-nav",
+    dataAttr: "rp-addr-end",
+    onSelect: addr => { state.route.endLabel = addr.customer || ""; state.route.endAddress = addr.fullAddress || ""; }
+  });
 }
 
 // ── weekly hours helper ───────────────────────────────────────────────────────
