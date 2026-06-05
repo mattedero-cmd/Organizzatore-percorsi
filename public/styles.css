@@ -416,6 +416,9 @@ textarea:focus {
   border: 1px solid var(--line);
   color: var(--muted);
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 
 .archive-card,
@@ -441,9 +444,8 @@ textarea:focus {
   font-weight: 600;
   font-size: 0.95rem;
   margin: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 .saved-card-info {
   display: flex;
@@ -455,15 +457,21 @@ textarea:focus {
 }
 .saved-card-btns {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr 1fr;
-  gap: 6px;
+  grid-template-columns: 1fr;
+  gap: 5px;
+}
+.saved-card-btns-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 5px;
 }
 .saved-card-btn {
-  font-size: 0.82rem;
+  font-size: 0.8rem;
   padding: 6px 4px;
-  min-height: 34px;
+  min-height: 32px;
   text-align: center;
   justify-content: center;
+  width: 100%;
 }
 .saved-card-meta {
   display: flex;
@@ -485,10 +493,11 @@ textarea:focus {
 }
 .saved-card-route {
   font-size: 0.8rem;
-  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
   min-width: 0;
+  max-width: 100%;
 }
 
 .section-head {

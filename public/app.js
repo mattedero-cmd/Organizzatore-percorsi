@@ -1173,9 +1173,11 @@ function renderSaved() {
             <div class="stop-meta saved-card-route">${escapeHtml(route.startLabel || "—")} → ${escapeHtml(route.endLabel || "—")}</div>
             <div class="saved-card-btns">
               <button class="btn primary saved-card-btn" data-open-route="${route.id}">Apri</button>
-              <button class="btn saved-card-btn" data-rename-route="${route.id}" title="Rinomina">✎</button>
-              <button class="btn saved-card-btn" data-duplicate-route="${route.id}" title="Duplica">⎘</button>
-              <button class="btn danger saved-card-btn" data-delete-route="${route.id}" title="Elimina">×</button>
+              <div class="saved-card-btns-actions">
+                <button class="btn saved-card-btn" data-rename-route="${route.id}" title="Rinomina">✎ Rinomina</button>
+                <button class="btn saved-card-btn" data-duplicate-route="${route.id}" title="Duplica">⎘ Duplica</button>
+                <button class="btn danger saved-card-btn" data-delete-route="${route.id}" title="Elimina">× Elimina</button>
+              </div>
             </div>
             ${route.plannedStops?.length ? `<div class="saved-stops-list">${route.plannedStops.filter((s, i, arr) => !s.stopPart || s.stopPart === "morning" || arr.findIndex(x => x.addressId === s.addressId) === i).map((s, i) => `<span class="saved-stop-chip">${i + 1}. ${escapeHtml(s.customer)}${s.location ? ` — ${escapeHtml(s.location)}` : ""}</span>`).join("")}</div>` : ""}
           </article>`).join("") || `<div class="empty">Nessun giro salvato.</div>`}
