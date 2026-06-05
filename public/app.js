@@ -879,7 +879,7 @@ function worstWarningLevel(warnings) {
 }
 
 function renderManualOrder(result) {
-  const rows = (state.manualOrderRows || result.rows).filter(r => !r.type);
+  const rows = getOrderableStops(result);
   return `
     <details class="panel order-panel" ${state.manualOrderRows ? "open" : ""}>
       <summary>Riordina tappe manualmente</summary>
@@ -1450,11 +1450,20 @@ async function saveAddressForm(form) {
   showToast("Contatto salvato");
 }
 
+// ── manual order helpers ──────────────────────────────────────────────────────
+
+// Returns the ordered list of unique stops (no split-afternoon duplicates, no breaks)
+// from either manualOrderRows (already filtered) or result.rows.
+function getOrderableStops(result) {
+  if (state.manualOrderRows) return [...state.manualOrderRows];
+  return result.rows.filter(r => !r.type && (!r.stopPart || r.stopPart === "morning"));
+}
+
 // ── manual order replan ───────────────────────────────────────────────────────
 
 async function replanWithOrder(manualOrder) {
   const result = normalizeSavedRoute(state.result);
-  const rows = manualOrder ? (state.manualOrderRows || result.rows) : result.rows;
+  const rows = manualOrder ? getOrderableStops(result) : result.rows.filter(r => !r.type && (!r.stopPart || r.stopPart === "morning"));
   const r = state.route;
   state.planning = true;
   render();
@@ -1475,9 +1484,10 @@ async function replanWithOrder(manualOrder) {
           uid: row.stopUid || row.uid || crypto.randomUUID(),
           addressId: row.addressId,
           customer: row.customer, location: row.location,
-          fullAddress: row.address, notes: row.notes,
+          fullAddress: row.address || row.fullAddress, notes: row.notes,
           openMorning: row.openMorning, closeMorning: row.closeMorning,
           openAfternoon: row.openAfternoon, closeAfternoon: row.closeAfternoon,
+          weeklyHours: row.weeklyHours || null,
           durationMinutes: row.durationMinutes, lat: row.lat, lng: row.lng
         })),
         manualOrder
@@ -2057,14 +2067,14 @@ function bindEvents() {
       return;
     }
 
-    // manual order controls
+    // manual order controls — manualOrderRows stores only the unique stops (no split/type rows)
     const moveUp = e.target.closest("[data-move-up]");
     if (moveUp) {
       const i = Number(moveUp.dataset.moveUp);
       const result = normalizeSavedRoute(state.result);
-      const rows = state.manualOrderRows ? [...state.manualOrderRows] : [...result.rows];
-      [rows[i - 1], rows[i]] = [rows[i], rows[i - 1]];
-      state.manualOrderRows = rows;
+      const stops = getOrderableStops(result);
+      [stops[i - 1], stops[i]] = [stops[i], stops[i - 1]];
+      state.manualOrderRows = stops;
       render();
       return;
     }
@@ -2073,9 +2083,9 @@ function bindEvents() {
     if (moveDown) {
       const i = Number(moveDown.dataset.moveDown);
       const result = normalizeSavedRoute(state.result);
-      const rows = state.manualOrderRows ? [...state.manualOrderRows] : [...result.rows];
-      [rows[i], rows[i + 1]] = [rows[i + 1], rows[i]];
-      state.manualOrderRows = rows;
+      const stops = getOrderableStops(result);
+      [stops[i], stops[i + 1]] = [stops[i + 1], stops[i]];
+      state.manualOrderRows = stops;
       render();
       return;
     }
