@@ -1651,51 +1651,6 @@ function renderResult() {
   }
 }
 
-// ── render: settings tab ──────────────────────────────────────────────────────
-
-function renderSettings() {
-  const nav = state.navigatorPref;
-  const theme = state.themePref;
-  app.innerHTML = `
-    <section class="panel">
-      <h2>Impostazioni</h2>
-      <form id="settings-form">
-        <h3 class="settings-section-title">Tariffe</h3>
-        <div class="form-grid">
-          <label class="field">€ per km<input name="kmRate" type="number" min="0" step="0.01" value="${escapeHtml(state.settings.kmRate)}" /></label>
-          <label class="field">€/ora guida<input name="driveHourRate" type="number" min="0" step="0.01" value="${escapeHtml(state.settings.driveHourRate)}" /></label>
-          <label class="field full">€/ora lavoro<input name="workHourRate" type="number" min="0" step="0.01" value="${escapeHtml(state.settings.workHourRate)}" /></label>
-        </div>
-
-        <h3 class="settings-section-title">Navigatore</h3>
-        <div class="settings-radio-group">
-          <label class="settings-radio"><input type="radio" name="navigatorPref" value="google" ${nav === "google" ? "checked" : ""} /> Google Maps</label>
-          <label class="settings-radio"><input type="radio" name="navigatorPref" value="apple" ${nav === "apple" ? "checked" : ""} /> Apple Mappe</label>
-          <label class="settings-radio"><input type="radio" name="navigatorPref" value="waze" ${nav === "waze" ? "checked" : ""} /> Waze</label>
-        </div>
-
-        <h3 class="settings-section-title">Tema</h3>
-        <div class="settings-radio-group">
-          <label class="settings-radio"><input type="radio" name="themePref" value="auto" ${theme === "auto" ? "checked" : ""} /> 🔄 Automatico (segue l'orario)</label>
-          <label class="settings-radio"><input type="radio" name="themePref" value="light" ${theme === "light" ? "checked" : ""} /> ☀️ Chiaro</label>
-          <label class="settings-radio"><input type="radio" name="themePref" value="dark" ${theme === "dark" ? "checked" : ""} /> 🌙 Scuro</label>
-        </div>
-
-        <h3 class="settings-section-title">Pianificazione</h3>
-        <div class="form-grid">
-          <label class="field checkbox-field full">
-            <input type="checkbox" name="lunchBreakEnabled" ${state.settings.lunchBreakEnabled !== false ? "checked" : ""} />
-            <span>Pausa pranzo di default</span>
-          </label>
-          <label class="field">Durata pranzo (min)<input name="lunchBreakMinutes" type="number" min="15" max="120" step="5" value="${escapeHtml(state.settings.lunchBreakMinutes || 45)}" /></label>
-        </div>
-        <p class="stop-meta" style="margin-top:6px;">Puoi sempre modificarla o saltarla al momento della pianificazione. Le soste automatiche si inseriscono aggiungendo contatti di tipo "☕ Sosta" nell'archivio.</p>
-
-        <div class="actions" style="margin-top:16px;"><button class="btn primary" type="submit">Salva impostazioni</button></div>
-      </form>
-    </section>`;
-}
-
 // ── render dispatch ───────────────────────────────────────────────────────────
 
 function render() {
@@ -1852,12 +1807,8 @@ async function toggleVoiceRecording() {
           const ta = document.querySelector("#transcript");
           if (ta) ta.value = text;
           state.route.transcript = text;
-          if (state.whisperConfigured) {
-            showToast("Elaboro il comando…");
-            await applyVoiceCommand();
-          } else {
-            showToast("Testo acquisito — premi Applica");
-          }
+          showToast("Elaboro il comando…");
+          await applyVoiceCommand();
         } catch (err) {
           showToast(err.message);
         }

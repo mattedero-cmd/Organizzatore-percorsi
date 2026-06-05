@@ -507,7 +507,9 @@ async function insertBreaks(rows, options) {
   // Orario effettivo della pausa pranzo (per le regole no-break ±pranzo)
   const lunchIns = insertions.find(ins => ins.type === "lunch");
   const lunchTime = lunchIns != null
-    ? parseTime(rows[lunchIns.beforeIndex]?.departureTime ?? "") || null
+    ? (parseTime(rows[lunchIns.beforeIndex]?.departureTime ?? "") ||
+       parseTime(rows[lunchIns.beforeIndex - 1]?.serviceEndTime ?? "") ||
+       null)
     : null;
 
   const isValidBreakTime = (t) => {
@@ -745,7 +747,7 @@ export async function planRoute(payload, settings, restStops = []) {
     restStops: activeRestStops,
     restaurantStops: activeRestaurantStops,
     dayStart: parseTime(best.summary.dayStart),
-    finalArrival: maxReturnTime != null ? Math.min(actualFinalArrival, maxReturnTime) : actualFinalArrival,
+    finalArrival: maxReturnTime != null ? Math.max(actualFinalArrival, maxReturnTime) : actualFinalArrival,
     restIntervalMin: settings?.restIntervalMin ?? 120,
     restMaxDeviationMin: settings?.restMaxDeviationMin ?? 40,
     restDurationMin: settings?.restDurationMin ?? 15,
