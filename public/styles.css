@@ -1306,15 +1306,14 @@ tbody tr:last-child td {
 
 .wh-table th {
   text-align: left;
-  padding: 4px 4px 6px;
+  padding: 3px 3px 5px;
   font-weight: 600;
   color: var(--muted);
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   white-space: nowrap;
 }
-
 .wh-table td {
-  padding: 3px 4px;
+  padding: 2px 3px;
   vertical-align: middle;
   white-space: nowrap;
 }
@@ -1325,9 +1324,9 @@ tbody tr:last-child td {
 }
 
 .wh-table input[type=time] {
-  width: 88px;
-  padding: 3px 4px;
-  font-size: 0.8rem;
+  width: 72px;
+  padding: 2px 3px;
+  font-size: 0.75rem;
 }
 
 .wh-table input[type=time]:disabled {
@@ -1369,36 +1368,42 @@ tbody tr:last-child td {
 /* Sezione Quando */
 .rp-when-row {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   align-items: flex-end;
 }
 .rp-when-date {
-  flex: 2;
+  flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
 }
 .rp-when-time {
-  flex: 1;
+  flex: 0 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
 }
 .rp-label {
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   color: var(--muted);
   font-weight: 500;
 }
-.rp-when-date input,
-.rp-when-time input {
+.rp-when-date input {
   width: 100%;
+  font-size: 0.85rem;
+  padding: 5px 6px;
+}
+.rp-when-time input {
+  width: 90px;
+  font-size: 0.85rem;
+  padding: 5px 6px;
 }
 
 /* Endpoint cards (Da / A) */
 .rp-endpoint-card {
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  overflow: hidden;
   margin-bottom: 8px;
   padding: 8px 12px;
 }
@@ -1447,10 +1452,18 @@ tbody tr:last-child td {
 }
 .rp-archive-inline {
   margin-top: 8px;
+  position: relative;
 }
 .rp-archive-inline input {
   width: 100%;
   margin-bottom: 4px;
+}
+.rp-archive-inline .stop-suggestions {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 50;
 }
 
 /* Opzioni collassate */

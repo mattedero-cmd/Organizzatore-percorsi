@@ -105,8 +105,7 @@ const state = {
     selectedAddressId: "",
     customCustomer: "", customLocation: "", customAddress: "",
     customDuration: 45,
-    customOpenMorning: "08:30", customCloseMorning: "12:30",
-    customOpenAfternoon: "14:30", customCloseAfternoon: "18:00",
+    customWeeklyHours: null,
     stops: [],
     transcript: "",
     lunchBreak: true,
@@ -483,7 +482,7 @@ function renderRoute() {
             <span class="rp-endpoint-icon">🏠</span>
             <span class="rp-endpoint-name" id="rp-start-name">${escapeHtml(startDisplay)}</span>
             <div class="rp-ep-actions">
-              <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(r.startAddress || r.startLabel || "")}" target="_blank" rel="noopener" class="btn ghost rp-ep-nav" title="Apri in Maps">↗</a>
+              <button type="button" class="btn ghost rp-ep-nav" id="rp-start-map-btn" title="Scegli sulla mappa">🗺</button>
               <button type="button" class="btn ghost" id="rp-start-archive-btn" title="Scegli dall'archivio">📋</button>
             </div>
           </div>
@@ -504,7 +503,7 @@ function renderRoute() {
               <span>= partenza</span>
             </label>
             <div class="rp-ep-actions" id="rp-end-ep-actions"${r.endSameAsStart ? ' style="display:none"' : ""}>
-              <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(r.endAddress || r.endLabel || "")}" target="_blank" rel="noopener" class="btn ghost rp-ep-nav" title="Apri in Maps">↗</a>
+              <button type="button" class="btn ghost rp-ep-nav" id="rp-end-map-btn" title="Scegli sulla mappa">🗺</button>
               <button type="button" class="btn ghost" id="rp-end-archive-btn" title="Scegli dall'archivio">📋</button>
             </div>
           </div>
@@ -566,11 +565,8 @@ function renderRoute() {
               <label class="field">Sede<input name="customLocation" value="${escapeHtml(r.customLocation)}" /></label>
               <label class="field full">Indirizzo<input name="customAddress" value="${escapeHtml(r.customAddress)}" /></label>
               <label class="field">Durata (min)<input name="customDuration" type="number" min="5" step="5" value="${escapeHtml(r.customDuration)}" /></label>
-              <label class="field">Apr. mattina<input name="customOpenMorning" type="time" value="${escapeHtml(r.customOpenMorning)}" /></label>
-              <label class="field">Ch. mattina<input name="customCloseMorning" type="time" value="${escapeHtml(r.customCloseMorning)}" /></label>
-              <label class="field">Apr. pom.<input name="customOpenAfternoon" type="time" value="${escapeHtml(r.customOpenAfternoon)}" /></label>
-              <label class="field">Ch. pom.<input name="customCloseAfternoon" type="time" value="${escapeHtml(r.customCloseAfternoon)}" /></label>
             </div>
+            ${renderWeeklyHoursSection(r.customWeeklyHours || null)}
             <div class="actions" style="margin-top:8px;">
               <button type="button" class="btn" id="add-custom-stop">+ Salva e aggiungi</button>
             </div>
@@ -711,6 +707,29 @@ function renderRoute() {
     dataAttr: "rp-addr-end",
     onSelect: addr => { state.route.endLabel = addr.customer || ""; state.route.endAddress = addr.fullAddress || ""; }
   });
+
+  // Map picker buttons for start/end endpoints
+  const bindMapBtn = (btnId, labelHiddenId, addrHiddenId, nameDisplayId, stateKey) => {
+    const btn = document.getElementById(btnId);
+    if (!btn) return;
+    btn.addEventListener("click", () => {
+      const labelEl = document.getElementById(labelHiddenId);
+      const addressEl = document.getElementById(addrHiddenId);
+      openMapPickerForField({
+        labelEl, addressEl,
+        onConfirm: (label, address) => {
+          if (labelEl) labelEl.value = label;
+          if (addressEl) addressEl.value = address;
+          const nameEl = document.getElementById(nameDisplayId);
+          if (nameEl) nameEl.textContent = label || address || "";
+          state.route[stateKey + "Label"] = label;
+          state.route[stateKey + "Address"] = address;
+        }
+      });
+    });
+  };
+  bindMapBtn("rp-start-map-btn", "rp-start-label-h", "rp-start-addr-h", "rp-start-name", "start");
+  bindMapBtn("rp-end-map-btn", "rp-end-label-h", "rp-end-addr-h", "rp-end-name", "end");
 }
 
 // ── weekly hours helper ───────────────────────────────────────────────────────
@@ -1292,8 +1311,6 @@ function updateRouteFromForm() {
     selectedAddressId: v.selectedAddressId || state.route.selectedAddressId,
     customCustomer: v.customCustomer, customLocation: v.customLocation,
     customAddress: v.customAddress, customDuration: Number(v.customDuration || 45),
-    customOpenMorning: v.customOpenMorning, customCloseMorning: v.customCloseMorning,
-    customOpenAfternoon: v.customOpenAfternoon, customCloseAfternoon: v.customCloseAfternoon,
     transcript: v.transcript || "",
     lunchBreak: Boolean(v.lunchBreak),
     lunchBreakMinutes: Number(v.lunchBreakMinutes || 45)
@@ -1909,7 +1926,7 @@ function openMapPicker() {
 
 // ── openMapPickerForField ─────────────────────────────────────────────────────
 
-function openMapPickerForField({ labelEl, addressEl, latEl, lngEl }) {
+function openMapPickerForField({ labelEl, addressEl, latEl, lngEl, onConfirm }) {
   const startLat = Number(latEl?.value) || 46.07;
   const startLng = Number(lngEl?.value) || 11.12;
   let pickedLat = startLat, pickedLng = startLng;
@@ -1987,14 +2004,19 @@ function openMapPickerForField({ labelEl, addressEl, latEl, lngEl }) {
     document.getElementById("map-picker-field-confirm").onclick = () => {
       if (latEl) latEl.value = Number(pickedLat).toFixed(6);
       if (lngEl) lngEl.value = Number(pickedLng).toFixed(6);
+      let label = "", address = "";
       if (pickedPlace) {
-        if (labelEl) labelEl.value = pickedPlace.name || "";
-        if (addressEl) addressEl.value = pickedPlace.formatted_address || "";
+        label = pickedPlace.name || "";
+        address = pickedPlace.formatted_address || "";
+        if (labelEl) labelEl.value = label;
+        if (addressEl) addressEl.value = address;
         showToast("Dati compilati dalla mappa");
       } else {
-        if (addressEl && labelSpan) addressEl.value = labelSpan.textContent || "";
+        address = labelSpan?.textContent || "";
+        if (addressEl) addressEl.value = address;
         showToast("Coordinate aggiornate");
       }
+      if (onConfirm) onConfirm(label, address, pickedLat, pickedLng);
       modal.remove();
     };
     document.getElementById("map-picker-field-cancel").onclick = () => modal.remove();
@@ -2237,13 +2259,13 @@ function bindEvents() {
     if (e.target.closest("#add-custom-stop")) {
       updateRouteFromForm();
       if (!state.route.customAddress || !state.route.customCustomer) { showToast("Cliente e indirizzo obbligatori"); return; }
+      const wh = readWeeklyHours();
       const saved = await api("/api/addresses", {
         method: "POST",
         body: JSON.stringify({
           customer: state.route.customCustomer, location: state.route.customLocation,
           fullAddress: state.route.customAddress,
-          openMorning: state.route.customOpenMorning, closeMorning: state.route.customCloseMorning,
-          openAfternoon: state.route.customOpenAfternoon, closeAfternoon: state.route.customCloseAfternoon,
+          weekly_hours: wh ? JSON.stringify(wh) : null,
           defaultDuration: state.route.customDuration
         })
       }).catch(() => null);
@@ -2252,11 +2274,9 @@ function bindEvents() {
         uid: crypto.randomUUID(),
         addressId: saved?.id, customer: state.route.customCustomer, location: state.route.customLocation,
         fullAddress: state.route.customAddress, durationMinutes: state.route.customDuration,
-        openMorning: state.route.customOpenMorning, closeMorning: state.route.customCloseMorning,
-        openAfternoon: state.route.customOpenAfternoon, closeAfternoon: state.route.customCloseAfternoon,
-        recognized: true
+        weeklyHours: wh, recognized: true
       });
-      Object.assign(state.route, { customCustomer: "", customLocation: "", customAddress: "", customDuration: 45 });
+      Object.assign(state.route, { customCustomer: "", customLocation: "", customAddress: "", customDuration: 45, customWeeklyHours: null });
       render();
       showToast("Tappa aggiunta e salvata");
       return;
