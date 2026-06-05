@@ -1203,9 +1203,11 @@ function renderArchive() {
                 ${a.phone ? `<a class="btn" href="tel:${escapeHtml(a.phone)}" title="${escapeHtml(a.phoneName || a.phone)}">${phoneIcon(a.phoneType)}</a>` : ""}
                 ${a.phone2 ? `<a class="btn" href="tel:${escapeHtml(a.phone2)}" title="${escapeHtml(a.phone2Name || a.phone2)}">${phoneIcon(a.phone2Type)}</a>` : ""}
                 ${a.email ? `<a class="btn" href="mailto:${escapeHtml(a.email)}">✉</a>` : ""}
+                <button class="btn" data-check-opening="${a.id}" title="Verifica orari apertura">🕐</button>
                 <button class="btn" data-edit-address="${a.id}">Modifica</button>
                 <button class="btn danger" data-delete-address="${a.id}">×</button>
               </div>
+              <div class="opening-status" id="opening-status-${a.id}" style="display:none"></div>
             </article>`).join("") || `<div class="empty" style="grid-column:1/-1">Nessun contatto trovato.</div>`}
         </div>
       </div>
@@ -2331,7 +2333,7 @@ function openMapPickerForField({ labelEl, addressEl, latEl, lngEl, onConfirm }) 
         try {
           await api("/api/addresses", {
             method: "POST",
-            body: JSON.stringify({ customer: label || address, fullAddress: address, lat: pickedLat, lng: pickedLng })
+            body: JSON.stringify({ customer: label || address, fullAddress: address, lat: pickedLat, lng: pickedLng, placeId: pickedPlace?.place_id || null })
           });
           await refreshAllData();
           showToast("Luogo salvato nell'archivio");
@@ -2629,6 +2631,30 @@ function bindEvents() {
     if (e.target.closest("#listen-command")) { toggleVoiceRecording(); return; }
     if (e.target.closest("#apply-command")) {
       try { await applyVoiceCommand(); } catch (err) { showToast(err.message); }
+      return;
+    }
+
+    const checkOpening = e.target.closest("[data-check-opening]");
+    if (checkOpening) {
+      const id = checkOpening.dataset.checkOpening;
+      const statusEl = document.getElementById(`opening-status-${id}`);
+      if (!statusEl) return;
+      if (statusEl.style.display !== "none") { statusEl.style.display = "none"; return; }
+      statusEl.style.display = "block";
+      statusEl.textContent = "⏳ Verifica in corso…";
+      const today = new Date().toISOString().slice(0, 10);
+      try {
+        const data = await api(`/api/addresses/${id}/opening?date=${today}`);
+        const dayNames = ["domenica","lunedì","martedì","mercoledì","giovedì","venerdì","sabato"];
+        const todayName = dayNames[new Date().getDay()];
+        const todayLine = data.weekdayText
+          ? data.weekdayText.find(l => l.toLowerCase().startsWith(todayName.slice(0, 3))) || data.weekdayText[new Date().getDay() === 0 ? 6 : new Date().getDay() - 1]
+          : null;
+        const statusIcon = data.isOpen === true ? "🟢 Aperto" : data.isOpen === false ? "🔴 Chiuso" : "⚫ Sconosciuto";
+        statusEl.innerHTML = `<span class="opening-badge">${statusIcon}</span>${todayLine ? `<span class="opening-hours-today">${escapeHtml(todayLine)}</span>` : ""}`;
+      } catch {
+        statusEl.textContent = "Orari non disponibili";
+      }
       return;
     }
 

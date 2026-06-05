@@ -105,6 +105,33 @@ function decodePolyline(encoded) {
   return coords;
 }
 
+// Returns true/false/null (null = unknown/no periods data).
+// periods: Google Places opening_hours.periods array.
+// targetDay: 0=Sun … 6=Sat. targetMin: minutes from midnight (e.g. 10:30 → 630).
+export function isOpenAtTime(periods, targetDay, targetMin) {
+  if (!Array.isArray(periods) || !periods.length) return null;
+  for (const p of periods) {
+    if (!p.open) continue;
+    const openDay = p.open.day;
+    const openMin = parseInt(p.open.time.slice(0, 2)) * 60 + parseInt(p.open.time.slice(2));
+    if (!p.close) {
+      // Open 24 h (no close entry)
+      if (openDay === targetDay) return true;
+      continue;
+    }
+    const closeDay = p.close.day;
+    const closeMin = parseInt(p.close.time.slice(0, 2)) * 60 + parseInt(p.close.time.slice(2));
+    if (openDay === closeDay) {
+      if (openDay === targetDay && targetMin >= openMin && targetMin < closeMin) return true;
+    } else {
+      // Overnight period
+      if (openDay === targetDay && targetMin >= openMin) return true;
+      if (closeDay === targetDay && targetMin < closeMin) return true;
+    }
+  }
+  return false;
+}
+
 // Cache per evitare chiamate doppie nella stessa area durante una pianificazione
 const placesCache = new Map();
 
@@ -128,10 +155,22 @@ function perpKmToSegment(pLat, pLng, aLat, aLng, bLat, bLng) {
   return haversineKm({ lat: pLat, lng: pLng }, { lat: aLat + t * dLat, lng: aLng + t * dLng });
 }
 
+async function fetchPlaceDetails(placeId, key) {
+  try {
+    const url = `${BASE}/place/details/json?place_id=${encodeURIComponent(placeId)}&fields=opening_hours&key=${key}`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
+    const data = await res.json();
+    if (data.status === "OK") return data.result?.opening_hours || null;
+  } catch {}
+  return null;
+}
+
 // segFrom/segTo: route segment endpoints for perpendicular filtering.
 // radiusM: how wide to cast the Places API net (default 15 km).
 // MAX_DETOUR_KM: max perpendicular distance from the segment (≈ 2 min at 50 km/h).
-export async function findNearbyRestStop(lat, lng, segFromLat, segFromLng, segToLat, segToLng, radiusM = 15000) {
+// breakTimeMin: minutes from midnight for the planned break time (optional).
+// scheduledDate: YYYY-MM-DD string (optional, to determine day of week).
+export async function findNearbyRestStop(lat, lng, segFromLat, segFromLng, segToLat, segToLng, radiusM = 15000, breakTimeMin = null, scheduledDate = null) {
   if (!lat || !lng) return null;
   const key = API_KEY();
   if (!key) return null;
@@ -143,6 +182,11 @@ export async function findNearbyRestStop(lat, lng, segFromLat, segFromLng, segTo
   const MAX_DETOUR_KM = 1.7; // ≈ 2 min at 50 km/h
 
   const hasSegment = segFromLat != null && segToLat != null;
+  const checkHours = breakTimeMin != null && scheduledDate != null;
+  const targetDay = checkHours ? (() => {
+    const [y, m, d] = scheduledDate.split("-").map(Number);
+    return new Date(y, m - 1, d).getDay();
+  })() : null;
 
   try {
     const url = `${BASE}/place/nearbysearch/json?location=${lat},${lng}&radius=${radiusM}&type=bar&language=it&key=${key}`;
@@ -154,30 +198,58 @@ export async function findNearbyRestStop(lat, lng, segFromLat, segFromLng, segTo
       return null;
     }
 
-    const best = data.results
+    const candidates = data.results
       .filter(p => {
         if (!p.rating || p.user_ratings_total < 5) return false;
         if (EXCLUDE_KEYWORDS.test(p.name)) return false;
         const pLat = p.geometry.location.lat, pLng = p.geometry.location.lng;
-        // Use perpendicular distance to the route segment when available;
-        // otherwise fall back to haversine from the search point.
         const km = hasSegment
           ? perpKmToSegment(pLat, pLng, segFromLat, segFromLng, segToLat, segToLng)
           : haversineKm({ lat, lng }, { lat: pLat, lng: pLng });
         return km <= MAX_DETOUR_KM;
       })
-      .sort((a, b) => placesScore(b) - placesScore(a))[0];
+      .sort((a, b) => placesScore(b) - placesScore(a))
+      .slice(0, 5);
 
-    if (!best) { placesCache.set(cacheKey, null); return null; }
+    if (!candidates.length) { placesCache.set(cacheKey, null); return null; }
+
+    let chosen = candidates[0];
+    let chosenOpenAtBreak = null;
+
+    if (checkHours) {
+      // Fetch opening hours for top candidates and prefer open ones
+      const withHours = await Promise.all(candidates.map(async p => {
+        const oh = await fetchPlaceDetails(p.place_id, key);
+        const openAtBreak = isOpenAtTime(oh?.periods ?? null, targetDay, breakTimeMin);
+        return { p, openAtBreak };
+      }));
+
+      const open = withHours.filter(x => x.openAtBreak === true);
+      const unknown = withHours.filter(x => x.openAtBreak === null);
+
+      if (open.length) {
+        chosen = open[0].p;
+        chosenOpenAtBreak = true;
+      } else if (unknown.length) {
+        chosen = unknown[0].p;
+        chosenOpenAtBreak = null;
+      } else {
+        // All marked closed — still return best, flag it
+        chosen = withHours[0].p;
+        chosenOpenAtBreak = false;
+      }
+    }
 
     const result = {
-      customer: best.name,
-      location: best.vicinity || "",
-      fullAddress: best.vicinity || "",
-      lat: best.geometry.location.lat,
-      lng: best.geometry.location.lng,
-      rating: best.rating,
-      reviewCount: best.user_ratings_total,
+      customer: chosen.name,
+      location: chosen.vicinity || "",
+      fullAddress: chosen.vicinity || "",
+      lat: chosen.geometry.location.lat,
+      lng: chosen.geometry.location.lng,
+      rating: chosen.rating,
+      reviewCount: chosen.user_ratings_total,
+      placeId: chosen.place_id || null,
+      openAtBreak: chosenOpenAtBreak,
       addressType: "rest",
       fromPlaces: true
     };

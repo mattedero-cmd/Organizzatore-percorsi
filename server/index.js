@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import {
   initDb,
   listAddresses,
+  getAddress,
   createAddress,
   updateAddress,
   deleteAddress,
@@ -18,6 +19,7 @@ import {
   deleteRoute
 } from "./db.js";
 import { loadEnv } from "./env.js";
+import { isOpenAtTime } from "./googleMapsService.js";
 import { planRoute } from "./planner.js";
 import { routeShape } from "./googleMapsService.js";
 import { parseVoiceCommand } from "./voiceParser.js";
@@ -139,6 +141,41 @@ async function handleApi(request, response) {
     if (addressMatch && method === "DELETE") {
       await deleteAddress(addressMatch[1]);
       return sendJson(response, 200, { ok: true });
+    }
+
+    const openingMatch = url.pathname.match(/^\/api\/addresses\/(\d+)\/opening$/);
+    if (openingMatch && method === "GET") {
+      const addr = await getAddress(openingMatch[1]);
+      if (!addr) return sendJson(response, 404, { error: "Non trovato" });
+      const apiKey = process.env.GOOGLE_MAPS_API_KEY || "";
+      if (!apiKey) return sendJson(response, 503, { error: "API non configurata" });
+      const BASE_MAPS = "https://maps.googleapis.com/maps/api";
+      let placeId = addr.placeId;
+      try {
+        if (!placeId) {
+          const q = encodeURIComponent([addr.customer, addr.fullAddress].filter(Boolean).join(" "));
+          const tsRes = await fetch(`${BASE_MAPS}/place/textsearch/json?query=${q}&region=it&key=${apiKey}`, { signal: AbortSignal.timeout(6000) });
+          const tsData = await tsRes.json();
+          placeId = tsData.results?.[0]?.place_id || null;
+        }
+        if (!placeId) return sendJson(response, 503, { error: "Luogo non trovato su Google Maps" });
+        const detRes = await fetch(`${BASE_MAPS}/place/details/json?place_id=${encodeURIComponent(placeId)}&fields=opening_hours,name&language=it&key=${apiKey}`, { signal: AbortSignal.timeout(6000) });
+        const detData = await detRes.json();
+        const oh = detData.result?.opening_hours || null;
+        const dateParam = url.searchParams.get("date");
+        const now = dateParam ? (() => { const [y,m,d] = dateParam.split("-").map(Number); return new Date(y, m-1, d); })() : new Date();
+        const targetDay = now.getDay();
+        const targetMin = now.getHours() * 60 + now.getMinutes();
+        const isOpen = isOpenAtTime(oh?.periods ?? null, targetDay, targetMin);
+        return sendJson(response, 200, {
+          isOpen,
+          openNow: oh?.open_now ?? null,
+          weekdayText: oh?.weekday_text ?? null,
+          placeId
+        });
+      } catch (err) {
+        return sendJson(response, 503, { error: "Errore verifica orari" });
+      }
     }
 
     if (method === "GET" && url.pathname === "/api/settings") {

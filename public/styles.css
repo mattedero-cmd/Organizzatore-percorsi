@@ -422,6 +422,19 @@ textarea:focus {
   display: grid;
   gap: 8px;
 }
+.opening-status {
+  font-size: 0.8rem;
+  padding: 6px 8px;
+  background: var(--card-bg, #f8f8f8);
+  border-radius: 6px;
+  border: 1px solid var(--border, #ddd);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.opening-badge { font-weight: 600; }
+.opening-hours-today { color: var(--text-muted, #666); }
 .saved-card-head {
   display: flex;
   align-items: flex-start;

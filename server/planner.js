@@ -444,7 +444,8 @@ async function insertBreaks(rows, options) {
   const {
     lunchBreakEnabled, lunchBreakMinutes = 45, restStops = [],
     dayStart = 7 * 60,
-    finalArrival = 20 * 60
+    finalArrival = 20 * 60,
+    scheduledDate = null
   } = options;
 
   // ── constants ────────────────────────────────────────────────────────────────
@@ -509,7 +510,7 @@ async function insertBreaks(rows, options) {
 
   // driveOffset: minutes into the drive-to-row-i where the break is inserted.
   // 0 = at the start of the leg (end of previous stop); >0 = mid-leg.
-  const tryInsert = async (beforeIndex, refLat, refLng, fromLat, fromLng, toLat, toLng, driveOffset = 0) => {
+  const tryInsert = async (beforeIndex, refLat, refLng, fromLat, fromLng, toLat, toLng, driveOffset = 0, breakTimeMin = null) => {
     if (insertions.some(ins => ins.beforeIndex === beforeIndex && Math.abs((ins.driveOffset||0) - driveOffset) < 5)) {
       cumulative = 0;
       return true;
@@ -517,12 +518,15 @@ async function insertBreaks(rows, options) {
     // Prefer saved stops near the route segment (perpendicular distance ≤ 2 km)
     let spot = findNearestRestStop(restStops, refLat, refLng, toLat, toLng, 2.0);
     if (!spot && refLat && refLng) {
-      spot = await findNearbyRestStop(refLat, refLng, fromLat, fromLng, toLat, toLng).catch(() => null);
+      spot = await findNearbyRestStop(refLat, refLng, fromLat, fromLng, toLat, toLng, 15000, breakTimeMin, scheduledDate).catch(() => null);
     }
     if (!spot) { return false; } // keep cumulative intact — retry at next opportunity
     const label = spot.rating
       ? `${spot.customer} · ⭐ ${spot.rating} (${spot.reviewCount})`
       : spot.customer;
+    const warnings = spot.openAtBreak === false
+      ? [{ msg: `La sosta "${spot.customer}" potrebbe essere chiusa all'orario previsto`, level: "warn" }]
+      : [];
     insertions.push({
       beforeIndex, type: "rest", duration: REST_DUR,
       driveOffset,
@@ -530,7 +534,10 @@ async function insertBreaks(rows, options) {
       location: spot.location || "",
       address: spot.fullAddress || "",
       lat: spot.lat ?? null,
-      lng: spot.lng ?? null
+      lng: spot.lng ?? null,
+      placeId: spot.placeId ?? null,
+      openAtBreak: spot.openAtBreak ?? null,
+      warnings
     });
     cumulative = 0;
     return true;
@@ -552,7 +559,7 @@ async function insertBreaks(rows, options) {
       const breakTime = prevServiceEnd + driveConsumed + needed;
       if (!isValidBreakTime(breakTime)) break;
       // Pass destination (row.lat/lng) so saved stops are checked against the segment
-      const inserted = await tryInsert(i, interpLat, interpLng, lastLat, lastLng, row.lat, row.lng, driveConsumed + needed);
+      const inserted = await tryInsert(i, interpLat, interpLng, lastLat, lastLng, row.lat, row.lng, driveConsumed + needed, breakTime);
       if (!inserted) break;
       driveConsumed += needed;
       remainingDrive -= needed;
@@ -570,7 +577,7 @@ async function insertBreaks(rows, options) {
       const breakTime = prevServiceEnd;
       const nextRow = rows[i + 1];
       if (isValidBreakTime(breakTime)) {
-        await tryInsert(i + 1, row.lat, row.lng, row.lat, row.lng, nextRow?.lat, nextRow?.lng, 0);
+        await tryInsert(i + 1, row.lat, row.lng, row.lat, row.lng, nextRow?.lat, nextRow?.lng, 0, breakTime);
       }
     }
     if (cumulative >= REST_MAX) cumulative = Math.floor(REST_MAX / 2);
@@ -718,7 +725,8 @@ export async function planRoute(payload, settings, restStops = []) {
     finalArrival: parseTime(best.finalLeg.arrivalTime),
     restIntervalMin: settings?.restIntervalMin ?? 120,
     restMaxDeviationMin: settings?.restMaxDeviationMin ?? 40,
-    restDurationMin: settings?.restDurationMin ?? 15
+    restDurationMin: settings?.restDurationMin ?? 15,
+    scheduledDate
   });
   best = {
     ...best,
