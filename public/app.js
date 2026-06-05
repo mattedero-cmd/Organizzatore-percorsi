@@ -2838,6 +2838,7 @@ function bindEvents() {
             lunchBreakMinutes: res?.lunchBreakMinutes || state.route.lunchBreakMinutes,
             stops
           };
+          if (state.result) state.result = { ...state.result, scheduledDate: newDate };
           await planCurrentRoute();
         } catch (err) {
           showToast(err.message);

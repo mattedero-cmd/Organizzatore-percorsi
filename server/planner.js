@@ -176,7 +176,7 @@ function permute(items) {
   return result;
 }
 
-async function buildLegMatrix(nodes) {
+async function buildLegMatrix(nodes, driveMarkupMinPerHour = 10) {
   const matrix = new Map();
   const pairs = [];
   for (let from = 0; from < nodes.length; from += 1) {
@@ -193,7 +193,7 @@ async function buildLegMatrix(nodes) {
       const pair = pairs[cursor];
       cursor += 1;
       const leg = await routeBetween(nodes[pair.from], nodes[pair.to]);
-      const adjustedDriveMinutes = addDriveBuffer(leg.driveMinutes, settings?.driveMarkupMinPerHour ?? 10);
+      const adjustedDriveMinutes = addDriveBuffer(leg.driveMinutes, driveMarkupMinPerHour);
       matrix.set(`${pair.from}:${pair.to}`, {
         ...leg,
         baseDriveMinutes: leg.driveMinutes,
@@ -684,7 +684,7 @@ export async function planRoute(payload, settings, restStops = []) {
     }
   }));
 
-  const matrix = await buildLegMatrix(nodes);
+  const matrix = await buildLegMatrix(nodes, settings?.driveMarkupMinPerHour ?? 10);
   const startMinutes = parseTime(payload.startTime || payload.start?.time || "");
   const timingMode = payload.timingMode || "first_open_minus";
   const arrivalLeadMinutes = Number(payload.arrivalLeadMinutes ?? 10);
