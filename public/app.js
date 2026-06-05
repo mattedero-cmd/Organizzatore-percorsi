@@ -1524,38 +1524,49 @@ function renderResult() {
 
       <div class="result-list">
         ${rows.map(row => {
+          // Build Maps URL for a break row (rest or restaurant lunch)
+          const breakMapsUrl = (r) => {
+            if (!r.lat || !r.lng) return null;
+            const q = encodeURIComponent(r.customer + (r.location ? " " + r.location : ""));
+            if (state.navigatorPref === "apple") return `http://maps.apple.com/?ll=${r.lat},${r.lng}&q=${q}`;
+            if (state.navigatorPref === "waze") return `https://waze.com/ul?ll=${r.lat},${r.lng}&navigate=yes`;
+            return `https://www.google.com/maps/search/?api=1&query=${q}&center=${r.lat},${r.lng}`;
+          };
+
           // Special row: lunch break
-          if (row.type === "lunch") return `
+          if (row.type === "lunch") {
+            const lunchUrl = breakMapsUrl(row);
+            const lunchName = row.customer && row.customer !== "Pausa pranzo"
+              ? row.customer
+              : null;
+            return `
           <article class="card result-card break-card lunch-card">
             <div class="break-row">
               <span class="break-icon">🍽</span>
-              <div>
-                <p class="stop-title" style="margin:0">Pausa pranzo</p>
+              <div style="flex:1;min-width:0">
+                ${lunchUrl && lunchName
+                  ? `<a class="stop-title break-place-link" href="${lunchUrl}" target="_blank" rel="noopener" style="margin:0">${escapeHtml(lunchName)}${row.location ? ` — ${escapeHtml(row.location)}` : ""}</a>`
+                  : `<p class="stop-title" style="margin:0">Pausa pranzo</p>`}
                 <div class="stop-meta">${escapeHtml(row.serviceStartTime)} – ${escapeHtml(row.serviceEndTime)} · ${minutesLabel(row.durationMinutes)}</div>
               </div>
             </div>
           </article>`;
+          }
 
           // Special row: rest stop
           if (row.type === "rest") {
-            const restNavUrl = row.lat && row.lng
-              ? (state.navigatorPref === "apple"
-                  ? `http://maps.apple.com/?ll=${row.lat},${row.lng}&q=${encodeURIComponent(row.customer)}`
-                  : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(row.customer)}&query_place_id=&center=${row.lat},${row.lng}`)
-              : stopNavUrl(row, state.navigatorPref);
+            const restUrl = breakMapsUrl(row);
             return `
           <article class="card result-card break-card rest-card">
             <div class="break-row">
               <span class="break-icon">☕</span>
               <div style="flex:1;min-width:0">
-                <p class="stop-title" style="margin:0">${escapeHtml(row.customer)}${row.location ? ` — ${escapeHtml(row.location)}` : ""}</p>
+                ${restUrl
+                  ? `<a class="stop-title break-place-link" href="${restUrl}" target="_blank" rel="noopener" style="margin:0">${escapeHtml(row.customer)}${row.location ? ` — ${escapeHtml(row.location)}` : ""}</a>`
+                  : `<p class="stop-title" style="margin:0">${escapeHtml(row.customer)}${row.location ? ` — ${escapeHtml(row.location)}` : ""}</p>`}
                 <div class="stop-meta">${escapeHtml(row.serviceStartTime)} – ${escapeHtml(row.serviceEndTime)} · ${minutesLabel(row.durationMinutes)}</div>
                 ${row.address ? `<div class="stop-meta" style="font-size:0.8rem">${escapeHtml(row.address)}</div>` : ""}
               </div>
-            </div>
-            <div style="display:flex;gap:8px;margin-top:8px;">
-              <a class="btn primary" href="${restNavUrl}" target="_blank" rel="noopener" style="flex:1;text-align:center">↗ Naviga</a>
-              ${row.lat && row.lng ? `<a class="btn" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(row.customer + " " + (row.location || ""))}&center=${row.lat},${row.lng}" target="_blank" rel="noopener" title="Vedi su Google Maps">🔍 Maps</a>` : ""}
             </div>
           </article>`;
           }
