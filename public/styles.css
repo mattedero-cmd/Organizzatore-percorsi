@@ -438,29 +438,31 @@ textarea:focus {
 .opening-hours-today { color: var(--text-muted, #666); }
 .saved-card-head {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
+  align-items: center;
+  gap: 8px;
+  justify-content: space-between;
+  min-width: 0;
 }
 .saved-card-name {
   font-weight: 600;
-  font-size: 0.95rem;
+  font-size: 0.92rem;
   margin: 0;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  flex: 1;
 }
 .saved-card-btns {
   display: flex;
-  gap: 6px;
-  flex-wrap: nowrap;
+  gap: 4px;
+  flex-shrink: 0;
   align-items: center;
 }
 .saved-open-btn {
-  font-size: 0.82rem;
-  padding: 4px 14px;
-  min-height: 32px;
-  flex: 1;
+  font-size: 0.8rem;
+  padding: 4px 10px;
+  min-height: 30px;
 }
 .saved-card-meta {
   display: flex;
@@ -946,6 +948,18 @@ tbody tr:last-child td {
   gap: 8px;
 }
 
+.result-date-input {
+  font-size: 0.82rem;
+  padding: 3px 6px;
+  min-height: 28px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  color: var(--text);
+  background: var(--surface);
+  flex-shrink: 0;
+  width: auto;
+}
+
 .nav-panel {
   background: var(--surface);
   border: 1px solid var(--line);
@@ -1370,22 +1384,27 @@ tbody tr:last-child td {
   font-size: 0.74rem;
   table-layout: fixed;
 }
-/* col-day 22px | col-cb 20px each | col-time 25% of remaining space */
+/* col-day 22px | col-cb 18px each | col-time equal share of remaining */
 .wh-table col.col-day  { width: 22px; }
-.wh-table col.col-cb   { width: 20px; }
-.wh-table col.col-time { width: 25%; }
+.wh-table col.col-cb   { width: 18px; }
+.wh-table col.col-time { width: auto; }
 .wh-table th {
   text-align: center;
-  padding: 2px 0 4px;
+  padding: 1px 1px 3px;
   font-weight: 600;
   color: var(--muted);
   font-size: 0.62rem;
   white-space: nowrap;
   overflow: hidden;
 }
-.wh-table th:first-child { text-align: left; }
+.wh-table th:first-child { text-align: left; padding-left: 0; }
+/* 1px gap between time columns, 3px gap before Ap (after Cont) */
+.wh-table th:nth-child(4),
+.wh-table td:nth-child(4) { padding-left: 3px; }
+.wh-table th:nth-child(n+5),
+.wh-table td:nth-child(n+5) { padding-left: 1px; }
 .wh-table td {
-  padding: 2px 0;
+  padding: 1px 0;
   vertical-align: middle;
 }
 .wh-day {
@@ -1393,11 +1412,12 @@ tbody tr:last-child td {
   width: 22px;
   font-size: 0.72rem;
   overflow: hidden;
+  padding-right: 0;
 }
 .wh-cb {
   width: 18px;
   text-align: center;
-  padding: 0;
+  padding: 0 0 0 2px;
 }
 .wh-table input[type=time] {
   width: 100%;
@@ -1405,11 +1425,8 @@ tbody tr:last-child td {
   padding: 2px 0;
   font-size: 0.66rem;
   text-align: center;
-  max-width: 58px;
+  max-width: 60px;
 }
-/* extra gap between Ch and Cont columns */
-.wh-table col.col-cb + col.col-cb { padding-left: 4px; }
-.wh-table td.wh-cb + td.wh-cb { padding-left: 4px; }
 .wh-fill-all {
   font-size: 0.75rem;
   padding: 3px 8px;

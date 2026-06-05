@@ -1419,10 +1419,13 @@ function renderResult() {
       <div class="section-head" style="margin-bottom:10px;">
         <div>
           <div class="row" style="align-items:center;gap:8px;">
-            <h2 style="margin:0;">${escapeHtml(result.name || ("Percorso — " + (result.scheduledDate || "")))}</h2>
+            <h2 style="margin:0;">${escapeHtml(result.name || "Percorso")}</h2>
             ${result.id ? `<button class="btn" style="padding:2px 8px;font-size:0.85rem;" data-rename-current-route="${result.id}">✎</button>` : ""}
           </div>
-          <div class="stop-meta">${escapeHtml(summary.dayStart)} → ${escapeHtml(summary.dayEnd)} · ${summary.totalKm.toFixed(1)} km · ${euro(summary.totalCost)}</div>
+          <div class="row" style="align-items:center;gap:8px;margin-top:4px;">
+            <input type="date" class="result-date-input" id="result-date-input" value="${escapeHtml(result.scheduledDate || "")}" title="Cambia data e ricalcola" />
+            <span class="stop-meta">${escapeHtml(summary.dayStart)} → ${escapeHtml(summary.dayEnd)} · ${summary.totalKm.toFixed(1)} km · ${euro(summary.totalCost)}</span>
+          </div>
         </div>
         <div class="row" style="gap:8px;flex-wrap:wrap;">
           <button class="btn" data-tab-jump="saved">▣ Giri</button>
@@ -2796,6 +2799,31 @@ function bindEvents() {
     if (e.target.id === "vcf-input") {
       const file = e.target.files?.[0];
       if (file) importFromVcf(file).catch(() => showToast("Errore lettura file"));
+    }
+
+    if (e.target.id === "result-date-input") {
+      const newDate = e.target.value;
+      if (!newDate) return;
+      (async () => {
+        try {
+          showToast("Ricalcolo in corso…");
+          state.route = {
+            ...state.route,
+            scheduledDate: newDate,
+            stops: (state.result?.plannedStops || state.result?.rows?.filter(r => r.type === "stop").map(r => ({
+              uid: r.uid || crypto.randomUUID(),
+              customer: r.customer, location: r.location, fullAddress: r.fullAddress || r.address,
+              lat: r.lat, lng: r.lng, durationMinutes: r.durationMinutes,
+              weeklyHours: r.weeklyHours, openMorning: r.openMorning, closeMorning: r.closeMorning,
+              openAfternoon: r.openAfternoon, closeAfternoon: r.closeAfternoon, addressId: r.addressId
+            })) || state.route.stops)
+          };
+          await planCurrentRoute();
+        } catch (err) {
+          showToast(err.message);
+        }
+      })();
+      return;
     }
 
     const reschedule = e.target.closest("[data-reschedule-route]");
