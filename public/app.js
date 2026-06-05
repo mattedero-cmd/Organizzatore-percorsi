@@ -811,24 +811,34 @@ function stopDetailExtra(result, row, addr) {
     const humidity = w.humidity != null ? ` ${w.humidity}% umid.` : "";
     const wind = w.windKmh != null ? ` 💨${Math.round(w.windKmh)}km/h` : "";
     const alerts = (w.warnings || []).map(s => `<span class="badge warning">${escapeHtml(s)}</span>`).join(" ");
-    parts.push(`<div class="stop-detail-section"><span class="st-label">Meteo</span> <span class="stop-weather-full">${weatherIcon(w)} <strong>${temp}</strong> ${escapeHtml(w.description || "")}${humidity}${wind}${alerts ? " " + alerts : ""}</span></div>`);
+    parts.push(`<div class="stop-detail-section"><span class="rc-section-label">Meteo</span><div class="stop-weather-full">${weatherIcon(w)} <strong>${temp}</strong> ${escapeHtml(w.description || "")}${humidity}${wind}${alerts ? " " + alerts : ""}</div></div>`);
   }
 
-  // Full weekly hours — 3 cols: day | am | pm
+  // Weekly hours — collapse consecutive days with identical hours
   const wh = addr?.weeklyHours || row.weeklyHours;
   if (wh) {
     const scheduledDow = result.scheduledDate ? new Date(result.scheduledDate + "T12:00:00").getDay() : -1;
-    const dayRows = [1,2,3,4,5,6,0].map(d => {
-      const h = wh[d] || wh[String(d)] || { closed: true };
-      const isToday = d === scheduledDow;
-      const tr = isToday ? `<tr class="wh-today">` : `<tr>`;
-      if (h.closed) return `${tr}<td class="wh-day">${DAYS_IT[d]}</td><td class="wh-hours wh-muted" colspan="2">Chiuso</td></tr>`;
-      if (h.continuous) return `${tr}<td class="wh-day">${DAYS_IT[d]}</td><td class="wh-hours" colspan="2">${h.openMorning}–${h.closeAfternoon}</td></tr>`;
+    const ORDER = [1,2,3,4,5,6,0];
+    const dayKey = d => { const h = wh[d] || wh[String(d)] || { closed: true }; return h.closed ? "chiuso" : h.continuous ? `cont:${h.openMorning}-${h.closeAfternoon}` : `${h.openMorning}-${h.closeMorning}|${h.openAfternoon}-${h.closeAfternoon}`; };
+    // Group consecutive days with same key
+    const groups = [];
+    for (const d of ORDER) {
+      const k = dayKey(d);
+      if (groups.length && groups[groups.length-1].key === k) { groups[groups.length-1].days.push(d); }
+      else groups.push({ key: k, days: [d] });
+    }
+    const dayRows = groups.map(g => {
+      const hasToday = g.days.includes(scheduledDow);
+      const tr = hasToday ? `<tr class="wh-today">` : `<tr>`;
+      const label = g.days.length === 1 ? DAYS_IT[g.days[0]] : `${DAYS_IT[g.days[0]]}–${DAYS_IT[g.days[g.days.length-1]]}`;
+      const h = wh[g.days[0]] || wh[String(g.days[0])] || { closed: true };
+      if (h.closed) return `${tr}<td class="wh-day">${label}</td><td class="wh-hours wh-muted" colspan="2">Chiuso</td></tr>`;
+      if (h.continuous) return `${tr}<td class="wh-day">${label}</td><td class="wh-hours" colspan="2">${h.openMorning}–${h.closeAfternoon}</td></tr>`;
       const am = (h.openMorning && h.closeMorning) ? `${h.openMorning}–${h.closeMorning}` : "—";
       const pm = (h.openAfternoon && h.closeAfternoon) ? `${h.openAfternoon}–${h.closeAfternoon}` : "";
-      return `${tr}<td class="wh-day">${DAYS_IT[d]}</td><td class="wh-hours">${am}</td><td class="wh-hours wh-muted">${pm}</td></tr>`;
+      return `${tr}<td class="wh-day">${label}</td><td class="wh-hours">${am}</td><td class="wh-hours wh-muted">${pm}</td></tr>`;
     }).join("");
-    parts.push(`<div class="stop-detail-section"><span class="st-label">Orari settimanali</span><table class="wh-inline"><colgroup><col class="wh-col-day"><col class="wh-col-am"><col class="wh-col-pm"></colgroup><tbody>${dayRows}</tbody></table></div>`);
+    parts.push(`<div class="stop-detail-section"><span class="rc-section-label">Orari</span><table class="wh-inline"><colgroup><col class="wh-col-day"><col class="wh-col-am"><col class="wh-col-pm"></colgroup><tbody>${dayRows}</tbody></table></div>`);
   }
 
   return parts.length ? `<div class="stop-detail-extra">${parts.join("")}</div>` : "";
@@ -973,49 +983,61 @@ function renderResult() {
           const phoneBtn = pref ? `<a class="btn" href="tel:${escapeHtml(pref.number)}" title="${escapeHtml(pref.name || pref.number)}">${phoneIcon(pref.type)}</a>` : "";
           const warnLevel = worstWarningLevel(row.warnings);
           const cardClass = warnLevel === "error" ? " card-error" : warnLevel === "warn" ? " card-warn" : "";
-          const errorBadge = warnLevel === "error"
-            ? `<span class="badge badge-error" style="margin-top:3px;display:inline-block">${escapeHtml(row.warnings.find(w => (w.level||"") === "error" || /(chiusa|dopo|oltre)/.test(w.msg||w))?.msg || "⚠")}</span>`
-            : warnLevel === "warn"
-            ? `<span class="badge badge-warn" style="margin-top:3px;display:inline-block">${escapeHtml(row.warnings.find(w => (w.level||"") === "warn")?.msg || "⚠")}</span>`
-            : "";
+          const warnMsg = warnLevel ? (row.warnings.find(w => w.level === warnLevel || (warnLevel==="error" && /(chiusa|dopo|oltre)/.test(w.msg||w)))?.msg || "") : "";
+          const expandId = `${row.stopNumber}${row.stopPart ? "-" + row.stopPart : ""}`;
+          const isAfternoon = row.stopPart === "afternoon";
+          const arrivalDisplay = isAfternoon ? row.serviceStartTime : row.arrivalTime;
           return `
-          <article class="card result-card${cardClass}">
-            <div class="stop-compact-head" data-expand-stop="${row.stopNumber}${row.stopPart ? "-" + row.stopPart : ""}">
-              <div class="stop-compact-title">${partBadge}<span class="stop-title">${stopTitle}</span></div>
-              ${errorBadge}
-              <div class="stop-meta stop-compact-addr">${escapeHtml(row.address)}</div>
-              ${weatherCompact(result, row.stopNumber)}
-            </div>
-            <div class="stop-actions-big">
-              ${row.stopPart !== "afternoon" ? `<a class="btn primary" href="${stopNavUrl(row, state.navigatorPref)}" target="_blank" rel="noopener">↗ Naviga</a>` : ""}
-              ${phoneBtn}
-              ${email && !row.stopPart ? `<a class="btn" href="mailto:${escapeHtml(email)}?subject=${emailSubject}">✉</a>` : ""}
-            </div>
-            <div class="stop-details" data-stop-details="${row.stopNumber}${row.stopPart ? "-" + row.stopPart : ""}" hidden>
-              <div class="stop-times-row">
-                ${row.stopPart !== "afternoon" ? `<span><span class="st-label">Partenza</span> <strong>${escapeHtml(row.departureTime)}</strong></span>` : ""}
-                ${row.stopPart !== "afternoon" ? `<span><span class="st-label">Guida</span> <strong>${minutesLabel(row.driveMinutes)} · ${row.km.toFixed(1)} km</strong></span>` : ""}
-                <span><span class="st-label">${row.stopPart === "afternoon" ? "Riprende" : "Arrivo"}</span> <strong>${escapeHtml(row.stopPart === "afternoon" ? row.serviceStartTime : row.arrivalTime)}</strong></span>
-                <span><span class="st-label">Interv.</span> <strong>${minutesLabel(row.durationMinutes)}</strong></span>
-                <span><span class="st-label">Fine</span> <strong>${escapeHtml(row.serviceEndTime)}</strong></span>
+          <article class="card rc${cardClass}">
+            <div class="rc-head" data-expand-stop="${expandId}">
+              <div class="rc-left">
+                <div class="rc-num-name">${partBadge}<span class="rc-name">${stopTitle}</span></div>
+                <div class="rc-addr">${escapeHtml(row.address)}</div>
+                ${warnLevel ? `<span class="badge ${warnLevel === "error" ? "badge-error" : "badge-warn"} rc-warn">${escapeHtml(warnMsg)}</span>` : ""}
               </div>
-              ${phone && !row.stopPart ? `<div class="stop-contact-row">${phoneIcon(addr?.phoneType)} <a href="tel:${escapeHtml(phone)}">${escapeHtml(phone)}</a>${addr?.phoneName ? ` <span class="phone-name-badge">${escapeHtml(addr.phoneName)}</span>` : ""}${addr?.phonePreferred !== "phone2" && phone2 ? " ★" : ""}</div>` : ""}
-              ${phone2 && !row.stopPart ? `<div class="stop-contact-row">${phoneIcon(addr?.phone2Type)} <a href="tel:${escapeHtml(phone2)}">${escapeHtml(phone2)}</a>${addr?.phone2Name ? ` <span class="phone-name-badge">${escapeHtml(addr.phone2Name)}</span>` : ""}${addr?.phonePreferred === "phone2" ? " ★" : ""}</div>` : ""}
-              ${email && !row.stopPart ? `<div class="stop-contact-row">✉ <a href="mailto:${escapeHtml(email)}">${escapeHtml(email)}</a></div>` : ""}
-              ${row.notes && !row.stopPart ? `<div class="stop-meta stop-notes">${escapeHtml(row.notes)}</div>` : ""}
-              ${warningBadges(row.warnings)}
+              <div class="rc-arrival">
+                <div class="rc-arr-time">${escapeHtml(arrivalDisplay)}</div>
+                <div class="rc-arr-label">${isAfternoon ? "riprende" : "arrivo"}</div>
+                ${weatherCompact(result, row.stopNumber)}
+              </div>
+            </div>
+            <div class="rc-actions">
+              ${!isAfternoon ? `<a class="btn primary rc-nav-btn" href="${stopNavUrl(row, state.navigatorPref)}" target="_blank" rel="noopener">↗ Naviga</a>` : ""}
+              ${phoneBtn}
+              ${email && !row.stopPart ? `<a class="btn icon-btn" href="mailto:${escapeHtml(email)}?subject=${emailSubject}" title="${escapeHtml(email)}">✉</a>` : ""}
+              <button class="btn icon-btn rc-expand-btn" data-expand-stop="${expandId}" title="Dettagli">⋯</button>
+            </div>
+            <div class="rc-details" data-stop-details="${expandId}" hidden>
+              <div class="rc-timing-strip">
+                ${!isAfternoon ? `<span>🚗 ${minutesLabel(row.driveMinutes)} · ${row.km.toFixed(1)} km</span>` : ""}
+                <span>🔧 ${minutesLabel(row.durationMinutes)}</span>
+                <span>✓ ${escapeHtml(row.serviceEndTime)}</span>
+                ${!isAfternoon ? `<span class="rc-ts-muted">⬆ ${escapeHtml(row.departureTime)}</span>` : ""}
+              </div>
+              ${phone && !row.stopPart ? `<div class="rc-contact">${phoneIcon(addr?.phoneType)} <a href="tel:${escapeHtml(phone)}">${escapeHtml(phone)}</a>${addr?.phoneName ? ` <span class="phone-name-badge">${escapeHtml(addr.phoneName)}</span>` : ""}${addr?.phonePreferred !== "phone2" && phone2 ? " ★" : ""}</div>` : ""}
+              ${phone2 && !row.stopPart ? `<div class="rc-contact">${phoneIcon(addr?.phone2Type)} <a href="tel:${escapeHtml(phone2)}">${escapeHtml(phone2)}</a>${addr?.phone2Name ? ` <span class="phone-name-badge">${escapeHtml(addr.phone2Name)}</span>` : ""}${addr?.phonePreferred === "phone2" ? " ★" : ""}</div>` : ""}
+              ${email && !row.stopPart ? `<div class="rc-contact">✉ <a href="mailto:${escapeHtml(email)}">${escapeHtml(email)}</a></div>` : ""}
+              ${row.notes && !row.stopPart ? `<div class="rc-notes">${escapeHtml(row.notes)}</div>` : ""}
+              ${warnLevel ? warningBadges(row.warnings) : ""}
               ${!row.stopPart ? stopDetailExtra(result, row, addr) : ""}
             </div>
           </article>`;
         }).join("")}
 
-        <article class="card result-card">
-          <p class="stop-title">↩ ${escapeHtml(result.end?.label || "Arrivo finale")}</p>
-          <div class="stop-meta">${escapeHtml(result.end?.address || result.end?.fullAddress || "")}</div>
-          <div class="stop-times-row" style="border:none;margin:0;padding-top:4px;">
-            <span><span class="st-label">Partenza</span> <strong>${escapeHtml(finalLeg.departureTime)}</strong></span>
-            <span><span class="st-label">Guida</span> <strong>${minutesLabel(finalLeg.driveMinutes)} · ${finalLeg.km.toFixed(1)} km</strong></span>
-            <span><span class="st-label">Arrivo</span> <strong>${escapeHtml(finalLeg.arrivalTime)}</strong></span>
+        <article class="card rc">
+          <div class="rc-head" style="cursor:default">
+            <div class="rc-left">
+              <div class="rc-num-name"><span class="rc-name">↩ ${escapeHtml(result.end?.label || "Casa")}</span></div>
+              <div class="rc-addr">${escapeHtml(result.end?.address || result.end?.fullAddress || "")}</div>
+            </div>
+            <div class="rc-arrival">
+              <div class="rc-arr-time">${escapeHtml(finalLeg.arrivalTime)}</div>
+              <div class="rc-arr-label">arrivo</div>
+            </div>
+          </div>
+          <div class="rc-timing-strip" style="padding-top:0">
+            <span>🚗 ${minutesLabel(finalLeg.driveMinutes)} · ${finalLeg.km.toFixed(1)} km</span>
+            <span class="rc-ts-muted">⬆ ${escapeHtml(finalLeg.departureTime)}</span>
           </div>
         </article>
       </div>
