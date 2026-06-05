@@ -452,6 +452,18 @@ function renderStops() {
   }).join("")}</div>`;
 }
 
+function syncEndIfSameAsStart() {
+  if (!state.route.endSameAsStart) return;
+  state.route.endLabel = state.route.startLabel;
+  state.route.endAddress = state.route.startAddress;
+  const nameEl = document.getElementById("rp-end-name");
+  if (nameEl) nameEl.textContent = state.route.startLabel || state.route.startAddress || "= partenza";
+  const lh = document.getElementById("rp-end-label-h");
+  const ah = document.getElementById("rp-end-addr-h");
+  if (lh) lh.value = state.route.endLabel;
+  if (ah) ah.value = state.route.endAddress;
+}
+
 function renderRoute() {
   const r = state.route;
   const dm = r.timingMode;
@@ -696,7 +708,11 @@ function renderRoute() {
     labelHiddenId: "rp-start-label-h", addrHiddenId: "rp-start-addr-h",
     nameDisplayId: "rp-start-name", mapsLinkSelector: "#rp-start-card .rp-ep-nav",
     dataAttr: "rp-addr-start",
-    onSelect: addr => { state.route.startLabel = addr.customer || ""; state.route.startAddress = addr.fullAddress || ""; }
+    onSelect: addr => {
+      state.route.startLabel = addr.customer || "";
+      state.route.startAddress = addr.fullAddress || "";
+      syncEndIfSameAsStart();
+    }
   });
 
   bindArchiveSearch({
@@ -724,6 +740,7 @@ function renderRoute() {
           if (nameEl) nameEl.textContent = label || address || "";
           state.route[stateKey + "Label"] = label;
           state.route[stateKey + "Address"] = address;
+          if (stateKey === "start") syncEndIfSameAsStart();
         }
       });
     });
@@ -754,10 +771,13 @@ function renderWeeklyHoursSection(weeklyHours) {
     </tr>`;
   }).join("");
   return `<div class="field full">
-    <label class="wh-label">Orari settimanali</label>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+      <label class="wh-label" style="margin-bottom:0">Orari settimanali</label>
+      <button type="button" class="btn ghost wh-fill-all" id="wh-fill-all-btn" title="Copia orari Lunedì a tutti i giorni aperti">↧ Applica a tutti</button>
+    </div>
     <div class="wh-table-wrap">
       <table class="wh-table">
-        <thead><tr><th></th><th></th><th></th><th>Apertura</th><th>Ch. matt.</th><th>Apr. pom.</th><th>Chiusura</th></tr></thead>
+        <thead><tr><th></th><th>Ch.</th><th>Cont.</th><th>Apertura</th><th>Ch.matt.</th><th>Apr.pm</th><th>Chiusura</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
     </div>
@@ -836,20 +856,27 @@ function renderSaved() {
     <section class="panel">
       <div class="section-head">
         <h2>Giri salvati</h2>
-        <button class="btn" id="refresh-routes">↻ Aggiorna</button>
+        <button class="btn" id="refresh-routes">↻</button>
       </div>
       <div class="saved-list">
         ${state.savedRoutes.map(route => `
           <article class="card saved-card">
-            <p class="stop-title">${escapeHtml(route.name)}</p>
-            <div class="stop-meta">${escapeHtml(route.scheduledDate || "Senza data")} · ${escapeHtml(route.startTime || "--:--")} · ${Number(route.totalKm).toFixed(1)} km · ${euro(route.totalCost)}</div>
-            <div class="stop-meta">${escapeHtml(route.startLabel || "—")} → ${escapeHtml(route.endLabel || "—")}</div>
-            ${route.plannedStops?.length ? `<div class="saved-stops-list">${route.plannedStops.filter((s, i, arr) => !s.stopPart || s.stopPart === "morning" || arr.findIndex(x => x.addressId === s.addressId) === i).map((s, i) => `<span class="saved-stop-chip">${i + 1}. ${escapeHtml(s.customer)}${s.location ? ` <span style="opacity:.6">— ${escapeHtml(s.location)}</span>` : ""}</span>`).join("")}</div>` : ""}
-            <div class="actions">
-              <button class="btn primary" data-open-route="${route.id}">→ Apri</button>
-              <button class="btn" data-rename-route="${route.id}">✎</button>
-              <button class="btn danger" data-delete-route="${route.id}">×</button>
+            <div class="saved-card-head">
+              <p class="saved-card-name">${escapeHtml(route.name)}</p>
+              <div class="saved-card-btns">
+                <button class="btn primary saved-open-btn" data-open-route="${route.id}">Apri</button>
+                <button class="btn icon-btn" data-rename-route="${route.id}" title="Rinomina">✎</button>
+                <button class="btn danger icon-btn" data-delete-route="${route.id}" title="Elimina">×</button>
+              </div>
             </div>
+            <div class="saved-card-meta">
+              <span>${escapeHtml(route.scheduledDate || "—")}</span>
+              <span>${escapeHtml(route.startTime || "--:--")}</span>
+              <span>${Number(route.totalKm).toFixed(1)} km</span>
+              <span>${euro(route.totalCost)}</span>
+            </div>
+            <div class="stop-meta saved-card-route">${escapeHtml(route.startLabel || "—")} → ${escapeHtml(route.endLabel || "—")}</div>
+            ${route.plannedStops?.length ? `<div class="saved-stops-list">${route.plannedStops.filter((s, i, arr) => !s.stopPart || s.stopPart === "morning" || arr.findIndex(x => x.addressId === s.addressId) === i).map((s, i) => `<span class="saved-stop-chip">${i + 1}. ${escapeHtml(s.customer)}${s.location ? ` — ${escapeHtml(s.location)}` : ""}</span>`).join("")}</div>` : ""}
           </article>`).join("") || `<div class="empty">Nessun giro salvato.</div>`}
       </div>
     </section>`;
@@ -1943,7 +1970,10 @@ function openMapPickerForField({ labelEl, addressEl, latEl, lngEl, onConfirm }) 
       <div id="map-picker-field-map"></div>
       <div class="map-picker-footer">
         <span id="map-picker-field-label" class="stop-meta">Tocca la mappa o cerca un luogo</span>
-        <button class="btn primary" id="map-picker-field-confirm">✓ Usa</button>
+        <div style="display:flex;gap:6px;">
+          <button class="btn ghost" id="map-picker-field-save" title="Salva nell'archivio e usa">💾 Salva</button>
+          <button class="btn primary" id="map-picker-field-confirm">✓ Usa</button>
+        </div>
       </div>
     </div>`;
   document.body.appendChild(modal);
@@ -2001,7 +2031,7 @@ function openMapPickerForField({ labelEl, addressEl, latEl, lngEl, onConfirm }) 
       map.setZoom(17);
     });
 
-    document.getElementById("map-picker-field-confirm").onclick = () => {
+    const applyPick = async (saveToArchive) => {
       if (latEl) latEl.value = Number(pickedLat).toFixed(6);
       if (lngEl) lngEl.value = Number(pickedLng).toFixed(6);
       let label = "", address = "";
@@ -2010,15 +2040,27 @@ function openMapPickerForField({ labelEl, addressEl, latEl, lngEl, onConfirm }) 
         address = pickedPlace.formatted_address || "";
         if (labelEl) labelEl.value = label;
         if (addressEl) addressEl.value = address;
-        showToast("Dati compilati dalla mappa");
       } else {
         address = labelSpan?.textContent || "";
         if (addressEl) addressEl.value = address;
-        showToast("Coordinate aggiornate");
+      }
+      if (saveToArchive && (label || address)) {
+        try {
+          await api("/api/addresses", {
+            method: "POST",
+            body: JSON.stringify({ customer: label || address, fullAddress: address, lat: pickedLat, lng: pickedLng })
+          });
+          await refreshAllData();
+          showToast("Luogo salvato nell'archivio");
+        } catch { showToast("Errore nel salvataggio"); }
+      } else {
+        showToast(pickedPlace ? "Dati compilati dalla mappa" : "Coordinate aggiornate");
       }
       if (onConfirm) onConfirm(label, address, pickedLat, pickedLng);
       modal.remove();
     };
+    document.getElementById("map-picker-field-confirm").onclick = () => applyPick(false);
+    document.getElementById("map-picker-field-save").onclick = () => applyPick(true);
     document.getElementById("map-picker-field-cancel").onclick = () => modal.remove();
   });
 }
@@ -2317,6 +2359,29 @@ function bindEvents() {
     if (e.target.closest("#open-map-picker")) { openMapPicker(); return; }
 
     // Weekly hours: toggle disabled state
+    if (e.target.closest("#wh-fill-all-btn")) {
+      // Copy Monday's hours to all non-closed days
+      const rows = document.querySelectorAll(".wh-row");
+      let srcRow = null;
+      rows.forEach(r => { if (Number(r.dataset.day) === 1) srcRow = r; });
+      if (!srcRow) return;
+      const om = srcRow.querySelector(".wh-om")?.value || "";
+      const cm = srcRow.querySelector(".wh-cm")?.value || "";
+      const oa = srcRow.querySelector(".wh-oa")?.value || "";
+      const ca = srcRow.querySelector(".wh-ca")?.value || "";
+      const cont = srcRow.querySelector(".wh-cont")?.checked;
+      rows.forEach(r => {
+        if (r === srcRow) return;
+        if (r.querySelector(".wh-closed")?.checked) return;
+        const setV = (sel, v) => { const el = r.querySelector(sel); if (el) el.value = v; };
+        setV(".wh-om", om); setV(".wh-cm", cont ? "" : cm);
+        setV(".wh-oa", cont ? "" : oa); setV(".wh-ca", ca);
+        const contEl = r.querySelector(".wh-cont");
+        if (contEl) contEl.checked = !!cont;
+      });
+      return;
+    }
+
     if (e.target.classList.contains("wh-closed") || e.target.classList.contains("wh-cont")) {
       const row = e.target.closest(".wh-row");
       if (row) {

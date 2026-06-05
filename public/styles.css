@@ -422,6 +422,45 @@ textarea:focus {
   display: grid;
   gap: 8px;
 }
+.saved-card-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  justify-content: space-between;
+}
+.saved-card-name {
+  font-weight: 600;
+  font-size: 0.95rem;
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.saved-card-btns {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.saved-open-btn {
+  font-size: 0.82rem;
+  padding: 4px 10px;
+  min-height: 32px;
+}
+.saved-card-meta {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.saved-card-route {
+  font-size: 0.82rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
 .section-head {
   display: flex;
@@ -1084,7 +1123,8 @@ tbody tr:last-child td {
   border-top: 1px solid var(--line);
 }
 
-#map-picker-map {
+#map-picker-map,
+#map-picker-field-map {
   flex: 1;
   min-height: 0;
 }
@@ -1301,19 +1341,20 @@ tbody tr:last-child td {
 .wh-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.8rem;
+  font-size: 0.78rem;
+  table-layout: auto;
 }
 
 .wh-table th {
   text-align: left;
-  padding: 3px 3px 5px;
+  padding: 2px 2px 4px;
   font-weight: 600;
   color: var(--muted);
-  font-size: 0.7rem;
+  font-size: 0.68rem;
   white-space: nowrap;
 }
 .wh-table td {
-  padding: 2px 3px;
+  padding: 2px 2px;
   vertical-align: middle;
   white-space: nowrap;
 }
@@ -1324,9 +1365,15 @@ tbody tr:last-child td {
 }
 
 .wh-table input[type=time] {
-  width: 72px;
-  padding: 2px 3px;
+  width: 68px;
+  padding: 2px 2px;
+  font-size: 0.73rem;
+}
+.wh-fill-all {
   font-size: 0.75rem;
+  padding: 3px 8px;
+  min-height: 28px;
+  margin-bottom: 6px;
 }
 
 .wh-table input[type=time]:disabled {
@@ -1367,37 +1414,24 @@ tbody tr:last-child td {
 
 /* Sezione Quando */
 .rp-when-row {
-  display: flex;
-  gap: 6px;
-  align-items: flex-end;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
 }
-.rp-when-date {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
+.rp-when-date,
 .rp-when-time {
-  flex: 0 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
 }
 .rp-label {
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   color: var(--muted);
   font-weight: 500;
 }
-.rp-when-date input {
-  width: 100%;
-  font-size: 0.85rem;
-  padding: 5px 6px;
-}
+.rp-when-date input,
 .rp-when-time input {
-  width: 90px;
-  font-size: 0.85rem;
-  padding: 5px 6px;
+  width: 100%;
 }
 
 /* Endpoint cards (Da / A) */
