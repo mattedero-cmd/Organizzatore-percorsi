@@ -1188,7 +1188,7 @@ function renderWeeklyHoursSection(weeklyHours) {
     <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:6px;flex-wrap:wrap;">
       <label class="wh-label" style="margin-bottom:0">Orari settimanali</label>
       <div style="display:flex;gap:6px;">
-        ${state.googleMapsKey ? `<button type="button" class="btn ghost" id="complete-with-maps-btn">🗺 Completa con Maps</button>` : ""}
+        ${state.googleMapsKey ? `<button type="button" class="btn ghost" id="complete-with-maps-btn" data-cwm-btn>🗺 Completa con Maps</button>` : ""}
         <button type="button" class="btn ghost wh-fill-all" id="wh-fill-all-btn">↧ Applica a tutti</button>
       </div>
     </div>
@@ -2622,83 +2622,81 @@ async function useCurrentPosition() {
 
 
 async function completeFormWithMaps() {
+  // Prevent duplicate panels
+  if (document.getElementById("cwm-panel")) return;
+
   const ready = await loadGoogleMapsScript();
   if (!ready) { showToast("Google Maps non disponibile"); return; }
 
   const form = document.getElementById("address-form");
   if (!form) return;
   const fVal = name => (form.querySelector(`[name="${name}"]`)?.value || "").trim();
-  const suggested = [fVal("activity") || fVal("customer"), fVal("fullAddress") || fVal("location")].filter(Boolean).join(" ");
+  const query = [fVal("activity") || fVal("customer"), fVal("fullAddress") || fVal("location")].filter(Boolean).join(" ");
 
-  const overlay = document.createElement("div");
-  overlay.className = "modal-overlay";
-  overlay.innerHTML = `
-    <div class="modal-box" style="max-width:380px">
-      <h3 style="margin-bottom:10px">Cerca su Maps</h3>
-      <p style="font-size:0.82rem;color:var(--muted);margin-bottom:8px;">Seleziona il risultato giusto per compilare i campi vuoti della scheda.</p>
-      <div style="display:flex;gap:6px;margin-bottom:8px;">
-        <input id="cwm-query" style="flex:1" type="text" placeholder="Nome locale, indirizzo…" value="${escapeHtml(suggested)}" autocomplete="off" />
-        <button class="btn primary" id="cwm-search">🔍</button>
-      </div>
-      <div id="cwm-results" class="cwm-results"></div>
-      <div style="display:flex;justify-content:flex-end;margin-top:10px;">
-        <button class="btn" id="cwm-cancel">Annulla</button>
-      </div>
-    </div>`;
-  document.body.appendChild(overlay);
+  // Build inline panel below the button
+  const btn = form.querySelector("[data-cwm-btn]");
+  const panel = document.createElement("div");
+  panel.id = "cwm-panel";
+  panel.className = "cwm-panel";
+  panel.innerHTML = `<div class="cwm-searching">Ricerca in corso…</div>`;
+  btn?.insertAdjacentElement("afterend", panel);
 
-  const queryInput = overlay.querySelector("#cwm-query");
-  queryInput.focus();
-  queryInput.select();
-  overlay.querySelector("#cwm-cancel").onclick = () => overlay.remove();
-  overlay.addEventListener("click", e => { if (e.target === overlay) overlay.remove(); });
+  const closePanel = () => panel.remove();
+
+  if (!query) {
+    // No data in form — open Maps on current position
+    panel.innerHTML = `<div class="cwm-searching">Nessun dato nel form da cercare.<br>
+      <a href="https://maps.google.com" target="_blank" rel="noopener" class="cwm-maps-link">Apri Google Maps</a></div>`;
+    return;
+  }
 
   const svc = new google.maps.places.PlacesService(document.createElement("div"));
 
-  const doSearch = async () => {
-    const q = queryInput.value.trim();
-    if (!q) return;
-    const searchBtn = overlay.querySelector("#cwm-search");
-    searchBtn.disabled = true;
-    const resultsEl = overlay.querySelector("#cwm-results");
-    resultsEl.innerHTML = `<div class="cwm-searching">Ricerca in corso…</div>`;
-    try {
-      const results = await new Promise(resolve =>
-        svc.textSearch({ query: q, region: "it" }, (res, status) =>
-          resolve(status === google.maps.places.PlacesServiceStatus.OK ? res : [])
-        )
-      );
-      if (!results.length) { resultsEl.innerHTML = `<div class="cwm-searching">Nessun risultato — prova a essere più specifico.</div>`; return; }
-      resultsEl.innerHTML = results.slice(0, 5).map((r, i) =>
-        `<div class="cwm-result-item" data-idx="${i}">
+  try {
+    const results = await new Promise(resolve =>
+      svc.textSearch({ query, region: "it" }, (res, status) =>
+        resolve(status === google.maps.places.PlacesServiceStatus.OK ? res : [])
+      )
+    );
+
+    if (!results.length) {
+      panel.innerHTML = `<div class="cwm-searching">Nessun risultato per "<strong>${escapeHtml(query)}</strong>".<br>
+        <a href="https://maps.google.com/maps?q=${encodeURIComponent(query)}" target="_blank" rel="noopener" class="cwm-maps-link">Cerca su Google Maps</a></div>`;
+      return;
+    }
+
+    // Show up to 5 results, each with a "Usa" button
+    panel.innerHTML = results.slice(0, 5).map((r, i) =>
+      `<div class="cwm-result-item" data-idx="${i}">
+        <div class="cwm-result-info">
           <span class="cwm-result-name">${escapeHtml(r.name)}</span>
           <span class="cwm-result-addr">${escapeHtml(r.formatted_address || "")}</span>
-        </div>`
-      ).join("");
-      resultsEl.querySelectorAll(".cwm-result-item").forEach(item => {
-        item.addEventListener("click", async () => {
-          const place = results[Number(item.dataset.idx)];
-          item.style.opacity = "0.5";
-          const detailed = await new Promise(resolve =>
-            svc.getDetails({
-              placeId: place.place_id,
-              fields: ["name", "formatted_address", "geometry", "formatted_phone_number", "international_phone_number", "opening_hours"]
-            }, (p, s) => resolve(s === google.maps.places.PlacesServiceStatus.OK ? p : place))
-          );
-          overlay.remove();
-          applyPlaceToForm(detailed);
-        });
-      });
-    } catch (err) {
-      resultsEl.innerHTML = `<div class="cwm-searching">Errore: ${escapeHtml(err.message)}</div>`;
-    } finally {
-      searchBtn.disabled = false;
-    }
-  };
+        </div>
+        <button class="btn primary cwm-use-btn" data-idx="${i}">Usa</button>
+      </div>`
+    ).join("") + `<button class="btn cwm-cancel-btn" style="margin-top:6px;width:100%">Annulla</button>`;
 
-  overlay.querySelector("#cwm-search").onclick = doSearch;
-  queryInput.addEventListener("keydown", e => { if (e.key === "Enter") doSearch(); });
-  if (suggested) doSearch(); // auto-search if form already has data
+    panel.querySelector(".cwm-cancel-btn").onclick = closePanel;
+
+    panel.querySelectorAll(".cwm-use-btn").forEach(useBtn => {
+      useBtn.addEventListener("click", async () => {
+        const place = results[Number(useBtn.dataset.idx)];
+        useBtn.textContent = "…";
+        useBtn.disabled = true;
+        const detailed = await new Promise(resolve =>
+          svc.getDetails({
+            placeId: place.place_id,
+            fields: ["name", "formatted_address", "geometry", "formatted_phone_number", "international_phone_number", "opening_hours"]
+          }, (p, s) => resolve(s === google.maps.places.PlacesServiceStatus.OK ? p : place))
+        );
+        closePanel();
+        applyPlaceToForm(detailed);
+      });
+    });
+
+  } catch (err) {
+    panel.innerHTML = `<div class="cwm-searching">Errore: ${escapeHtml(err.message)}</div>`;
+  }
 }
 
 function applyPlaceToForm(place) {
