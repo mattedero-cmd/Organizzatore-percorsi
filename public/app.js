@@ -607,7 +607,6 @@ function renderMenuGuide() {
 
     </div>`;
 }
-}
 
 function renderMenuInfo() {
   return `
