@@ -1292,6 +1292,37 @@ function renderSaved() {
     </section>`;
 }
 
+// ── visit history helpers ─────────────────────────────────────────────────────
+
+function buildVisitHistory(addressId) {
+  const visits = [];
+  for (const r of state.savedRoutes) {
+    const rows = Array.isArray(r.rows) ? r.rows : [];
+    for (const row of rows) {
+      if (row.type) continue;
+      if (String(row.addressId) === String(addressId)) {
+        visits.push({ date: r.scheduledDate || "", name: r.name || "Giro senza nome", routeId: r.id });
+        break; // one entry per route even if stop appears twice (AM/PM)
+      }
+    }
+  }
+  return visits.sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+}
+
+function renderVisitHistory(addressId) {
+  const visits = buildVisitHistory(addressId);
+  if (!visits.length) return `<div class="visit-history-empty">Nessuna visita registrata nei giri salvati</div>`;
+  const fmtDate = d => d ? new Date(d + "T00:00:00").toLocaleDateString("it-IT", { day: "numeric", month: "short", year: "numeric" }) : "—";
+  return `<div class="visit-history">
+    ${visits.map(v => `
+      <div class="visit-row" data-load-route="${v.routeId}">
+        <span class="visit-date">${fmtDate(v.date)}</span>
+        <span class="visit-name">${escapeHtml(v.name)}</span>
+        <span class="visit-arrow">›</span>
+      </div>`).join("")}
+  </div>`;
+}
+
 // ── render: archive tab ───────────────────────────────────────────────────────
 
 function renderArchive() {
@@ -1335,6 +1366,10 @@ function renderArchive() {
                 <button class="btn danger" data-delete-address="${a.id}">×</button>
               </div>
               <div class="opening-status" id="opening-status-${a.id}" style="display:none"></div>
+              <details class="visit-history-details">
+                <summary class="visit-history-toggle">📅 Storico visite</summary>
+                ${renderVisitHistory(a.id)}
+              </details>
             </article>`).join("") || `<div class="empty" style="grid-column:1/-1">Nessun contatto trovato.</div>`}
         </div>
       </div>
@@ -3264,6 +3299,14 @@ function bindEvents() {
       await api(`/api/addresses/${delAddr.dataset.deleteAddress}`, { method: "DELETE" });
       await refreshAllData();
       render();
+      return;
+    }
+
+    const visitRow = e.target.closest("[data-load-route]");
+    if (visitRow) {
+      const routeId = visitRow.dataset.loadRoute;
+      const route = state.savedRoutes.find(r => String(r.id) === String(routeId));
+      if (route) { state.result = route; setActiveTab("result"); }
       return;
     }
 

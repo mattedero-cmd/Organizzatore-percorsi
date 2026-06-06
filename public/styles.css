@@ -2067,3 +2067,43 @@ tbody tr:last-child td {
   margin-bottom: 4px;
 }
 .auth-remember input { width: 16px; height: 16px; accent-color: var(--primary); }
+
+/* ── storico visite ──────────────────────────────────────────────────────── */
+.visit-history-details {
+  margin-top: 8px;
+  border-top: 1px solid var(--line);
+  padding-top: 6px;
+}
+.visit-history-toggle {
+  font-size: 0.8rem;
+  color: var(--muted);
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 0;
+}
+.visit-history-toggle::-webkit-details-marker { display: none; }
+.visit-history-details[open] .visit-history-toggle { color: var(--primary); }
+.visit-history {
+  margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.visit-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 6px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.82rem;
+  transition: background 0.15s;
+}
+.visit-row:hover { background: var(--surface2, #f4f4f5); }
+.visit-date { color: var(--muted); white-space: nowrap; min-width: 90px; }
+.visit-name { flex: 1; color: var(--text); }
+.visit-arrow { color: var(--muted); font-size: 1rem; }
+.visit-history-empty { font-size: 0.8rem; color: var(--muted); padding: 4px 6px; }
