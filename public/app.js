@@ -598,16 +598,6 @@ function renderMenuGuide() {
         </ul>
       `)}
 
-      ${section("⚙ Impostazioni", `
-        <ul>
-          <li><b>Punto di partenza default</b>: nome ed indirizzo preimpostato per ogni nuovo giro. Se lasciato vuoto, il campo rimane libero.</li>
-          <li><b>Navigatore</b>: scegli tra Google Maps, Apple Maps e Waze per il pulsante ↗ Naviga.</li>
-          <li><b>Tariffa km</b> (€/km), <b>costo orario guida</b> e <b>costo orario lavoro</b>: usati per calcolare il riepilogo economico del giro e del PDF.</li>
-          <li><b>Pausa pranzo</b>: orario e durata della pausa pranzo automatica inserita nel percorso.</li>
-          <li><b>Soste di riposo</b>: abilita/disabilita l'inserimento automatico di soste ogni ~2 ore.</li>
-          <li><b>Account</b>: cambio password, logout. Con "Ricordami" attivo la sessione rimane aperta per 30 giorni.</li>
-        </ul>
-      `)}
 
     </div>`;
 }
