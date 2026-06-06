@@ -820,7 +820,7 @@ function renderStopSuggestions() {
   const q = state.stopSearchText.trim().toLowerCase();
   if (!q) return "";
   const matches = state.allAddresses.filter(a =>
-    [a.customer, a.location, a.fullAddress].some(v => (v || "").toLowerCase().includes(q))
+    [a.customer, a.activity, a.location, a.fullAddress].some(v => (v || "").toLowerCase().includes(q))
   ).slice(0, 8);
   if (!matches.length) return `<div class="stop-suggestion-empty">Nessun risultato</div>`;
   return matches.map(a => `
@@ -834,7 +834,7 @@ function renderStops() {
   const q = state.stopFilter.trim().toLowerCase();
   const visible = q
     ? state.route.stops.filter(s =>
-        [s.customer, s.location, s.fullAddress].some(v => (v || "").toLowerCase().includes(q)))
+        [s.customer, s.activity, s.location, s.fullAddress].some(v => (v || "").toLowerCase().includes(q)))
     : state.route.stops;
   if (!state.route.stops.length) return `<div class="empty">Nessuna tappa inserita.</div>`;
   if (!visible.length) return `<div class="empty">Nessuna tappa corrisponde alla ricerca.</div>`;
