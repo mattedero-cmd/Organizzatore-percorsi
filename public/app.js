@@ -1800,12 +1800,23 @@ function generate() {
 
   const phoneHeader = withPhones ? "<th>Telefono</th>" : "";
   const endColspan = withPhones ? 3 : 2;
-  const costsBlock = withCosts
-    ? '<table class="st"><tr><td>Km totali</td><td>' + summary.totalKm.toFixed(1) + ' km</td><td>Ore guida</td><td>' + mins(summary.totalDriveMinutes) + '</td><td>Ore lavoro</td><td>' + mins(summary.totalWorkMinutes) + '</td></tr><tr><td>Giornata</td><td>' + esc(summary.dayStart) + '–' + esc(summary.dayEnd) + '</td><td>Costo km</td><td>' + eur(summary.costKm) + '</td><td>Costo guida</td><td>' + eur(summary.costDrive) + '</td></tr><tr><td>Totale</td><td><strong>' + eur(summary.totalCost) + '</strong></td><td>Costo lavoro</td><td>' + eur(summary.costWork) + '</td><td></td><td></td></tr></table>'
-    : '<div class="ss"><span>Km: <b>' + summary.totalKm.toFixed(1) + '</b></span><span>Guida: <b>' + mins(summary.totalDriveMinutes) + '</b></span><span>Lavoro: <b>' + mins(summary.totalWorkMinutes) + '</b></span><span>Giornata: <b>' + esc(summary.dayStart) + '–' + esc(summary.dayEnd) + '</b></span></div>';
+
+  // Summary block: clean 2-column label/value rows grouped by topic
+  const summaryRows =
+    '<tr class="sg"><td colspan="4" class="sh">Giornata</td></tr>' +
+    '<tr><td>Orario</td><td>' + esc(summary.dayStart) + ' – ' + esc(summary.dayEnd) + '</td><td>Km totali</td><td>' + summary.totalKm.toFixed(1) + ' km</td></tr>' +
+    '<tr><td>Ore guida</td><td>' + mins(summary.totalDriveMinutes) + '</td><td>Ore lavoro</td><td>' + mins(summary.totalWorkMinutes) + '</td></tr>' +
+    (withCosts
+      ? '<tr class="sg"><td colspan="4" class="sh">Costi</td></tr>' +
+        '<tr><td>Costo km</td><td>' + eur(summary.costKm) + '</td><td>Costo guida</td><td>' + eur(summary.costDrive) + '</td></tr>' +
+        '<tr><td>Costo lavoro</td><td>' + eur(summary.costWork) + '</td><td class="tl">Totale giornata</td><td class="tv">' + eur(summary.totalCost) + '</td></tr>'
+      : '');
+  const costsBlock = '<table class="st"><tbody>' + summaryRows + '</tbody></table>';
+
+  const styles = '*{box-sizing:border-box;margin:0;padding:0}body{font-family:Arial,sans-serif;font-size:11pt;color:#111;padding:20px}h1{font-size:16pt;margin-bottom:2px}.sub{font-size:10pt;color:#555;margin-bottom:14px}table{width:100%;border-collapse:collapse;margin-bottom:16px}th{background:#222;color:#fff;padding:6px 8px;text-align:left;font-size:10pt}td{padding:5px 8px;border-bottom:1px solid #ddd;font-size:10pt;vertical-align:top}tr.br td{background:#f5f5f5;font-style:italic;color:#555}small{color:#666}.a{font-size:9pt}.st td{padding:5px 10px;border-bottom:1px solid #eee;font-size:10pt}.st td:first-child,.st td:nth-child(3){color:#666;width:18%}.st .sh{font-weight:700;background:#f0f0f0;color:#111;padding:5px 10px;font-size:9pt;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid #ccc}.st .tl{font-weight:700;color:#111!important}.st .tv{font-weight:700;font-size:12pt}.note{min-width:60px}@media print{body{padding:0}}';
 
   document.open();
-  document.write('<!DOCTYPE html><html lang="it"><head><meta charset="utf-8"><title>' + esc(routeName) + (date ? " – " + date : "") + '</title><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:Arial,sans-serif;font-size:11pt;color:#111;padding:20px}h1{font-size:16pt;margin-bottom:2px}.sub{font-size:10pt;color:#555;margin-bottom:14px}table{width:100%;border-collapse:collapse;margin-bottom:16px}th{background:#222;color:#fff;padding:6px 8px;text-align:left;font-size:10pt}td{padding:5px 8px;border-bottom:1px solid #ddd;font-size:10pt;vertical-align:top}tr.br td{background:#f5f5f5;font-style:italic;color:#555}small{color:#666}.a{font-size:9pt}.st td{font-weight:bold;border:none;padding:4px 8px}.st td:first-child{font-weight:normal;color:#555}.ss{display:flex;gap:20px;flex-wrap:wrap;font-size:10pt;padding:6px 0;border-top:1px solid #ddd}.note{min-width:60px}@media print{body{padding:0}}</style></head><body><h1>' + esc(routeName) + '</h1>' + (date ? '<div class="sub">' + date + '</div>' : '') + '<table><thead><tr><th>#</th><th>Tappa</th>' + phoneHeader + '<th>Orario</th><th>Durata</th><th>Km</th><th class="note">Note</th></tr></thead><tbody>' + stopRows + '<tr><td colspan="' + endColspan + '"><strong>↩ ' + esc(result.end?.label || "Casa") + '</strong><br><small>' + esc(result.end?.address || result.end?.fullAddress || "") + '</small></td><td>' + esc(finalLeg.arrivalTime) + '</td><td></td><td>' + Number(finalLeg.km).toFixed(1) + '</td><td></td></tr></tbody></table>' + costsBlock + '</body></html>');
+  document.write('<!DOCTYPE html><html lang="it"><head><meta charset="utf-8"><title>' + esc(routeName) + (date ? " – " + date : "") + '</title><style>' + styles + '</style></head><body><h1>' + esc(routeName) + '</h1>' + (date ? '<div class="sub">' + date + '</div>' : '') + '<table><thead><tr><th>#</th><th>Tappa</th>' + phoneHeader + '<th>Orario</th><th>Durata</th><th>Km</th><th class="note">Note</th></tr></thead><tbody>' + stopRows + '<tr><td colspan="' + endColspan + '"><strong>↩ ' + esc(result.end?.label || "Casa") + '</strong><br><small>' + esc(result.end?.address || result.end?.fullAddress || "") + '</small></td><td>' + esc(finalLeg.arrivalTime) + '</td><td></td><td>' + Number(finalLeg.km).toFixed(1) + '</td><td></td></tr></tbody></table>' + costsBlock + '</body></html>');
   document.close();
   window.addEventListener('afterprint', () => window.close());
   setTimeout(() => window.print(), 300);
