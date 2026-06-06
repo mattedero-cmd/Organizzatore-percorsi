@@ -1506,11 +1506,16 @@ tbody tr:last-child td {
   gap: 0;
   background: var(--surface);
   min-height: 100%;
+  width: 100%;
+  overflow: hidden;
 }
 
 .rp-section {
   padding: 12px 14px;
   border-bottom: 1px solid var(--line);
+  width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
 /* Sezione Quando */
@@ -1525,25 +1530,26 @@ tbody tr:last-child td {
   flex-direction: column;
   gap: 4px;
   min-width: 0;
+  flex: 1;
 }
-.rp-when-date { flex: 0 0 auto; }
-.rp-when-time { flex: 0 0 auto; }
 .rp-label {
   font-size: 0.75rem;
   color: var(--muted);
   font-weight: 500;
 }
 .rp-when-date input {
-  width: 130px;
+  width: 100%;
   min-width: 0;
   font-size: 0.85rem;
   padding: 6px 4px;
+  box-sizing: border-box;
 }
 .rp-when-time input {
-  width: 90px;
+  width: 100%;
   min-width: 0;
   font-size: 0.85rem;
   padding: 6px 4px;
+  box-sizing: border-box;
 }
 
 /* Endpoint cards (Da / A) */
@@ -1556,11 +1562,12 @@ tbody tr:last-child td {
 .rp-endpoint-card:last-child {
   margin-bottom: 0;
 }
-/* Simple single-row layout: icon + name + action buttons */
+/* Single-row layout: icon + name + action buttons; wraps on small screens */
 .rp-ep-row {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
 }
 .rp-endpoint-icon {
   font-size: 1.3rem;
@@ -1592,8 +1599,6 @@ tbody tr:last-child td {
   gap: 4px;
   font-size: 0.78rem;
   color: var(--muted);
-  white-space: nowrap;
-  flex-shrink: 0;
   cursor: pointer;
 }
 .rp-archive-inline {
