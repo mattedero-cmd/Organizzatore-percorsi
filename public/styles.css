@@ -2020,37 +2020,83 @@ tbody tr:last-child td {
   color: var(--muted);
   margin: 0 0 8px;
 }
-.stats-table-wrap {
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  border-radius: 8px;
-  border: 1px solid var(--line);
+/* ── Stats tabs ───────────────────────────────────────────────────────────── */
+.stats-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 2px solid var(--line);
+  margin: 0;
+  padding: 0 12px;
 }
-.stats-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.82rem;
-}
-.stats-table th {
-  background: var(--surface2, #f4f4f5);
+.stats-tab-btn {
+  flex: 1;
+  padding: 10px 4px;
+  background: none;
+  border: none;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px;
+  font-size: 0.88rem;
+  font-weight: 500;
   color: var(--muted);
-  font-weight: 600;
-  font-size: 0.72rem;
-  text-transform: uppercase;
-  letter-spacing: .04em;
-  padding: 6px 10px;
-  text-align: left;
-  white-space: nowrap;
+  cursor: pointer;
+  transition: color 0.15s;
+  min-height: unset;
+  width: auto;
+  border-radius: 0;
 }
-.stats-table td {
-  padding: 6px 10px;
-  border-top: 1px solid var(--line);
-  vertical-align: top;
+.stats-tab-btn.active {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+  font-weight: 700;
 }
-.stats-table tr:first-child td { border-top: none; }
-.stats-month { font-weight: 600; white-space: nowrap; }
-.stats-client-name { font-weight: 500; }
-.stats-date { white-space: nowrap; color: var(--muted); font-size: 0.78rem; }
+.stats-body {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+/* Riepilogo KPI grid */
+.stats-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.stats-kpi {
+  background: var(--surface2, #f4f4f5);
+  border-radius: 10px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.stats-kpi-val { font-size: 1.5rem; font-weight: 800; color: var(--text); line-height: 1.1; }
+.stats-kpi-lbl { font-size: 0.72rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+/* Row cards (mesi / clienti) */
+.stats-row-card {
+  background: var(--surface2, #f4f4f5);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+.stats-row-title {
+  font-weight: 700;
+  font-size: 1rem;
+  margin-bottom: 6px;
+  text-transform: capitalize;
+}
+.stats-row-sub { font-weight: 400; color: var(--muted); font-size: 0.85rem; }
+.stats-row-metrics {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.stats-row-metrics span {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+.stats-row-metrics b { font-size: 1.05rem; font-weight: 700; }
+.stats-row-metrics small { font-size: 0.68rem; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
 .auth-remember {
   display: flex;
   align-items: center;
