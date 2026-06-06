@@ -2058,14 +2058,14 @@ function renderMenuStats() {
   } else if (tab === "months") {
     body = monthKeys.map(k => {
       const m = byMonth[k];
-      return `<div class="stats-row-card">
-        <div class="stats-row-title">${fmtMonth(k)}</div>
-        <div class="stats-row-metrics">
-          <span><b>${m.count}</b><small>giri</small></span>
-          <span><b>${m.km.toFixed(0)}</b><small>km</small></span>
-          <span><b>${minutesLabel(m.driveMin)}</b><small>guida</small></span>
-          <span><b>${minutesLabel(m.workMin)}</b><small>lavoro</small></span>
-          <span><b>${euro(m.cost)}</b><small>costo</small></span>
+      return `<div class="stats-month-block">
+        <div class="stats-month-title">${fmtMonth(k)}</div>
+        <div class="stats-cards">
+          <div class="stats-kpi"><span class="stats-kpi-val">${m.count}</span><span class="stats-kpi-lbl">Giri</span></div>
+          <div class="stats-kpi"><span class="stats-kpi-val">${m.km.toFixed(0)}</span><span class="stats-kpi-lbl">Km totali</span></div>
+          <div class="stats-kpi"><span class="stats-kpi-val">${minutesLabel(m.driveMin)}</span><span class="stats-kpi-lbl">Ore guida</span></div>
+          <div class="stats-kpi"><span class="stats-kpi-val">${minutesLabel(m.workMin)}</span><span class="stats-kpi-lbl">Ore lavoro</span></div>
+          <div class="stats-kpi"><span class="stats-kpi-val">${euro(m.cost)}</span><span class="stats-kpi-lbl">Costo totale</span></div>
         </div>
       </div>`;
     }).join("");
