@@ -2109,30 +2109,43 @@ tbody tr:last-child td {
 .visit-history-empty { font-size: 0.8rem; color: var(--muted); padding: 4px 6px; }
 
 /* ── Completa con Maps overlay ───────────────────────────────────────────── */
-.cwm-panel {
-  margin-top: 8px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 8px;
-  background: var(--surface, #fff);
+/* Completa con Maps — fullscreen map modal */
+.cwm-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  background: #fff;
 }
-.cwm-searching { font-size: 0.85rem; color: var(--muted); padding: 6px 4px; line-height: 1.5; }
-.cwm-maps-link { color: var(--accent); text-decoration: underline; }
-.cwm-result-item {
+.cwm-modal-header {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 10px;
+  padding: 8px 12px;
+  background: var(--surface, #fff);
+  border-bottom: 1px solid var(--line);
+  z-index: 1;
+}
+.cwm-search-input {
+  flex: 1;
+  height: 38px;
   border-radius: 8px;
   border: 1px solid var(--line);
-  background: var(--surface2, #f9f9f9);
+  padding: 0 10px;
+  font-size: 0.95rem;
 }
-.cwm-result-info { display: flex; flex-direction: column; flex: 1; min-width: 0; }
-.cwm-result-name { font-weight: 600; font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.cwm-result-addr { font-size: 0.78rem; color: var(--muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.cwm-result-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
-.cwm-use-btn { font-size: 0.8rem; padding: 4px 10px; }
-.cwm-map-btn { font-size: 1rem; padding: 4px 8px; }
+.cwm-close-btn { flex-shrink: 0; }
+.cwm-map-container { flex: 1; }
+.cwm-place-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: var(--surface, #fff);
+  border-top: 1px solid var(--line);
+  box-shadow: 0 -2px 8px rgba(0,0,0,0.08);
+}
+.cwm-place-info { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.cwm-place-name { font-weight: 700; font-size: 0.95rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cwm-place-addr { font-size: 0.78rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

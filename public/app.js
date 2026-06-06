@@ -2622,8 +2622,7 @@ async function useCurrentPosition() {
 
 
 async function completeFormWithMaps() {
-  // Prevent duplicate panels
-  if (document.getElementById("cwm-panel")) return;
+  if (document.getElementById("cwm-modal")) return;
 
   const ready = await loadGoogleMapsScript();
   if (!ready) { showToast("Google Maps non disponibile"); return; }
@@ -2631,76 +2630,125 @@ async function completeFormWithMaps() {
   const form = document.getElementById("address-form");
   if (!form) return;
   const fVal = name => (form.querySelector(`[name="${name}"]`)?.value || "").trim();
-  const query = [fVal("activity") || fVal("customer"), fVal("fullAddress") || fVal("location")].filter(Boolean).join(" ");
 
-  // Build inline panel below the button
-  const btn = form.querySelector("[data-cwm-btn]");
-  const panel = document.createElement("div");
-  panel.id = "cwm-panel";
-  panel.className = "cwm-panel";
-  panel.innerHTML = `<div class="cwm-searching">Ricerca in corso…</div>`;
-  btn?.insertAdjacentElement("afterend", panel);
+  // Starting center: coordinates from form → geocode address → current position → Italy
+  let startLat = Number(fVal("lat")) || 0;
+  let startLng = Number(fVal("lng")) || 0;
+  const hasCoords = startLat !== 0 || startLng !== 0;
 
-  const closePanel = () => panel.remove();
+  const modal = document.createElement("div");
+  modal.id = "cwm-modal";
+  modal.className = "cwm-modal";
+  modal.innerHTML = `
+    <div class="cwm-modal-header">
+      <input id="cwm-search-input" type="text" class="cwm-search-input" placeholder="Cerca un luogo…" autocomplete="off" />
+      <button class="btn cwm-close-btn" id="cwm-close">✕</button>
+    </div>
+    <div id="cwm-map-container" class="cwm-map-container"></div>
+    <div id="cwm-place-bar" class="cwm-place-bar" style="display:none">
+      <div class="cwm-place-info">
+        <span id="cwm-place-name" class="cwm-place-name"></span>
+        <span id="cwm-place-addr" class="cwm-place-addr"></span>
+      </div>
+      <button class="btn primary" id="cwm-use-btn">Usa</button>
+    </div>`;
+  document.body.appendChild(modal);
 
-  if (!query) {
-    // No data in form — open Maps on current position
-    panel.innerHTML = `<div class="cwm-searching">Nessun dato nel form da cercare.<br>
-      <a href="https://maps.google.com" target="_blank" rel="noopener" class="cwm-maps-link">Apri Google Maps</a></div>`;
-    return;
-  }
+  modal.querySelector("#cwm-close").onclick = () => modal.remove();
 
-  const svc = new google.maps.places.PlacesService(document.createElement("div"));
+  const mapEl = modal.querySelector("#cwm-map-container");
+  const placeBar = modal.querySelector("#cwm-place-bar");
+  const placeNameEl = modal.querySelector("#cwm-place-name");
+  const placeAddrEl = modal.querySelector("#cwm-place-addr");
+  const useBtn = modal.querySelector("#cwm-use-btn");
 
-  try {
-    const results = await new Promise(resolve =>
-      svc.textSearch({ query, region: "it" }, (res, status) =>
-        resolve(status === google.maps.places.PlacesServiceStatus.OK ? res : [])
-      )
-    );
+  const initCenter = hasCoords
+    ? { lat: startLat, lng: startLng }
+    : { lat: 46.07, lng: 11.12 }; // default Italy
 
-    if (!results.length) {
-      panel.innerHTML = `<div class="cwm-searching">Nessun risultato per "<strong>${escapeHtml(query)}</strong>".<br>
-        <a href="https://maps.google.com/maps?q=${encodeURIComponent(query)}" target="_blank" rel="noopener" class="cwm-maps-link">Cerca su Google Maps</a></div>`;
-      return;
-    }
+  const map = new google.maps.Map(mapEl, {
+    center: initCenter,
+    zoom: hasCoords ? 16 : 7,
+    disableDefaultUI: false,
+    gestureHandling: "greedy",
+    clickableIcons: true,
+  });
 
-    // Show up to 5 results, each with a "Usa" button and Maps link
-    panel.innerHTML = results.slice(0, 5).map((r, i) => {
-      const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(r.name)}&query_place_id=${encodeURIComponent(r.place_id)}`;
-      return `<div class="cwm-result-item" data-idx="${i}">
-        <div class="cwm-result-info">
-          <span class="cwm-result-name">${escapeHtml(r.name)}</span>
-          <span class="cwm-result-addr">${escapeHtml(r.formatted_address || "")}</span>
-        </div>
-        <div class="cwm-result-actions">
-          <a href="${mapsUrl}" target="_blank" rel="noopener" class="btn ghost cwm-map-btn" title="Apri su Maps">🗺</a>
-          <button class="btn primary cwm-use-btn" data-idx="${i}">Usa</button>
-        </div>
-      </div>`;
-    }).join("") + `<button class="btn cwm-cancel-btn" style="margin-top:6px;width:100%">Annulla</button>`;
-
-    panel.querySelector(".cwm-cancel-btn").onclick = closePanel;
-
-    panel.querySelectorAll(".cwm-use-btn").forEach(useBtn => {
-      useBtn.addEventListener("click", async () => {
-        const place = results[Number(useBtn.dataset.idx)];
-        useBtn.textContent = "…";
-        useBtn.disabled = true;
-        const detailed = await new Promise(resolve =>
-          svc.getDetails({
-            placeId: place.place_id,
-            fields: ["name", "formatted_address", "geometry", "formatted_phone_number", "international_phone_number", "opening_hours"]
-          }, (p, s) => resolve(s === google.maps.places.PlacesServiceStatus.OK ? p : place))
-        );
-        closePanel();
-        applyPlaceToForm(detailed);
+  // If we have an address but no coords, geocode it to center
+  if (!hasCoords) {
+    const addrQuery = [fVal("activity") || fVal("customer"), fVal("fullAddress") || fVal("location")].filter(Boolean).join(" ");
+    if (addrQuery) {
+      const geocoder = new google.maps.Geocoder();
+      geocoder.geocode({ address: addrQuery, region: "it" }, (res, status) => {
+        if (status === "OK" && res[0]) {
+          map.setCenter(res[0].geometry.location);
+          map.setZoom(16);
+        }
       });
-    });
-
-  } catch (err) {
-    panel.innerHTML = `<div class="cwm-searching">Errore: ${escapeHtml(err.message)}</div>`;
+    } else {
+      // Try geolocation
+      navigator.geolocation?.getCurrentPosition(pos => {
+        map.setCenter({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        map.setZoom(14);
+      });
+    }
   }
+
+  // Search box
+  const searchInput = modal.querySelector("#cwm-search-input");
+  const searchBox = new google.maps.places.SearchBox(searchInput);
+  map.addListener("bounds_changed", () => searchBox.setBounds(map.getBounds()));
+  let searchMarker = null;
+  searchBox.addListener("places_changed", () => {
+    const places = searchBox.getPlaces();
+    if (!places?.length) return;
+    const p = places[0];
+    if (searchMarker) searchMarker.setMap(null);
+    searchMarker = new google.maps.Marker({ map, position: p.geometry.location, animation: google.maps.Animation.DROP });
+    map.setCenter(p.geometry.location);
+    map.setZoom(17);
+    showPlaceBar(p);
+  });
+
+  const svc = new google.maps.places.PlacesService(map);
+  let selectedPlace = null;
+
+  function showPlaceBar(place) {
+    selectedPlace = place;
+    placeNameEl.textContent = place.name || "";
+    placeAddrEl.textContent = place.formatted_address || place.vicinity || "";
+    placeBar.style.display = "flex";
+  }
+
+  // Click on POI
+  map.addListener("click", e => {
+    const placeId = e.placeId;
+    if (!placeId) return;
+    e.stop(); // prevent default info window
+    svc.getDetails({
+      placeId,
+      fields: ["name", "formatted_address", "geometry", "formatted_phone_number", "international_phone_number", "opening_hours"]
+    }, (place, status) => {
+      if (status === google.maps.places.PlacesServiceStatus.OK) showPlaceBar(place);
+    });
+  });
+
+  useBtn.onclick = async () => {
+    if (!selectedPlace) return;
+    // If we don't have full details yet (came from searchBox partial), fetch them
+    if (!selectedPlace.opening_hours && selectedPlace.place_id) {
+      useBtn.textContent = "…";
+      useBtn.disabled = true;
+      selectedPlace = await new Promise(resolve =>
+        svc.getDetails({
+          placeId: selectedPlace.place_id,
+          fields: ["name", "formatted_address", "geometry", "formatted_phone_number", "international_phone_number", "opening_hours"]
+        }, (p, s) => resolve(s === google.maps.places.PlacesServiceStatus.OK ? p : selectedPlace))
+      );
+    }
+    modal.remove();
+    applyPlaceToForm(selectedPlace);
+  };
 }
 
 function applyPlaceToForm(place) {
