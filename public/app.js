@@ -1699,131 +1699,122 @@ function renderResult() {
 
 function printRoute() {
   if (!state.result) return;
-
-  // Show options dialog before printing
-  const overlay = document.createElement("div");
-  overlay.className = "modal-overlay";
-  overlay.innerHTML = `
-    <div class="modal-box" style="max-width:340px">
-      <h3 style="margin-bottom:12px">Opzioni stampa</h3>
-      <label style="display:flex;align-items:center;gap:8px;margin-bottom:10px;cursor:pointer">
-        <input type="checkbox" id="print-opt-phones" checked>
-        Includi numeri di telefono
-      </label>
-      <label style="display:flex;align-items:center;gap:8px;margin-bottom:20px;cursor:pointer">
-        <input type="checkbox" id="print-opt-costs">
-        Includi riepilogo costi
-      </label>
-      <div style="display:flex;gap:8px;justify-content:flex-end">
-        <button class="btn" id="print-cancel">Annulla</button>
-        <button class="btn primary" id="print-confirm">🖨 Stampa</button>
-      </div>
-    </div>`;
-  document.body.appendChild(overlay);
-
-  const cleanup = () => overlay.remove();
-  overlay.querySelector("#print-cancel").addEventListener("click", cleanup);
-  overlay.addEventListener("click", e => { if (e.target === overlay) cleanup(); });
-
-  overlay.querySelector("#print-confirm").addEventListener("click", () => {
-    const withPhones = overlay.querySelector("#print-opt-phones").checked;
-    const withCosts  = overlay.querySelector("#print-opt-costs").checked;
-    cleanup();
-    openPrintWindow(withPhones, withCosts);
-  });
-}
-
-function openPrintWindow(withPhones, withCosts) {
   const result = normalizeSavedRoute(state.result);
-  const { rows, finalLeg, summary } = result;
+  const routeName = result.name || "Percorso";
   const date = result.scheduledDate
     ? new Date(result.scheduledDate).toLocaleDateString("it-IT", { weekday: "long", year: "numeric", month: "long", day: "numeric" })
     : "";
-  const routeName = result.name || "Percorso";
 
-  const stopRows = rows.map(row => {
-    if (row.type === "lunch") {
-      const name = row.customer && row.customer !== "Pausa pranzo" ? row.customer : "Pausa pranzo";
-      return `<tr class="break-row"><td colspan="${withPhones ? 3 : 2}">🍽 ${name}${row.location ? ` — ${row.location}` : ""}</td><td>${row.serviceStartTime} – ${row.serviceEndTime}</td><td>${minutesLabel(row.durationMinutes)}</td><td></td><td></td></tr>`;
-    }
-    if (row.type === "rest") {
-      return `<tr class="break-row"><td colspan="${withPhones ? 3 : 2}">☕ ${row.customer}${row.location ? ` — ${row.location}` : ""}</td><td>${row.serviceStartTime} – ${row.serviceEndTime}</td><td>${minutesLabel(row.durationMinutes)}</td><td></td><td></td></tr>`;
-    }
-    const addr = state.allAddresses.find(a => String(a.id) === String(row.addressId));
-    const phoneCell = (() => {
-      if (!withPhones) return "";
-      const lines = [];
-      const p1 = addr?.phone || row.phone || "";
-      const p2 = addr?.phone2 || row.phone2 || "";
-      const p1name = addr?.phoneName || "";
-      const p2name = addr?.phone2Name || "";
-      if (p1) lines.push(`${p1}${p1name ? ` (${p1name})` : ""}`);
-      if (p2) lines.push(`${p2}${p2name ? ` (${p2name})` : ""}`);
-      return `<td>${lines.join("<br>")}</td>`;
-    })();
-    const nameCell = `<td>${row.customer || ""}${row.activity ? `<br><small>${row.activity}</small>` : ""}${row.location && !row.activity ? `<br><small>${row.location}</small>` : ""}<br><small class="addr">${row.address || ""}</small></td>`;
-    return `<tr><td>${row.stopNumber}</td>${nameCell}${phoneCell}<td>${row.arrivalTime} – ${row.serviceEndTime}</td><td>${minutesLabel(row.durationMinutes)}</td><td>${row.km ? row.km.toFixed(1) : ""}</td><td></td></tr>`;
-  }).join("");
+  // Enrich rows with address data now, before opening the window
+  const enrichedRows = result.rows.map(row => {
+    const addr = state.allAddresses.find(a => String(a.id) === String(row.addressId)) || {};
+    return {
+      ...row,
+      phone:     addr.phone     || row.phone     || "",
+      phoneName: addr.phoneName || row.phoneName || "",
+      phoneType: addr.phoneType || row.phoneType || "",
+      phone2:     addr.phone2     || row.phone2     || "",
+      phone2Name: addr.phone2Name || row.phone2Name || "",
+      phone2Type: addr.phone2Type || row.phone2Type || "",
+      activity:   addr.activity   || row.activity   || "",
+    };
+  });
 
-  const phoneHeader = withPhones ? "<th>Telefono</th>" : "";
-  const costsBlock = withCosts ? `
-<table class="summary-table">
-  <tr><td>Km totali</td><td>${summary.totalKm.toFixed(1)} km</td><td>Ore guida</td><td>${minutesLabel(summary.totalDriveMinutes)}</td><td>Ore lavoro</td><td>${minutesLabel(summary.totalWorkMinutes)}</td></tr>
-  <tr><td>Giornata</td><td>${summary.dayStart} – ${summary.dayEnd}</td><td>Costo km</td><td>${euro(summary.costKm)}</td><td>Costo guida</td><td>${euro(summary.costDrive)}</td></tr>
-  <tr><td>Totale</td><td><strong>${euro(summary.totalCost)}</strong></td><td>Costo lavoro</td><td>${euro(summary.costWork)}</td><td></td><td></td></tr>
-</table>` : `
-<div class="summary-simple">
-  <span>Km totali: <strong>${summary.totalKm.toFixed(1)} km</strong></span>
-  <span>Guida: <strong>${minutesLabel(summary.totalDriveMinutes)}</strong></span>
-  <span>Lavoro: <strong>${minutesLabel(summary.totalWorkMinutes)}</strong></span>
-  <span>Giornata: <strong>${summary.dayStart} – ${summary.dayEnd}</strong></span>
-</div>`;
+  const payload = JSON.stringify({ result: { ...result, rows: enrichedRows }, routeName, date });
 
   const html = `<!DOCTYPE html>
 <html lang="it">
 <head>
 <meta charset="utf-8">
-<title>${routeName}${date ? " – " + date : ""}</title>
+<title>Stampa — ${routeName}</title>
 <style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: Arial, sans-serif; font-size: 11pt; color: #111; padding: 20px; }
-  h1 { font-size: 16pt; margin-bottom: 2px; }
-  .subtitle { font-size: 10pt; color: #555; margin-bottom: 14px; }
-  table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
-  th { background: #222; color: #fff; padding: 6px 8px; text-align: left; font-size: 10pt; }
-  td { padding: 5px 8px; border-bottom: 1px solid #ddd; font-size: 10pt; vertical-align: top; }
-  tr.break-row td { background: #f5f5f5; font-style: italic; color: #555; }
-  small { color: #666; }
-  small.addr { font-size: 9pt; }
-  .summary-table td { font-weight: bold; border: none; padding: 4px 8px; }
-  .summary-table td:first-child { font-weight: normal; color: #555; }
-  .summary-simple { display: flex; gap: 20px; flex-wrap: wrap; font-size: 10pt; padding: 6px 0; border-top: 1px solid #ddd; }
-  .notes-col { min-width: 60px; }
-  @media print {
-    body { padding: 0; }
-  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, Arial, sans-serif; background: #f4f4f5; display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+  .card { background: #fff; border-radius: 12px; padding: 28px 32px; max-width: 360px; width: 100%; box-shadow: 0 4px 24px rgba(0,0,0,.10); }
+  h2 { font-size: 1.1rem; margin-bottom: 4px; }
+  .sub { font-size: .85rem; color: #666; margin-bottom: 22px; }
+  label { display: flex; align-items: center; gap: 10px; font-size: .95rem; cursor: pointer; padding: 10px 0; border-bottom: 1px solid #eee; }
+  label:last-of-type { border-bottom: none; margin-bottom: 20px; }
+  input[type=checkbox] { width: 18px; height: 18px; accent-color: #2563eb; flex-shrink: 0; }
+  .desc { font-size: .78rem; color: #888; margin-top: 1px; }
+  button { width: 100%; padding: 11px; border: none; border-radius: 8px; font-size: 1rem; font-weight: 600; cursor: pointer; background: #2563eb; color: #fff; }
+  button:hover { background: #1d4ed8; }
+  @media print { body { background: white; } .card { box-shadow: none; } }
 </style>
 </head>
 <body>
-<h1>${routeName}</h1>
-${date ? `<div class="subtitle">${date}</div>` : ""}
-<table>
-  <thead><tr><th>#</th><th>Tappa</th>${phoneHeader}<th>Orario</th><th>Durata</th><th>Km</th><th class="notes-col">Note</th></tr></thead>
-  <tbody>
-    ${stopRows}
-    <tr><td colspan="${withPhones ? 3 : 2}"><strong>↩ ${result.end?.label || "Casa"}</strong><br><small>${result.end?.address || result.end?.fullAddress || ""}</small></td><td>${finalLeg.arrivalTime}</td><td></td><td>${finalLeg.km.toFixed(1)}</td><td></td></tr>
-  </tbody>
-</table>
-${costsBlock}
-<script>window.onload = () => { window.print(); }<\/script>
+<div class="card">
+  <h2>🖨 Opzioni stampa</h2>
+  <div class="sub">${routeName}${date ? " · " + date : ""}</div>
+  <label>
+    <input type="checkbox" id="opt-phones" checked>
+    <span>Numeri di telefono<br><span class="desc">Aggiunge una colonna con i contatti di ogni tappa</span></span>
+  </label>
+  <label>
+    <input type="checkbox" id="opt-costs">
+    <span>Riepilogo costi<br><span class="desc">Costo km, guida, lavoro e totale giornata</span></span>
+  </label>
+  <button onclick="generate()">Stampa / Salva PDF</button>
+</div>
+<script>
+const DATA = ${payload};
+
+function esc(s) {
+  return String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+function mins(v) {
+  const n = Number(v || 0), h = Math.floor(n / 60), m = n % 60;
+  if (!h) return m + " min";
+  if (!m) return h + " h";
+  return h + " h " + m + " min";
+}
+function eur(v) {
+  return new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR" }).format(Number(v || 0));
+}
+
+function generate() {
+  const withPhones = document.getElementById("opt-phones").checked;
+  const withCosts  = document.getElementById("opt-costs").checked;
+  const { result, routeName, date } = DATA;
+  const { rows, finalLeg, summary } = result;
+
+  const colCount = withPhones ? 6 : 5;
+  const stopRows = rows.map(row => {
+    if (row.type === "lunch") {
+      const name = row.customer && row.customer !== "Pausa pranzo" ? row.customer : "Pausa pranzo";
+      return '<tr class="br"><td colspan="' + colCount + '">🍽 ' + esc(name) + (row.location ? " — " + esc(row.location) : "") + "</td><td>" + esc(row.serviceStartTime) + "–" + esc(row.serviceEndTime) + "</td><td>" + mins(row.durationMinutes) + "</td></tr>";
+    }
+    if (row.type === "rest") {
+      return '<tr class="br"><td colspan="' + colCount + '">☕ ' + esc(row.customer) + (row.location ? " — " + esc(row.location) : "") + "</td><td>" + esc(row.serviceStartTime) + "–" + esc(row.serviceEndTime) + "</td><td>" + mins(row.durationMinutes) + "</td></tr>";
+    }
+    const phoneCell = (() => {
+      if (!withPhones) return "";
+      const lines = [];
+      if (row.phone) lines.push(esc(row.phone) + (row.phoneName ? " <small>(" + esc(row.phoneName) + ")</small>" : ""));
+      if (row.phone2) lines.push(esc(row.phone2) + (row.phone2Name ? " <small>(" + esc(row.phone2Name) + ")</small>" : ""));
+      return "<td>" + (lines.join("<br>") || "—") + "</td>";
+    })();
+    const nameCell = "<td>" + esc(row.customer || "") + (row.activity ? "<br><small>" + esc(row.activity) + "</small>" : "") + (row.location && !row.activity ? "<br><small>" + esc(row.location) + "</small>" : "") + "<br><small class='a'>" + esc(row.address || "") + "</small></td>";
+    return "<tr><td>" + esc(row.stopNumber) + "</td>" + nameCell + phoneCell + "<td>" + esc(row.arrivalTime) + "–" + esc(row.serviceEndTime) + "</td><td>" + mins(row.durationMinutes) + "</td><td>" + (row.km ? Number(row.km).toFixed(1) : "") + "</td><td class='note'></td></tr>";
+  }).join("");
+
+  const phoneHeader = withPhones ? "<th>Telefono</th>" : "";
+  const endColspan = withPhones ? 3 : 2;
+  const costsBlock = withCosts
+    ? '<table class="st"><tr><td>Km totali</td><td>' + summary.totalKm.toFixed(1) + ' km</td><td>Ore guida</td><td>' + mins(summary.totalDriveMinutes) + '</td><td>Ore lavoro</td><td>' + mins(summary.totalWorkMinutes) + '</td></tr><tr><td>Giornata</td><td>' + esc(summary.dayStart) + '–' + esc(summary.dayEnd) + '</td><td>Costo km</td><td>' + eur(summary.costKm) + '</td><td>Costo guida</td><td>' + eur(summary.costDrive) + '</td></tr><tr><td>Totale</td><td><strong>' + eur(summary.totalCost) + '</strong></td><td>Costo lavoro</td><td>' + eur(summary.costWork) + '</td><td></td><td></td></tr></table>'
+    : '<div class="ss"><span>Km: <b>' + summary.totalKm.toFixed(1) + '</b></span><span>Guida: <b>' + mins(summary.totalDriveMinutes) + '</b></span><span>Lavoro: <b>' + mins(summary.totalWorkMinutes) + '</b></span><span>Giornata: <b>' + esc(summary.dayStart) + '–' + esc(summary.dayEnd) + '</b></span></div>';
+
+  document.open();
+  document.write('<!DOCTYPE html><html lang="it"><head><meta charset="utf-8"><title>' + esc(routeName) + (date ? " – " + date : "") + '</title><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:Arial,sans-serif;font-size:11pt;color:#111;padding:20px}h1{font-size:16pt;margin-bottom:2px}.sub{font-size:10pt;color:#555;margin-bottom:14px}table{width:100%;border-collapse:collapse;margin-bottom:16px}th{background:#222;color:#fff;padding:6px 8px;text-align:left;font-size:10pt}td{padding:5px 8px;border-bottom:1px solid #ddd;font-size:10pt;vertical-align:top}tr.br td{background:#f5f5f5;font-style:italic;color:#555}small{color:#666}.a{font-size:9pt}.st td{font-weight:bold;border:none;padding:4px 8px}.st td:first-child{font-weight:normal;color:#555}.ss{display:flex;gap:20px;flex-wrap:wrap;font-size:10pt;padding:6px 0;border-top:1px solid #ddd}.note{min-width:60px}@media print{body{padding:0}}</style></head><body><h1>' + esc(routeName) + '</h1>' + (date ? '<div class="sub">' + date + '</div>' : '') + '<table><thead><tr><th>#</th><th>Tappa</th>' + phoneHeader + '<th>Orario</th><th>Durata</th><th>Km</th><th class="note">Note</th></tr></thead><tbody>' + stopRows + '<tr><td colspan="' + endColspan + '"><strong>↩ ' + esc(result.end?.label || "Casa") + '</strong><br><small>' + esc(result.end?.address || result.end?.fullAddress || "") + '</small></td><td>' + esc(finalLeg.arrivalTime) + '</td><td></td><td>' + Number(finalLeg.km).toFixed(1) + '</td><td></td></tr></tbody></table>' + costsBlock + '</body></html>');
+  document.close();
+  setTimeout(() => window.print(), 300);
+}
+<\/script>
 </body>
 </html>`;
 
   const w = window.open("", "_blank");
-  if (w) {
-    w.document.write(html);
-    w.document.close();
-  }
+  if (w) { w.document.write(html); w.document.close(); }
 }
 
 // ── render dispatch ───────────────────────────────────────────────────────────
