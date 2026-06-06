@@ -1699,6 +1699,41 @@ function renderResult() {
 
 function printRoute() {
   if (!state.result) return;
+
+  // Show options dialog before printing
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay";
+  overlay.innerHTML = `
+    <div class="modal-box" style="max-width:340px">
+      <h3 style="margin-bottom:12px">Opzioni stampa</h3>
+      <label style="display:flex;align-items:center;gap:8px;margin-bottom:10px;cursor:pointer">
+        <input type="checkbox" id="print-opt-phones" checked>
+        Includi numeri di telefono
+      </label>
+      <label style="display:flex;align-items:center;gap:8px;margin-bottom:20px;cursor:pointer">
+        <input type="checkbox" id="print-opt-costs">
+        Includi riepilogo costi
+      </label>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button class="btn" id="print-cancel">Annulla</button>
+        <button class="btn primary" id="print-confirm">🖨 Stampa</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  const cleanup = () => overlay.remove();
+  overlay.querySelector("#print-cancel").addEventListener("click", cleanup);
+  overlay.addEventListener("click", e => { if (e.target === overlay) cleanup(); });
+
+  overlay.querySelector("#print-confirm").addEventListener("click", () => {
+    const withPhones = overlay.querySelector("#print-opt-phones").checked;
+    const withCosts  = overlay.querySelector("#print-opt-costs").checked;
+    cleanup();
+    openPrintWindow(withPhones, withCosts);
+  });
+}
+
+function openPrintWindow(withPhones, withCosts) {
   const result = normalizeSavedRoute(state.result);
   const { rows, finalLeg, summary } = result;
   const date = result.scheduledDate
@@ -1709,13 +1744,40 @@ function printRoute() {
   const stopRows = rows.map(row => {
     if (row.type === "lunch") {
       const name = row.customer && row.customer !== "Pausa pranzo" ? row.customer : "Pausa pranzo";
-      return `<tr class="break-row"><td colspan="2">🍽 ${name}${row.location ? ` — ${row.location}` : ""}</td><td>${row.serviceStartTime} – ${row.serviceEndTime}</td><td>${minutesLabel(row.durationMinutes)}</td><td></td><td></td></tr>`;
+      return `<tr class="break-row"><td colspan="${withPhones ? 3 : 2}">🍽 ${name}${row.location ? ` — ${row.location}` : ""}</td><td>${row.serviceStartTime} – ${row.serviceEndTime}</td><td>${minutesLabel(row.durationMinutes)}</td><td></td><td></td></tr>`;
     }
     if (row.type === "rest") {
-      return `<tr class="break-row"><td colspan="2">☕ ${row.customer}${row.location ? ` — ${row.location}` : ""}</td><td>${row.serviceStartTime} – ${row.serviceEndTime}</td><td>${minutesLabel(row.durationMinutes)}</td><td></td><td></td></tr>`;
+      return `<tr class="break-row"><td colspan="${withPhones ? 3 : 2}">☕ ${row.customer}${row.location ? ` — ${row.location}` : ""}</td><td>${row.serviceStartTime} – ${row.serviceEndTime}</td><td>${minutesLabel(row.durationMinutes)}</td><td></td><td></td></tr>`;
     }
-    return `<tr><td>${row.stopNumber}</td><td>${row.customer || ""}${row.location ? `<br><small>${row.location}</small>` : ""}<br><small class="addr">${row.address || ""}</small></td><td>${row.arrivalTime} – ${row.serviceEndTime}</td><td>${minutesLabel(row.durationMinutes)}</td><td>${row.km ? row.km.toFixed(1) : ""}</td><td></td></tr>`;
+    const addr = state.allAddresses.find(a => String(a.id) === String(row.addressId));
+    const phoneCell = (() => {
+      if (!withPhones) return "";
+      const lines = [];
+      const p1 = addr?.phone || row.phone || "";
+      const p2 = addr?.phone2 || row.phone2 || "";
+      const p1name = addr?.phoneName || "";
+      const p2name = addr?.phone2Name || "";
+      if (p1) lines.push(`${p1}${p1name ? ` (${p1name})` : ""}`);
+      if (p2) lines.push(`${p2}${p2name ? ` (${p2name})` : ""}`);
+      return `<td>${lines.join("<br>")}</td>`;
+    })();
+    const nameCell = `<td>${row.customer || ""}${row.activity ? `<br><small>${row.activity}</small>` : ""}${row.location && !row.activity ? `<br><small>${row.location}</small>` : ""}<br><small class="addr">${row.address || ""}</small></td>`;
+    return `<tr><td>${row.stopNumber}</td>${nameCell}${phoneCell}<td>${row.arrivalTime} – ${row.serviceEndTime}</td><td>${minutesLabel(row.durationMinutes)}</td><td>${row.km ? row.km.toFixed(1) : ""}</td><td></td></tr>`;
   }).join("");
+
+  const phoneHeader = withPhones ? "<th>Telefono</th>" : "";
+  const costsBlock = withCosts ? `
+<table class="summary-table">
+  <tr><td>Km totali</td><td>${summary.totalKm.toFixed(1)} km</td><td>Ore guida</td><td>${minutesLabel(summary.totalDriveMinutes)}</td><td>Ore lavoro</td><td>${minutesLabel(summary.totalWorkMinutes)}</td></tr>
+  <tr><td>Giornata</td><td>${summary.dayStart} – ${summary.dayEnd}</td><td>Costo km</td><td>${euro(summary.costKm)}</td><td>Costo guida</td><td>${euro(summary.costDrive)}</td></tr>
+  <tr><td>Totale</td><td><strong>${euro(summary.totalCost)}</strong></td><td>Costo lavoro</td><td>${euro(summary.costWork)}</td><td></td><td></td></tr>
+</table>` : `
+<div class="summary-simple">
+  <span>Km totali: <strong>${summary.totalKm.toFixed(1)} km</strong></span>
+  <span>Guida: <strong>${minutesLabel(summary.totalDriveMinutes)}</strong></span>
+  <span>Lavoro: <strong>${minutesLabel(summary.totalWorkMinutes)}</strong></span>
+  <span>Giornata: <strong>${summary.dayStart} – ${summary.dayEnd}</strong></span>
+</div>`;
 
   const html = `<!DOCTYPE html>
 <html lang="it">
@@ -1735,10 +1797,10 @@ function printRoute() {
   small.addr { font-size: 9pt; }
   .summary-table td { font-weight: bold; border: none; padding: 4px 8px; }
   .summary-table td:first-child { font-weight: normal; color: #555; }
-  .notes-col { min-width: 80px; }
+  .summary-simple { display: flex; gap: 20px; flex-wrap: wrap; font-size: 10pt; padding: 6px 0; border-top: 1px solid #ddd; }
+  .notes-col { min-width: 60px; }
   @media print {
     body { padding: 0; }
-    button { display: none; }
   }
 </style>
 </head>
@@ -1746,17 +1808,13 @@ function printRoute() {
 <h1>${routeName}</h1>
 ${date ? `<div class="subtitle">${date}</div>` : ""}
 <table>
-  <thead><tr><th>#</th><th>Tappa</th><th>Orario</th><th>Durata</th><th>Km</th><th class="notes-col">Note</th></tr></thead>
+  <thead><tr><th>#</th><th>Tappa</th>${phoneHeader}<th>Orario</th><th>Durata</th><th>Km</th><th class="notes-col">Note</th></tr></thead>
   <tbody>
     ${stopRows}
-    <tr><td colspan="2"><strong>↩ ${result.end?.label || "Casa"}</strong><br><small>${result.end?.address || result.end?.fullAddress || ""}</small></td><td>${finalLeg.arrivalTime}</td><td></td><td>${finalLeg.km.toFixed(1)}</td><td></td></tr>
+    <tr><td colspan="${withPhones ? 3 : 2}"><strong>↩ ${result.end?.label || "Casa"}</strong><br><small>${result.end?.address || result.end?.fullAddress || ""}</small></td><td>${finalLeg.arrivalTime}</td><td></td><td>${finalLeg.km.toFixed(1)}</td><td></td></tr>
   </tbody>
 </table>
-<table class="summary-table">
-  <tr><td>Km totali</td><td>${summary.totalKm.toFixed(1)} km</td><td>Ore guida</td><td>${minutesLabel(summary.totalDriveMinutes)}</td><td>Ore lavoro</td><td>${minutesLabel(summary.totalWorkMinutes)}</td></tr>
-  <tr><td>Giornata</td><td>${summary.dayStart} – ${summary.dayEnd}</td><td>Costo km</td><td>${euro(summary.costKm)}</td><td>Costo guida</td><td>${euro(summary.costDrive)}</td></tr>
-  <tr><td>Totale</td><td><strong>${euro(summary.totalCost)}</strong></td><td>Costo lavoro</td><td>${euro(summary.costWork)}</td><td></td><td></td></tr>
-</table>
+${costsBlock}
 <script>window.onload = () => { window.print(); }<\/script>
 </body>
 </html>`;
