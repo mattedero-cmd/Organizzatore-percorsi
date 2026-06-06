@@ -2621,36 +2621,136 @@ async function useCurrentPosition() {
 }
 
 
-function completeFormWithMaps() {
+async function completeFormWithMaps() {
+  const ready = await loadGoogleMapsScript();
+  if (!ready) { showToast("Google Maps non disponibile"); return; }
+
   const form = document.getElementById("address-form");
   if (!form) return;
   const fVal = name => (form.querySelector(`[name="${name}"]`)?.value || "").trim();
-  const query = [fVal("activity") || fVal("customer"), fVal("fullAddress") || fVal("location")].filter(Boolean).join(" ");
+  const suggested = [fVal("activity") || fVal("customer"), fVal("fullAddress") || fVal("location")].filter(Boolean).join(" ");
 
-  if (query) {
-    const pref = state.navigatorPref;
-    const url = pref === "apple"
-      ? `http://maps.apple.com/?q=${encodeURIComponent(query)}`
-      : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
-    window.open(url, "_blank", "noopener");
-  } else {
-    // No data in form — open Maps on current position
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        pos => {
-          const { latitude: lat, longitude: lng } = pos.coords;
-          const pref = state.navigatorPref;
-          const url = pref === "apple"
-            ? `http://maps.apple.com/?ll=${lat},${lng}`
-            : `https://www.google.com/maps/@${lat},${lng},16z`;
-          window.open(url, "_blank", "noopener");
-        },
-        () => window.open("https://www.google.com/maps", "_blank", "noopener")
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay";
+  overlay.innerHTML = `
+    <div class="modal-box" style="max-width:380px">
+      <h3 style="margin-bottom:10px">Cerca su Maps</h3>
+      <p style="font-size:0.82rem;color:var(--muted);margin-bottom:8px;">Seleziona il risultato giusto per compilare i campi vuoti della scheda.</p>
+      <div style="display:flex;gap:6px;margin-bottom:8px;">
+        <input id="cwm-query" style="flex:1" type="text" placeholder="Nome locale, indirizzo…" value="${escapeHtml(suggested)}" autocomplete="off" />
+        <button class="btn primary" id="cwm-search">🔍</button>
+      </div>
+      <div id="cwm-results" class="cwm-results"></div>
+      <div style="display:flex;justify-content:flex-end;margin-top:10px;">
+        <button class="btn" id="cwm-cancel">Annulla</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  const queryInput = overlay.querySelector("#cwm-query");
+  queryInput.focus();
+  queryInput.select();
+  overlay.querySelector("#cwm-cancel").onclick = () => overlay.remove();
+  overlay.addEventListener("click", e => { if (e.target === overlay) overlay.remove(); });
+
+  const svc = new google.maps.places.PlacesService(document.createElement("div"));
+
+  const doSearch = async () => {
+    const q = queryInput.value.trim();
+    if (!q) return;
+    const searchBtn = overlay.querySelector("#cwm-search");
+    searchBtn.disabled = true;
+    const resultsEl = overlay.querySelector("#cwm-results");
+    resultsEl.innerHTML = `<div class="cwm-searching">Ricerca in corso…</div>`;
+    try {
+      const results = await new Promise(resolve =>
+        svc.textSearch({ query: q, region: "it" }, (res, status) =>
+          resolve(status === google.maps.places.PlacesServiceStatus.OK ? res : [])
+        )
       );
-    } else {
-      window.open("https://www.google.com/maps", "_blank", "noopener");
+      if (!results.length) { resultsEl.innerHTML = `<div class="cwm-searching">Nessun risultato — prova a essere più specifico.</div>`; return; }
+      resultsEl.innerHTML = results.slice(0, 5).map((r, i) =>
+        `<div class="cwm-result-item" data-idx="${i}">
+          <span class="cwm-result-name">${escapeHtml(r.name)}</span>
+          <span class="cwm-result-addr">${escapeHtml(r.formatted_address || "")}</span>
+        </div>`
+      ).join("");
+      resultsEl.querySelectorAll(".cwm-result-item").forEach(item => {
+        item.addEventListener("click", async () => {
+          const place = results[Number(item.dataset.idx)];
+          item.style.opacity = "0.5";
+          const detailed = await new Promise(resolve =>
+            svc.getDetails({
+              placeId: place.place_id,
+              fields: ["name", "formatted_address", "geometry", "formatted_phone_number", "international_phone_number", "opening_hours"]
+            }, (p, s) => resolve(s === google.maps.places.PlacesServiceStatus.OK ? p : place))
+          );
+          overlay.remove();
+          applyPlaceToForm(detailed);
+        });
+      });
+    } catch (err) {
+      resultsEl.innerHTML = `<div class="cwm-searching">Errore: ${escapeHtml(err.message)}</div>`;
+    } finally {
+      searchBtn.disabled = false;
     }
+  };
+
+  overlay.querySelector("#cwm-search").onclick = doSearch;
+  queryInput.addEventListener("keydown", e => { if (e.key === "Enter") doSearch(); });
+  if (suggested) doSearch(); // auto-search if form already has data
+}
+
+function applyPlaceToForm(place) {
+  const form = document.getElementById("address-form");
+  if (!form) return;
+  const f = name => form.querySelector(`[name="${name}"]`);
+  const setIfEmpty = (name, value) => { const el = f(name); if (el && !el.value.trim() && value) el.value = value; };
+
+  setIfEmpty("fullAddress", place.formatted_address);
+  setIfEmpty("phone", place.formatted_phone_number || place.international_phone_number || "");
+  if (place.geometry?.location) {
+    setIfEmpty("lat", place.geometry.location.lat().toFixed(6));
+    setIfEmpty("lng", place.geometry.location.lng().toFixed(6));
   }
+
+  if (!place.opening_hours?.periods) { showToast("Dati compilati — nessun orario disponibile su Maps"); return; }
+
+  const fmtTime = t => t?.length === 4 ? `${t.slice(0, 2)}:${t.slice(2)}` : (t || "");
+  const byDay = {};
+  for (const p of place.opening_hours.periods) {
+    const d = p.open?.day ?? -1;
+    if (d < 0) continue;
+    if (!byDay[d]) byDay[d] = [];
+    byDay[d].push({ open: fmtTime(p.open?.time), close: fmtTime(p.close?.time) });
+  }
+
+  let filled = 0;
+  document.querySelectorAll(".wh-row").forEach(row => {
+    const d = Number(row.dataset.day);
+    const om = row.querySelector(".wh-om");
+    if (!om || om.value.trim()) return;
+    const periods = byDay[d];
+    if (!periods) {
+      const closedEl = row.querySelector(".wh-closed");
+      if (closedEl && !closedEl.checked) { closedEl.checked = true; closedEl.dispatchEvent(new Event("change")); filled++; }
+    } else {
+      const p0 = periods[0], p1 = periods[1];
+      const cont = periods.length === 1;
+      const setV = (sel, v) => { const el = row.querySelector(sel); if (el && !el.value.trim()) el.value = v; };
+      setV(".wh-om", p0.open);
+      if (cont) {
+        setV(".wh-ca", p0.close);
+        const contEl = row.querySelector(".wh-cont");
+        if (contEl && !contEl.checked) { contEl.checked = true; contEl.dispatchEvent(new Event("change")); }
+      } else {
+        setV(".wh-cm", p0.close);
+        if (p1) { setV(".wh-oa", p1.open); setV(".wh-ca", p1.close); }
+      }
+      filled++;
+    }
+  });
+  showToast(filled ? `Compilati orari per ${filled} giorni` : "Dati compilati — orari già presenti");
 }
 
 
