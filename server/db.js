@@ -40,6 +40,7 @@ function rowToAddress(row) {
   return {
     id: row.id,
     customer: row.customer ?? "",
+    activity: row.activity ?? "",
     location: row.location ?? "",
     fullAddress: row.full_address ?? "",
     addressType: row.address_type ?? "customer",
@@ -427,6 +428,9 @@ export async function migrateSettingsColumns() {
   if (!addrCols.includes("place_id")) {
     await runSql("ALTER TABLE addresses ADD COLUMN place_id TEXT DEFAULT NULL;");
   }
+  if (!addrCols.includes("activity")) {
+    await runSql("ALTER TABLE addresses ADD COLUMN activity TEXT DEFAULT '';");
+  }
 }
 
 async function migrateAuth() {
@@ -472,12 +476,12 @@ export async function listAddresses(search = "", userId = null) {
   const term = String(search || "").trim().toLowerCase();
   const userFilter = userId != null ? ` AND user_id = ${sqlValue(Number(userId))}` : "";
   if (dbMode === "postgres") {
-    const where = term ? `WHERE lower(concat_ws(' ', customer, location, full_address, notes)) LIKE ${sqlValue(`%${term}%`)}${userFilter}` : (userFilter ? `WHERE 1=1${userFilter}` : "");
-    const rows = await runSql(`SELECT * FROM addresses ${where} ORDER BY lower(customer), lower(location);`, true);
+    const where = term ? `WHERE lower(concat_ws(' ', customer, activity, location, full_address, notes)) LIKE ${sqlValue(`%${term}%`)}${userFilter}` : (userFilter ? `WHERE 1=1${userFilter}` : "");
+    const rows = await runSql(`SELECT * FROM addresses ${where} ORDER BY lower(coalesce(nullif(activity,''),customer)), lower(location);`, true);
     return rows.map(rowToAddress);
   }
-  const where = term ? `WHERE lower(customer || ' ' || location || ' ' || full_address || ' ' || notes) LIKE ${sqlValue(`%${term}%`)}${userFilter}` : (userFilter ? `WHERE 1=1${userFilter}` : "");
-  const rows = await runSql(`SELECT * FROM addresses ${where} ORDER BY customer COLLATE NOCASE, location COLLATE NOCASE;`, true);
+  const where = term ? `WHERE lower(customer || ' ' || coalesce(activity,'') || ' ' || location || ' ' || full_address || ' ' || notes) LIKE ${sqlValue(`%${term}%`)}${userFilter}` : (userFilter ? `WHERE 1=1${userFilter}` : "");
+  const rows = await runSql(`SELECT * FROM addresses ${where} ORDER BY coalesce(nullif(activity,''),customer) COLLATE NOCASE, location COLLATE NOCASE;`, true);
   return rows.map(rowToAddress);
 }
 
@@ -489,8 +493,8 @@ export async function getAddress(id, userId = null) {
 
 export async function createAddress(address, userId = null) {
   const userIdVal = userId != null ? sqlValue(Number(userId)) : "NULL";
-  const cols = `customer, location, full_address, address_type, phone, phone_type, phone_name, phone2, phone2_type, phone2_name, phone_preferred, email, notes, open_morning, close_morning, open_afternoon, close_afternoon, default_duration, weekly_hours, lat, lng, place_id, user_id`;
-  const vals = `${sqlValue(address.customer || "Senza nome")}, ${sqlValue(address.location || "")}, ${sqlValue(address.fullAddress || address.full_address || "")}, ${sqlValue(address.addressType || "customer")}, ${sqlValue(address.phone || "")}, ${sqlValue(address.phoneType || "cell")}, ${sqlValue(address.phoneName || "")}, ${sqlValue(address.phone2 || "")}, ${sqlValue(address.phone2Type || "fisso")}, ${sqlValue(address.phone2Name || "")}, ${sqlValue(address.phonePreferred || "phone")}, ${sqlValue(address.email || "")}, ${sqlValue(address.notes || "")}, ${sqlValue(address.openMorning || address.open_morning || "")}, ${sqlValue(address.closeMorning || address.close_morning || "")}, ${sqlValue(address.openAfternoon || address.open_afternoon || "")}, ${sqlValue(address.closeAfternoon || address.close_afternoon || "")}, ${sqlValue(Number(address.defaultDuration || address.default_duration || 45))}, ${sqlValue(address.weeklyHours ? JSON.stringify(address.weeklyHours) : null)}, ${sqlValue(address.lat === undefined ? null : Number(address.lat))}, ${sqlValue(address.lng === undefined ? null : Number(address.lng))}, ${sqlValue(address.placeId || address.place_id || null)}, ${userIdVal}`;
+  const cols = `customer, activity, location, full_address, address_type, phone, phone_type, phone_name, phone2, phone2_type, phone2_name, phone_preferred, email, notes, open_morning, close_morning, open_afternoon, close_afternoon, default_duration, weekly_hours, lat, lng, place_id, user_id`;
+  const vals = `${sqlValue(address.customer || "Senza nome")}, ${sqlValue(address.activity || "")}, ${sqlValue(address.location || "")}, ${sqlValue(address.fullAddress || address.full_address || "")}, ${sqlValue(address.addressType || "customer")}, ${sqlValue(address.phone || "")}, ${sqlValue(address.phoneType || "cell")}, ${sqlValue(address.phoneName || "")}, ${sqlValue(address.phone2 || "")}, ${sqlValue(address.phone2Type || "fisso")}, ${sqlValue(address.phone2Name || "")}, ${sqlValue(address.phonePreferred || "phone")}, ${sqlValue(address.email || "")}, ${sqlValue(address.notes || "")}, ${sqlValue(address.openMorning || address.open_morning || "")}, ${sqlValue(address.closeMorning || address.close_morning || "")}, ${sqlValue(address.openAfternoon || address.open_afternoon || "")}, ${sqlValue(address.closeAfternoon || address.close_afternoon || "")}, ${sqlValue(Number(address.defaultDuration || address.default_duration || 45))}, ${sqlValue(address.weeklyHours ? JSON.stringify(address.weeklyHours) : null)}, ${sqlValue(address.lat === undefined ? null : Number(address.lat))}, ${sqlValue(address.lng === undefined ? null : Number(address.lng))}, ${sqlValue(address.placeId || address.place_id || null)}, ${userIdVal}`;
   if (dbMode === "postgres") {
     const rows = await runSql(`INSERT INTO addresses (${cols}) VALUES (${vals}) RETURNING *;`, true);
     return rowToAddress(rows[0]);
@@ -502,7 +506,7 @@ export async function createAddress(address, userId = null) {
 
 export async function updateAddress(id, address, userId = null) {
   const userFilter = userId != null ? ` AND user_id = ${sqlValue(Number(userId))}` : "";
-  const setClause = `customer = ${sqlValue(address.customer || "Senza nome")}, location = ${sqlValue(address.location || "")}, full_address = ${sqlValue(address.fullAddress || "")}, address_type = ${sqlValue(address.addressType || "customer")}, phone = ${sqlValue(address.phone || "")}, phone_type = ${sqlValue(address.phoneType || "cell")}, phone_name = ${sqlValue(address.phoneName || "")}, phone2 = ${sqlValue(address.phone2 || "")}, phone2_type = ${sqlValue(address.phone2Type || "fisso")}, phone2_name = ${sqlValue(address.phone2Name || "")}, phone_preferred = ${sqlValue(address.phonePreferred || "phone")}, email = ${sqlValue(address.email || "")}, notes = ${sqlValue(address.notes || "")}, open_morning = ${sqlValue(address.openMorning || "")}, close_morning = ${sqlValue(address.closeMorning || "")}, open_afternoon = ${sqlValue(address.openAfternoon || "")}, close_afternoon = ${sqlValue(address.closeAfternoon || "")}, default_duration = ${sqlValue(Number(address.defaultDuration || 45))}, weekly_hours = ${sqlValue(address.weeklyHours ? JSON.stringify(address.weeklyHours) : null)}, lat = ${sqlValue(address.lat === undefined ? null : Number(address.lat))}, lng = ${sqlValue(address.lng === undefined ? null : Number(address.lng))}, place_id = ${sqlValue(address.placeId !== undefined ? address.placeId : (address.place_id ?? null))}`;
+  const setClause = `customer = ${sqlValue(address.customer || "Senza nome")}, activity = ${sqlValue(address.activity || "")}, location = ${sqlValue(address.location || "")}, full_address = ${sqlValue(address.fullAddress || "")}, address_type = ${sqlValue(address.addressType || "customer")}, phone = ${sqlValue(address.phone || "")}, phone_type = ${sqlValue(address.phoneType || "cell")}, phone_name = ${sqlValue(address.phoneName || "")}, phone2 = ${sqlValue(address.phone2 || "")}, phone2_type = ${sqlValue(address.phone2Type || "fisso")}, phone2_name = ${sqlValue(address.phone2Name || "")}, phone_preferred = ${sqlValue(address.phonePreferred || "phone")}, email = ${sqlValue(address.email || "")}, notes = ${sqlValue(address.notes || "")}, open_morning = ${sqlValue(address.openMorning || "")}, close_morning = ${sqlValue(address.closeMorning || "")}, open_afternoon = ${sqlValue(address.openAfternoon || "")}, close_afternoon = ${sqlValue(address.closeAfternoon || "")}, default_duration = ${sqlValue(Number(address.defaultDuration || 45))}, weekly_hours = ${sqlValue(address.weeklyHours ? JSON.stringify(address.weeklyHours) : null)}, lat = ${sqlValue(address.lat === undefined ? null : Number(address.lat))}, lng = ${sqlValue(address.lng === undefined ? null : Number(address.lng))}, place_id = ${sqlValue(address.placeId !== undefined ? address.placeId : (address.place_id ?? null))}`;
   if (dbMode === "postgres") {
     const rows = await runSql(`UPDATE addresses SET ${setClause}, updated_at = NOW() WHERE id = ${sqlValue(Number(id))}${userFilter} RETURNING *;`, true);
     return rows[0] ? rowToAddress(rows[0]) : null;

@@ -1914,6 +1914,25 @@ tbody tr:last-child td {
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+/* ── import wizard ───────────────────────────────────────────────────────── */
+.import-wizard-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 12px;
+  margin: -4px -4px 14px;
+  background: color-mix(in srgb, var(--primary) 10%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--primary) 30%, var(--line));
+  border-radius: 8px;
+}
+.import-wizard-step {
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--primary-dark);
+}
+
 /* ── import preview ──────────────────────────────────────────────────────── */
 .import-contact-row {
   display: flex;

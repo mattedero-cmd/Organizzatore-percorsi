@@ -35,7 +35,9 @@ function preferredPhone(a) {
 }
 
 function addressName(a) {
-  return `${a.customer || ""}${a.location ? ` — ${a.location}` : ""}`.trim();
+  const primary = a.activity || a.customer || "";
+  const secondary = a.activity && a.customer ? a.customer : (a.location || "");
+  return `${primary}${secondary ? ` — ${secondary}` : ""}`.trim();
 }
 
 function showToast(message) {
@@ -82,7 +84,7 @@ async function api(path, options = {}) {
 // ── state ────────────────────────────────────────────────────────────────────
 
 const emptyForm = {
-  id: null, customer: "", location: "", fullAddress: "",
+  id: null, customer: "", activity: "", location: "", fullAddress: "",
   addressType: "customer",
   phone: "", phoneType: "cell", phoneName: "",
   phone2: "", phone2Type: "fisso", phone2Name: "",
@@ -137,6 +139,7 @@ const state = {
   manualOrderRows: null,
   planning: false,
   stopFilter: "",
+  importWizard: null,
   whisperConfigured: false,
   voiceRecording: false,
   _mediaRecorder: null,
@@ -1305,7 +1308,8 @@ function renderArchive() {
             ? `<div class="empty" style="grid-column:1/-1">Cerca un contatto per nome o città, oppure premi <b>Mostra tutti</b>.</div>`
             : state.addresses.map(a => `
             <article class="card archive-card">
-              <p class="stop-title">${a.addressType === "rest" ? "☕ " : ""}${escapeHtml(addressName(a))}</p>
+              <p class="stop-title">${a.addressType === "rest" ? "☕ " : a.addressType === "restaurant" ? "🍽 " : a.addressType === "favorite" ? "⭐ " : ""}${escapeHtml(a.activity || a.customer)}</p>
+              ${a.activity ? `<div class="stop-meta" style="font-weight:600">👤 ${escapeHtml(a.customer)}</div>` : ""}
               <div class="stop-meta">${escapeHtml(a.fullAddress)}</div>
               ${a.phone ? `<div class="stop-meta">${phoneIcon(a.phoneType)} ${escapeHtml(a.phone)}${a.phoneName ? ` <span class="phone-name-badge">${escapeHtml(a.phoneName)}</span>` : ""}${a.phonePreferred === "phone" && a.phone2 ? " ★" : ""}</div>` : ""}
               ${a.phone2 ? `<div class="stop-meta">${phoneIcon(a.phone2Type)} ${escapeHtml(a.phone2)}${a.phone2Name ? ` <span class="phone-name-badge">${escapeHtml(a.phone2Name)}</span>` : ""}${a.phonePreferred === "phone2" ? " ★" : ""}</div>` : ""}
@@ -1325,10 +1329,22 @@ function renderArchive() {
       </div>
 
       <form class="panel" id="address-form">
-        <h2>${form.id ? "Modifica contatto" : "Nuovo contatto"}</h2>
+        ${state.importWizard ? `
+          <div class="import-wizard-banner">
+            <div>
+              <span class="import-wizard-step">Contatto ${state.importWizard.index + 1} di ${state.importWizard.contacts.length}</span>
+              <span class="stop-meta"> · ${state.importWizard.saved} salvati, ${state.importWizard.skipped} saltati</span>
+            </div>
+            <div style="display:flex;gap:6px;">
+              <button type="button" class="btn" id="wizard-skip">Salta →</button>
+              <button type="button" class="btn danger" id="wizard-abort">× Esci</button>
+            </div>
+          </div>` : ""}
+        <h2>${state.importWizard ? "Verifica e salva" : form.id ? "Modifica contatto" : "Nuovo contatto"}</h2>
         <div class="form-grid">
-          <label class="field">Cliente / nome<input name="customer" value="${escapeHtml(form.customer)}" required /></label>
-          <label class="field">Sede<input name="location" value="${escapeHtml(form.location)}" /></label>
+          <label class="field">Nome / Cognome<input name="customer" value="${escapeHtml(form.customer)}" required placeholder="Mario Rossi" /></label>
+          <label class="field">Attività / Azienda<input name="activity" value="${escapeHtml(form.activity || "")}" placeholder="Intesa Sanpaolo" /></label>
+          <label class="field">Sede / Città<input name="location" value="${escapeHtml(form.location)}" /></label>
           <label class="field full">Indirizzo completo<input name="fullAddress" value="${escapeHtml(form.fullAddress)}" required /></label>
           <div class="field full phone-group">
             <div class="phone-label-row">
@@ -1383,8 +1399,8 @@ function renderArchive() {
           </div>
         </div>
         <div class="actions">
-          <button class="btn primary" type="submit">Salva</button>
-          <button class="btn ghost" type="button" id="cancel-address">Annulla</button>
+          <button class="btn primary" type="submit">${state.importWizard ? "Salva e prossimo →" : "Salva"}</button>
+          ${!state.importWizard ? `<button class="btn ghost" type="button" id="cancel-address">Annulla</button>` : ""}
         </div>
       </form>
     </section>`;
@@ -1977,11 +1993,12 @@ function parseVcf(text) {
     const email = (props["EMAIL"]?.[0]?.value || "").toLowerCase();
 
     contacts.push({
-      customer: fn,
-      location: org,
+      customer:   fn,
+      activity:   org,
+      location:   "",
       fullAddress,
-      phone:     p1?.num  || "",
-      phoneType: p1?.type || "cell",
+      phone:      p1?.num  || "",
+      phoneType:  p1?.type || "cell",
       phone2:     p2?.num  || "",
       phone2Type: p2?.type || "fisso",
       email,
@@ -2143,6 +2160,50 @@ function showImportPreview(rawContacts) {
   });
 }
 
+function startImportWizard(contacts) {
+  if (!contacts.length) { showToast("Nessun contatto trovato nel file"); return; }
+  state.importWizard = { contacts, index: 0, saved: 0, skipped: 0 };
+  loadWizardContact(0);
+  setActiveTab("archive");
+  renderArchive();
+}
+
+function loadWizardContact(index) {
+  const c = state.importWizard.contacts[index];
+  state.addressForm = {
+    ...emptyForm,
+    customer:   c.customer   || "",
+    activity:   c.activity   || "",
+    location:   c.location   || "",
+    fullAddress: c.fullAddress || "",
+    phone:      c.phone      || "",
+    phoneType:  c.phoneType  || "cell",
+    phone2:     c.phone2     || "",
+    phone2Type: c.phone2Type || "fisso",
+    email:      c.email      || "",
+    addressType: c.addressType || "customer"
+  };
+}
+
+function advanceWizard(wasSaved = true) {
+  const w = state.importWizard;
+  if (w && wasSaved) w.saved++;
+  const next = w ? w.index + 1 : 0;
+  if (!w || next >= w.contacts.length) {
+    const summary = w ? `${w.saved} salvati, ${w.skipped} saltati` : "";
+    state.importWizard = null;
+    state.addressForm = { ...emptyForm };
+    refreshAllData().then(() => renderArchive());
+    showToast(`Importazione completata — ${summary}`);
+    return;
+  }
+  w.index = next;
+  loadWizardContact(next);
+  renderArchive();
+  // Scroll form into view on mobile
+  setTimeout(() => document.getElementById("address-form")?.scrollIntoView({ behavior: "smooth", block: "start" }), 60);
+}
+
 async function importFromContactPicker() {
   document.querySelector("#vcf-input")?.click();
 }
@@ -2153,8 +2214,7 @@ async function importFromVcf(file) {
     const text = await file.text();
     const contacts = file.name.toLowerCase().endsWith(".csv") ? parseCsv(text) : parseVcf(text);
     hideSpinner();
-    if (!contacts.length) { showToast("Nessun contatto trovato nel file"); return; }
-    showImportPreview(contacts);
+    startImportWizard(contacts);
   } catch {
     hideSpinner();
     showToast("Errore lettura file");
@@ -2166,7 +2226,7 @@ async function importFromVcf(file) {
 async function saveAddressForm(form) {
   const v = readForm(form);
   const payload = {
-    customer: v.customer, location: v.location, fullAddress: v.fullAddress,
+    customer: v.customer, activity: v.activity || "", location: v.location, fullAddress: v.fullAddress,
     addressType: v.addressType || "customer",
     phone: v.phone || "", phoneType: v.phoneType || "cell", phoneName: v.phoneName || "",
     phone2: v.phone2 || "", phone2Type: v.phone2Type || "fisso", phone2Name: v.phone2Name || "",
@@ -3142,7 +3202,24 @@ function bindEvents() {
   app.addEventListener("submit", async e => {
     e.preventDefault();
     if (e.target.id === "address-form") {
-      try { await saveAddressForm(e.target); } catch (err) { showToast(err.message); }
+      try {
+        await saveAddressForm(e.target);
+        if (state.importWizard) advanceWizard(true);
+      } catch (err) { showToast(err.message); }
+    }
+  });
+
+  app.addEventListener("click", e => {
+    if (e.target.id === "wizard-skip") {
+      state.importWizard.skipped++;
+      advanceWizard(false);
+    }
+    if (e.target.id === "wizard-abort") {
+      const w = state.importWizard;
+      state.importWizard = null;
+      state.addressForm = { ...emptyForm };
+      renderArchive();
+      showToast(`Importazione interrotta — ${w.saved} contatti salvati`);
     }
   });
 }
