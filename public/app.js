@@ -2227,7 +2227,8 @@ function parseVcf(text) {
     for (const line of lines) {
       const colonIdx = line.indexOf(":");
       if (colonIdx < 0) continue;
-      const rawKey = line.slice(0, colonIdx);
+      // Strip item\d+. prefix used by iPhone (e.g. item1.ADR → ADR)
+      const rawKey = line.slice(0, colonIdx).replace(/^item\d+\./i, "");
       let value = line.slice(colonIdx + 1);
 
       const keyParts = rawKey.toUpperCase().split(";");
@@ -2533,9 +2534,13 @@ async function saveAddressForm(form) {
   } else {
     await api("/api/addresses", { method: "POST", body: JSON.stringify(payload) });
   }
-  state.addressForm = { ...emptyForm };
-  await refreshAllData();
-  render();
+  if (!state.importWizard) {
+    state.addressForm = { ...emptyForm };
+    await refreshAllData();
+    render();
+  } else {
+    await refreshAllData();
+  }
   showToast("Contatto salvato");
 }
 
@@ -2616,136 +2621,39 @@ async function useCurrentPosition() {
 }
 
 
-async function completeFormWithMaps() {
-  const ready = await loadGoogleMapsScript();
-  if (!ready) { showToast("Google Maps non disponibile"); return; }
-
+function completeFormWithMaps() {
   const form = document.getElementById("address-form");
   if (!form) return;
   const fVal = name => (form.querySelector(`[name="${name}"]`)?.value || "").trim();
-  const suggested = [fVal("activity") || fVal("customer"), fVal("fullAddress") || fVal("location")].filter(Boolean).join(" ");
+  const query = [fVal("activity") || fVal("customer"), fVal("fullAddress") || fVal("location")].filter(Boolean).join(" ");
 
-  // ── Step 1: search overlay ─────────────────────────────────────────────
-  const overlay = document.createElement("div");
-  overlay.className = "modal-overlay";
-  overlay.innerHTML = `
-    <div class="modal-box" style="max-width:380px">
-      <h3 style="margin-bottom:10px">Cerca su Maps</h3>
-      <input id="cwm-query" class="cwm-input" type="text" placeholder="Nome locale, indirizzo…" value="${escapeHtml(suggested)}" autocomplete="off" />
-      <div id="cwm-results" class="cwm-results"></div>
-      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;">
-        <button class="btn" id="cwm-cancel">Annulla</button>
-        <button class="btn primary" id="cwm-search">🔍 Cerca</button>
-      </div>
-    </div>`;
-  document.body.appendChild(overlay);
-  const queryInput = overlay.querySelector("#cwm-query");
-  queryInput.focus();
-  queryInput.select();
-
-  overlay.querySelector("#cwm-cancel").onclick = () => overlay.remove();
-  overlay.addEventListener("click", e => { if (e.target === overlay) overlay.remove(); });
-
-  const doSearch = async () => {
-    const q = queryInput.value.trim();
-    if (!q) return;
-    const searchBtn = overlay.querySelector("#cwm-search");
-    searchBtn.disabled = true; searchBtn.textContent = "⏳";
-    const resultsEl = overlay.querySelector("#cwm-results");
-    resultsEl.innerHTML = `<div class="cwm-searching">Ricerca in corso…</div>`;
-
-    try {
-      const svc = new google.maps.places.PlacesService(document.createElement("div"));
-      const results = await new Promise(resolve =>
-        svc.textSearch({ query: q, region: "it" }, (res, status) =>
-          resolve(status === google.maps.places.PlacesServiceStatus.OK ? res : [])
-        )
+  if (query) {
+    const pref = state.navigatorPref;
+    const url = pref === "apple"
+      ? `http://maps.apple.com/?q=${encodeURIComponent(query)}`
+      : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
+    window.open(url, "_blank", "noopener");
+  } else {
+    // No data in form — open Maps on current position
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        pos => {
+          const { latitude: lat, longitude: lng } = pos.coords;
+          const pref = state.navigatorPref;
+          const url = pref === "apple"
+            ? `http://maps.apple.com/?ll=${lat},${lng}`
+            : `https://www.google.com/maps/@${lat},${lng},16z`;
+          window.open(url, "_blank", "noopener");
+        },
+        () => window.open("https://www.google.com/maps", "_blank", "noopener")
       );
-
-      if (!results.length) { resultsEl.innerHTML = `<div class="cwm-searching">Nessun risultato. Prova con un termine diverso.</div>`; return; }
-
-      resultsEl.innerHTML = results.slice(0, 5).map((r, i) =>
-        `<div class="cwm-result-item" data-idx="${i}">
-          <span class="cwm-result-name">${escapeHtml(r.name)}</span>
-          <span class="cwm-result-addr">${escapeHtml(r.formatted_address || "")}</span>
-        </div>`
-      ).join("");
-
-      resultsEl.querySelectorAll(".cwm-result-item").forEach(item => {
-        item.addEventListener("click", async () => {
-          const place = results[Number(item.dataset.idx)];
-          overlay.remove();
-          // Load full details (opening_hours requires a details call)
-          const detailed = await new Promise(resolve =>
-            svc.getDetails({ placeId: place.place_id, fields: ["name","formatted_address","geometry","formatted_phone_number","international_phone_number","opening_hours"] }, (p, s) =>
-              resolve(s === google.maps.places.PlacesServiceStatus.OK ? p : place)
-            )
-          );
-          applyPlaceToForm(detailed);
-        });
-      });
-    } catch (err) {
-      resultsEl.innerHTML = `<div class="cwm-searching">Errore: ${escapeHtml(err.message)}</div>`;
-    } finally {
-      searchBtn.disabled = false; searchBtn.textContent = "🔍 Cerca";
-    }
-  };
-
-  overlay.querySelector("#cwm-search").onclick = doSearch;
-  queryInput.addEventListener("keydown", e => { if (e.key === "Enter") doSearch(); });
-}
-
-function applyPlaceToForm(place) {
-  const form = document.getElementById("address-form");
-  if (!form) return;
-  const f = name => form.querySelector(`[name="${name}"]`);
-  const setIfEmpty = (name, value) => { const el = f(name); if (el && !el.value.trim() && value) el.value = value; };
-
-  setIfEmpty("fullAddress", place.formatted_address);
-  setIfEmpty("phone", place.formatted_phone_number || place.international_phone_number || "");
-  if (place.geometry?.location) {
-    setIfEmpty("lat", place.geometry.location.lat().toFixed(6));
-    setIfEmpty("lng", place.geometry.location.lng().toFixed(6));
-  }
-
-  if (!place.opening_hours?.periods) { showToast("Dati compilati — nessun orario disponibile su Maps"); return; }
-
-  const fmtTime = t => t?.length === 4 ? `${t.slice(0,2)}:${t.slice(2)}` : (t || "");
-  const byDay = {};
-  for (const p of place.opening_hours.periods) {
-    const d = p.open?.day ?? -1;
-    if (d < 0) continue;
-    if (!byDay[d]) byDay[d] = [];
-    byDay[d].push({ open: fmtTime(p.open?.time), close: fmtTime(p.close?.time) });
-  }
-
-  let filled = 0;
-  document.querySelectorAll(".wh-row").forEach(row => {
-    const d = Number(row.dataset.day);
-    const om = row.querySelector(".wh-om");
-    if (!om || om.value.trim()) return; // already filled
-    const periods = byDay[d];
-    if (!periods) {
-      const closedEl = row.querySelector(".wh-closed");
-      if (closedEl && !closedEl.checked) { closedEl.checked = true; closedEl.dispatchEvent(new Event("change")); filled++; }
     } else {
-      const p0 = periods[0], p1 = periods[1];
-      const cont = periods.length === 1;
-      const setV = (sel, v) => { const el = row.querySelector(sel); if (el && !el.value.trim()) el.value = v; };
-      setV(".wh-om", p0.open);
-      if (cont) {
-        setV(".wh-ca", p0.close);
-        const contEl = row.querySelector(".wh-cont");
-        if (contEl && !contEl.checked) { contEl.checked = true; contEl.dispatchEvent(new Event("change")); }
-      } else {
-        setV(".wh-cm", p0.close);
-        if (p1) { setV(".wh-oa", p1.open); setV(".wh-ca", p1.close); }
-      }
-      filled++;
+      window.open("https://www.google.com/maps", "_blank", "noopener");
     }
-  });
-  showToast(filled ? `Compilati orari per ${filled} giorni` : "Dati aggiornati — orari già presenti");
+  }
 }
+
+
 
 function openMapPicker() {
   const latEl = document.querySelector("#coord-lat");
