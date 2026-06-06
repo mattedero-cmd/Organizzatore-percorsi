@@ -2079,27 +2079,55 @@ tbody tr:last-child td {
 }
 .visit-history-toggle::-webkit-details-marker { display: none; }
 .visit-history-details[open] .visit-history-toggle { color: var(--primary); }
-.visit-history {
-  margin-top: 6px;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.visit-row {
+.visit-history-empty { font-size: 0.8rem; color: var(--muted); padding: 4px 6px; }
+
+/* ── Visit calendar ───────────────────────────────────────────────────────── */
+.vcal { margin-top: 6px; }
+.vcal-header {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 5px 6px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 0.82rem;
-  transition: background 0.15s;
+  justify-content: space-between;
+  margin-bottom: 6px;
 }
-.visit-row:hover { background: var(--surface2, #f4f4f5); }
-.visit-date { color: var(--muted); white-space: nowrap; min-width: 90px; }
-.visit-name { flex: 1; color: var(--text); }
-.visit-arrow { color: var(--muted); font-size: 1rem; }
-.visit-history-empty { font-size: 0.8rem; color: var(--muted); padding: 4px 6px; }
+.vcal-month { font-size: 0.82rem; font-weight: 600; text-transform: capitalize; }
+.vcal-nav { padding: 2px 8px; font-size: 0.9rem; }
+.vcal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+  text-align: center;
+  font-size: 0.72rem;
+}
+.vcal-head { font-weight: 700; color: var(--muted); padding: 2px 0; }
+.vcal-day {
+  padding: 3px 0;
+  border-radius: 50%;
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: default;
+}
+.vcal-day.vcal-past { background: #3b82f6; color: #fff; cursor: pointer; }
+.vcal-day.vcal-last { background: #f59e0b; color: #fff; cursor: pointer; font-weight: 700; }
+.vcal-day.vcal-future { background: #22c55e; color: #fff; cursor: pointer; }
+.vcal-day.vcal-today { outline: 2px solid var(--primary); outline-offset: 1px; }
+.vcal-legend {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+  font-size: 0.68rem;
+  color: var(--muted);
+}
+.vcal-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.vcal-dot.vcal-last { background: #f59e0b; }
+.vcal-dot.vcal-past { background: #3b82f6; }
+.vcal-dot.vcal-future { background: #22c55e; }
 
 /* ── Completa con Maps overlay ───────────────────────────────────────────── */
 /* Completa con Maps — fullscreen map modal */

@@ -112,6 +112,7 @@ const state = {
   addressSearch: "",
   archiveShowAll: false,
   stopSearchText: "",
+  visitCalendar: {}, // { [addressId]: { year, month } }
   addressForm: { ...emptyForm },
   settings: { kmRate: 0.65, driveHourRate: 22, workHourRate: 60 },
   route: {
@@ -163,7 +164,12 @@ function applyTheme() {
 function setActiveTab(tab) {
   state.activeTab = tab;
   document.querySelectorAll(".tab").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
-  render();
+  if (tab === "archive") {
+    // Refresh saved routes so visit calendar is up to date, then render
+    refreshSavedRoutes().then(() => render());
+  } else {
+    render();
+  }
 }
 
 function openMenu(section = null) {
@@ -1295,33 +1301,76 @@ function renderSaved() {
     </section>`;
 }
 
-// ── visit history helpers ─────────────────────────────────────────────────────
+// ── visit calendar helpers ────────────────────────────────────────────────────
 
-function buildVisitHistory(addressId) {
+function getVisitDates(addressId) {
+  // Returns array of { date: "YYYY-MM-DD", routeId, name, isPast }
+  const today = new Date().toISOString().slice(0, 10);
   const visits = [];
   for (const r of state.savedRoutes) {
-    // savedRoutes contains summaries with plannedStops; full rows only on loaded route
     const stops = Array.isArray(r.plannedStops) ? r.plannedStops
       : Array.isArray(r.rows) ? r.rows.filter(row => !row.type)
       : [];
-    if (stops.some(s => String(s.addressId) === String(addressId))) {
-      visits.push({ date: r.scheduledDate || "", name: r.name || "Giro senza nome", routeId: r.id });
+    if (stops.some(s => s.addressId != null && String(s.addressId) === String(addressId))) {
+      visits.push({ date: r.scheduledDate || "", routeId: r.id, name: r.name || "Giro senza nome", isPast: (r.scheduledDate || "") <= today });
     }
   }
-  return visits.sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+  return visits.sort((a, b) => a.date.localeCompare(b.date));
 }
 
-function renderVisitHistory(addressId) {
-  const visits = buildVisitHistory(addressId);
-  if (!visits.length) return `<div class="visit-history-empty">Nessuna visita registrata nei giri salvati</div>`;
-  const fmtDate = d => d ? new Date(d + "T00:00:00").toLocaleDateString("it-IT", { day: "numeric", month: "short", year: "numeric" }) : "—";
-  return `<div class="visit-history">
-    ${visits.map(v => `
-      <div class="visit-row" data-load-route="${v.routeId}">
-        <span class="visit-date">${fmtDate(v.date)}</span>
-        <span class="visit-name">${escapeHtml(v.name)}</span>
-        <span class="visit-arrow">›</span>
-      </div>`).join("")}
+function renderVisitCalendar(addressId) {
+  const visits = getVisitDates(addressId);
+  if (!visits.length) return `<div class="visit-history-empty">Nessun giro salvato include questa tappa</div>`;
+
+  const cal = state.visitCalendar[addressId];
+  const today = new Date();
+  const lastPast = [...visits].filter(v => v.isPast).pop();
+  const defaultDate = lastPast ? new Date(lastPast.date + "T00:00:00") : today;
+  const year = cal?.year ?? defaultDate.getFullYear();
+  const month = cal?.month ?? defaultDate.getMonth(); // 0-based
+
+  const byDate = {};
+  for (const v of visits) byDate[v.date] = v;
+
+  // Calendar grid
+  const firstDay = new Date(year, month, 1);
+  const lastDay = new Date(year, month + 1, 0);
+  const startDow = (firstDay.getDay() + 6) % 7; // Mon=0
+  const monthName = firstDay.toLocaleDateString("it-IT", { month: "long", year: "numeric" });
+
+  const prevM = month === 0 ? `data-vcal-nav="${addressId}:${year - 1}:11"` : `data-vcal-nav="${addressId}:${year}:${month - 1}"`;
+  const nextM = month === 11 ? `data-vcal-nav="${addressId}:${year + 1}:0"` : `data-vcal-nav="${addressId}:${year}:${month + 1}"`;
+
+  const days = ["L","M","M","G","V","S","D"];
+  let cells = days.map(d => `<span class="vcal-head">${d}</span>`).join("");
+  for (let i = 0; i < startDow; i++) cells += `<span></span>`;
+  const todayStr = today.toISOString().slice(0, 10);
+  for (let d = 1; d <= lastDay.getDate(); d++) {
+    const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    const v = byDate[dateStr];
+    let cls = "vcal-day";
+    if (v) {
+      if (lastPast && v.date === lastPast.date) cls += " vcal-last";
+      else if (v.isPast) cls += " vcal-past";
+      else cls += " vcal-future";
+    }
+    if (dateStr === todayStr) cls += " vcal-today";
+    const attrs = v ? ` data-load-route="${v.routeId}" title="${escapeHtml(v.name)}"` : "";
+    cells += `<span class="${cls}"${attrs}>${d}</span>`;
+  }
+
+  return `<div class="vcal">
+    <div class="vcal-header">
+      <button class="btn vcal-nav" ${prevM}>‹</button>
+      <span class="vcal-month">${monthName}</span>
+      <button class="btn vcal-nav" ${nextM}>›</button>
+    </div>
+    <div class="vcal-grid">${cells}</div>
+    <div class="vcal-legend">
+      <span class="vcal-dot vcal-last"></span>Ultimo&nbsp;
+      <span class="vcal-dot vcal-past"></span>Passato&nbsp;
+      <span class="vcal-dot vcal-future"></span>Futuro
+    </div>
   </div>`;
 }
 
@@ -1368,9 +1417,9 @@ function renderArchive() {
                 <button class="btn danger" data-delete-address="${a.id}">×</button>
               </div>
               <div class="opening-status" id="opening-status-${a.id}" style="display:none"></div>
-              <details class="visit-history-details">
+              <details class="visit-history-details" ${state.visitCalendar[a.id] !== undefined ? "open" : ""}>
                 <summary class="visit-history-toggle">📅 Storico visite</summary>
-                ${renderVisitHistory(a.id)}
+                ${renderVisitCalendar(a.id)}
               </details>
             </article>`).join("") || `<div class="empty" style="grid-column:1/-1">Nessun contatto trovato.</div>`}
         </div>
@@ -3186,8 +3235,17 @@ function bindEvents() {
     }
     // archive search
     if (e.target.id === "archive-search") {
-      state.addressSearch = e.target.value;
-      state.archiveShowAll = Boolean(e.target.value);
+      const q = e.target.value;
+      state.addressSearch = q;
+      state.archiveShowAll = Boolean(q);
+      // Immediate client-side filter from already-loaded list, then server confirms
+      if (q) {
+        const ql = q.toLowerCase();
+        state.addresses = state.allAddresses.filter(a =>
+          [a.customer, a.activity, a.location, a.fullAddress, a.notes].some(v => (v || "").toLowerCase().includes(ql))
+        );
+        renderArchive();
+      }
       refreshAllData().then(() => renderArchive());
     }
     // stop autocomplete
@@ -3500,11 +3558,30 @@ function bindEvents() {
       return;
     }
 
+    const vcalNav = e.target.closest("[data-vcal-nav]");
+    if (vcalNav) {
+      const [addrId, y, m] = vcalNav.dataset.vcalNav.split(":");
+      state.visitCalendar[addrId] = { year: Number(y), month: Number(m) };
+      // Re-render just the calendar div inside the card
+      const calContainer = vcalNav.closest(".visit-history-details");
+      if (calContainer) {
+        const content = calContainer.querySelector(".vcal, .visit-history-empty");
+        if (content) content.outerHTML = renderVisitCalendar(addrId);
+      }
+      return;
+    }
+
     const visitRow = e.target.closest("[data-load-route]");
     if (visitRow) {
       const routeId = visitRow.dataset.loadRoute;
       const route = state.savedRoutes.find(r => String(r.id) === String(routeId));
       if (route) { state.result = route; setActiveTab("result"); }
+      else {
+        // Load full route from server
+        api(`/api/routes/${routeId}`).then(raw => {
+          if (raw) { state.result = raw; setActiveTab("result"); }
+        });
+      }
       return;
     }
 
