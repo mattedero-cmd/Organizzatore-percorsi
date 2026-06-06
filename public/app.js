@@ -471,36 +471,107 @@ function renderMenuGuide() {
   return `
     ${menuHeader("Guida", true)}
     <div class="bsheet-section-body">
-      ${section("🗓 Come creare un giro", `
+
+      ${section("🗓 Creare un giro", `
         <ol>
-          <li>Nella tab <b>Nuovo percorso</b>, imposta la <b>data</b> e l'<b>orario di partenza</b>.</li>
-          <li>Seleziona il punto di partenza con 📋 (archivio) o 🗺 (mappa). Se uguale al giorno prima, rimane quello salvato.</li>
-          <li>Cerca le tappe nella barra di ricerca e premi <b>+ Aggiungi</b> per inserirle.</li>
-          <li>Puoi aggiungere tappe manuali (non in archivio) aprendo la sezione <b>+ Manuale</b>.</li>
-          <li>Premi <b>→ Ottimizza e salva</b>: il percorso viene calcolato nell'ordine ottimale rispettando gli orari di apertura.</li>
-          <li>Il risultato mostra tutti gli orari stimati di arrivo, guida e lavoro.</li>
+          <li>Vai nella tab <b>Nuovo percorso</b>.</li>
+          <li>Imposta <b>data</b> e <b>orario di partenza</b>.</li>
+          <li>Scegli il punto di partenza con il pulsante 📋 (cerca in archivio) o 🗺 (scegli sulla mappa). Il punto di arrivo è uguale alla partenza per default; puoi cambiarlo separatamente.</li>
+          <li>Cerca le tappe nella barra <b>"Cerca e aggiungi tappa"</b> e premi <b>+ Aggiungi</b>.</li>
+          <li>Puoi anche aggiungere tappe manuali (non in archivio) aprendo la sezione <b>+ Manuale</b>.</li>
+          <li>Premi <b>→ Ottimizza e salva</b>: il percorso viene calcolato nell'ordine ottimale rispettando gli orari di apertura di ogni tappa.</li>
         </ol>
       `)}
-      ${section("📇 Gestione contatti", `
+
+      ${section("📋 Tab Giri salvati", `
         <ul>
-          <li>Vai su <b>Archivio → + Nuovo</b> per aggiungere un contatto.</li>
-          <li>Compila gli <b>orari settimanali</b>: supporta orario continuato, chiusure giornaliere e orari diversi per giorno.</li>
-          <li>Usa <b>📱 Importa</b> per importare contatti dalla rubrica telefonica con gli orari Google.</li>
-          <li>I numeri che iniziano con <b>3</b> vengono riconosciuti come cellulare, con <b>0</b> come fisso.</li>
-          <li>Contatti con tipo <b>☕ Sosta</b> vengono usati come punti di pausa automatici durante il giro.</li>
+          <li>Mostra tutti i giri salvati in ordine cronologico.</li>
+          <li>Tocca un giro per aprirlo nella tab <b>Percorso</b>.</li>
+          <li>Il pulsante <b>✏ Rinomina</b> permette di dare un nome personalizzato al giro.</li>
+          <li>Il pulsante <b>⎘ Copia</b> duplica il giro: utile per riutilizzare un giro simile in data diversa.</li>
+          <li>Il pulsante <b>× Elimina</b> rimuove il giro.</li>
+          <li>I giri mostrano un riepilogo: numero di tappe, km totali, data programmata.</li>
         </ul>
       `)}
+
+      ${section("📍 Tab Percorso (risultato)", `
+        <ul>
+          <li>Ogni tappa mostra: <b>orario di arrivo stimato</b>, km e minuti di guida dalla tappa precedente, durata della visita.</li>
+          <li>Bordo <span style="color:#ef4444;font-weight:700">rosso</span> = errore (sede chiusa oggi, arrivo fuori orario).</li>
+          <li>Bordo <span style="color:#f59e0b;font-weight:700">ambra</span> = avviso (arrivo in anticipo, attesa apertura).</li>
+          <li>Premi <b>⋯</b> su una tappa per vedere orari settimanali, avvisi dettagliati e meteo.</li>
+          <li>Premi <b>↗ Naviga</b> per aprire il navigatore (impostabile in Impostazioni).</li>
+          <li>Premi <b>📞</b> per chiamare direttamente il cliente.</li>
+          <li>Puoi riordinare le tappe con i pulsanti <b>↑ ↓</b> e ricalcolare il percorso.</li>
+          <li>Il pulsante <b>🖨 Stampa PDF</b> genera un foglio di viaggio stampabile (vedi sezione PDF).</li>
+        </ul>
+      `)}
+
+      ${section("🖨 Stampa PDF del giro", `
+        <ul>
+          <li>Premi <b>🖨 Stampa PDF</b> nella tab Percorso.</li>
+          <li>Si apre una schermata con due opzioni: <b>Includi telefoni</b> e <b>Includi costi</b>.</li>
+          <li><b>Includi telefoni</b>: aggiunge il numero di telefono di ogni cliente nella stampa.</li>
+          <li><b>Includi costi</b>: aggiunge il riepilogo economico (km, costo guida, costo lavoro, totale).</li>
+          <li>Premi <b>Stampa</b> per aprire la finestra di stampa del browser. La scheda si chiude automaticamente dopo la stampa.</li>
+        </ul>
+      `)}
+
+      ${section("📇 Gestione contatti (Archivio)", `
+        <ul>
+          <li>Vai su <b>Archivio → + Nuovo</b> per aggiungere un contatto manualmente.</li>
+          <li>Compila <b>Nome/Cognome</b>, <b>Attività/Azienda</b>, <b>Sede/Città</b>, <b>Indirizzo completo</b>.</li>
+          <li>I due campi telefono supportano: tipo (📱 cellulare, ☎ fisso, 📞 altro), numero e nome intestatario. La stella ★ indica quale numero chiamare per default.</li>
+          <li>Gli <b>orari settimanali</b> si impostano giorno per giorno: puoi indicare orario mattina/pomeriggio, orario continuato o chiusura totale. Il tasto <b>Applica a tutti</b> copia l'orario di un giorno a tutti i giorni.</li>
+          <li>Il campo <b>Durata default</b> determina quanto tempo viene allocato per la visita in un giro.</li>
+          <li>Il tipo contatto (<b>Cliente</b>, <b>☕ Sosta</b>, <b>🍽 Ristorante</b>, <b>⭐ Preferito</b>) cambia il comportamento nel percorso.</li>
+        </ul>
+      `)}
+
+      ${section("🗺 Completa con Maps (form contatto)", `
+        <ul>
+          <li>Durante la compilazione di un contatto, premi <b>🗺 Completa con Maps</b> (visibile nella sezione orari se Google Maps è attivo).</li>
+          <li>Si apre una mappa a schermo intero centrata sull'indirizzo o le coordinate già inserite nel form. Se il form è vuoto, si apre sulla tua posizione GPS.</li>
+          <li>Usa la <b>barra di ricerca</b> in alto per trovare un locale.</li>
+          <li>Tocca qualsiasi <b>segnaposto</b> (POI) sulla mappa: compare in basso una scheda con nome e indirizzo.</li>
+          <li>Premi <b>Usa</b> per importare automaticamente nel form i campi ancora vuoti: indirizzo, telefono, coordinate e orari di apertura settimanali.</li>
+          <li>Solo i campi <b>vuoti</b> vengono modificati — quelli già compilati rimangono intatti.</li>
+        </ul>
+      `)}
+
+      ${section("📱 Importa contatti da rubrica", `
+        <ul>
+          <li>Premi <b>📱 Importa</b> nell'Archivio.</li>
+          <li>Seleziona un file <b>.vcf</b> (vCard) esportato dalla rubrica del telefono o un file <b>.csv</b>.</li>
+          <li>L'app apre una procedura guidata: per ogni contatto del file puoi <b>verificare i dati</b>, modificarli e poi premere <b>Salva contatto</b>.</li>
+          <li>Il pulsante <b>Salta →</b> passa al contatto successivo senza salvare.</li>
+          <li>Il pulsante <b>× Esci</b> interrompe l'importazione mantenendo i contatti già salvati.</li>
+          <li>Dopo l'importazione puoi usare <b>🗺 Completa con Maps</b> per aggiungere orari e dati mancanti.</li>
+        </ul>
+      `)}
+
+      ${section("📅 Storico visite (calendario)", `
+        <ul>
+          <li>In ogni scheda contatto dell'Archivio, premi <b>📅 Storico visite</b> per aprire il calendario delle presenze.</li>
+          <li><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#f59e0b;vertical-align:middle"></span> <b>Arancio</b> = ultimo giro passato in cui il cliente era incluso.</li>
+          <li><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#3b82f6;vertical-align:middle"></span> <b>Blu</b> = altri giri passati.</li>
+          <li><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#22c55e;vertical-align:middle"></span> <b>Verde</b> = giri futuri pianificati.</li>
+          <li>Usa le frecce <b>‹ ›</b> per navigare tra i mesi.</li>
+          <li>Tocca un giorno colorato per aprire quel giro nella tab Percorso.</li>
+        </ul>
+      `)}
+
       ${section("☕ Soste automatiche", `
         <ul>
-          <li>Il sistema inserisce soste ogni <b>~2 ore</b> di guida cumulata (configurabile in Impostazioni).</li>
-          <li>Per soste in luoghi specifici, aggiungi contatti di tipo <b>☕ Sosta</b> nell'archivio.</li>
-          <li>Senza soste in archivio, il sistema cerca automaticamente punti di sosta tramite Google Maps.</li>
-          <li>Regole automatiche: nessuna sosta nelle <b>prime 2 ore</b>, nell'<b>ultima ora prima del rientro</b>, né nell'ora prima o nelle 2 ore dopo il pranzo.</li>
-          <li>Toccando una sosta nel risultato si apre la scheda Google del luogo.</li>
+          <li>Il sistema inserisce soste ogni <b>~2 ore</b> di guida+lavoro cumulati.</li>
+          <li>Per soste in luoghi specifici, aggiungi contatti di tipo <b>☕ Sosta</b> nell'archivio: verranno usati per prime.</li>
+          <li>Senza soste salvate, il sistema cerca punti di sosta tramite Google Maps nelle vicinanze.</li>
+          <li>Regole automatiche: nessuna sosta nelle <b>prime 2 ore</b> di giornata, nell'<b>ultima ora prima del rientro</b>, nell'ora prima del pranzo né nelle 2 ore dopo.</li>
         </ul>
       `)}
+
       ${section("🎤 Comandi vocali", `
-        <p>Apri il pannello 🎤 in fondo al form e premi <b>● Avvia</b>. Puoi dire:</p>
+        <p>Apri il pannello 🎤 in fondo al form della tab Nuovo percorso e premi <b>● Avvia</b>. Puoi dire:</p>
         <ul>
           <li><code>aggiungi [nome cliente]</code> — aggiunge una tappa dall'archivio</li>
           <li><code>aggiungi X e aggiungi Y</code> — più tappe in un comando</li>
@@ -511,18 +582,31 @@ function renderMenuGuide() {
           <li><code>parto da [luogo]</code> — cambia il punto di partenza</li>
           <li><code>in anticipo di 10 minuti</code> — imposta minuti di anticipo arrivo</li>
         </ul>
+        <p style="font-size:0.8rem;color:var(--muted);margin-top:6px;">Richiede Whisper configurato sul server.</p>
       `)}
-      ${section("📊 Leggere i risultati", `
+
+      ${section("📊 Statistiche", `
         <ul>
-          <li>Ogni tappa mostra: <b>orario di arrivo</b>, km e minuti di guida, durata visita.</li>
-          <li>Bordo <b style="color:#ef4444">rosso</b> = errore (sede chiusa oggi, arrivo fuori orario).</li>
-          <li>Bordo <b style="color:#f59e0b">ambra</b> = avviso (arrivo in anticipo, attesa apertura).</li>
-          <li>Tocca <b>⋯</b> su una tappa per vedere orari settimanali, meteo e avvisi dettagliati.</li>
-          <li>Il pulsante <b>↗ Naviga</b> apre il navigatore scelto nelle impostazioni.</li>
-          <li>Puoi riordinare le tappe manualmente con i pulsanti ↑ ↓ prima di ricalcolare.</li>
+          <li>Apri il menu ☰ e premi <b>📊 Statistiche</b>.</li>
+          <li>Mostra il <b>totale km e giri per mese</b> dell'anno corrente.</li>
+          <li>Mostra i <b>clienti più visitati</b>: numero di giri in cui compaiono e km medi.</li>
+          <li>I dati vengono calcolati in tempo reale dai giri salvati.</li>
         </ul>
       `)}
+
+      ${section("⚙ Impostazioni", `
+        <ul>
+          <li><b>Punto di partenza default</b>: nome ed indirizzo preimpostato per ogni nuovo giro. Se lasciato vuoto, il campo rimane libero.</li>
+          <li><b>Navigatore</b>: scegli tra Google Maps, Apple Maps e Waze per il pulsante ↗ Naviga.</li>
+          <li><b>Tariffa km</b> (€/km), <b>costo orario guida</b> e <b>costo orario lavoro</b>: usati per calcolare il riepilogo economico del giro e del PDF.</li>
+          <li><b>Pausa pranzo</b>: orario e durata della pausa pranzo automatica inserita nel percorso.</li>
+          <li><b>Soste di riposo</b>: abilita/disabilita l'inserimento automatico di soste ogni ~2 ore.</li>
+          <li><b>Account</b>: cambio password, logout. Con "Ricordami" attivo la sessione rimane aperta per 30 giorni.</li>
+        </ul>
+      `)}
+
     </div>`;
+}
 }
 
 function renderMenuInfo() {
