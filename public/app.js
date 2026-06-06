@@ -2665,16 +2665,20 @@ async function completeFormWithMaps() {
       return;
     }
 
-    // Show up to 5 results, each with a "Usa" button
-    panel.innerHTML = results.slice(0, 5).map((r, i) =>
-      `<div class="cwm-result-item" data-idx="${i}">
+    // Show up to 5 results, each with a "Usa" button and Maps link
+    panel.innerHTML = results.slice(0, 5).map((r, i) => {
+      const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(r.name)}&query_place_id=${encodeURIComponent(r.place_id)}`;
+      return `<div class="cwm-result-item" data-idx="${i}">
         <div class="cwm-result-info">
           <span class="cwm-result-name">${escapeHtml(r.name)}</span>
           <span class="cwm-result-addr">${escapeHtml(r.formatted_address || "")}</span>
         </div>
-        <button class="btn primary cwm-use-btn" data-idx="${i}">Usa</button>
-      </div>`
-    ).join("") + `<button class="btn cwm-cancel-btn" style="margin-top:6px;width:100%">Annulla</button>`;
+        <div class="cwm-result-actions">
+          <a href="${mapsUrl}" target="_blank" rel="noopener" class="btn ghost cwm-map-btn" title="Apri su Maps">🗺</a>
+          <button class="btn primary cwm-use-btn" data-idx="${i}">Usa</button>
+        </div>
+      </div>`;
+    }).join("") + `<button class="btn cwm-cancel-btn" style="margin-top:6px;width:100%">Annulla</button>`;
 
     panel.querySelector(".cwm-cancel-btn").onclick = closePanel;
 

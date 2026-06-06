@@ -2133,4 +2133,6 @@ tbody tr:last-child td {
 .cwm-result-info { display: flex; flex-direction: column; flex: 1; min-width: 0; }
 .cwm-result-name { font-weight: 600; font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cwm-result-addr { font-size: 0.78rem; color: var(--muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.cwm-use-btn { flex-shrink: 0; font-size: 0.8rem; padding: 4px 10px; }
+.cwm-result-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+.cwm-use-btn { font-size: 0.8rem; padding: 4px 10px; }
+.cwm-map-btn { font-size: 1rem; padding: 4px 8px; }
