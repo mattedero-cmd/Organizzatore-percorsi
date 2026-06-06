@@ -1543,6 +1543,7 @@ function renderResult() {
         <div class="row" style="gap:8px;flex-wrap:wrap;">
           <button class="btn" data-tab-jump="saved">▣ Giri</button>
           <button class="btn${result.rows?.some(r => r.type === "lunch") ? " primary" : ""}" id="toggle-lunch-break" title="${result.rows?.some(r => r.type === "lunch") ? "Rimuovi pausa pranzo" : "Aggiungi pausa pranzo"}">🍽 ${result.rows?.some(r => r.type === "lunch") ? "Togli pranzo" : "Aggiungi pranzo"}</button>
+          <button class="btn" id="print-route-btn" title="Stampa o salva come PDF">🖨 PDF</button>
         </div>
       </div>
 
@@ -1691,6 +1692,79 @@ function renderResult() {
 
   if (state.googleMapsKey) {
     requestAnimationFrame(() => renderGoogleMap(result));
+  }
+}
+
+// ── print / PDF export ────────────────────────────────────────────────────────
+
+function printRoute() {
+  if (!state.result) return;
+  const result = normalizeSavedRoute(state.result);
+  const { rows, finalLeg, summary } = result;
+  const date = result.scheduledDate
+    ? new Date(result.scheduledDate).toLocaleDateString("it-IT", { weekday: "long", year: "numeric", month: "long", day: "numeric" })
+    : "";
+  const routeName = result.name || "Percorso";
+
+  const stopRows = rows.map(row => {
+    if (row.type === "lunch") {
+      const name = row.customer && row.customer !== "Pausa pranzo" ? row.customer : "Pausa pranzo";
+      return `<tr class="break-row"><td colspan="2">🍽 ${name}${row.location ? ` — ${row.location}` : ""}</td><td>${row.serviceStartTime} – ${row.serviceEndTime}</td><td>${minutesLabel(row.durationMinutes)}</td><td></td><td></td></tr>`;
+    }
+    if (row.type === "rest") {
+      return `<tr class="break-row"><td colspan="2">☕ ${row.customer}${row.location ? ` — ${row.location}` : ""}</td><td>${row.serviceStartTime} – ${row.serviceEndTime}</td><td>${minutesLabel(row.durationMinutes)}</td><td></td><td></td></tr>`;
+    }
+    return `<tr><td>${row.stopNumber}</td><td>${row.customer || ""}${row.location ? `<br><small>${row.location}</small>` : ""}<br><small class="addr">${row.address || ""}</small></td><td>${row.arrivalTime} – ${row.serviceEndTime}</td><td>${minutesLabel(row.durationMinutes)}</td><td>${row.km ? row.km.toFixed(1) : ""}</td><td></td></tr>`;
+  }).join("");
+
+  const html = `<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<title>${routeName}${date ? " – " + date : ""}</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Arial, sans-serif; font-size: 11pt; color: #111; padding: 20px; }
+  h1 { font-size: 16pt; margin-bottom: 2px; }
+  .subtitle { font-size: 10pt; color: #555; margin-bottom: 14px; }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+  th { background: #222; color: #fff; padding: 6px 8px; text-align: left; font-size: 10pt; }
+  td { padding: 5px 8px; border-bottom: 1px solid #ddd; font-size: 10pt; vertical-align: top; }
+  tr.break-row td { background: #f5f5f5; font-style: italic; color: #555; }
+  small { color: #666; }
+  small.addr { font-size: 9pt; }
+  .summary-table td { font-weight: bold; border: none; padding: 4px 8px; }
+  .summary-table td:first-child { font-weight: normal; color: #555; }
+  .notes-col { min-width: 80px; }
+  @media print {
+    body { padding: 0; }
+    button { display: none; }
+  }
+</style>
+</head>
+<body>
+<h1>${routeName}</h1>
+${date ? `<div class="subtitle">${date}</div>` : ""}
+<table>
+  <thead><tr><th>#</th><th>Tappa</th><th>Orario</th><th>Durata</th><th>Km</th><th class="notes-col">Note</th></tr></thead>
+  <tbody>
+    ${stopRows}
+    <tr><td colspan="2"><strong>↩ ${result.end?.label || "Casa"}</strong><br><small>${result.end?.address || result.end?.fullAddress || ""}</small></td><td>${finalLeg.arrivalTime}</td><td></td><td>${finalLeg.km.toFixed(1)}</td><td></td></tr>
+  </tbody>
+</table>
+<table class="summary-table">
+  <tr><td>Km totali</td><td>${summary.totalKm.toFixed(1)} km</td><td>Ore guida</td><td>${minutesLabel(summary.totalDriveMinutes)}</td><td>Ore lavoro</td><td>${minutesLabel(summary.totalWorkMinutes)}</td></tr>
+  <tr><td>Giornata</td><td>${summary.dayStart} – ${summary.dayEnd}</td><td>Costo km</td><td>${euro(summary.costKm)}</td><td>Costo guida</td><td>${euro(summary.costDrive)}</td></tr>
+  <tr><td>Totale</td><td><strong>${euro(summary.totalCost)}</strong></td><td>Costo lavoro</td><td>${euro(summary.costWork)}</td><td></td><td></td></tr>
+</table>
+<script>window.onload = () => { window.print(); }<\/script>
+</body>
+</html>`;
+
+  const w = window.open("", "_blank");
+  if (w) {
+    w.document.write(html);
+    w.document.close();
   }
 }
 
@@ -2768,6 +2842,11 @@ function bindEvents() {
         const sug = document.querySelector("#stop-suggestions");
         if (sug) sug.innerHTML = "";
       }
+      return;
+    }
+
+    if (e.target.closest("#print-route-btn")) {
+      printRoute();
       return;
     }
 
