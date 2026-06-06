@@ -1185,9 +1185,12 @@ function renderWeeklyHoursSection(weeklyHours) {
     </div>`;
   }).join("");
   return `<div class="field full">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:6px;flex-wrap:wrap;">
       <label class="wh-label" style="margin-bottom:0">Orari settimanali</label>
-      <button type="button" class="btn ghost wh-fill-all" id="wh-fill-all-btn">↧ Applica a tutti</button>
+      <div style="display:flex;gap:6px;">
+        ${state.googleMapsKey ? `<button type="button" class="btn ghost" id="complete-with-maps-btn">🗺 Completa con Maps</button>` : ""}
+        <button type="button" class="btn ghost wh-fill-all" id="wh-fill-all-btn">↧ Applica a tutti</button>
+      </div>
     </div>
     <div class="wh-days-wrap">${rows}</div>
   </div>`;
@@ -2613,6 +2616,98 @@ async function useCurrentPosition() {
 }
 
 
+async function completeFormWithMaps() {
+  const form = document.getElementById("address-form");
+  if (!form) return;
+  const f = name => form.querySelector(`[name="${name}"]`);
+  const val = name => (f(name)?.value || "").trim();
+
+  // Build the search query from whatever we already have
+  const query = [val("activity") || val("customer"), val("fullAddress") || val("location")].filter(Boolean).join(" ");
+  if (!query) { showToast("Inserisci almeno nome o indirizzo prima di cercare su Maps"); return; }
+
+  const ready = await loadGoogleMapsScript();
+  if (!ready) { showToast("Google Maps non disponibile"); return; }
+
+  const btn = document.getElementById("complete-with-maps-btn");
+  if (btn) { btn.disabled = true; btn.textContent = "⏳ Ricerca…"; }
+
+  try {
+    const svc = new google.maps.places.PlacesService(document.createElement("div"));
+    const request = { query, fields: ["name", "formatted_address", "geometry", "formatted_phone_number", "international_phone_number", "opening_hours", "website"], region: "it" };
+
+    const place = await new Promise(resolve => svc.findPlaceFromQuery(request, (results, status) => {
+      resolve(status === google.maps.places.PlacesServiceStatus.OK && results[0] ? results[0] : null);
+    }));
+
+    if (!place) { showToast("Nessun risultato su Maps — prova a specificare meglio nome o indirizzo"); return; }
+
+    // Fill only empty fields
+    const setIfEmpty = (name, value) => {
+      const el = f(name);
+      if (el && !el.value.trim() && value) el.value = value;
+    };
+
+    setIfEmpty("fullAddress", place.formatted_address);
+    const phone = place.formatted_phone_number || place.international_phone_number || "";
+    setIfEmpty("phone", phone);
+    if (place.geometry?.location) {
+      setIfEmpty("lat", place.geometry.location.lat().toFixed(6));
+      setIfEmpty("lng", place.geometry.location.lng().toFixed(6));
+    }
+
+    // Fill opening hours — only days still completely empty
+    if (place.opening_hours?.periods) {
+      const fmtTime = t => t.length === 4 ? `${t.slice(0,2)}:${t.slice(2)}` : t;
+      const byDay = {};
+      for (const p of place.opening_hours.periods) {
+        const d = p.open?.day ?? -1;
+        if (d < 0) continue;
+        if (!byDay[d]) byDay[d] = [];
+        byDay[d].push({ open: fmtTime(p.open?.time || ""), close: fmtTime(p.close?.time || "") });
+      }
+
+      const whRows = document.querySelectorAll(".wh-row");
+      let filled = 0;
+      whRows.forEach(row => {
+        const d = Number(row.dataset.day);
+        const jsDay = d === 0 ? 0 : d; // Mon=1…Sun=0 in Google, Mon=1…Sun=7 in our UI
+        const periods = byDay[jsDay];
+        const om = row.querySelector(".wh-om");
+        if (!om || om.value.trim()) return; // skip if already has a value
+
+        if (!periods) {
+          // Mark as closed only if not already set
+          const closedEl = row.querySelector(".wh-closed");
+          if (closedEl && !closedEl.checked) { closedEl.checked = true; closedEl.dispatchEvent(new Event("change")); filled++; }
+        } else {
+          const p0 = periods[0], p1 = periods[1];
+          const cont = periods.length === 1;
+          const setV = (sel, v) => { const el = row.querySelector(sel); if (el && !el.value.trim()) el.value = v; };
+          setV(".wh-om", p0.open);
+          if (cont) {
+            setV(".wh-ca", p0.close);
+            const contEl = row.querySelector(".wh-cont");
+            if (contEl && !contEl.checked) { contEl.checked = true; contEl.dispatchEvent(new Event("change")); }
+          } else {
+            setV(".wh-cm", p0.close);
+            if (p1) { setV(".wh-oa", p1.open); setV(".wh-ca", p1.close); }
+          }
+          filled++;
+        }
+      });
+      if (filled) showToast(`Compilati orari per ${filled} giorni`);
+      else showToast("Orari già presenti — nessun campo sovrascritto");
+    } else {
+      showToast("Trovato su Maps ma nessun orario disponibile");
+    }
+  } catch (err) {
+    showToast("Errore ricerca Maps: " + err.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = "🗺 Completa con Maps"; }
+  }
+}
+
 function openMapPicker() {
   const latEl = document.querySelector("#coord-lat");
   const lngEl = document.querySelector("#coord-lng");
@@ -3328,6 +3423,11 @@ function bindEvents() {
     }
 
     // Weekly hours: toggle disabled state
+    if (e.target.closest("#complete-with-maps-btn")) {
+      completeFormWithMaps();
+      return;
+    }
+
     if (e.target.closest("#wh-fill-all-btn")) {
       // Copy Monday's hours to all non-closed days
       const rows = document.querySelectorAll(".wh-row");
