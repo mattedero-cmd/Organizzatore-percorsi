@@ -1896,96 +1896,269 @@ async function applyVoiceCommand() {
 
 // ── contact import ────────────────────────────────────────────────────────────
 
-async function importFromContactPicker() {
-  if (!("contacts" in navigator && navigator.contacts?.select)) {
-    document.querySelector("#vcf-input")?.click();
-    return;
-  }
-  try {
-    const contacts = await navigator.contacts.select(["name", "address", "tel", "email"], { multiple: true });
-    if (!contacts.length) { showToast("Nessun contatto selezionato"); return; }
-    let added = 0;
-    for (const c of contacts) {
-      const name = c.name?.[0] || "";
-      if (!name) continue;
-      const existing = state.addresses.find(a => a.customer.toLowerCase() === name.toLowerCase());
-      if (existing) continue;
-      const addrObj = c.address?.[0];
-      const fullAddress = addrObj
-        ? [addrObj.streetAddress, addrObj.city, addrObj.postalCode].filter(Boolean).join(", ")
-        : "";
-      const phone = c.tel?.[0]?.value || c.tel?.[0] || "";
-      const email = c.email?.[0] || "";
-      await api("/api/addresses", {
-        method: "POST",
-        body: JSON.stringify({ customer: name, fullAddress: fullAddress || name, phone: String(phone), email: String(email) })
-      });
-      added++;
-    }
-    await refreshAllData();
-    render();
-    showToast(added ? `${added} contatti importati` : "Nessun nuovo contatto da aggiungere");
-  } catch (e) {
-    showToast("Importazione non riuscita");
-  }
-}
-
 function parseVcf(text) {
-  return text.split(/BEGIN:VCARD/gi).slice(1).flatMap(vcard => {
-    const lines = vcard.split(/\r?\n/);
-    let name = "", phone = "", email = "", street = "", city = "", zip = "";
-    for (const line of lines) {
-      const [key, ...rest] = line.split(":");
-      const val = rest.join(":").trim();
-      const k = key.split(";")[0].toUpperCase();
-      if (k === "FN" && !name) name = val;
-      else if ((k === "TEL" || k.startsWith("TEL;")) && !phone) phone = val;
-      else if ((k === "EMAIL" || k.startsWith("EMAIL;")) && !email) email = val;
-      else if (k === "ADR" || k.startsWith("ADR;")) {
-        const parts = val.split(";");
-        street = parts[2] || ""; city = parts[3] || ""; zip = parts[5] || "";
-      }
-    }
-    if (!name) return [];
-    const fullAddress = [street, zip, city].filter(Boolean).join(", ");
-    return [{ customer: name, fullAddress: fullAddress || name, phone, email }];
-  });
-}
+  // Unfold lines (RFC 6350: CRLF + space/tab = continuation)
+  const unfolded = text
+    .replace(/\r\n/g, "\n").replace(/\r/g, "\n")
+    .replace(/\n[ \t]/g, "");
 
-async function importFromVcf(file) {
-  const text = await file.text();
-  const contacts = file.name.endsWith(".csv") ? parseCsv(text) : parseVcf(text);
-  if (!contacts.length) { showToast("Nessun contatto trovato nel file"); return; }
-  let added = 0;
-  for (const c of contacts) {
-    if (!c.customer) continue;
-    const exists = state.addresses.find(a => a.customer.toLowerCase() === c.customer.toLowerCase());
-    if (exists) continue;
-    await api("/api/addresses", { method: "POST", body: JSON.stringify(c) });
-    added++;
+  function decodeQP(str) {
+    // Decode QUOTED-PRINTABLE encoding (common in iPhone vCards for non-ASCII)
+    return str.replace(/=([0-9A-Fa-f]{2})/g, (_, h) =>
+      String.fromCharCode(parseInt(h, 16))
+    );
   }
-  await refreshAllData();
-  render();
-  showToast(`${added} contatti importati da file`);
+
+  const contacts = [];
+  const blocks = unfolded.split(/^BEGIN:VCARD$/im);
+
+  for (const block of blocks.slice(1)) {
+    const endIdx = block.search(/^END:VCARD$/im);
+    const body = endIdx >= 0 ? block.slice(0, endIdx) : block;
+    const lines = body.split("\n").filter(l => l.trim());
+
+    const props = {};
+    for (const line of lines) {
+      const colonIdx = line.indexOf(":");
+      if (colonIdx < 0) continue;
+      const rawKey = line.slice(0, colonIdx);
+      let value = line.slice(colonIdx + 1);
+
+      const keyParts = rawKey.toUpperCase().split(";");
+      const propName = keyParts[0];
+      const paramStr = keyParts.slice(1).join(";");
+
+      // Decode QUOTED-PRINTABLE if indicated
+      if (paramStr.includes("ENCODING=QUOTED-PRINTABLE")) {
+        try { value = decodeURIComponent(escape(decodeQP(value))); } catch { value = decodeQP(value); }
+      }
+
+      // Collect TYPE values (TYPE=CELL, TYPE=WORK, CELL, WORK, IPHONE, etc.)
+      const typeTokens = paramStr.split(";").flatMap(p => {
+        const [k, v] = p.split("=");
+        return v ? (k === "TYPE" ? v.split(",") : []) : [k];
+      }).map(t => t.toUpperCase());
+
+      if (!props[propName]) props[propName] = [];
+      props[propName].push({ value: value.trim(), types: typeTokens });
+    }
+
+    const fn = props["FN"]?.[0]?.value || "";
+    if (!fn) continue;
+
+    // ORG → location (first component only)
+    const org = (props["ORG"]?.[0]?.value || "").split(";")[0].trim();
+
+    // Phones: prefer CELL, then any, extract up to 2
+    const allTels = (props["TEL"] || []).map(t => {
+      const num = t.value.replace(/[^\d+]/g, "");
+      const types = t.types;
+      const isCell = types.some(x => ["CELL","MOBILE","IPHONE"].includes(x));
+      const isFisso = !isCell && types.some(x => ["WORK","HOME","VOICE"].includes(x));
+      return { num, type: isCell ? "cell" : isFisso ? "fisso" : "cell" };
+    }).filter(t => t.num.length >= 6);
+
+    const p1 = allTels.find(t => t.type === "cell") || allTels[0] || null;
+    const p2 = allTels.find(t => t !== p1) || null;
+
+    // Address: prefer WORK, then HOME, then any
+    const adrs = props["ADR"] || [];
+    const workAdr = adrs.find(a => a.types.includes("WORK")) || adrs[0] || null;
+    let fullAddress = "";
+    if (workAdr) {
+      const parts = workAdr.value.split(";");
+      // ADR: PO Box; Extended; Street; City; Region; Postal; Country
+      const street = parts[2]?.trim() || "";
+      const city   = parts[3]?.trim() || "";
+      const postal = parts[5]?.trim() || "";
+      fullAddress = [street, `${postal} ${city}`.trim()].filter(Boolean).join(", ");
+    }
+
+    const email = (props["EMAIL"]?.[0]?.value || "").toLowerCase();
+
+    contacts.push({
+      customer: fn,
+      location: org,
+      fullAddress,
+      phone:     p1?.num  || "",
+      phoneType: p1?.type || "cell",
+      phone2:     p2?.num  || "",
+      phone2Type: p2?.type || "fisso",
+      email,
+      addressType: "customer"
+    });
+  }
+
+  return contacts;
 }
 
 function parseCsv(text) {
+  // Handles quoted fields with embedded commas
+  function splitCsvLine(line) {
+    const result = [];
+    let cur = "", inQ = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (ch === '"') { inQ = !inQ; }
+      else if (ch === "," && !inQ) { result.push(cur.trim()); cur = ""; }
+      else cur += ch;
+    }
+    result.push(cur.trim());
+    return result;
+  }
+
   const lines = text.split(/\r?\n/).filter(Boolean);
   if (lines.length < 2) return [];
-  const headers = lines[0].split(",").map(h => h.replace(/^"|"$/g, "").toLowerCase().trim());
+  const headers = splitCsvLine(lines[0]).map(h => h.toLowerCase().replace(/["\s]/g, ""));
   return lines.slice(1).flatMap(line => {
-    const vals = line.split(",").map(v => v.replace(/^"|"$/g, "").trim());
+    const vals = splitCsvLine(line);
     const row = Object.fromEntries(headers.map((h, i) => [h, vals[i] || ""]));
-    const customer = row.name || row.nome || row.customer || row.cliente || "";
+    const customer = row.name || row.nome || row.customer || row.cliente || row["firstname"] || "";
     if (!customer) return [];
     return [{
       customer,
-      location: row.sede || row.location || "",
-      fullAddress: row.address || row.indirizzo || row.full_address || customer,
-      phone: row.phone || row.tel || row.telefono || "",
-      email: row.email || ""
+      location: row.company || row.azienda || row.sede || row.location || "",
+      fullAddress: row.address || row.indirizzo || row.full_address || "",
+      phone: row.phone || row.tel || row.telefono || row["mobilephone"] || row["mobile"] || "",
+      phoneType: "cell",
+      phone2: row.phone2 || row.tel2 || row["homephone"] || row["workphone"] || "",
+      phone2Type: "fisso",
+      email: row.email || "",
+      addressType: "customer"
     }];
   });
+}
+
+async function geocodeOne(address, apiKey) {
+  if (!address || !apiKey) return null;
+  try {
+    const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&region=it&key=${apiKey}`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
+    const data = await res.json();
+    if (data.status === "OK" && data.results[0]) {
+      const loc = data.results[0].geometry.location;
+      return { lat: loc.lat, lng: loc.lng };
+    }
+  } catch { /* ignore */ }
+  return null;
+}
+
+function showImportPreview(rawContacts) {
+  const existing = new Set(state.addresses.map(a => a.customer.toLowerCase().trim()));
+  // Flag duplicates but still show them (user decides)
+  const contacts = rawContacts.map(c => ({
+    ...c,
+    _dup: existing.has(c.customer.toLowerCase().trim())
+  }));
+
+  const hasAddr = contacts.some(c => c.fullAddress);
+  const canGeo  = hasAddr && Boolean(state.googleMapsKey);
+
+  const overlay = document.createElement("div");
+  overlay.id = "import-preview-overlay";
+  overlay.className = "map-picker-overlay";
+  overlay.innerHTML = `
+    <div class="map-picker-box" style="max-height:90dvh;display:flex;flex-direction:column;">
+      <div class="map-picker-header">
+        <span>Anteprima importazione</span>
+        <button class="btn ghost" id="import-close">×</button>
+      </div>
+      <div style="padding:12px 16px;border-bottom:1px solid var(--line);display:flex;flex-wrap:wrap;gap:10px;align-items:center;">
+        <span class="stop-meta"><b>${contacts.length}</b> contatti trovati · <b>${contacts.filter(c => c._dup).length}</b> già presenti</span>
+        <label style="display:flex;align-items:center;gap:6px;font-size:0.82rem;margin-left:auto;">
+          <input type="checkbox" id="import-select-all" checked style="width:16px;min-height:16px;height:16px;" />
+          Seleziona tutti
+        </label>
+        ${canGeo ? `<label style="display:flex;align-items:center;gap:6px;font-size:0.82rem;">
+          <input type="checkbox" id="import-geocode" style="width:16px;min-height:16px;height:16px;" />
+          Geocodifica indirizzi 📍
+        </label>` : ""}
+      </div>
+      <div id="import-list" style="flex:1;overflow-y:auto;padding:8px 12px;display:grid;gap:6px;">
+        ${contacts.map((c, i) => `
+          <label class="import-contact-row${c._dup ? " import-dup" : ""}">
+            <input type="checkbox" class="import-cb" data-idx="${i}" ${c._dup ? "" : "checked"} style="width:16px;min-height:16px;height:16px;flex-shrink:0;" />
+            <div style="min-width:0;">
+              <div style="font-weight:700;font-size:0.88rem;">${escapeHtml(c.customer)}${c.location ? ` <span style="font-weight:400;color:var(--muted)">— ${escapeHtml(c.location)}</span>` : ""}${c._dup ? ' <span class="badge" style="font-size:0.7rem;vertical-align:middle;">già presente</span>' : ""}</div>
+              ${c.phone ? `<div class="stop-meta">${phoneIcon(c.phoneType)} ${escapeHtml(c.phone)}${c.phone2 ? ` · ${phoneIcon(c.phone2Type)} ${escapeHtml(c.phone2)}` : ""}</div>` : ""}
+              ${c.fullAddress ? `<div class="stop-meta" style="font-size:0.78rem;">${escapeHtml(c.fullAddress)}</div>` : ""}
+              ${c.email ? `<div class="stop-meta" style="font-size:0.78rem;">✉ ${escapeHtml(c.email)}</div>` : ""}
+            </div>
+          </label>`).join("")}
+      </div>
+      <div style="padding:12px 16px;border-top:1px solid var(--line);display:flex;gap:8px;align-items:center;">
+        <div id="import-progress" class="stop-meta" style="flex:1;"></div>
+        <button class="btn" id="import-close-btn">Annulla</button>
+        <button class="btn primary" id="import-confirm-btn">Importa selezionati</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  // Select all toggle
+  const selectAll = overlay.querySelector("#import-select-all");
+  selectAll?.addEventListener("change", () => {
+    overlay.querySelectorAll(".import-cb").forEach(cb => cb.checked = selectAll.checked);
+  });
+
+  // Close
+  const close = () => overlay.remove();
+  overlay.querySelector("#import-close")?.addEventListener("click", close);
+  overlay.querySelector("#import-close-btn")?.addEventListener("click", close);
+
+  // Confirm
+  overlay.querySelector("#import-confirm-btn")?.addEventListener("click", async () => {
+    const geocode = overlay.querySelector("#import-geocode")?.checked ?? false;
+    const selected = [...overlay.querySelectorAll(".import-cb:checked")]
+      .map(cb => contacts[Number(cb.dataset.idx)]);
+
+    if (!selected.length) { showToast("Nessun contatto selezionato"); return; }
+
+    const confirmBtn = overlay.querySelector("#import-confirm-btn");
+    const closeBtn   = overlay.querySelector("#import-close-btn");
+    const progress   = overlay.querySelector("#import-progress");
+    confirmBtn.disabled = true;
+    closeBtn.disabled   = true;
+
+    let added = 0;
+    for (let i = 0; i < selected.length; i++) {
+      const c = { ...selected[i] };
+      delete c._dup;
+      if (progress) progress.textContent = `${i + 1} / ${selected.length}…`;
+
+      if (geocode && c.fullAddress && !c.lat) {
+        const geo = await geocodeOne(c.fullAddress, state.googleMapsKey);
+        if (geo) { c.lat = geo.lat; c.lng = geo.lng; }
+      }
+
+      try {
+        await api("/api/addresses", { method: "POST", body: JSON.stringify(c) });
+        added++;
+      } catch { /* skip on error */ }
+    }
+
+    await refreshAllData();
+    renderArchive();
+    close();
+    showToast(`${added} contatti importati`);
+  });
+}
+
+async function importFromContactPicker() {
+  document.querySelector("#vcf-input")?.click();
+}
+
+async function importFromVcf(file) {
+  showSpinner("Lettura file…");
+  try {
+    const text = await file.text();
+    const contacts = file.name.toLowerCase().endsWith(".csv") ? parseCsv(text) : parseVcf(text);
+    hideSpinner();
+    if (!contacts.length) { showToast("Nessun contatto trovato nel file"); return; }
+    showImportPreview(contacts);
+  } catch {
+    hideSpinner();
+    showToast("Errore lettura file");
+  }
 }
 
 // ── save address form ─────────────────────────────────────────────────────────
