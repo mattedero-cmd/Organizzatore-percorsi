@@ -2107,3 +2107,23 @@ tbody tr:last-child td {
 .visit-name { flex: 1; color: var(--text); }
 .visit-arrow { color: var(--muted); font-size: 1rem; }
 .visit-history-empty { font-size: 0.8rem; color: var(--muted); padding: 4px 6px; }
+
+/* ── Completa con Maps overlay ───────────────────────────────────────────── */
+.cwm-input {
+  width: 100%;
+  margin-bottom: 8px;
+}
+.cwm-results { display: flex; flex-direction: column; gap: 4px; max-height: 260px; overflow-y: auto; }
+.cwm-searching { font-size: 0.85rem; color: var(--muted); padding: 8px 4px; }
+.cwm-result-item {
+  display: flex;
+  flex-direction: column;
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  border: 1px solid var(--line);
+  transition: background 0.12s;
+}
+.cwm-result-item:hover { background: var(--surface2, #f4f4f5); }
+.cwm-result-name { font-weight: 600; font-size: 0.9rem; }
+.cwm-result-addr { font-size: 0.78rem; color: var(--muted); margin-top: 2px; }
