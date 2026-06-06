@@ -670,17 +670,22 @@ function stopNavUrl(row, pref) {
 
 // ── Google Maps display ───────────────────────────────────────────────────────
 
+let _mapsLoadPromise = null;
+
 async function loadGoogleMapsScript() {
   if (state.googleMapsReady) return true;
   if (!state.googleMapsKey) return false;
-  return new Promise(resolve => {
-    if (window.google?.maps) { state.googleMapsReady = true; resolve(true); return; }
-    window.__gMapsCb = () => { state.googleMapsReady = true; resolve(true); };
+  if (window.google?.maps) { state.googleMapsReady = true; return true; }
+  // Coalesce concurrent calls into a single load attempt
+  if (_mapsLoadPromise) return _mapsLoadPromise;
+  _mapsLoadPromise = new Promise(resolve => {
+    window.__gMapsCb = () => { state.googleMapsReady = true; _mapsLoadPromise = null; resolve(true); };
     const s = document.createElement("script");
     s.src = `https://maps.googleapis.com/maps/api/js?key=${state.googleMapsKey}&libraries=places&callback=__gMapsCb`;
-    s.onerror = () => resolve(false);
+    s.onerror = () => { _mapsLoadPromise = null; resolve(false); };
     document.head.appendChild(s);
   });
+  return _mapsLoadPromise;
 }
 
 async function renderGoogleMap(result) {
@@ -2468,6 +2473,7 @@ function openMapPicker() {
   const startLng = Number(lngEl?.value) || 11.12;
   let pickedLat = startLat, pickedLng = startLng;
   let pickedPlace = null; // full place data when selected via search
+  let pickedAddress = ""; // real resolved address from geocoding or search
 
   const modal = document.createElement("div");
   modal.className = "map-picker-modal";
@@ -2509,9 +2515,10 @@ function openMapPicker() {
     // Reverse geocode a tap to get a readable address
     const reverseGeocode = (lat, lng) => {
       new google.maps.Geocoder().geocode({ location: { lat, lng } }, (res, st) => {
-        const addr = st === "OK" && res[0] ? res[0].formatted_address : `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
-        updateMarker(lat, lng, addr);
-        pickedPlace = null; // tapped manually — no structured place data
+        const addr = st === "OK" && res[0] ? res[0].formatted_address : "";
+        pickedAddress = addr;
+        updateMarker(lat, lng, addr || `${lat.toFixed(5)}, ${lng.toFixed(5)}`);
+        pickedPlace = null;
       });
     };
 
@@ -2693,6 +2700,7 @@ function openMapPickerForField({ labelEl, addressEl, latEl, lngEl, onConfirm }) 
   const startLng = Number(lngEl?.value) || 11.12;
   let pickedLat = startLat, pickedLng = startLng;
   let pickedPlace = null;
+  let pickedAddress = ""; // real resolved address (empty = only coordinates)
 
   const modal = document.createElement("div");
   modal.className = "map-picker-modal";
@@ -2730,8 +2738,10 @@ function openMapPickerForField({ labelEl, addressEl, latEl, lngEl, onConfirm }) 
     };
     const reverseGeocode = (lat, lng) => {
       new google.maps.Geocoder().geocode({ location: { lat, lng } }, (res, st) => {
-        const addr = st === "OK" && res[0] ? res[0].formatted_address : `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
-        updateMarker(lat, lng, addr); pickedPlace = null;
+        const addr = st === "OK" && res[0] ? res[0].formatted_address : "";
+        pickedAddress = addr;
+        updateMarker(lat, lng, addr || `${lat.toFixed(5)}, ${lng.toFixed(5)}`);
+        pickedPlace = null;
       });
     };
     map.addListener("click", e => {
@@ -2762,6 +2772,7 @@ function openMapPickerForField({ labelEl, addressEl, latEl, lngEl, onConfirm }) 
       const place = autocomplete.getPlace();
       if (!place.geometry?.location) { showToast("Luogo non trovato"); return; }
       pickedPlace = place;
+      pickedAddress = place.formatted_address || place.name || "";
       updateMarker(place.geometry.location.lat(), place.geometry.location.lng(), place.name || place.formatted_address);
       map.setZoom(17);
     });
@@ -2773,13 +2784,15 @@ function openMapPickerForField({ labelEl, addressEl, latEl, lngEl, onConfirm }) 
       if (pickedPlace) {
         label = pickedPlace.name || "";
         address = pickedPlace.formatted_address || "";
+        pickedAddress = address;
         if (labelEl) labelEl.value = label;
         if (addressEl) addressEl.value = address;
       } else {
-        address = labelSpan?.textContent || "";
-        if (addressEl) addressEl.value = address;
+        address = pickedAddress;
+        if (addressEl && address) addressEl.value = address;
       }
-      if (saveToArchive && (label || address)) {
+      if (saveToArchive) {
+        if (!address) { showToast("Cerca o seleziona un luogo prima di salvare"); return; }
         try {
           await api("/api/addresses", {
             method: "POST",
@@ -2787,7 +2800,7 @@ function openMapPickerForField({ labelEl, addressEl, latEl, lngEl, onConfirm }) 
           });
           await refreshAllData();
           showToast("Luogo salvato nell'archivio");
-        } catch { showToast("Errore nel salvataggio"); }
+        } catch (err) { showToast("Errore nel salvataggio: " + err.message); return; }
       } else {
         showToast(pickedPlace ? "Dati compilati dalla mappa" : "Coordinate aggiornate");
       }
