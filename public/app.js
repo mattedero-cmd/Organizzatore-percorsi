@@ -1395,33 +1395,25 @@ function renderArchive() {
           <label class="field">Sede / Città<input name="location" value="${escapeHtml(form.location)}" /></label>
           <label class="field full">Indirizzo completo<input name="fullAddress" value="${escapeHtml(form.fullAddress)}" required /></label>
           <div class="field full phone-group">
-            <div class="phone-label-row">
-              <span class="phone-label">Telefono 1</span>
-            </div>
             <div class="phone-row">
-              <label class="phone-pref-label phone-pref-inline"><input type="radio" name="phonePreferred" value="phone" ${form.phonePreferred !== "phone2" ? "checked" : ""} /> Preferito</label>
+              <label class="phone-pref-star" title="Preferito"><input type="radio" name="phonePreferred" value="phone" ${form.phonePreferred !== "phone2" ? "checked" : ""} />★</label>
               <select name="phoneType" class="phone-type-select">
-                <option value="cell" ${form.phoneType === "cell" ? "selected" : ""}>📱 Cell</option>
-                <option value="fisso" ${form.phoneType === "fisso" ? "selected" : ""}>☎ Fisso</option>
-                <option value="altro" ${form.phoneType === "altro" ? "selected" : ""}>Altro</option>
+                <option value="cell" ${form.phoneType === "cell" ? "selected" : ""}>📱</option>
+                <option value="fisso" ${form.phoneType === "fisso" ? "selected" : ""}>☎</option>
+                <option value="altro" ${form.phoneType === "altro" ? "selected" : ""}>📞</option>
               </select>
-              <input name="phone" type="tel" value="${escapeHtml(form.phone)}" placeholder="Numero" style="flex:1" />
-              <input name="phoneName" value="${escapeHtml(form.phoneName)}" placeholder="Nome (es. Mario)" style="flex:1" />
-            </div>
-          </div>
-          <div class="field full phone-group">
-            <div class="phone-label-row">
-              <span class="phone-label">Telefono 2</span>
+              <input name="phone" type="tel" value="${escapeHtml(form.phone)}" placeholder="Tel 1" style="flex:2;min-width:0" />
+              <input name="phoneName" value="${escapeHtml(form.phoneName)}" placeholder="Intestatario" style="flex:1;min-width:0" />
             </div>
             <div class="phone-row">
-              <label class="phone-pref-label phone-pref-inline"><input type="radio" name="phonePreferred" value="phone2" ${form.phonePreferred === "phone2" ? "checked" : ""} /> Preferito</label>
+              <label class="phone-pref-star" title="Preferito"><input type="radio" name="phonePreferred" value="phone2" ${form.phonePreferred === "phone2" ? "checked" : ""} />★</label>
               <select name="phone2Type" class="phone-type-select">
-                <option value="cell" ${form.phone2Type === "cell" ? "selected" : ""}>📱 Cell</option>
-                <option value="fisso" ${form.phone2Type === "fisso" ? "selected" : ""}>☎ Fisso</option>
-                <option value="altro" ${form.phone2Type === "altro" ? "selected" : ""}>Altro</option>
+                <option value="cell" ${form.phone2Type === "cell" ? "selected" : ""}>📱</option>
+                <option value="fisso" ${form.phone2Type === "fisso" ? "selected" : ""}>☎</option>
+                <option value="altro" ${form.phone2Type === "altro" ? "selected" : ""}>📞</option>
               </select>
-              <input name="phone2" type="tel" value="${escapeHtml(form.phone2)}" placeholder="Numero" style="flex:1" />
-              <input name="phone2Name" value="${escapeHtml(form.phone2Name)}" placeholder="Nome (es. Ufficio)" style="flex:1" />
+              <input name="phone2" type="tel" value="${escapeHtml(form.phone2)}" placeholder="Tel 2" style="flex:2;min-width:0" />
+              <input name="phone2Name" value="${escapeHtml(form.phone2Name)}" placeholder="Intestatario" style="flex:1;min-width:0" />
             </div>
           </div>
           <label class="field">Tipo contatto<select name="addressType">
@@ -2674,44 +2666,17 @@ async function completeFormWithMaps() {
     clickableIcons: true,
   });
 
-  // If we have an address but no coords, geocode it to center
-  if (!hasCoords) {
-    const addrQuery = [fVal("activity") || fVal("customer"), fVal("fullAddress") || fVal("location")].filter(Boolean).join(" ");
-    if (addrQuery) {
-      const geocoder = new google.maps.Geocoder();
-      geocoder.geocode({ address: addrQuery, region: "it" }, (res, status) => {
-        if (status === "OK" && res[0]) {
-          map.setCenter(res[0].geometry.location);
-          map.setZoom(16);
-        }
-      });
-    } else {
-      // Try geolocation
-      navigator.geolocation?.getCurrentPosition(pos => {
-        map.setCenter({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-        map.setZoom(14);
-      });
-    }
-  }
-
-  // Search box
-  const searchInput = modal.querySelector("#cwm-search-input");
-  const searchBox = new google.maps.places.SearchBox(searchInput);
-  map.addListener("bounds_changed", () => searchBox.setBounds(map.getBounds()));
-  let searchMarker = null;
-  searchBox.addListener("places_changed", () => {
-    const places = searchBox.getPlaces();
-    if (!places?.length) return;
-    const p = places[0];
-    if (searchMarker) searchMarker.setMap(null);
-    searchMarker = new google.maps.Marker({ map, position: p.geometry.location, animation: google.maps.Animation.DROP });
-    map.setCenter(p.geometry.location);
-    map.setZoom(17);
-    showPlaceBar(p);
-  });
-
   const svc = new google.maps.places.PlacesService(map);
   let selectedPlace = null;
+  let activeMarker = null;
+
+  function placeMarker(location, place) {
+    if (activeMarker) activeMarker.setMap(null);
+    activeMarker = new google.maps.Marker({ map, position: location, animation: google.maps.Animation.DROP });
+    map.setCenter(location);
+    map.setZoom(17);
+    if (place) showPlaceBar(place);
+  }
 
   function showPlaceBar(place) {
     selectedPlace = place;
@@ -2719,6 +2684,48 @@ async function completeFormWithMaps() {
     placeAddrEl.textContent = place.formatted_address || place.vicinity || "";
     placeBar.style.display = "flex";
   }
+
+  // Auto-search on open: try coords first, then textSearch for name/address
+  const autoQuery = [fVal("activity") || fVal("customer"), fVal("fullAddress") || fVal("location")].filter(Boolean).join(" ");
+  if (hasCoords) {
+    // Already centered; try to find a POI at those coords via reverse geocode
+    const geocoder = new google.maps.Geocoder();
+    geocoder.geocode({ location: { lat: startLat, lng: startLng } }, (res, status) => {
+      if (status === "OK" && res[0]) {
+        const r = res[0];
+        placeMarker({ lat: startLat, lng: startLng }, { name: fVal("activity") || fVal("customer") || r.formatted_address, formatted_address: r.formatted_address, place_id: r.place_id });
+      }
+    });
+  } else if (autoQuery) {
+    svc.textSearch({ query: autoQuery, region: "it" }, (res, status) => {
+      if (status === google.maps.places.PlacesServiceStatus.OK && res[0]) {
+        const p = res[0];
+        svc.getDetails({ placeId: p.place_id, fields: ["name", "formatted_address", "geometry", "formatted_phone_number", "international_phone_number", "opening_hours"] }, (detail, s) => {
+          const place = s === google.maps.places.PlacesServiceStatus.OK ? detail : p;
+          placeMarker(place.geometry.location, place);
+        });
+      }
+    });
+  } else {
+    navigator.geolocation?.getCurrentPosition(pos => {
+      map.setCenter({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+      map.setZoom(14);
+    });
+  }
+
+  // Search box
+  const searchInput = modal.querySelector("#cwm-search-input");
+  const searchBox = new google.maps.places.SearchBox(searchInput);
+  map.addListener("bounds_changed", () => searchBox.setBounds(map.getBounds()));
+  searchBox.addListener("places_changed", () => {
+    const places = searchBox.getPlaces();
+    if (!places?.length) return;
+    const p = places[0];
+    svc.getDetails({ placeId: p.place_id, fields: ["name", "formatted_address", "geometry", "formatted_phone_number", "international_phone_number", "opening_hours"] }, (detail, s) => {
+      const place = s === google.maps.places.PlacesServiceStatus.OK ? detail : p;
+      placeMarker(place.geometry?.location || p.geometry.location, place);
+    });
+  });
 
   // Click on POI
   map.addListener("click", e => {

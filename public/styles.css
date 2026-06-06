@@ -1242,8 +1242,10 @@ tbody tr:last-child td {
 }
 
 .phone-type-select {
-  width: 90px;
+  width: 48px;
   flex-shrink: 0;
+  padding: 0 2px;
+  text-align: center;
 }
 
 /* ── settings sections ────────────────────────────────────────────────────── */
@@ -1279,26 +1281,17 @@ tbody tr:last-child td {
   flex-shrink: 0;
 }
 
-.phone-label-row {
+.phone-pref-star {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  margin-bottom: 4px;
-}
-
-.phone-pref-label {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 0.82rem;
-  color: var(--muted);
-  cursor: pointer;
-}
-
-.phone-pref-inline {
+  gap: 1px;
   flex-shrink: 0;
-  order: -1;
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: var(--muted);
+  padding: 0 2px;
 }
+.phone-pref-star input[type=radio] { width: 14px; height: 14px; margin: 0; accent-color: var(--primary); }
 
 /* ── warning badge levels ─────────────────────────────────────────────────── */
 .badge-error {
