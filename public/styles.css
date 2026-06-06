@@ -216,6 +216,7 @@ textarea {
   padding: 9px 10px;
   background: var(--surface);
   color: var(--text);
+  font-size: 16px; /* previene auto-zoom iOS su focus */
 }
 
 input[type="checkbox"] {
@@ -2154,7 +2155,7 @@ tbody tr:last-child td {
   border-radius: 8px;
   border: 1px solid var(--line);
   padding: 0 10px;
-  font-size: 0.95rem;
+  font-size: 16px; /* ≥16px previene auto-zoom su iOS al focus */
 }
 .cwm-close-btn { flex-shrink: 0; }
 .cwm-map-container { flex: 1; min-height: 0; }
