@@ -2067,7 +2067,7 @@ tbody tr:last-child td {
   gap: 8px;
 }
 .stats-kpi {
-  background: var(--surface2, #f4f4f5);
+  background: var(--surface-2);
   border-radius: 10px;
   padding: 12px;
   display: flex;
@@ -2079,7 +2079,7 @@ tbody tr:last-child td {
 .stats-kpi-lbl { font-size: 0.72rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
 /* Row cards (mesi / clienti) */
 .stats-row-card {
-  background: var(--surface2, #f4f4f5);
+  background: var(--surface-2);
   border-radius: 10px;
   padding: 12px 14px;
 }

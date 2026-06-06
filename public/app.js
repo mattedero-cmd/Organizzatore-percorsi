@@ -156,8 +156,7 @@ function applyTheme() {
   } else if (state.themePref === "light") {
     state.theme = "day";
   } else {
-    const h = new Date().getHours();
-    state.theme = (h >= 19 || h < 7) ? "night" : "day";
+    state.theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "night" : "day";
   }
   document.documentElement.dataset.theme = state.theme;
 }
@@ -4033,7 +4032,10 @@ async function init() {
 }
 
 applyTheme();
-setInterval(applyTheme, 60_000);
+// Follow OS dark/light preference in real time when set to "auto"
+window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+  if (state.themePref === "auto") applyTheme();
+});
 bindEvents();
 
 if ("serviceWorker" in navigator) {
