@@ -2758,6 +2758,7 @@ async function completeFormWithMaps() {
   modal.innerHTML = `
     <div class="cwm-modal-header">
       <input id="cwm-search-input" type="text" class="cwm-search-input" placeholder="Cerca un luogo…" autocomplete="off" />
+      <button class="btn" id="cwm-search-btn" style="flex-shrink:0">🔍</button>
       <button class="btn cwm-close-btn" id="cwm-close">✕</button>
     </div>
     <div id="cwm-map-container" class="cwm-map-container">
@@ -2860,7 +2861,22 @@ async function completeFormWithMaps() {
     });
   }
 
-  // Search box
+  // Helper: search by text query and pin result
+  const doTextSearch = q => {
+    if (!q.trim()) return;
+    svc.textSearch({ query: q, region: "it" }, (res, status) => {
+      if (status === google.maps.places.PlacesServiceStatus.OK && res[0]) {
+        svc.getDetails({ placeId: res[0].place_id, fields: ["name", "formatted_address", "geometry", "formatted_phone_number", "international_phone_number", "opening_hours"] }, (detail, s) => {
+          const place = s === google.maps.places.PlacesServiceStatus.OK ? detail : res[0];
+          if (place.geometry?.location) placeMarker(place.geometry.location, place);
+        });
+      } else {
+        showToast("Nessun risultato trovato");
+      }
+    });
+  };
+
+  // Search box — also triggers on Enter key if user doesn't pick autocomplete
   const searchInput = modal.querySelector("#cwm-search-input");
   const searchBox = new google.maps.places.SearchBox(searchInput);
   map.addListener("bounds_changed", () => searchBox.setBounds(map.getBounds()));
@@ -2874,16 +2890,18 @@ async function completeFormWithMaps() {
       placeMarker(place.geometry?.location || p.geometry.location, place);
     });
   });
+  searchInput.addEventListener("keydown", e => {
+    if (e.key === "Enter") { e.preventDefault(); doTextSearch(searchInput.value); }
+  });
+  modal.querySelector("#cwm-search-btn").onclick = () => doTextSearch(searchInput.value);
 
-  // Click on POI
+  // Click on POI — pin it and show place bar
   map.addListener("click", e => {
     if (!e.placeId) return;
     e.stop();
     svc.getDetails({ placeId: e.placeId, fields: ["name", "formatted_address", "geometry", "formatted_phone_number", "international_phone_number", "opening_hours"] }, (place, status) => {
-      if (status === google.maps.places.PlacesServiceStatus.OK) {
-        if (activeMarker) activeMarker.setMap(null);
-        activeMarker = new google.maps.Marker({ map, position: place.geometry.location });
-        showPlaceBar(place);
+      if (status === google.maps.places.PlacesServiceStatus.OK && place.geometry?.location) {
+        placeMarker(place.geometry.location, place);
       }
     });
   });
@@ -2909,6 +2927,8 @@ function applyPlaceToForm(place) {
   const f = name => form.querySelector(`[name="${name}"]`);
   const setIfEmpty = (name, value) => { const el = f(name); if (el && !el.value.trim() && value) el.value = value; };
 
+  setIfEmpty("activity", place.name);
+  setIfEmpty("customer", place.name);
   setIfEmpty("fullAddress", place.formatted_address);
   setIfEmpty("phone", place.formatted_phone_number || place.international_phone_number || "");
   if (place.geometry?.location) {
