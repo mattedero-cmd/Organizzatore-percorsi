@@ -1949,6 +1949,7 @@ function renderMenuStats() {
 // ── render dispatch ───────────────────────────────────────────────────────────
 
 function render() {
+  if (!state.user) { renderAuthScreen(false); return; }
   if (state.activeTab === "route") renderRoute();
   else if (state.activeTab === "saved") renderSaved();
   else if (state.activeTab === "archive") renderArchive();
@@ -3495,6 +3496,7 @@ function renderLoginForm() {
   return `<form class="auth-form">
     <label class="field">Username<input name="username" autocomplete="username" required /></label>
     <label class="field">Password<input name="password" type="password" autocomplete="current-password" required /></label>
+    <label class="auth-remember"><input type="checkbox" name="remember" checked /> Ricordami su questo dispositivo</label>
     <p class="auth-error"></p>
     <button class="btn primary" type="submit" style="width:100%">Accedi</button>
   </form>`;
@@ -3559,7 +3561,7 @@ function renderAuthScreen(isSetup = false) {
           const res = await fetch(endpoint, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ username: data.username, password: data.password })
+            body: JSON.stringify({ username: data.username, password: data.password, remember: data.remember === "on" })
           });
           const result = await res.json();
           if (!res.ok) throw new Error(result.error || "Errore");

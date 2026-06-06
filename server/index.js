@@ -93,9 +93,10 @@ function parseCookies(header) {
   );
 }
 
-function sessionCookie(token) {
+function sessionCookie(token, remember = true) {
   const secure = process.env.NODE_ENV === "production" ? "; Secure" : "";
-  return `session=${token}; HttpOnly; Path=/; SameSite=Strict; Max-Age=2592000${secure}`;
+  const maxAge = remember ? "; Max-Age=2592000" : ""; // 30 days or session cookie
+  return `session=${token}; HttpOnly; Path=/; SameSite=Strict${maxAge}${secure}`;
 }
 
 async function authenticate(request) {
@@ -194,7 +195,7 @@ async function handleApi(request, response) {
 
       if (method === "POST" && url.pathname === "/api/auth/login") {
         const body = await parseBody(request);
-        const { username, password } = body;
+        const { username, password, remember } = body;
         if (!username || !password) return sendJson(response, 400, { error: "Username e password obbligatori" });
         const user = await findUserByUsername(username.trim());
         if (!user || !(await verifyPassword(password, user.password_hash))) {
@@ -202,7 +203,7 @@ async function handleApi(request, response) {
         }
         const token = generateToken();
         await createSession(token, user.id);
-        response.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Set-Cookie": sessionCookie(token) });
+        response.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Set-Cookie": sessionCookie(token, remember !== false) });
         response.end(JSON.stringify({ id: user.id, username: user.username }));
         return;
       }
