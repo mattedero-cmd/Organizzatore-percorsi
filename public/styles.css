@@ -44,6 +44,7 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
+  overflow-x: hidden;
 }
 
 button,
@@ -62,6 +63,8 @@ button {
   min-height: 100vh;
   display: grid;
   grid-template-rows: auto auto 1fr;
+  overflow-x: hidden;
+  max-width: 100vw;
 }
 
 .topbar {
@@ -148,8 +151,10 @@ h3 {
 
 .app {
   width: min(1360px, 100%);
+  max-width: 100%;
   margin: 0 auto;
   padding: 18px;
+  box-sizing: border-box;
 }
 
 .grid {
