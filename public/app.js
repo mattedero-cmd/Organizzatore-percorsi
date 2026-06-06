@@ -2748,18 +2748,10 @@ async function useCurrentPosition() {
 async function completeFormWithMaps() {
   if (document.getElementById("cwm-modal")) return;
 
-  const ready = await loadGoogleMapsScript();
-  if (!ready) { showToast("Google Maps non disponibile"); return; }
-
   const form = document.getElementById("address-form");
   if (!form) return;
-  const fVal = name => (form.querySelector(`[name="${name}"]`)?.value || "").trim();
 
-  // Starting center: coordinates from form → geocode address → current position → Italy
-  let startLat = Number(fVal("lat")) || 0;
-  let startLng = Number(fVal("lng")) || 0;
-  const hasCoords = startLat !== 0 || startLng !== 0;
-
+  // Show modal immediately with loading state
   const modal = document.createElement("div");
   modal.id = "cwm-modal";
   modal.className = "cwm-modal";
@@ -2768,7 +2760,9 @@ async function completeFormWithMaps() {
       <input id="cwm-search-input" type="text" class="cwm-search-input" placeholder="Cerca un luogo…" autocomplete="off" />
       <button class="btn cwm-close-btn" id="cwm-close">✕</button>
     </div>
-    <div id="cwm-map-container" class="cwm-map-container"></div>
+    <div id="cwm-map-container" class="cwm-map-container">
+      <div class="cwm-map-loading">Caricamento mappa…</div>
+    </div>
     <div id="cwm-place-bar" class="cwm-place-bar" style="display:none">
       <div class="cwm-place-info">
         <span id="cwm-place-name" class="cwm-place-name"></span>
@@ -2778,7 +2772,11 @@ async function completeFormWithMaps() {
     </div>`;
   document.body.appendChild(modal);
 
-  modal.querySelector("#cwm-close").onclick = () => modal.remove();
+  const closeModal = () => modal.remove();
+  modal.querySelector("#cwm-close").onclick = closeModal;
+  document.addEventListener("keydown", function escHandler(e) {
+    if (e.key === "Escape") { closeModal(); document.removeEventListener("keydown", escHandler); }
+  });
 
   const mapEl = modal.querySelector("#cwm-map-container");
   const placeBar = modal.querySelector("#cwm-place-bar");
@@ -2786,17 +2784,34 @@ async function completeFormWithMaps() {
   const placeAddrEl = modal.querySelector("#cwm-place-addr");
   const useBtn = modal.querySelector("#cwm-use-btn");
 
-  const initCenter = hasCoords
-    ? { lat: startLat, lng: startLng }
-    : { lat: 46.07, lng: 11.12 }; // default Italy
+  const fVal = name => (form.querySelector(`[name="${name}"]`)?.value || "").trim();
 
-  const map = new google.maps.Map(mapEl, {
-    center: initCenter,
-    zoom: hasCoords ? 16 : 7,
-    disableDefaultUI: false,
-    gestureHandling: "greedy",
-    clickableIcons: true,
-  });
+  // Load Maps script
+  const ready = await loadGoogleMapsScript();
+  if (!ready || !google?.maps?.places) {
+    mapEl.innerHTML = `<div class="cwm-map-loading" style="color:#ef4444">Google Maps non disponibile.<br>Verifica la configurazione della chiave API.</div>`;
+    return;
+  }
+
+  mapEl.innerHTML = ""; // clear loading text
+
+  let startLat = Number(fVal("lat")) || 0;
+  let startLng = Number(fVal("lng")) || 0;
+  const hasCoords = startLat !== 0 || startLng !== 0;
+  const initCenter = hasCoords ? { lat: startLat, lng: startLng } : { lat: 46.07, lng: 11.12 };
+
+  let map;
+  try {
+    map = new google.maps.Map(mapEl, {
+      center: initCenter,
+      zoom: hasCoords ? 16 : 7,
+      gestureHandling: "greedy",
+      clickableIcons: true,
+    });
+  } catch (err) {
+    mapEl.innerHTML = `<div class="cwm-map-loading" style="color:#ef4444">Errore inizializzazione mappa: ${escapeHtml(err.message)}</div>`;
+    return;
+  }
 
   const svc = new google.maps.places.PlacesService(map);
   let selectedPlace = null;
@@ -2817,24 +2832,24 @@ async function completeFormWithMaps() {
     placeBar.style.display = "flex";
   }
 
-  // Auto-search on open: try coords first, then textSearch for name/address
+  // Auto-center and pin on open
   const autoQuery = [fVal("activity") || fVal("customer"), fVal("fullAddress") || fVal("location")].filter(Boolean).join(" ");
   if (hasCoords) {
-    // Already centered; try to find a POI at those coords via reverse geocode
-    const geocoder = new google.maps.Geocoder();
-    geocoder.geocode({ location: { lat: startLat, lng: startLng } }, (res, status) => {
+    new google.maps.Geocoder().geocode({ location: { lat: startLat, lng: startLng } }, (res, status) => {
       if (status === "OK" && res[0]) {
-        const r = res[0];
-        placeMarker({ lat: startLat, lng: startLng }, { name: fVal("activity") || fVal("customer") || r.formatted_address, formatted_address: r.formatted_address, place_id: r.place_id });
+        placeMarker({ lat: startLat, lng: startLng }, {
+          name: fVal("activity") || fVal("customer") || res[0].formatted_address,
+          formatted_address: res[0].formatted_address,
+          place_id: res[0].place_id
+        });
       }
     });
   } else if (autoQuery) {
     svc.textSearch({ query: autoQuery, region: "it" }, (res, status) => {
       if (status === google.maps.places.PlacesServiceStatus.OK && res[0]) {
-        const p = res[0];
-        svc.getDetails({ placeId: p.place_id, fields: ["name", "formatted_address", "geometry", "formatted_phone_number", "international_phone_number", "opening_hours"] }, (detail, s) => {
-          const place = s === google.maps.places.PlacesServiceStatus.OK ? detail : p;
-          placeMarker(place.geometry.location, place);
+        svc.getDetails({ placeId: res[0].place_id, fields: ["name", "formatted_address", "geometry", "formatted_phone_number", "international_phone_number", "opening_hours"] }, (detail, s) => {
+          const place = s === google.maps.places.PlacesServiceStatus.OK ? detail : res[0];
+          if (place.geometry?.location) placeMarker(place.geometry.location, place);
         });
       }
     });
@@ -2853,6 +2868,7 @@ async function completeFormWithMaps() {
     const places = searchBox.getPlaces();
     if (!places?.length) return;
     const p = places[0];
+    if (!p.place_id) { if (p.geometry?.location) placeMarker(p.geometry.location, p); return; }
     svc.getDetails({ placeId: p.place_id, fields: ["name", "formatted_address", "geometry", "formatted_phone_number", "international_phone_number", "opening_hours"] }, (detail, s) => {
       const place = s === google.maps.places.PlacesServiceStatus.OK ? detail : p;
       placeMarker(place.geometry?.location || p.geometry.location, place);
@@ -2861,31 +2877,28 @@ async function completeFormWithMaps() {
 
   // Click on POI
   map.addListener("click", e => {
-    const placeId = e.placeId;
-    if (!placeId) return;
-    e.stop(); // prevent default info window
-    svc.getDetails({
-      placeId,
-      fields: ["name", "formatted_address", "geometry", "formatted_phone_number", "international_phone_number", "opening_hours"]
-    }, (place, status) => {
-      if (status === google.maps.places.PlacesServiceStatus.OK) showPlaceBar(place);
+    if (!e.placeId) return;
+    e.stop();
+    svc.getDetails({ placeId: e.placeId, fields: ["name", "formatted_address", "geometry", "formatted_phone_number", "international_phone_number", "opening_hours"] }, (place, status) => {
+      if (status === google.maps.places.PlacesServiceStatus.OK) {
+        if (activeMarker) activeMarker.setMap(null);
+        activeMarker = new google.maps.Marker({ map, position: place.geometry.location });
+        showPlaceBar(place);
+      }
     });
   });
 
   useBtn.onclick = async () => {
     if (!selectedPlace) return;
-    // If we don't have full details yet (came from searchBox partial), fetch them
     if (!selectedPlace.opening_hours && selectedPlace.place_id) {
       useBtn.textContent = "…";
       useBtn.disabled = true;
       selectedPlace = await new Promise(resolve =>
-        svc.getDetails({
-          placeId: selectedPlace.place_id,
-          fields: ["name", "formatted_address", "geometry", "formatted_phone_number", "international_phone_number", "opening_hours"]
-        }, (p, s) => resolve(s === google.maps.places.PlacesServiceStatus.OK ? p : selectedPlace))
+        svc.getDetails({ placeId: selectedPlace.place_id, fields: ["name", "formatted_address", "geometry", "formatted_phone_number", "international_phone_number", "opening_hours"] },
+          (p, s) => resolve(s === google.maps.places.PlacesServiceStatus.OK ? p : selectedPlace))
       );
     }
-    modal.remove();
+    closeModal();
     applyPlaceToForm(selectedPlace);
   };
 }

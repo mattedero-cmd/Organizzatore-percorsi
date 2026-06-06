@@ -2157,7 +2157,18 @@ tbody tr:last-child td {
   font-size: 0.95rem;
 }
 .cwm-close-btn { flex-shrink: 0; }
-.cwm-map-container { flex: 1; }
+.cwm-map-container { flex: 1; min-height: 0; }
+.cwm-map-loading {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.9rem;
+  color: var(--muted);
+  text-align: center;
+  padding: 20px;
+  line-height: 1.5;
+}
 .cwm-place-bar {
   display: flex;
   align-items: center;
