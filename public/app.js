@@ -699,8 +699,8 @@ function normalizeSavedRoute(route) {
     },
     summary: {
       totalKm: Number(summary.totalKm ?? route?.totalKm ?? 0),
-      totalDriveMinutes: Number(summary.totalDriveMinutes || 0),
-      totalWorkMinutes: Number(summary.totalWorkMinutes || rows.reduce((t, r) => t + Number(r.durationMinutes || 0), 0)),
+      totalDriveMinutes: Number(summary.totalDriveMinutes || route?.totalDriveMinutes || 0),
+      totalWorkMinutes: Number(summary.totalWorkMinutes || route?.totalWorkMinutes || rows.reduce((t, r) => t + Number(r.durationMinutes || 0), 0)),
       dayStart: summary.dayStart || route?.startTime || "--:--",
       dayEnd: summary.dayEnd || finalLeg.arrivalTime || "--:--",
       costKm: Number(summary.costKm || 0),
@@ -2022,20 +2022,9 @@ function renderMenuStats() {
     return new Date(Number(y), Number(m) - 1).toLocaleDateString("it-IT", { month: "long", year: "numeric" });
   };
 
-  // ── aggregate by client ───────────────────────────────────────────────────
-  const byClient = {};
-  for (const r of routes) {
-    for (const row of r.rows) {
-      if (row.type) continue;
-      const key = row.customer || "—";
-      if (!byClient[key]) byClient[key] = { visits: 0, workMin: 0, lastDate: "", location: row.location || "" };
-      byClient[key].visits++;
-      byClient[key].workMin += Number(row.durationMinutes || 0);
-      const d = r.scheduledDate || "";
-      if (!byClient[key].lastDate || d > byClient[key].lastDate) byClient[key].lastDate = d;
-    }
-  }
-  const clientEntries = Object.entries(byClient).sort((a, b) => b[1].visits - a[1].visits);
+  // ── unique clients count (for summary KPI) ───────────────────────────────
+  const clientNames = new Set();
+  for (const r of routes) for (const row of r.rows) if (!row.type && row.customer) clientNames.add(row.customer);
 
   // ── totals ────────────────────────────────────────────────────────────────
   const totals = routes.reduce((t, r) => {
@@ -2050,7 +2039,6 @@ function renderMenuStats() {
   const tabBar = `<div class="stats-tabs">
     <button class="stats-tab-btn${tab === "summary" ? " active" : ""}" data-stats-tab="summary">Riepilogo</button>
     <button class="stats-tab-btn${tab === "months" ? " active" : ""}" data-stats-tab="months">Per mese</button>
-    <button class="stats-tab-btn${tab === "clients" ? " active" : ""}" data-stats-tab="clients">Per cliente</button>
   </div>`;
 
   let body = "";
@@ -2064,7 +2052,7 @@ function renderMenuStats() {
         <div class="stats-kpi"><span class="stats-kpi-val">${minutesLabel(totals.workMin)}</span><span class="stats-kpi-lbl">Ore lavoro</span></div>
         <div class="stats-kpi"><span class="stats-kpi-val">${euro(totals.cost)}</span><span class="stats-kpi-lbl">Costo totale</span></div>
         <div class="stats-kpi"><span class="stats-kpi-val">${(totals.km / totals.count).toFixed(0)}</span><span class="stats-kpi-lbl">Km medi/giro</span></div>
-        <div class="stats-kpi"><span class="stats-kpi-val">${clientEntries.length}</span><span class="stats-kpi-lbl">Clienti unici</span></div>
+        <div class="stats-kpi"><span class="stats-kpi-val">${clientNames.size}</span><span class="stats-kpi-lbl">Clienti unici</span></div>
         <div class="stats-kpi"><span class="stats-kpi-val">${monthKeys.length}</span><span class="stats-kpi-lbl">Mesi attivi</span></div>
       </div>`;
   } else if (tab === "months") {
@@ -2076,21 +2064,11 @@ function renderMenuStats() {
           <span><b>${m.count}</b><small>giri</small></span>
           <span><b>${m.km.toFixed(0)}</b><small>km</small></span>
           <span><b>${minutesLabel(m.driveMin)}</b><small>guida</small></span>
+          <span><b>${minutesLabel(m.workMin)}</b><small>lavoro</small></span>
           <span><b>${euro(m.cost)}</b><small>costo</small></span>
         </div>
       </div>`;
     }).join("");
-  } else {
-    body = clientEntries.map(([name, c]) =>
-      `<div class="stats-row-card">
-        <div class="stats-row-title">${escapeHtml(name)}${c.location ? `<span class="stats-row-sub"> · ${escapeHtml(c.location)}</span>` : ""}</div>
-        <div class="stats-row-metrics">
-          <span><b>${c.visits}</b><small>visite</small></span>
-          <span><b>${minutesLabel(c.workMin)}</b><small>lav.</small></span>
-          <span><b>${fmtDate(c.lastDate)}</b><small>ultima visita</small></span>
-        </div>
-      </div>`
-    ).join("");
   }
 
   return `${menuHeader("Statistiche", true)}
