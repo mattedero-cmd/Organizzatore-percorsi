@@ -2016,3 +2016,44 @@ tbody tr:last-child td {
   text-align: center;
   margin-top: 8px;
 }
+
+/* ── statistiche ─────────────────────────────────────────────────────────── */
+.bsheet-section-title {
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--muted);
+  margin: 0 0 8px;
+}
+.stats-table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+}
+.stats-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+.stats-table th {
+  background: var(--surface2, #f4f4f5);
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  padding: 6px 10px;
+  text-align: left;
+  white-space: nowrap;
+}
+.stats-table td {
+  padding: 6px 10px;
+  border-top: 1px solid var(--line);
+  vertical-align: top;
+}
+.stats-table tr:first-child td { border-top: none; }
+.stats-month { font-weight: 600; white-space: nowrap; }
+.stats-client-name { font-weight: 500; }
+.stats-date { white-space: nowrap; color: var(--muted); font-size: 0.78rem; }

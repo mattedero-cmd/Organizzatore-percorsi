@@ -312,6 +312,11 @@ function menuHeader(title, showBack = false) {
 function renderMenuRoot() {
   return `
     ${menuHeader("Menu")}
+    <button class="bsheet-menu-item" data-menu-go="stats">
+      <span class="bsheet-menu-icon">📊</span>
+      <span class="bsheet-menu-label">Statistiche</span>
+      <span class="bsheet-menu-arrow">›</span>
+    </button>
     <button class="bsheet-menu-item" data-menu-go="settings">
       <span class="bsheet-menu-icon">⚙️</span>
       <span class="bsheet-menu-label">Impostazioni</span>
@@ -334,6 +339,7 @@ function renderMenuRoot() {
 }
 
 function renderMenuSection(section) {
+  if (section === "stats") return renderMenuStats();
   if (section === "settings") return renderMenuSettings();
   if (section === "guide") return renderMenuGuide();
   if (section === "info") return renderMenuInfo();
@@ -1832,6 +1838,112 @@ function generate() {
 
   const w = window.open("", "_blank");
   if (w) { w.document.write(html); w.document.close(); }
+}
+
+// ── render: statistics (menu panel) ──────────────────────────────────────────
+
+function renderMenuStats() {
+  const routes = state.savedRoutes.map(r => normalizeSavedRoute(r));
+
+  if (!routes.length) {
+    return `${menuHeader("Statistiche")}
+      <div style="padding:16px;color:var(--muted);font-size:0.9rem;">Nessun giro salvato. Calcola e salva qualche percorso per vedere le statistiche.</div>`;
+  }
+
+  // ── aggregate by month ────────────────────────────────────────────────────
+  const byMonth = {};
+  for (const r of routes) {
+    const key = r.scheduledDate ? r.scheduledDate.slice(0, 7) : "senza-data";
+    if (!byMonth[key]) byMonth[key] = { km: 0, driveMin: 0, workMin: 0, cost: 0, count: 0 };
+    const m = byMonth[key];
+    m.km       += r.summary.totalKm;
+    m.driveMin += r.summary.totalDriveMinutes;
+    m.workMin  += r.summary.totalWorkMinutes;
+    m.cost     += r.summary.totalCost;
+    m.count++;
+  }
+  const monthKeys = Object.keys(byMonth).filter(k => k !== "senza-data").sort().reverse();
+  if (byMonth["senza-data"]) monthKeys.push("senza-data");
+
+  const fmtMonth = key => {
+    if (key === "senza-data") return "Senza data";
+    const [y, m] = key.split("-");
+    return new Date(Number(y), Number(m) - 1).toLocaleDateString("it-IT", { month: "long", year: "numeric" });
+  };
+
+  // ── aggregate by client ───────────────────────────────────────────────────
+  const byClient = {};
+  for (const r of routes) {
+    for (const row of r.rows) {
+      if (row.type) continue;
+      const key = row.customer || "—";
+      if (!byClient[key]) byClient[key] = { visits: 0, workMin: 0, lastDate: "", location: row.location || "" };
+      byClient[key].visits++;
+      byClient[key].workMin += Number(row.durationMinutes || 0);
+      const d = r.scheduledDate || "";
+      if (!byClient[key].lastDate || d > byClient[key].lastDate) byClient[key].lastDate = d;
+    }
+  }
+  const clientEntries = Object.entries(byClient).sort((a, b) => b[1].visits - a[1].visits);
+
+  // ── totals ────────────────────────────────────────────────────────────────
+  const totals = routes.reduce((t, r) => {
+    t.km       += r.summary.totalKm;
+    t.driveMin += r.summary.totalDriveMinutes;
+    t.workMin  += r.summary.totalWorkMinutes;
+    t.cost     += r.summary.totalCost;
+    t.count++;
+    return t;
+  }, { km: 0, driveMin: 0, workMin: 0, cost: 0, count: 0 });
+
+  const fmtDate = d => d ? new Date(d + "T00:00:00").toLocaleDateString("it-IT", { day: "numeric", month: "short", year: "numeric" }) : "—";
+
+  return `${menuHeader("Statistiche")}
+    <div style="padding:0 16px 16px;">
+
+      <div class="summary-grid" style="margin-bottom:16px;">
+        <div class="metric"><div class="metric-label">Giri</div><div class="metric-value">${totals.count}</div></div>
+        <div class="metric"><div class="metric-label">Km totali</div><div class="metric-value">${totals.km.toFixed(0)}</div></div>
+        <div class="metric"><div class="metric-label">Ore guida</div><div class="metric-value">${minutesLabel(totals.driveMin)}</div></div>
+        <div class="metric"><div class="metric-label">Ore lavoro</div><div class="metric-value">${minutesLabel(totals.workMin)}</div></div>
+        <div class="metric"><div class="metric-label">Costo totale</div><div class="metric-value">${euro(totals.cost)}</div></div>
+        <div class="metric"><div class="metric-label">Media km/giro</div><div class="metric-value">${(totals.km / totals.count).toFixed(0)}</div></div>
+      </div>
+
+      <h3 class="bsheet-section-title">Per mese</h3>
+      <div class="stats-table-wrap">
+        <table class="stats-table">
+          <thead><tr><th>Mese</th><th>Giri</th><th>Km</th><th>Guida</th><th>Costo</th></tr></thead>
+          <tbody>
+            ${monthKeys.map(k => {
+              const m = byMonth[k];
+              return `<tr>
+                <td class="stats-month">${fmtMonth(k)}</td>
+                <td>${m.count}</td>
+                <td>${m.km.toFixed(0)}</td>
+                <td>${minutesLabel(m.driveMin)}</td>
+                <td>${euro(m.cost)}</td>
+              </tr>`;
+            }).join("")}
+          </tbody>
+        </table>
+      </div>
+
+      <h3 class="bsheet-section-title" style="margin-top:16px;">Per cliente <span class="stop-meta">(${clientEntries.length})</span></h3>
+      <div class="stats-table-wrap">
+        <table class="stats-table">
+          <thead><tr><th>Cliente</th><th>Visite</th><th>Ore lav.</th><th>Ultima</th></tr></thead>
+          <tbody>
+            ${clientEntries.map(([name, c]) => `<tr>
+              <td><span class="stats-client-name">${escapeHtml(name)}</span>${c.location ? `<br><small class="stop-meta">${escapeHtml(c.location)}</small>` : ""}</td>
+              <td>${c.visits}</td>
+              <td>${minutesLabel(c.workMin)}</td>
+              <td class="stats-date">${fmtDate(c.lastDate)}</td>
+            </tr>`).join("")}
+          </tbody>
+        </table>
+      </div>
+    </div>`;
 }
 
 // ── render dispatch ───────────────────────────────────────────────────────────
