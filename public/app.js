@@ -1297,13 +1297,12 @@ function renderSaved() {
 function buildVisitHistory(addressId) {
   const visits = [];
   for (const r of state.savedRoutes) {
-    const rows = Array.isArray(r.rows) ? r.rows : [];
-    for (const row of rows) {
-      if (row.type) continue;
-      if (String(row.addressId) === String(addressId)) {
-        visits.push({ date: r.scheduledDate || "", name: r.name || "Giro senza nome", routeId: r.id });
-        break; // one entry per route even if stop appears twice (AM/PM)
-      }
+    // savedRoutes contains summaries with plannedStops; full rows only on loaded route
+    const stops = Array.isArray(r.plannedStops) ? r.plannedStops
+      : Array.isArray(r.rows) ? r.rows.filter(row => !row.type)
+      : [];
+    if (stops.some(s => String(s.addressId) === String(addressId))) {
+      visits.push({ date: r.scheduledDate || "", name: r.name || "Giro senza nome", routeId: r.id });
     }
   }
   return visits.sort((a, b) => (b.date || "").localeCompare(a.date || ""));
