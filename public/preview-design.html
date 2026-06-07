@@ -3,433 +3,633 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Anteprima design</title>
+<title>Anteprima Premium</title>
 <style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
 
-  body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    background: #0a0f1e;
-    color: #e2e8f0;
-    min-height: 100vh;
-    padding: 20px 16px 40px;
-    overflow-x: hidden;
-  }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif;
+  min-height: 100vh;
+  overflow-x: hidden;
+  color: #e8eaf0;
+}
 
-  /* ── Background decorativo ── */
-  body::before {
-    content: "";
-    position: fixed;
-    inset: 0;
-    background:
-      radial-gradient(ellipse 80% 60% at 20% -10%, rgba(20, 184, 166, 0.18) 0%, transparent 60%),
-      radial-gradient(ellipse 60% 50% at 85% 110%, rgba(99, 102, 241, 0.15) 0%, transparent 55%),
-      radial-gradient(ellipse 50% 40% at 50% 50%, rgba(15, 23, 42, 0.9) 0%, transparent 100%);
-    pointer-events: none;
-    z-index: 0;
-  }
+/* ═══════════════════════════════════════
+   SFONDO RICCO — necessario per il blur
+═══════════════════════════════════════ */
+.bg {
+  position: fixed;
+  inset: 0;
+  background: #060912;
+  z-index: 0;
+}
 
-  .page { position: relative; z-index: 1; max-width: 420px; margin: 0 auto; }
+/* Blob colorati che danno profondità */
+.bg::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 55% 40% at 15% 10%,  rgba(20,184,166,0.28) 0%, transparent 65%),
+    radial-gradient(ellipse 45% 50% at 88%  5%,  rgba(99,102,241,0.22) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 35% at 70% 55%,  rgba(168,85,247,0.14) 0%, transparent 55%),
+    radial-gradient(ellipse 50% 45% at  5% 80%,  rgba(59,130,246,0.16) 0%, transparent 60%),
+    radial-gradient(ellipse 40% 30% at 92% 90%,  rgba(20,184,166,0.12) 0%, transparent 50%);
+}
 
-  /* ── Header sezione ── */
-  .section-head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 20px;
-    padding: 0 2px;
-  }
+/* Griglia sottile per texture di profondità */
+.bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255,255,255,0.022) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.022) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
 
-  .section-head h2 {
-    font-size: 1.35rem;
-    font-weight: 700;
-    letter-spacing: -0.02em;
-    color: #f1f5f9;
-  }
+/* Barra orizzontale luminosa in cima */
+.top-glow {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg,
+    transparent 0%,
+    rgba(20,184,166,0.6) 30%,
+    rgba(99,102,241,0.6) 70%,
+    transparent 100%);
+  z-index: 100;
+}
 
-  /* ── Pulsante ghost ── */
-  .btn-ghost {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 7px 14px;
-    border-radius: 20px;
-    border: 1px solid rgba(255,255,255,0.12);
-    background: rgba(255,255,255,0.05);
-    color: #94a3b8;
-    font-size: 0.82rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    backdrop-filter: blur(8px);
-  }
-  .btn-ghost:hover { background: rgba(255,255,255,0.1); color: #e2e8f0; border-color: rgba(255,255,255,0.22); }
-  .btn-ghost svg { opacity: 0.7; }
+/* ═══════════════════════════════════════
+   LAYOUT
+═══════════════════════════════════════ */
+.page {
+  position: relative;
+  z-index: 1;
+  max-width: 430px;
+  margin: 0 auto;
+  padding: 22px 16px 110px;
+}
 
-  /* ── Card glassmorphism ── */
-  .route-card {
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.09);
-    border-radius: 18px;
-    padding: 18px 18px 14px;
-    margin-bottom: 14px;
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    box-shadow:
-      0 4px 24px rgba(0,0,0,0.3),
-      inset 0 1px 0 rgba(255,255,255,0.07);
-    animation: cardIn 0.35s ease both;
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
-  }
-  .route-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 32px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.09);
-  }
+/* ═══════════════════════════════════════
+   HEADER
+═══════════════════════════════════════ */
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  padding: 0 2px;
+}
 
-  @keyframes cardIn {
-    from { opacity: 0; transform: translateY(12px); }
-    to   { opacity: 1; transform: translateY(0); }
-  }
-  .route-card:nth-child(1) { animation-delay: 0.05s; }
-  .route-card:nth-child(2) { animation-delay: 0.12s; }
-  .route-card:nth-child(3) { animation-delay: 0.19s; }
+.section-title {
+  font-size: 1.5rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  background: linear-gradient(135deg, #f1f5f9 0%, #94a3b8 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
 
-  /* ── Card header ── */
-  .card-top {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    margin-bottom: 12px;
-  }
+.section-count {
+  font-size: 0.75rem;
+  color: #475569;
+  margin-bottom: 18px;
+  padding-left: 2px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
 
-  .card-title {
-    display: flex;
-    align-items: center;
-    gap: 9px;
-  }
+/* ═══════════════════════════════════════
+   PULSANTE GHOST VETRO
+═══════════════════════════════════════ */
+.btn-glass {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 22px;
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(255,255,255,0.06);
+  color: #94a3b8;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  letter-spacing: 0.01em;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.1);
+  transition: all 0.22s ease;
+}
+.btn-glass:hover {
+  background: rgba(255,255,255,0.11);
+  color: #e2e8f0;
+  border-color: rgba(255,255,255,0.22);
+  box-shadow: 0 4px 14px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.15);
+}
 
-  .route-icon {
-    width: 32px; height: 32px;
-    border-radius: 10px;
-    background: rgba(20, 184, 166, 0.15);
-    border: 1px solid rgba(20, 184, 166, 0.25);
-    display: flex; align-items: center; justify-content: center;
-    font-size: 14px;
-    flex-shrink: 0;
-  }
+/* ═══════════════════════════════════════
+   CARD — effetto vetro pieno
+═══════════════════════════════════════ */
+.route-card {
+  position: relative;
+  background: rgba(14, 22, 42, 0.55);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 22px;
+  padding: 0;
+  margin-bottom: 16px;
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  overflow: hidden;
+  box-shadow:
+    0 8px 32px rgba(0,0,0,0.45),
+    0 1px 0 rgba(255,255,255,0.08) inset,
+    0 -1px 0 rgba(0,0,0,0.3) inset;
+  animation: cardIn 0.4s cubic-bezier(0.22,1,0.36,1) both;
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+.route-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 16px 48px rgba(0,0,0,0.55), 0 1px 0 rgba(255,255,255,0.1) inset;
+}
 
-  .card-name {
-    font-size: 0.97rem;
-    font-weight: 700;
-    color: #f1f5f9;
-    letter-spacing: -0.01em;
-  }
+.route-card:nth-child(1) { animation-delay: 0.04s; }
+.route-card:nth-child(2) { animation-delay: 0.11s; }
+.route-card:nth-child(3) { animation-delay: 0.18s; }
 
-  .badge-opt {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    padding: 3px 9px;
-    border-radius: 20px;
-    font-size: 0.7rem;
-    font-weight: 600;
-    letter-spacing: 0.02em;
-    background: rgba(20, 184, 166, 0.12);
-    border: 1px solid rgba(20, 184, 166, 0.25);
-    color: #2dd4bf;
-  }
+@keyframes cardIn {
+  from { opacity: 0; transform: translateY(18px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0)   scale(1); }
+}
 
-  /* ── Metadati ── */
-  .card-meta {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    margin-bottom: 10px;
-  }
+/* Bordo superiore colorato */
+.route-card::before {
+  content: "";
+  position: absolute;
+  top: 0; left: 20px; right: 20px;
+  height: 1px;
+  background: linear-gradient(90deg,
+    transparent,
+    rgba(20,184,166,0.6) 30%,
+    rgba(99,102,241,0.5) 70%,
+    transparent);
+}
 
-  .meta-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    padding: 4px 10px;
-    border-radius: 8px;
-    background: rgba(255,255,255,0.05);
-    border: 1px solid rgba(255,255,255,0.07);
-    font-size: 0.79rem;
-    color: #94a3b8;
-    font-weight: 500;
-  }
-  .meta-chip b { color: #cbd5e1; font-weight: 600; }
+/* ─ Card body ─ */
+.card-body { padding: 18px 18px 16px; }
 
-  .card-route-line {
-    font-size: 0.78rem;
-    color: #64748b;
-    margin-bottom: 14px;
-    padding-left: 2px;
-  }
+/* ─ Card top row ─ */
+.card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
 
-  /* ── Pulsante primario ── */
-  .btn-primary {
-    width: 100%;
-    padding: 12px;
-    border-radius: 12px;
-    border: none;
-    background: linear-gradient(135deg, #14b8a6 0%, #0d9488 100%);
-    color: #fff;
-    font-size: 0.9rem;
-    font-weight: 700;
-    letter-spacing: 0.01em;
-    cursor: pointer;
-    margin-bottom: 10px;
-    box-shadow: 0 4px 16px rgba(20, 184, 166, 0.25), inset 0 1px 0 rgba(255,255,255,0.15);
-    transition: all 0.2s ease;
-    position: relative;
-    overflow: hidden;
-  }
-  .btn-primary::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    background: rgba(255,255,255,0);
-    transition: background 0.15s;
-  }
-  .btn-primary:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 6px 22px rgba(20, 184, 166, 0.38), inset 0 1px 0 rgba(255,255,255,0.2);
-  }
-  .btn-primary:active { transform: scale(0.98); }
+.card-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
 
-  /* ── Pulsanti secondari ── */
-  .card-actions {
-    display: flex;
-    gap: 7px;
-  }
+.route-icon {
+  width: 36px; height: 36px;
+  border-radius: 11px;
+  background: linear-gradient(135deg, rgba(20,184,166,0.25), rgba(99,102,241,0.2));
+  border: 1px solid rgba(20,184,166,0.3);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.12);
+  flex-shrink: 0;
+}
 
-  .btn-secondary {
-    flex: 1;
-    padding: 8px 6px;
-    border-radius: 10px;
-    border: 1px solid rgba(255,255,255,0.1);
-    background: rgba(255,255,255,0.04);
-    color: #94a3b8;
-    font-size: 0.78rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.18s ease;
-    display: flex; align-items: center; justify-content: center; gap: 5px;
-  }
-  .btn-secondary:hover { background: rgba(255,255,255,0.09); color: #e2e8f0; border-color: rgba(255,255,255,0.18); }
+.card-name {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #f1f5f9;
+  letter-spacing: -0.02em;
+}
 
-  .btn-danger {
-    flex: 1;
-    padding: 8px 6px;
-    border-radius: 10px;
-    border: 1px solid rgba(239, 68, 68, 0.2);
-    background: transparent;
-    color: #f87171;
-    font-size: 0.78rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.18s ease;
-    display: flex; align-items: center; justify-content: center; gap: 5px;
-  }
-  .btn-danger:hover { background: rgba(239, 68, 68, 0.12); border-color: rgba(239, 68, 68, 0.35); color: #fca5a5; }
+.badge-opt {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  background: linear-gradient(135deg, rgba(20,184,166,0.18), rgba(99,102,241,0.14));
+  border: 1px solid rgba(20,184,166,0.28);
+  color: #2dd4bf;
+  box-shadow: 0 0 10px rgba(20,184,166,0.12);
+}
 
-  /* ── Stop tags ── */
-  .stop-tags {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 5px;
-    margin-top: 10px;
-    padding-top: 10px;
-    border-top: 1px solid rgba(255,255,255,0.05);
-  }
-  .stop-tag {
-    font-size: 0.72rem;
-    color: #64748b;
-    background: rgba(255,255,255,0.03);
-    border: 1px solid rgba(255,255,255,0.06);
-    border-radius: 6px;
-    padding: 2px 8px;
-  }
+/* ─ Chips metadati ─ */
+.card-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 11px;
+}
 
-  /* ── Tab bar ── */
-  .tab-bar {
-    position: fixed;
-    bottom: 0; left: 0; right: 0;
-    padding: 10px 16px 28px;
-    background: rgba(10, 15, 30, 0.85);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    border-top: 1px solid rgba(255,255,255,0.07);
-    display: flex;
-    justify-content: space-around;
-    align-items: center;
-    z-index: 10;
-  }
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 11px;
+  border-radius: 9px;
+  background: rgba(255,255,255,0.045);
+  border: 1px solid rgba(255,255,255,0.08);
+  font-size: 0.78rem;
+  color: #64748b;
+  font-weight: 500;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
+}
+.chip b { color: #cbd5e1; font-weight: 700; }
+.chip-em b { color: #34d399; }
 
-  .tab-item {
-    display: flex; flex-direction: column; align-items: center; gap: 3px;
-    padding: 6px 18px;
-    border-radius: 14px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    font-size: 0.68rem;
-    color: #475569;
-    font-weight: 500;
-    border: none; background: none;
-  }
-  .tab-item svg { transition: transform 0.2s; }
-  .tab-item:hover { color: #94a3b8; }
-  .tab-item:hover svg { transform: translateY(-1px); }
+.route-line {
+  font-size: 0.77rem;
+  color: #475569;
+  margin-bottom: 14px;
+  padding-left: 1px;
+  letter-spacing: 0.01em;
+}
 
-  .tab-item.active {
-    background: rgba(20, 184, 166, 0.12);
-    color: #2dd4bf;
-    border: 1px solid rgba(20, 184, 166, 0.2);
-    box-shadow: 0 0 16px rgba(20, 184, 166, 0.1);
-  }
-  .tab-item.active svg { filter: drop-shadow(0 0 4px rgba(20,184,166,0.5)); }
+/* ═══════════════════════════════════════
+   DIVISORE CON GRADIENTE
+═══════════════════════════════════════ */
+.card-divider {
+  height: 1px;
+  background: linear-gradient(90deg,
+    transparent,
+    rgba(255,255,255,0.07) 30%,
+    rgba(255,255,255,0.07) 70%,
+    transparent);
+  margin: 0 -18px 14px;
+}
 
-  .tab-dot {
-    width: 4px; height: 4px; border-radius: 50%;
-    background: #14b8a6;
-    box-shadow: 0 0 6px #14b8a6;
-    margin-top: -2px;
-  }
+/* ═══════════════════════════════════════
+   PULSANTE PRIMARIO — vetro verde
+═══════════════════════════════════════ */
+.btn-primary {
+  width: 100%;
+  padding: 13px;
+  border-radius: 14px;
+  border: 1px solid rgba(20,184,166,0.4);
+  background: linear-gradient(135deg,
+    rgba(20,184,166,0.35) 0%,
+    rgba(13,148,136,0.28) 50%,
+    rgba(99,102,241,0.18) 100%);
+  color: #e0fdf4;
+  font-size: 0.92rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  margin-bottom: 11px;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow:
+    0 4px 20px rgba(20,184,166,0.2),
+    inset 0 1px 0 rgba(255,255,255,0.18),
+    inset 0 -1px 0 rgba(0,0,0,0.15);
+  transition: all 0.22s ease;
+  position: relative;
+  overflow: hidden;
+}
+.btn-primary::before {
+  content: "";
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 50%;
+  background: linear-gradient(rgba(255,255,255,0.07), transparent);
+  border-radius: 14px 14px 0 0;
+  pointer-events: none;
+}
+.btn-primary:hover {
+  background: linear-gradient(135deg,
+    rgba(20,184,166,0.48) 0%,
+    rgba(13,148,136,0.38) 50%,
+    rgba(99,102,241,0.25) 100%);
+  box-shadow: 0 6px 28px rgba(20,184,166,0.32), inset 0 1px 0 rgba(255,255,255,0.22);
+  transform: translateY(-1px);
+}
+.btn-primary:active { transform: scale(0.98); }
+
+/* ═══════════════════════════════════════
+   PULSANTI AZIONI — vetro neutro e rosso
+═══════════════════════════════════════ */
+.card-actions { display: flex; gap: 7px; }
+
+.btn-action {
+  flex: 1;
+  padding: 9px 6px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.09);
+  background: rgba(255,255,255,0.045);
+  color: #94a3b8;
+  font-size: 0.76rem;
+  font-weight: 700;
+  cursor: pointer;
+  letter-spacing: 0.01em;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 2px 6px rgba(0,0,0,0.25);
+  transition: all 0.18s ease;
+  display: flex; align-items: center; justify-content: center; gap: 5px;
+  position: relative; overflow: hidden;
+}
+.btn-action::before {
+  content: "";
+  position: absolute; top: 0; left: 0; right: 0; height: 45%;
+  background: linear-gradient(rgba(255,255,255,0.06), transparent);
+  pointer-events: none;
+}
+.btn-action:hover {
+  background: rgba(255,255,255,0.09);
+  color: #e2e8f0;
+  border-color: rgba(255,255,255,0.16);
+  transform: translateY(-1px);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.12), 0 4px 10px rgba(0,0,0,0.35);
+}
+
+.btn-action-del {
+  flex: 1;
+  padding: 9px 6px;
+  border-radius: 12px;
+  border: 1px solid rgba(239,68,68,0.22);
+  background: rgba(239,68,68,0.06);
+  color: #f87171;
+  font-size: 0.76rem;
+  font-weight: 700;
+  cursor: pointer;
+  letter-spacing: 0.01em;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: inset 0 1px 0 rgba(255,100,100,0.08), 0 2px 6px rgba(0,0,0,0.25);
+  transition: all 0.18s ease;
+  display: flex; align-items: center; justify-content: center; gap: 5px;
+  position: relative; overflow: hidden;
+}
+.btn-action-del::before {
+  content: "";
+  position: absolute; top: 0; left: 0; right: 0; height: 45%;
+  background: linear-gradient(rgba(255,80,80,0.07), transparent);
+  pointer-events: none;
+}
+.btn-action-del:hover {
+  background: rgba(239,68,68,0.14);
+  border-color: rgba(239,68,68,0.38);
+  color: #fca5a5;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(239,68,68,0.18), inset 0 1px 0 rgba(255,100,100,0.12);
+}
+
+/* ─ Stop tags ─ */
+.stop-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  padding: 12px 18px 14px;
+  border-top: 1px solid rgba(255,255,255,0.05);
+  background: rgba(0,0,0,0.15);
+}
+.stop-tag {
+  font-size: 0.71rem;
+  color: #475569;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 7px;
+  padding: 3px 9px;
+  letter-spacing: 0.01em;
+}
+
+/* ═══════════════════════════════════════
+   TAB BAR — vetro pieno
+═══════════════════════════════════════ */
+.tab-bar {
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  padding: 10px 12px 30px;
+  background: rgba(6,9,18,0.7);
+  backdrop-filter: blur(28px);
+  -webkit-backdrop-filter: blur(28px);
+  border-top: 1px solid rgba(255,255,255,0.07);
+  box-shadow: 0 -8px 32px rgba(0,0,0,0.5);
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  z-index: 50;
+}
+/* Bordo superiore luminoso tab bar */
+.tab-bar::before {
+  content: "";
+  position: absolute;
+  top: -1px; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg,
+    transparent 0%,
+    rgba(20,184,166,0.35) 25%,
+    rgba(99,102,241,0.3) 75%,
+    transparent 100%);
+}
+
+.tab-item {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: 8px 16px;
+  border-radius: 14px;
+  cursor: pointer;
+  font-size: 0.67rem;
+  font-weight: 600;
+  color: #334155;
+  letter-spacing: 0.02em;
+  border: 1px solid transparent;
+  background: none;
+  transition: all 0.22s ease;
+}
+.tab-item svg { transition: transform 0.22s ease, filter 0.22s ease; }
+.tab-item:hover { color: #64748b; }
+
+.tab-item.active {
+  color: #2dd4bf;
+  background: rgba(20,184,166,0.1);
+  border-color: rgba(20,184,166,0.2);
+  box-shadow:
+    0 0 20px rgba(20,184,166,0.1),
+    inset 0 1px 0 rgba(255,255,255,0.08);
+}
+.tab-item.active svg {
+  filter: drop-shadow(0 0 5px rgba(20,184,166,0.55));
+  transform: translateY(-1px);
+}
+
+.tab-dot {
+  width: 3px; height: 3px;
+  border-radius: 50%;
+  background: #14b8a6;
+  box-shadow: 0 0 6px #14b8a6, 0 0 12px rgba(20,184,166,0.5);
+  margin-top: -1px;
+}
 </style>
 </head>
 <body>
+<div class="bg"></div>
+<div class="top-glow"></div>
 
 <div class="page">
 
-  <div class="section-head">
-    <h2>Giri salvati</h2>
-    <button class="btn-ghost">
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+  <div class="section-header">
+    <div>
+      <div class="section-title">Giri salvati</div>
+      <div class="section-count">3 percorsi · ultima settimana</div>
+    </div>
+    <button class="btn-glass">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
       Aggiorna
     </button>
   </div>
 
-  <!-- Card 1 -->
+  <!-- ── Card 1 ── -->
   <div class="route-card">
-    <div class="card-top">
-      <div class="card-title">
-        <div class="route-icon">🗺</div>
-        <span class="card-name">Percorso giornaliero</span>
+    <div class="card-body">
+      <div class="card-top">
+        <div class="card-title-row">
+          <div class="route-icon">🗺</div>
+          <span class="card-name">Percorso giornaliero</span>
+        </div>
+        <span class="badge-opt">✦ ottimizzato</span>
       </div>
-      <span class="badge-opt">✦ ottimizzato</span>
+
+      <div class="card-chips">
+        <span class="chip">📅 <b>8 giu 2026</b></span>
+        <span class="chip">🕖 <b>07:00</b></span>
+        <span class="chip">📍 <b>110.2 km</b></span>
+        <span class="chip chip-em">💶 <b>300,76 €</b></span>
+      </div>
+
+      <div class="route-line">CASA &nbsp;—&nbsp; tappe lavoro &nbsp;—&nbsp; CASA</div>
+
+      <div class="card-divider"></div>
+
+      <button class="btn-primary">Apri percorso</button>
+
+      <div class="card-actions">
+        <button class="btn-action">✏ Rinomina</button>
+        <button class="btn-action">⧉ Duplica</button>
+        <button class="btn-action-del">✕ Elimina</button>
+      </div>
     </div>
-
-    <div class="card-meta">
-      <span class="meta-chip">📅 <b>8 giu 2026</b></span>
-      <span class="meta-chip">🕖 <b>07:00</b></span>
-      <span class="meta-chip">📍 <b>110.2 km</b></span>
-      <span class="meta-chip">💶 <b>300,76 €</b></span>
-    </div>
-
-    <div class="card-route-line">CASA — tappe lavoro — CASA</div>
-
-    <button class="btn-primary">Apri percorso</button>
-
-    <div class="card-actions">
-      <button class="btn-secondary">✏ Rinomina</button>
-      <button class="btn-secondary">⧉ Duplica</button>
-      <button class="btn-danger">✕ Elimina</button>
-    </div>
-
-    <div class="stop-tags">
+    <div class="stop-row">
       <span class="stop-tag">1. Cesare Sesti</span>
       <span class="stop-tag">2. Bar Cles</span>
-      <span class="stop-tag">3. Farmacia Trento</span>
+      <span class="stop-tag">3. Farmacia</span>
     </div>
   </div>
 
-  <!-- Card 2 -->
+  <!-- ── Card 2 ── -->
   <div class="route-card">
-    <div class="card-top">
-      <div class="card-title">
-        <div class="route-icon">🗺</div>
-        <span class="card-name">Percorso giornaliero</span>
+    <div class="card-body">
+      <div class="card-top">
+        <div class="card-title-row">
+          <div class="route-icon">🗺</div>
+          <span class="card-name">Percorso giornaliero</span>
+        </div>
+        <span class="badge-opt">✦ ottimizzato</span>
       </div>
-      <span class="badge-opt">✦ ottimizzato</span>
+
+      <div class="card-chips">
+        <span class="chip">📅 <b>6 giu 2026</b></span>
+        <span class="chip">🕖 <b>07:00</b></span>
+        <span class="chip">📍 <b>109.6 km</b></span>
+        <span class="chip chip-em">💶 <b>164,27 €</b></span>
+      </div>
+
+      <div class="route-line">CASA &nbsp;—&nbsp; tappe lavoro &nbsp;—&nbsp; CASA</div>
+
+      <div class="card-divider"></div>
+
+      <button class="btn-primary">Apri percorso</button>
+
+      <div class="card-actions">
+        <button class="btn-action">✏ Rinomina</button>
+        <button class="btn-action">⧉ Duplica</button>
+        <button class="btn-action-del">✕ Elimina</button>
+      </div>
     </div>
-
-    <div class="card-meta">
-      <span class="meta-chip">📅 <b>6 giu 2026</b></span>
-      <span class="meta-chip">🕖 <b>07:00</b></span>
-      <span class="meta-chip">📍 <b>109.6 km</b></span>
-      <span class="meta-chip">💶 <b>164,27 €</b></span>
-    </div>
-
-    <div class="card-route-line">CASA — tappe lavoro — CASA</div>
-
-    <button class="btn-primary">Apri percorso</button>
-
-    <div class="card-actions">
-      <button class="btn-secondary">✏ Rinomina</button>
-      <button class="btn-secondary">⧉ Duplica</button>
-      <button class="btn-danger">✕ Elimina</button>
-    </div>
-
-    <div class="stop-tags">
+    <div class="stop-row">
       <span class="stop-tag">1. Albero Fellin</span>
     </div>
   </div>
 
-  <!-- Card 3 -->
+  <!-- ── Card 3 ── -->
   <div class="route-card">
-    <div class="card-top">
-      <div class="card-title">
-        <div class="route-icon">🗺</div>
-        <span class="card-name">Percorso giornaliero</span>
+    <div class="card-body">
+      <div class="card-top">
+        <div class="card-title-row">
+          <div class="route-icon">🗺</div>
+          <span class="card-name">Percorso giornaliero</span>
+        </div>
+        <span class="badge-opt">✦ ottimizzato</span>
       </div>
-      <span class="badge-opt">✦ ottimizzato</span>
+
+      <div class="card-chips">
+        <span class="chip">📅 <b>4 giu 2026</b></span>
+        <span class="chip">🕖 <b>08:30</b></span>
+        <span class="chip">📍 <b>87.4 km</b></span>
+        <span class="chip chip-em">💶 <b>218,50 €</b></span>
+      </div>
+
+      <div class="route-line">CASA &nbsp;—&nbsp; tappe lavoro &nbsp;—&nbsp; CASA</div>
+
+      <div class="card-divider"></div>
+
+      <button class="btn-primary">Apri percorso</button>
+
+      <div class="card-actions">
+        <button class="btn-action">✏ Rinomina</button>
+        <button class="btn-action">⧉ Duplica</button>
+        <button class="btn-action-del">✕ Elimina</button>
+      </div>
     </div>
-
-    <div class="card-meta">
-      <span class="meta-chip">📅 <b>4 giu 2026</b></span>
-      <span class="meta-chip">🕖 <b>08:30</b></span>
-      <span class="meta-chip">📍 <b>87.4 km</b></span>
-      <span class="meta-chip">💶 <b>218,50 €</b></span>
-    </div>
-
-    <div class="card-route-line">CASA — tappe lavoro — CASA</div>
-
-    <button class="btn-primary">Apri percorso</button>
-
-    <div class="card-actions">
-      <button class="btn-secondary">✏ Rinomina</button>
-      <button class="btn-secondary">⧉ Duplica</button>
-      <button class="btn-danger">✕ Elimina</button>
-    </div>
-
-    <div class="stop-tags">
+    <div class="stop-row">
       <span class="stop-tag">1. Studio Gori</span>
       <span class="stop-tag">2. Banca Rovereto</span>
     </div>
   </div>
 
-  <div style="height: 90px;"></div>
 </div>
 
-<!-- Tab bar -->
+<!-- TAB BAR -->
 <div class="tab-bar">
   <button class="tab-item">
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+    <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">
+      <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
+    </svg>
     Nuovo
   </button>
   <button class="tab-item active">
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M19 11H5m14 0-4-4m4 4-4 4M5 11l4-4M5 11l4 4"/></svg>
+    <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">
+      <rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/>
+      <rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>
+    </svg>
     Giri salvati
     <div class="tab-dot"></div>
   </button>
   <button class="tab-item">
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+    <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">
+      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
+      <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+    </svg>
     Archivio
   </button>
   <button class="tab-item">
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 12h18M3 6h18M3 18h12"/></svg>
+    <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">
+      <circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/>
+    </svg>
     Percorso
   </button>
 </div>
