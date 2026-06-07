@@ -20,6 +20,7 @@ import {
   createUser,
   findUserByUsername,
   findUserById,
+  updateUserPassword,
   createSession,
   getSession,
   deleteSession,
@@ -302,6 +303,24 @@ async function handleApi(request, response) {
         response.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Set-Cookie": sessionCookie(token, remember !== false), ...SECURITY_HEADERS });
         response.end(JSON.stringify({ id: user.id, username: user.username }));
         return;
+      }
+
+      if (method === "POST" && url.pathname === "/api/auth/change-password") {
+        const cookies = parseCookies(request.headers.cookie);
+        const userId = await getSession(cookies.session || "");
+        if (!userId) return sendJson(response, 401, { error: "Non autenticato" });
+        const body = await parseBody(request);
+        const { currentPassword, newPassword } = body;
+        if (!currentPassword || !newPassword || newPassword.length < 6) {
+          return sendJson(response, 400, { error: "Password attuale e nuova password (min 6 caratteri) obbligatorie" });
+        }
+        const fullUser = await findUserByUsername((await findUserById(userId))?.username || "");
+        if (!fullUser || !(await verifyPassword(currentPassword, fullUser.password_hash))) {
+          return sendJson(response, 401, { error: "Password attuale non corretta" });
+        }
+        const newHash = await hashPassword(newPassword);
+        await updateUserPassword(userId, newHash);
+        return sendJson(response, 200, { ok: true });
       }
 
       if (method === "POST" && url.pathname === "/api/auth/logout") {

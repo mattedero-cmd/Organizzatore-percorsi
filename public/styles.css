@@ -1968,7 +1968,7 @@ tbody tr:last-child td {
   .app {
     padding: 12px;
     padding-bottom: 86px;
-    padding-top: 16px;
+    padding-top: 82px;
   }
 
   .grid,
@@ -3141,6 +3141,33 @@ tbody tr:last-child td {
   color: var(--muted);
   margin: 0 0 8px;
 }
+/* ── Change password ──────────────────────────────────────────────────────── */
+.change-pw-details summary { list-style: none; }
+.change-pw-details summary::-webkit-details-marker { display: none; }
+.change-pw-summary {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--accent);
+  padding: 10px 0;
+  user-select: none;
+}
+.change-pw-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 8px 0 12px;
+}
+.change-pw-error {
+  color: var(--danger, #ef4444);
+  font-size: 0.82rem;
+  min-height: 1em;
+  margin: 0;
+}
+
 /* ── Stats tabs ───────────────────────────────────────────────────────────── */
 .stats-tabs {
   display: flex;

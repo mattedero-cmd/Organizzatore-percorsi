@@ -649,6 +649,10 @@ export async function findUserById(id) {
   return rows[0] || null;
 }
 
+export async function updateUserPassword(userId, newHash) {
+  await runSql(`UPDATE users SET password_hash = ${sqlValue(newHash)} WHERE id = ${sqlValue(Number(userId))};`);
+}
+
 export async function createSession(token, userId) {
   const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
   await runSql(`INSERT INTO sessions (token, user_id, expires_at) VALUES (${sqlValue(token)}, ${sqlValue(Number(userId))}, ${sqlValue(expiresAt)});`);

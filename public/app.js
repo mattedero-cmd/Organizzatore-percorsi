@@ -60,6 +60,8 @@ const I = {
   wrench:   (s) => _svg('<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>', s),
   upload:   (s) => _svg('<polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/>', s),
   clock:    (s) => _svg('<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>', s),
+  lock:     (s) => _svg('<rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>', s),
+  key:      (s) => _svg('<path d="m21 2-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0 3 3L22 7l-3-3m-3.5 3.5L19 4"/>', s),
 };
 
 function phoneIcon(type) {
@@ -313,6 +315,30 @@ function renderMenu() {
       showToast("Impostazioni salvate");
       closeMenu();
     });
+    ov.querySelector("#change-pw-form")?.addEventListener("submit", async e => {
+      e.preventDefault();
+      const errEl = e.target.querySelector(".change-pw-error");
+      errEl.textContent = "";
+      const v = readForm(e.target);
+      if (v.newPassword !== v.confirmPassword) {
+        errEl.textContent = "Le nuove password non coincidono";
+        return;
+      }
+      try {
+        const res = await fetch("/api/auth/change-password", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ currentPassword: v.currentPassword, newPassword: v.newPassword })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) { errEl.textContent = data.error || "Errore aggiornamento password"; return; }
+        showToast("Password aggiornata");
+        e.target.reset();
+        e.target.closest("details").removeAttribute("open");
+      } catch (err) {
+        errEl.textContent = "Errore di rete";
+      }
+    });
     ov.addEventListener("click", e => {
       const paletteChip = e.target.closest("[data-palette]");
       if (paletteChip && document.getElementById("themePaletteInput")) {
@@ -549,6 +575,22 @@ function renderMenuSettings() {
           <button class="btn primary" type="submit" style="width:100%">Salva impostazioni</button>
         </div>
       </form>
+
+      <div class="bsheet-section" style="margin-top:8px;">
+        <div class="bsheet-section-title">${I.key ? I.key(14) : ""} ACCOUNT</div>
+        <div class="bsheet-section-body">
+          <details class="change-pw-details">
+            <summary class="change-pw-summary">${I.lock ? I.lock(14) : "🔒"} Cambia password</summary>
+            <form id="change-pw-form" class="change-pw-form" autocomplete="off">
+              <label class="field">Password attuale<input type="password" name="currentPassword" autocomplete="current-password" required /></label>
+              <label class="field">Nuova password<input type="password" name="newPassword" autocomplete="new-password" minlength="6" required /></label>
+              <label class="field">Conferma nuova password<input type="password" name="confirmPassword" autocomplete="new-password" minlength="6" required /></label>
+              <p class="change-pw-error"></p>
+              <button class="btn primary" type="submit" style="width:100%">Aggiorna password</button>
+            </form>
+          </details>
+        </div>
+      </div>
     </div>`;
 }
 
