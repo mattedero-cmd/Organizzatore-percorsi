@@ -21,10 +21,50 @@ function minutesLabel(minutes) {
   return `${h} h ${m} min`;
 }
 
+// ── SVG icon system ───────────────────────────────────────────────────────────
+const _svg = (paths, s = 16) =>
+  `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`;
+
+const I = {
+  trash:    (s) => _svg('<polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>', s),
+  edit:     (s) => _svg('<path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>', s),
+  copy:     (s) => _svg('<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>', s),
+  play:     (s) => _svg('<polygon points="5 3 19 12 5 21 5 3"/>', s),
+  navigate: (s) => _svg('<polygon points="3 11 22 2 13 21 11 13 3 11"/>', s),
+  refresh:  (s) => _svg('<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/>', s),
+  map:      (s) => _svg('<polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/>', s),
+  phone:    (s) => _svg('<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.28 2 2 0 0 1 3.6 1h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.6a16 16 0 0 0 6.29 6.29l.96-.96a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/>', s),
+  phoneLand:(s) => _svg('<path d="M15.05 5A5 5 0 0 1 19 8.95M15.05 1A9 9 0 0 1 23 8.94m-1 7.98v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.28 2 2 0 0 1 3.6 1h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.6a16 16 0 0 0 6.29 6.29l.96-.96a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/>', s),
+  email:    (s) => _svg('<rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>', s),
+  close:    (s) => _svg('<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>', s),
+  plus:     (s) => _svg('<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>', s),
+  arrowR:   (s) => _svg('<line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>', s),
+  arrowUp:  (s) => _svg('<line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/>', s),
+  arrowDown:(s) => _svg('<line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/>', s),
+  check:    (s) => _svg('<polyline points="20 6 9 17 4 12"/>', s),
+  mic:      (s) => _svg('<path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>', s),
+  micStop:  (s) => _svg('<rect x="8" y="8" width="8" height="8" rx="1"/>', s),
+  print:    (s) => _svg('<polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/>', s),
+  location: (s) => _svg('<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/>', s),
+  contacts: (s) => _svg('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>', s),
+  link:     (s) => _svg('<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>', s),
+  eye:      (s) => _svg('<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>', s),
+  eyeOff:   (s) => _svg('<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>', s),
+  arrowLeft:(s) => _svg('<line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/>', s),
+  save:     (s) => _svg('<path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>', s),
+  checkCircle:(s)=>_svg('<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>', s),
+  fork:     (s) => _svg('<line x1="8" y1="6" x2="8" y2="2"/><line x1="16" y1="6" x2="16" y2="2"/><path d="M8 6a4 4 0 0 0 0 8v8"/><path d="M16 6a4 4 0 0 1 0 8v-4h-4"/>', s),
+  coffee:   (s) => _svg('<path d="M17 8h1a4 4 0 1 1 0 8h-1"/><path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V8z"/><line x1="6" y1="2" x2="6" y2="4"/><line x1="10" y1="2" x2="10" y2="4"/><line x1="14" y1="2" x2="14" y2="4"/>', s),
+  list:     (s) => _svg('<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>', s),
+  car:      (s) => _svg('<path d="M5 17H3a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v9a2 2 0 0 1-2 2h-3"/><circle cx="7.5" cy="17.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/>', s),
+  wrench:   (s) => _svg('<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>', s),
+  upload:   (s) => _svg('<polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/>', s),
+  clock:    (s) => _svg('<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>', s),
+};
+
 function phoneIcon(type) {
-  if (type === "fisso") return "☎";
-  if (type === "altro") return "📞";
-  return "📱";
+  if (type === "fisso") return I.phoneLand(15);
+  return I.phone(15);
 }
 
 function preferredPhone(a) {
@@ -318,7 +358,7 @@ function menuHeader(title, showBack = false) {
   return `<div class="bsheet-header">
     ${showBack ? `<button class="bsheet-back" id="bsheet-back">‹</button>` : ""}
     <h2 class="bsheet-title">${title}</h2>
-    <button class="bsheet-close" id="bsheet-close" aria-label="Chiudi">×</button>
+    <button class="bsheet-close" id="bsheet-close" aria-label="Chiudi">${I.close(14)}</button>
   </div>`;
 }
 
@@ -326,28 +366,28 @@ function renderMenuRoot() {
   return `
     ${menuHeader("Menu")}
     <button class="bsheet-menu-item" data-menu-go="stats">
-      <span class="bsheet-menu-icon">📊</span>
+      <span class="bsheet-menu-icon">${_svg('<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>', 18)}</span>
       <span class="bsheet-menu-label">Statistiche</span>
-      <span class="bsheet-menu-arrow">›</span>
+      <span class="bsheet-menu-arrow">${I.arrowR(14)}</span>
     </button>
     <button class="bsheet-menu-item" data-menu-go="settings">
-      <span class="bsheet-menu-icon">⚙️</span>
+      <span class="bsheet-menu-icon">${_svg('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>', 18)}</span>
       <span class="bsheet-menu-label">Impostazioni</span>
-      <span class="bsheet-menu-arrow">›</span>
+      <span class="bsheet-menu-arrow">${I.arrowR(14)}</span>
     </button>
     <button class="bsheet-menu-item" data-menu-go="guide">
-      <span class="bsheet-menu-icon">📖</span>
+      <span class="bsheet-menu-icon">${_svg('<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>', 18)}</span>
       <span class="bsheet-menu-label">Guida</span>
-      <span class="bsheet-menu-arrow">›</span>
+      <span class="bsheet-menu-arrow">${I.arrowR(14)}</span>
     </button>
     <button class="bsheet-menu-item" data-menu-go="info">
-      <span class="bsheet-menu-icon">ℹ️</span>
+      <span class="bsheet-menu-icon">${_svg('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>', 18)}</span>
       <span class="bsheet-menu-label">Info app</span>
-      <span class="bsheet-menu-arrow">›</span>
+      <span class="bsheet-menu-arrow">${I.arrowR(14)}</span>
     </button>
     <div style="padding: 12px 16px; border-top: 1px solid var(--line); margin-top: 8px;">
       <div style="font-size:0.8rem;color:var(--muted);margin-bottom:8px;">Connesso come <strong>${escapeHtml(state.user?.username || "")}</strong></div>
-      <button class="btn" id="logout-btn" style="width:100%">Esci (logout)</button>
+      <button class="btn" id="logout-btn" style="width:100%">${I.arrowLeft(14)} Esci</button>
     </div>`;
 }
 
@@ -932,7 +972,7 @@ function renderStops() {
           <p class="stop-title">${globalIdx + 1}. ${escapeHtml(stop.customer)} ${escapeHtml(stop.location || "")}</p>
           <div class="stop-meta">${escapeHtml(stop.fullAddress)}</div>
         </div>
-        <button class="btn danger icon-btn" data-remove-stop="${stop.uid}">×</button>
+        <button class="btn danger icon-btn" data-remove-stop="${stop.uid}" title="Rimuovi">${I.close(13)}</button>
       </div>
       <div class="form-grid three">
         <label class="field">Durata (min)<input type="number" min="5" step="5" value="${escapeHtml(stop.durationMinutes)}" data-stop="${stop.uid}:durationMinutes" /></label>
@@ -1051,7 +1091,7 @@ function renderRoute() {
             <div id="stop-suggestions" class="stop-suggestions">${renderStopSuggestions()}</div>
           </div>
           <div class="rp-add-stop-actions">
-            <button type="button" class="btn" id="add-saved-stop">+ Aggiungi</button>
+            <button type="button" class="btn" id="add-saved-stop">${I.plus(14)} Aggiungi</button>
             <button type="button" class="btn ghost" id="rp-manual-stop-toggle">+ Manuale</button>
           </div>
           <div id="rp-manual-stop-panel" style="display:none">
@@ -1061,7 +1101,7 @@ function renderRoute() {
               <label class="field full">
                 Indirizzo<input name="customAddress" id="rp-custom-address" value="${escapeHtml(r.customAddress)}" />
               </label>
-              ${state.googleMapsKey ? `<div class="field full" style="padding-top:0"><button type="button" class="btn" id="rp-custom-map-btn">🗺 Scegli sulla mappa</button></div>` : ""}
+              ${state.googleMapsKey ? `<div class="field full" style="padding-top:0"><button type="button" class="btn" id="rp-custom-map-btn">${I.map(14)} Scegli sulla mappa</button></div>` : ""}
               <input type="hidden" id="rp-custom-lat" value="" />
               <input type="hidden" id="rp-custom-lng" value="" />
               <label class="field">Durata (min)<input name="customDuration" type="number" min="5" step="5" value="${escapeHtml(r.customDuration)}" /></label>
@@ -1080,7 +1120,7 @@ function renderRoute() {
 
       <!-- Pulsante sticky -->
       <div class="rp-plan-sticky">
-        <button type="button" class="btn primary" id="plan-route" style="width:100%">${state.planning ? "Calcolo in corso…" : "→ Ottimizza e salva"}</button>
+        <button type="button" class="btn primary" id="plan-route" style="width:100%">${state.planning ? "Calcolo in corso…" : `${I.navigate(14)} Ottimizza e salva`}</button>
       </div>
 
       <!-- Comando vocale (in fondo, non prominente) -->
@@ -1106,8 +1146,8 @@ function renderRoute() {
           </summary>
           <label class="field" style="margin-top:8px;"><textarea name="transcript" id="transcript">${escapeHtml(r.transcript)}</textarea></label>
           <div class="actions" style="margin-top:6px;">
-            <button type="button" class="btn${state.voiceRecording ? " recording" : ""}" id="listen-command">${state.voiceRecording ? "■ Stop" : "● Avvia"}</button>
-            <button type="button" class="btn" id="apply-command">✓ Applica</button>
+            <button type="button" class="btn${state.voiceRecording ? " recording" : ""}" id="listen-command">${state.voiceRecording ? `${I.micStop(14)} Stop` : `${I.mic(14)} Avvia`}</button>
+            <button type="button" class="btn" id="apply-command">${I.check(14)} Applica</button>
           </div>
         </details>
       </div>
@@ -1353,7 +1393,7 @@ function renderSaved() {
     <section class="panel">
       <div class="section-head">
         <h2>Giri salvati</h2>
-        <button class="btn" id="refresh-routes">↻</button>
+        <button class="btn" id="refresh-routes" title="Aggiorna">${I.refresh(14)}</button>
       </div>
       <div class="saved-list">
         ${state.savedRoutes.map(route => `
@@ -1367,11 +1407,11 @@ function renderSaved() {
             </div>
             <div class="stop-meta saved-card-route">${escapeHtml(route.startLabel || "—")} → ${escapeHtml(route.endLabel || "—")}</div>
             <div class="saved-card-btns">
-              <button class="btn primary saved-card-btn" data-open-route="${route.id}">Apri</button>
+              <button class="btn primary saved-card-btn" data-open-route="${route.id}">${I.play(13)} Apri</button>
               <div class="saved-card-btns-actions">
-                <button class="btn saved-card-btn" data-rename-route="${route.id}" title="Rinomina">✎ Rinomina</button>
-                <button class="btn saved-card-btn" data-duplicate-route="${route.id}" title="Duplica">⎘ Duplica</button>
-                <button class="btn danger saved-card-btn" data-delete-route="${route.id}" title="Elimina">× Elimina</button>
+                <button class="btn saved-card-btn" data-rename-route="${route.id}" title="Rinomina">${I.edit(13)} Rinomina</button>
+                <button class="btn saved-card-btn" data-duplicate-route="${route.id}" title="Duplica">${I.copy(13)} Duplica</button>
+                <button class="btn danger saved-card-btn" data-delete-route="${route.id}" title="Elimina">${I.trash(13)} Elimina</button>
               </div>
             </div>
             ${route.plannedStops?.length ? `<div class="saved-stops-list">${route.plannedStops.filter((s, i, arr) => !s.stopPart || s.stopPart === "morning" || arr.findIndex(x => x.addressId === s.addressId) === i).map((s, i) => { const isRest = s.addressType === "rest" || s.customer?.includes("⭐") || s.customer?.includes("★"); return `<span class="saved-stop-chip">${i + 1}. ${escapeHtml(s.customer)}${!isRest && s.location ? ` — ${escapeHtml(s.location)}` : ""}</span>`; }).join("")}</div>` : ""}
@@ -1464,16 +1504,16 @@ function renderArchive() {
         <div class="section-head">
           <h2>Archivio</h2>
           <div class="row">
-            <button class="btn" id="import-contacts">📱 Importa</button>
-            ${state.googleClientId ? `<button class="btn" id="import-google-contacts">🔗 Google</button>` : ""}
-            <button class="btn" id="new-address">+ Nuovo</button>
+            <button class="btn" id="import-contacts">${I.upload(14)} Importa</button>
+            ${state.googleClientId ? `<button class="btn" id="import-google-contacts">${I.link(14)} Google</button>` : ""}
+            <button class="btn" id="new-address">${I.plus(14)} Nuovo</button>
           </div>
         </div>
         <div class="row" style="gap:8px; margin-bottom:10px;">
           <input id="archive-search" placeholder="Cerca per nome, città, indirizzo…" value="${escapeHtml(state.addressSearch)}" style="flex:1" autocomplete="off" />
           ${showingResults
-            ? `<button class="btn" id="hide-all-addresses">× Nascondi</button>`
-            : `<button class="btn" id="show-all-addresses">Mostra tutti</button>`}
+            ? `<button class="btn" id="hide-all-addresses">${I.eyeOff(14)} Nascondi</button>`
+            : `<button class="btn" id="show-all-addresses">${I.eye(14)} Mostra tutti</button>`}
         </div>
         <input id="vcf-input" type="file" accept=".vcf,.vcard,.csv" style="display:none" />
         <div class="archive-list">
@@ -1486,15 +1526,15 @@ function renderArchive() {
               <div class="stop-meta">${escapeHtml(a.fullAddress)}</div>
               ${a.phone ? `<div class="stop-meta">${phoneIcon(a.phoneType)} ${escapeHtml(a.phone)}${a.phoneName ? ` <span class="phone-name-badge">${escapeHtml(a.phoneName)}</span>` : ""}${a.phonePreferred === "phone" && a.phone2 ? " ★" : ""}</div>` : ""}
               ${a.phone2 ? `<div class="stop-meta">${phoneIcon(a.phone2Type)} ${escapeHtml(a.phone2)}${a.phone2Name ? ` <span class="phone-name-badge">${escapeHtml(a.phone2Name)}</span>` : ""}${a.phonePreferred === "phone2" ? " ★" : ""}</div>` : ""}
-              ${a.email ? `<div class="stop-meta">✉ ${escapeHtml(a.email)}</div>` : ""}
+              ${a.email ? `<div class="stop-meta">${I.email(13)} ${escapeHtml(a.email)}</div>` : ""}
               <div class="stop-meta">${weeklyHoursSummary(a)}</div>
               <div class="actions">
                 ${a.phone ? `<a class="btn" href="tel:${escapeHtml(a.phone)}" title="${escapeHtml(a.phoneName || a.phone)}">${phoneIcon(a.phoneType)}</a>` : ""}
                 ${a.phone2 ? `<a class="btn" href="tel:${escapeHtml(a.phone2)}" title="${escapeHtml(a.phone2Name || a.phone2)}">${phoneIcon(a.phone2Type)}</a>` : ""}
-                ${a.email ? `<a class="btn" href="mailto:${escapeHtml(a.email)}">✉</a>` : ""}
-                <button class="btn" data-check-opening="${a.id}" title="Verifica orari apertura">🕐</button>
-                <button class="btn" data-edit-address="${a.id}">Modifica</button>
-                <button class="btn danger" data-delete-address="${a.id}">×</button>
+                ${a.email ? `<a class="btn icon-btn" href="mailto:${escapeHtml(a.email)}" title="${escapeHtml(a.email)}">${I.email(15)}</a>` : ""}
+                <button class="btn icon-btn" data-check-opening="${a.id}" title="Verifica orari apertura">${I.clock(15)}</button>
+                <button class="btn" data-edit-address="${a.id}">${I.edit(13)} Modifica</button>
+                <button class="btn danger icon-btn" data-delete-address="${a.id}" title="Elimina">${I.trash(14)}</button>
               </div>
               <div class="opening-status" id="opening-status-${a.id}" style="display:none"></div>
               <details class="visit-history-details" ${state.visitCalendar[a.id] !== undefined ? "open" : ""}>
@@ -1513,8 +1553,8 @@ function renderArchive() {
               <span class="stop-meta"> · ${state.importWizard.saved} salvati, ${state.importWizard.skipped} saltati</span>
             </div>
             <div style="display:flex;gap:6px;">
-              <button type="button" class="btn" id="wizard-skip">Salta →</button>
-              <button type="button" class="btn danger" id="wizard-abort">× Esci</button>
+              <button type="button" class="btn" id="wizard-skip">Salta ${I.arrowR(14)}</button>
+              <button type="button" class="btn danger" id="wizard-abort">${I.close(13)} Esci</button>
             </div>
           </div>` : ""}
         <h2>${state.importWizard ? "Verifica e salva" : form.id ? "Modifica contatto" : "Nuovo contatto"}</h2>
@@ -1558,8 +1598,8 @@ function renderArchive() {
           <div class="field full">
             <label>Coordinate GPS</label>
             <div class="coord-actions">
-              <button type="button" class="btn" id="use-current-pos">📍 Posizione attuale</button>
-              ${state.googleMapsKey ? `<button type="button" class="btn" id="open-map-picker">🗺 Scegli sulla mappa</button>` : ""}
+              <button type="button" class="btn" id="use-current-pos">${I.location(14)} Posizione attuale</button>
+              ${state.googleMapsKey ? `<button type="button" class="btn" id="open-map-picker">${I.map(14)} Scegli sulla mappa</button>` : ""}
             </div>
             <div class="form-grid" style="margin-top:8px;">
               <label class="field">Latitudine<input name="lat" id="coord-lat" type="number" step="0.000001" value="${escapeHtml(form.lat ?? "")}" /></label>
@@ -1675,14 +1715,14 @@ function renderManualOrder(result) {
             <span class="order-num">${i + 1}</span>
             <span>${escapeHtml(row.customer)} ${escapeHtml(row.location || "")}</span>
             <div class="row">
-              ${i > 0 ? `<button class="btn" data-move-up="${i}">↑</button>` : ""}
-              ${i < rows.length - 1 ? `<button class="btn" data-move-down="${i}">↓</button>` : ""}
+              ${i > 0 ? `<button class="btn icon-btn" data-move-up="${i}" title="Sposta su">${I.arrowUp(14)}</button>` : ""}
+              ${i < rows.length - 1 ? `<button class="btn icon-btn" data-move-down="${i}" title="Sposta giù">${I.arrowDown(14)}</button>` : ""}
             </div>
           </div>`).join("")}
       </div>
       <div class="actions">
-        <button class="btn primary" id="replan-order">✓ Ricalcola con quest'ordine</button>
-        <button class="btn" id="reset-order">↻ Ottimizzato</button>
+        <button class="btn primary" id="replan-order">${I.check(14)} Ricalcola con quest'ordine</button>
+        <button class="btn" id="reset-order">${I.refresh(14)} Ottimizzato</button>
       </div>
     </details>`;
 }
@@ -1702,7 +1742,7 @@ function renderResult() {
         <div>
           <div class="row" style="align-items:center;gap:8px;">
             <h2 style="margin:0;">${escapeHtml(result.name || "Percorso")}</h2>
-            ${result.id ? `<button class="btn" style="padding:2px 8px;font-size:0.85rem;" data-rename-current-route="${result.id}">✎</button>` : ""}
+            ${result.id ? `<button class="btn icon-btn" data-rename-current-route="${result.id}" title="Rinomina">${I.edit(14)}</button>` : ""}
           </div>
           <div class="row" style="align-items:center;gap:8px;margin-top:4px;">
             <input type="date" class="result-date-input" id="result-date-input" value="${escapeHtml(result.scheduledDate || "")}" title="Cambia data e ricalcola" />
@@ -1710,16 +1750,16 @@ function renderResult() {
           </div>
         </div>
         <div class="row" style="gap:8px;flex-wrap:wrap;">
-          <button class="btn" data-tab-jump="saved">▣ Giri</button>
-          <button class="btn${result.rows?.some(r => r.type === "lunch") ? " primary" : ""}" id="toggle-lunch-break" title="${result.rows?.some(r => r.type === "lunch") ? "Rimuovi pausa pranzo" : "Aggiungi pausa pranzo"}">🍽 ${result.rows?.some(r => r.type === "lunch") ? "Togli pranzo" : "Aggiungi pranzo"}</button>
-          <button class="btn" id="print-route-btn" title="Stampa o salva come PDF">🖨 PDF</button>
+          <button class="btn" data-tab-jump="saved">${I.list(14)} Giri</button>
+          <button class="btn${result.rows?.some(r => r.type === "lunch") ? " primary" : ""}" id="toggle-lunch-break" title="${result.rows?.some(r => r.type === "lunch") ? "Rimuovi pausa pranzo" : "Aggiungi pausa pranzo"}">${I.fork(14)} ${result.rows?.some(r => r.type === "lunch") ? "Togli pranzo" : "Aggiungi pranzo"}</button>
+          <button class="btn" id="print-route-btn" title="Stampa o salva come PDF">${I.print(14)} PDF</button>
         </div>
       </div>
 
       ${state.googleMapsKey ? `<div id="route-map" style="height:280px;border-radius:8px;border:1px solid var(--line);margin-bottom:14px;"></div>` : ""}
 
       <div class="nav-panel">
-        <a class="btn primary" href="${navUrl(result, pref)}" target="_blank" rel="noopener">↗ Apri percorso completo</a>
+        <a class="btn primary" href="${navUrl(result, pref)}" target="_blank" rel="noopener">${I.navigate(14)} Apri percorso completo</a>
       </div>
 
       ${renderManualOrder(result)}
@@ -1744,7 +1784,7 @@ function renderResult() {
             return `
           <article class="card result-card break-card lunch-card">
             <div class="break-row">
-              <span class="break-icon">🍽</span>
+              <span class="break-icon lunch-icon">${I.fork(18)}</span>
               <div style="flex:1;min-width:0">
                 ${lunchUrl && lunchName
                   ? `<a class="stop-title break-place-link" href="${lunchUrl}" target="_blank" rel="noopener" style="margin:0">${escapeHtml(lunchName)}${row.location ? ` — ${escapeHtml(row.location)}` : ""}</a>`
@@ -1761,7 +1801,7 @@ function renderResult() {
             return `
           <article class="card result-card break-card rest-card">
             <div class="break-row">
-              <span class="break-icon">☕</span>
+              <span class="break-icon coffee-icon">${I.coffee(18)}</span>
               <div style="flex:1;min-width:0">
                 ${restUrl
                   ? `<a class="stop-title break-place-link" href="${restUrl}" target="_blank" rel="noopener" style="margin:0">${escapeHtml(row.customer)}${row.location ? ` — ${escapeHtml(row.location)}` : ""}</a>`
@@ -1803,20 +1843,20 @@ function renderResult() {
               </div>
             </div>
             <div class="rc-actions">
-              ${!isAfternoon ? `<a class="btn primary rc-nav-btn" href="${stopNavUrl(row, state.navigatorPref)}" target="_blank" rel="noopener">↗ Naviga</a>` : ""}
+              ${!isAfternoon ? `<a class="btn primary rc-nav-btn" href="${stopNavUrl(row, state.navigatorPref)}" target="_blank" rel="noopener">${I.navigate(14)} Naviga</a>` : ""}
               ${phoneBtn}
-              ${email && !row.stopPart ? `<a class="btn icon-btn" href="mailto:${escapeHtml(email)}?subject=${emailSubject}" title="${escapeHtml(email)}">✉</a>` : ""}
+              ${email && !row.stopPart ? `<a class="btn icon-btn" href="mailto:${escapeHtml(email)}?subject=${emailSubject}" title="${escapeHtml(email)}">${I.email(15)}</a>` : ""}
             </div>
             <div class="rc-details" data-stop-details="${expandId}" hidden>
               <div class="rc-timing-strip">
-                ${!isAfternoon ? `<span>🚗 ${minutesLabel(row.driveMinutes)} · ${row.km.toFixed(1)} km</span>` : ""}
-                <span>🔧 ${minutesLabel(row.durationMinutes)}</span>
-                <span>✓ ${escapeHtml(row.serviceEndTime)}</span>
-                ${!isAfternoon ? `<span class="rc-ts-muted">⬆ ${escapeHtml(row.departureTime)}</span>` : ""}
+                ${!isAfternoon ? `<span>${I.car(13)} ${minutesLabel(row.driveMinutes)} · ${row.km.toFixed(1)} km</span>` : ""}
+                <span>${I.wrench(13)} ${minutesLabel(row.durationMinutes)}</span>
+                <span>${I.check(13)} ${escapeHtml(row.serviceEndTime)}</span>
+                ${!isAfternoon ? `<span class="rc-ts-muted">${I.arrowUp(13)} ${escapeHtml(row.departureTime)}</span>` : ""}
               </div>
               ${phone && !row.stopPart ? `<div class="rc-contact rc-contact--phone">${phoneIcon(addr?.phoneType)} <a href="tel:${escapeHtml(phone)}">${escapeHtml(phone)}</a>${addr?.phoneName ? ` <span class="phone-name-badge">${escapeHtml(addr.phoneName)}</span>` : ""}${addr?.phonePreferred !== "phone2" && phone2 ? " ★" : ""}</div>` : ""}
               ${phone2 && !row.stopPart ? `<div class="rc-contact rc-contact--phone">${phoneIcon(addr?.phone2Type)} <a href="tel:${escapeHtml(phone2)}">${escapeHtml(phone2)}</a>${addr?.phone2Name ? ` <span class="phone-name-badge">${escapeHtml(addr.phone2Name)}</span>` : ""}${addr?.phonePreferred === "phone2" ? " ★" : ""}</div>` : ""}
-              ${email && !row.stopPart ? `<div class="rc-contact">✉ <a href="mailto:${escapeHtml(email)}">${escapeHtml(email)}</a></div>` : ""}
+              ${email && !row.stopPart ? `<div class="rc-contact">${I.email(14)} <a href="mailto:${escapeHtml(email)}">${escapeHtml(email)}</a></div>` : ""}
               ${row.notes && !row.stopPart ? `<div class="rc-notes">${escapeHtml(row.notes)}</div>` : ""}
               ${warnLevel ? warningBadges(row.warnings) : ""}
               ${!row.stopPart ? stopDetailExtra(result, row, addr) : ""}
@@ -1836,8 +1876,8 @@ function renderResult() {
             </div>
           </div>
           <div class="rc-timing-strip" style="padding-top:0">
-            <span>🚗 ${minutesLabel(finalLeg.driveMinutes)} · ${finalLeg.km.toFixed(1)} km</span>
-            <span class="rc-ts-muted">⬆ ${escapeHtml(finalLeg.departureTime)}</span>
+            <span>${I.car(13)} ${minutesLabel(finalLeg.driveMinutes)} · ${finalLeg.km.toFixed(1)} km</span>
+            <span class="rc-ts-muted">${I.arrowUp(13)} ${escapeHtml(finalLeg.departureTime)}</span>
           </div>
         </article>
       </div>
@@ -2175,10 +2215,10 @@ function updateVoiceButton() {
   const btn = document.querySelector("#listen-command");
   if (!btn) return;
   if (state.voiceRecording) {
-    btn.textContent = "■ Stop";
+    btn.innerHTML = `${I.micStop(14)} Stop`;
     btn.classList.add("recording");
   } else {
-    btn.textContent = "● Avvia";
+    btn.innerHTML = `${I.mic(14)} Avvia`;
     btn.classList.remove("recording");
   }
 }

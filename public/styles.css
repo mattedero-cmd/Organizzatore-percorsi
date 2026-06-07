@@ -1282,8 +1282,8 @@ tbody tr:last-child td {
   border: 1px solid var(--line);
 }
 
-.lunch-card .break-icon { background: rgba(251,146,60,0.12); border-color: rgba(251,146,60,0.3); }
-.rest-card  .break-icon { background: rgba(139,92,246,0.12); border-color: rgba(139,92,246,0.3); }
+.lunch-card .break-icon { background: rgba(251,146,60,0.12); border-color: rgba(251,146,60,0.35); color: #fb923c; }
+.rest-card  .break-icon { background: rgba(139,92,246,0.12); border-color: rgba(139,92,246,0.35); color: #a78bfa; }
 
 .break-place-link {
   display: block;
@@ -2663,7 +2663,7 @@ tbody tr:last-child td {
   font-size: 1.2rem;
   letter-spacing: -0.025em;
 }
-.break-icon { font-size: 1.3rem; line-height: 1; filter: drop-shadow(0 0 6px var(--accent-glow)); }
+.break-icon svg { display: block; }
 .rc-name { font-size: 0.95rem; font-weight: 700; color: var(--text); }
 .stop-title { color: var(--text); font-size: 0.95rem; }
 .stop-meta { color: var(--muted); font-size: 0.85rem; line-height: 1.45; }
