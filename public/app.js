@@ -491,15 +491,15 @@ function renderMenuSettings() {
             ${stepper("lunchBreakMinutes", s.lunchBreakMinutes || 45, 15, 120, 5, "min")}
           </div>
         </div>
-        <p class="stop-meta" style="margin-top:4px;">Cerca prima tra i ristoranti salvati in archivio, poi su Maps. Aggiungi indirizzi con tipo "🍽 Ristorante" per dargli priorità.</p>
+        <p class="stop-meta" style="margin-top:4px;">Cerca prima tra i ristoranti salvati in archivio, poi su Maps. Aggiungi indirizzi con tipo "Ristorante" per dargli priorità.</p>
 
-        <h3 class="settings-section-title">🚗 Guida</h3>
+        <h3 class="settings-section-title">${_svg('<path d="M5 17H3a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v9a2 2 0 0 1-2 2h-3"/><circle cx="7.5" cy="17.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/>',15)} Guida</h3>
         <div class="field">
           <span class="field-label">Maggiorazione stimata traffico</span>
           ${stepper("driveMarkupMinPerHour", s.driveMarkupMinPerHour !== undefined ? s.driveMarkupMinPerHour : 10, 0, 30, 1, "min/h")}
         </div>
 
-        <h3 class="settings-section-title">💰 Tariffe</h3>
+        <h3 class="settings-section-title">${_svg('<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',15)} Tariffe</h3>
         <div class="form-grid">
           <label class="field">€ per km<input name="kmRate" type="number" min="0" step="0.01" value="${escapeHtml(s.kmRate)}" /></label>
           <label class="field">€/ora guida<input name="driveHourRate" type="number" min="0" step="0.01" value="${escapeHtml(s.driveHourRate)}" /></label>
