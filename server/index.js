@@ -216,6 +216,10 @@ async function handleApi(request, response) {
       }
 
       if (method === "POST" && url.pathname === "/api/auth/register") {
+        const ip = request.socket.remoteAddress || "unknown";
+        if (!checkLoginRateLimit(ip)) {
+          return sendJson(response, 429, { error: "Troppi tentativi. Riprova tra 15 minuti." });
+        }
         const body = await parseBody(request);
         const { username, password } = body;
         if (!username || !password || password.length < 6) return sendJson(response, 400, { error: "Username e password (min 6 caratteri) obbligatori" });
@@ -255,7 +259,7 @@ async function handleApi(request, response) {
         const cookies = parseCookies(request.headers.cookie);
         await deleteSession(cookies.session || "");
         const secure = process.env.NODE_ENV === "production" ? "; Secure" : "";
-        response.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Set-Cookie": `session=; HttpOnly; Path=/; SameSite=Strict; Max-Age=0${secure}` });
+        response.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Set-Cookie": `session=; HttpOnly; Path=/; SameSite=Strict; Max-Age=0${secure}`, ...SECURITY_HEADERS });
         response.end(JSON.stringify({ ok: true }));
         return;
       }
