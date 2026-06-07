@@ -157,6 +157,8 @@ function applyTheme() {
     state.theme = "night";
   } else if (state.themePref === "light") {
     state.theme = "day";
+  } else if (state.themePref === "nero") {
+    state.theme = "nero";
   } else {
     state.theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "night" : "day";
   }
@@ -446,9 +448,10 @@ function renderMenuSettings() {
         </div>
         <p class="stop-meta" style="margin:10px 0 6px;">Tema</p>
         <div class="settings-radio-group">
-          <label class="settings-radio"><input type="radio" name="themePref" value="auto" ${theme === "auto" ? "checked" : ""} /> 🔄 Automatico</label>
-          <label class="settings-radio"><input type="radio" name="themePref" value="light" ${theme === "light" ? "checked" : ""} /> ☀️ Chiaro</label>
-          <label class="settings-radio"><input type="radio" name="themePref" value="dark" ${theme === "dark" ? "checked" : ""} /> 🌙 Scuro</label>
+          <label class="settings-radio"><input type="radio" name="themePref" value="auto" ${theme === "auto" ? "checked" : ""} /> Automatico</label>
+          <label class="settings-radio"><input type="radio" name="themePref" value="light" ${theme === "light" ? "checked" : ""} /> Giorno</label>
+          <label class="settings-radio"><input type="radio" name="themePref" value="dark" ${theme === "dark" ? "checked" : ""} /> Notte</label>
+          <label class="settings-radio"><input type="radio" name="themePref" value="nero" ${theme === "nero" ? "checked" : ""} /> Neon Nero</label>
         </div>
 
         <div class="actions" style="margin-top:20px;">
