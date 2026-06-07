@@ -594,6 +594,12 @@ export async function saveRoute(route, userId = null) {
   return { id: rows[0]?.id };
 }
 
+export async function countRoutesByDate(date, userId = null) {
+  const userFilter = userId != null ? ` AND user_id = ${sqlValue(Number(userId))}` : "";
+  const rows = await runSql(`SELECT COUNT(*) as n FROM planned_routes WHERE scheduled_date = ${sqlValue(date)}${userFilter};`, true);
+  return Number(rows[0]?.n ?? rows[0]?.count ?? 0);
+}
+
 export async function listRoutes(userId = null) {
   const userFilter = userId != null ? `WHERE user_id = ${sqlValue(Number(userId))}` : "";
   if (dbMode === "postgres") {

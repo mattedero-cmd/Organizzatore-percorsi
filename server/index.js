@@ -26,6 +26,7 @@ import {
   createSession,
   getSession,
   deleteSession,
+  countRoutesByDate,
   hasAnyUser,
   assignOrphanedData,
   purgeExpiredSessions,
@@ -552,7 +553,14 @@ async function handleApi(request, response) {
       route = await attachWeather(route, { rowTimeoutMs: 3000 });
       const saved = await saveRoute({
         ...route,
-        name: body.name || "Percorso giornaliero",
+        name: body.name || await (async () => {
+          const d = route.scheduledDate;
+          if (!d) return "Percorso giornaliero";
+          const [y, m, day] = d.split("-");
+          const label = `${day}/${m}/${y}`;
+          const existing = await countRoutesByDate(d, userId);
+          return existing > 0 ? `${label} (${existing + 1})` : label;
+        })(),
         scheduledDate: route.scheduledDate,
         startLabel: body.start?.label || "",
         startAddress: body.start?.address || body.start?.fullAddress || "",

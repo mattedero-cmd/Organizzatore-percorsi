@@ -2217,14 +2217,35 @@ function _buildPrintDoc(withPhones, withCosts, result, routeName, date) {
     `</div>`;
 
   const phoneHeader = withPhones ? "<th>Telefono</th>" : "";
+  // Departure + weather info bar
+  const startLabel = _esc(result.start?.label || result.startLabel || "");
+  const startAddr  = _esc(result.start?.address || result.start?.fullAddress || result.startAddress || "");
+  const depTime    = _esc(summary.dayStart || "");
+  const w0 = (result.weather || []).find(x => Number(x.stopNumber) === 0) || (result.weather || [])[0];
+  const weatherStr = w0
+    ? `${Math.round(w0.temperatureC ?? 0)}°C, ${_esc(w0.description || "")}${w0.windKmh > 10 ? ", vento " + Math.round(w0.windKmh) + " km/h" : ""}`
+    : "";
+
+  const infoBar =
+    `<div class="ib">` +
+    (startLabel || startAddr ? `<div class="ib-item"><span class="ib-lbl">Partenza</span><span class="ib-val">${startLabel}${startAddr && startLabel ? " — " : ""}${startAddr}</span></div>` : "") +
+    (depTime ? `<div class="ib-item"><span class="ib-lbl">Orario</span><span class="ib-val">${depTime}</span></div>` : "") +
+    (weatherStr ? `<div class="ib-item"><span class="ib-lbl">Meteo</span><span class="ib-val">${weatherStr}</span></div>` : "") +
+    `</div>`;
+
   const now = new Date().toLocaleDateString("it-IT",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"});
 
   const css = [
     "*{box-sizing:border-box;margin:0;padding:0}",
     "body{font-family:-apple-system,'Helvetica Neue',Arial,sans-serif;font-size:10.5pt;color:#1a1a2e;background:#fff;padding:28px 32px}",
-    ".dh{margin-bottom:20px;padding-bottom:14px;border-bottom:2px solid #1a1a2e}",
+    ".dh{margin-bottom:12px;padding-bottom:14px;border-bottom:2px solid #1a1a2e}",
     ".dt{font-size:17pt;font-weight:700;letter-spacing:-.01em}",
     ".ds{font-size:10pt;color:#555;margin-top:3px}",
+    ".ib{display:flex;flex-wrap:wrap;gap:0;border:1px solid #e0e0e0;border-radius:4px;overflow:hidden;margin-bottom:18px;font-size:9.5pt}",
+    ".ib-item{display:flex;align-items:baseline;gap:8px;padding:7px 14px;border-right:1px solid #e0e0e0;flex:1;min-width:160px}",
+    ".ib-item:last-child{border-right:none}",
+    ".ib-lbl{font-size:8pt;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#888;white-space:nowrap}",
+    ".ib-val{font-size:9.5pt;color:#1a1a2e;font-weight:500}",
     "table{width:100%;border-collapse:collapse;margin-bottom:20px;font-size:10pt}",
     "thead tr{border-bottom:2px solid #1a1a2e}",
     "th{padding:7px 8px;text-align:left;font-size:8.5pt;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#444;white-space:nowrap}",
@@ -2249,7 +2270,7 @@ function _buildPrintDoc(withPhones, withCosts, result, routeName, date) {
   ].join("");
 
   return `<!DOCTYPE html><html lang="it"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${_esc(routeName)}${date?" – "+date:""}</title><style>${css}</style></head><body>` +
-    `<div class="dh"><div class="dt">${_esc(routeName)}</div>${date?`<div class="ds">${_esc(date)}</div>`:""}</div>` +
+    `<div class="dh"><div class="dt">${_esc(routeName)}</div>${date?`<div class="ds">${_esc(date)}</div>`:""}</div>` + infoBar +
     `<table><thead><tr><th>#</th><th>Tappa</th><th>&nbsp;</th>${phoneHeader}<th>Orario</th><th>Durata</th><th>Km</th><th>Note</th></tr></thead><tbody>` +
     stopRows + homeRow +
     `</tbody></table>` +
