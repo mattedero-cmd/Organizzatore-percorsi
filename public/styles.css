@@ -900,7 +900,6 @@ tbody tr:last-child td {
    RESULT CARD — rc-* system
    ═══════════════════════════════════════════════════════════ */
 
-/* Base card override */
 .rc {
   display: flex;
   flex-direction: column;
@@ -909,26 +908,23 @@ tbody tr:last-child td {
   overflow: hidden;
 }
 
-/* ── header row ── */
+/* ── header ── */
 .rc-head {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
-  padding: 11px 13px 8px;
+  gap: 12px;
+  padding: 14px 14px 10px;
   cursor: pointer;
   user-select: none;
 }
-.rc-head:active { background: var(--surface-2); }
+.rc-head:active { background: rgba(255,255,255,0.03); }
 
-.rc-left {
-  flex: 1;
-  min-width: 0;
-}
+.rc-left { flex: 1; min-width: 0; }
 
 .rc-num-name {
   display: flex;
   align-items: baseline;
-  gap: 4px;
+  gap: 5px;
   flex-wrap: wrap;
   line-height: 1.3;
 }
@@ -937,91 +933,117 @@ tbody tr:last-child td {
   font-size: 0.97rem;
   font-weight: 700;
   color: var(--text);
+  letter-spacing: -0.01em;
 }
 
 .rc-addr {
-  font-size: 0.75rem;
+  font-size: 0.73rem;
   color: var(--muted);
-  margin-top: 2px;
+  margin-top: 3px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.rc-warn {
-  margin-top: 4px;
-  display: inline-block;
-}
+.rc-warn { margin-top: 5px; display: inline-block; }
 
-/* arrival time block — right side */
+/* arrival block */
 .rc-arrival {
   text-align: right;
   flex-shrink: 0;
-  min-width: 52px;
+  min-width: 58px;
 }
 
 .rc-arr-time {
-  font-size: 1.15rem;
+  font-size: 1.35rem;
   font-weight: 800;
   color: var(--accent);
-  text-shadow: 0 0 12px var(--accent-glow);
+  text-shadow: 0 0 14px var(--accent-glow);
   line-height: 1;
+  letter-spacing: -0.03em;
 }
 
 .rc-arr-label {
-  font-size: 0.65rem;
+  font-size: 0.58rem;
   color: var(--muted);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
-  margin-top: 1px;
+  letter-spacing: 0.07em;
+  margin-top: 2px;
+}
+
+/* weather compact in arrival area */
+.rc-arrival .weather-compact {
+  font-size: 0.7rem;
+  color: var(--muted);
+  margin-top: 4px;
+  text-align: right;
 }
 
 /* ── action row ── */
 .rc-actions {
   display: flex;
   gap: 6px;
-  padding: 0 10px 10px;
+  padding: 0 12px 12px;
 }
 
 .rc-nav-btn {
   flex: 1;
-  min-height: 40px;
-  font-size: 0.92rem;
+  min-height: 42px;
+  font-size: 0.88rem;
   font-weight: 700;
+  letter-spacing: 0.02em;
 }
 
 .rc-actions .btn.icon-btn {
-  min-height: 40px;
-  min-width: 40px;
+  min-height: 42px;
+  min-width: 42px;
+  width: 42px;
   padding: 0;
   font-size: 1rem;
+  border-radius: 10px;
 }
 
-/* ── details (hidden by default) ── */
+/* ── details (expandable) ── */
 .rc-details {
   border-top: 1px solid var(--line);
-  padding: 8px 13px 12px;
+  padding: 12px 14px 14px;
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: 10px;
 }
 
 .rc-details[hidden] { display: none; }
 
-/* timing strip */
+/* timing chips strip */
 .rc-timing-strip {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 12px;
-  font-size: 0.82rem;
-  color: var(--text);
-  padding-bottom: 6px;
+  gap: 5px;
+  padding-bottom: 10px;
   border-bottom: 1px solid var(--line);
 }
 
-.rc-ts-muted { color: var(--muted); }
+.rc-timing-strip span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 0.76rem;
+  color: var(--text);
+  white-space: nowrap;
+}
 
-/* phone button in action row */
+.rc-ts-muted {
+  color: var(--muted) !important;
+  background: transparent !important;
+  border-color: transparent !important;
+  padding-left: 0 !important;
+}
+
+/* phone button */
 .rc-phone-btn {
   font-size: 0.78rem;
   padding: 4px 8px;
@@ -1033,25 +1055,39 @@ tbody tr:last-child td {
 .rc-contact {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 0.86rem;
+  gap: 8px;
+  font-size: 0.84rem;
+  color: var(--muted);
 }
+
+.rc-contact a {
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.rc-contact a:hover { text-decoration: underline; }
 
 .rc-notes {
-  font-size: 0.8rem;
+  font-size: 0.79rem;
   font-style: italic;
   color: var(--muted);
+  padding: 6px 10px;
+  background: rgba(255,255,255,0.02);
+  border-left: 2px solid var(--accent-border);
+  border-radius: 0 6px 6px 0;
 }
 
-/* section label inside details */
+/* section label (METEO, ORARI…) */
 .rc-section-label {
-  font-size: 0.68rem;
+  font-size: 0.62rem;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.07em;
-  color: var(--muted);
+  letter-spacing: 0.1em;
+  color: var(--accent);
+  opacity: 0.7;
   display: block;
-  margin-bottom: 3px;
+  margin-bottom: 4px;
 }
 
 .stop-weather-line {
@@ -1059,9 +1095,12 @@ tbody tr:last-child td {
   align-items: center;
   gap: 6px;
   flex-wrap: wrap;
-  margin-top: 4px;
-  font-size: 0.88rem;
+  font-size: 0.82rem;
   color: var(--muted);
+  padding: 5px 8px;
+  background: rgba(255,255,255,0.03);
+  border-radius: 8px;
+  border: 1px solid var(--line);
 }
 
 /* legacy — kept for stop planning list cards */
@@ -1205,22 +1244,46 @@ tbody tr:last-child td {
 
 .break-card {
   border-style: dashed;
-  opacity: 0.9;
+  opacity: 0.92;
   animation-duration: 0.25s;
 }
-.lunch-card { border-color: rgba(251,146,60,0.4); background: rgba(251,146,60,0.04) !important; }
-.rest-card  { border-color: rgba(139,92,246,0.35); background: rgba(139,92,246,0.04) !important; }
+.lunch-card {
+  border-color: rgba(251,146,60,0.35);
+  background: rgba(251,146,60,0.05) !important;
+}
+.rest-card {
+  border-color: rgba(139,92,246,0.3);
+  background: rgba(139,92,246,0.05) !important;
+}
+
+.break-card .card-body-inner,
+.break-card > *:first-child {
+  padding: 12px 14px;
+}
 
 .break-row {
   display: flex;
   align-items: center;
   gap: 12px;
+  padding: 12px 14px;
 }
 
 .break-icon {
-  font-size: 1.4rem;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
   line-height: 1;
+  flex-shrink: 0;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid var(--line);
 }
+
+.lunch-card .break-icon { background: rgba(251,146,60,0.12); border-color: rgba(251,146,60,0.3); }
+.rest-card  .break-icon { background: rgba(139,92,246,0.12); border-color: rgba(139,92,246,0.3); }
 
 .break-place-link {
   display: block;
@@ -1250,10 +1313,10 @@ tbody tr:last-child td {
   font-size: 0.82rem;
   padding: 3px 6px;
   min-height: 28px;
-  border-radius: 6px;
+  border-radius: 8px;
   border: 1px solid var(--line);
   color: var(--text);
-  background: var(--surface);
+  background: var(--bg2);
   flex-shrink: 0;
   width: auto;
 }
@@ -1632,17 +1695,17 @@ tbody tr:last-child td {
 /* compact weekly hours 3-column: day | am | pm */
 .wh-inline {
   border-collapse: collapse;
-  font-size: 0.78rem;
+  font-size: 0.76rem;
   width: 100%;
   table-layout: fixed;
 }
 
-.wh-inline col.wh-col-day  { width: 32px; }
+.wh-inline col.wh-col-day  { width: 28px; }
 .wh-inline col.wh-col-am   { width: 50%; }
 .wh-inline col.wh-col-pm   { width: 50%; }
 
 .wh-inline td {
-  padding: 1px 4px 1px 0;
+  padding: 2px 4px 2px 0;
   vertical-align: middle;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1652,6 +1715,9 @@ tbody tr:last-child td {
 .wh-inline .wh-day {
   font-weight: 700;
   color: var(--muted);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 .wh-inline .wh-hours {
@@ -1660,12 +1726,18 @@ tbody tr:last-child td {
 
 .wh-inline .wh-muted {
   color: var(--muted);
+  font-style: italic;
 }
 
 .wh-inline tr.wh-today .wh-day,
 .wh-inline tr.wh-today .wh-hours {
   font-weight: 800;
-  color: var(--primary);
+  color: var(--accent);
+}
+
+.wh-inline tr.wh-today td {
+  background: var(--accent-bg);
+  border-radius: 4px;
 }
 
 .wh-compact td {
