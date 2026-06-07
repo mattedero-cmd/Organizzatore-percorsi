@@ -257,8 +257,16 @@ function serveStatic(request, response) {
       response.end("Not found");
       return;
     }
+    const isSW = filePath.endsWith("service-worker.js");
+    const hasVersion = url.searchParams.has("v");
+    const cacheControl = isSW
+      ? "no-store, no-cache, must-revalidate"
+      : hasVersion
+        ? "public, max-age=31536000, immutable"
+        : "no-cache";
     response.writeHead(200, {
       "Content-Type": mimeTypes[path.extname(filePath)] || "application/octet-stream",
+      "Cache-Control": cacheControl,
       ...SECURITY_HEADERS
     });
     response.end(content);
