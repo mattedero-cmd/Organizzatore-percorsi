@@ -1032,11 +1032,11 @@ function renderRoute() {
         <!-- Partenza -->
         <div class="rp-endpoint-card" id="rp-start-card">
           <div class="rp-ep-row">
-            <span class="rp-endpoint-icon">🏠</span>
+            <span class="rp-endpoint-icon">${I.location(16)}</span>
             <span class="rp-endpoint-name" id="rp-start-name">${escapeHtml(startDisplay)}</span>
             <div class="rp-ep-actions">
-              <button type="button" class="btn ghost rp-ep-nav" id="rp-start-map-btn" title="Scegli sulla mappa">🗺</button>
-              <button type="button" class="btn ghost" id="rp-start-archive-btn" title="Scegli dall'archivio">📋</button>
+              <button type="button" class="btn icon-btn rp-ep-nav" id="rp-start-map-btn" title="Scegli sulla mappa">${I.map(15)}</button>
+              <button type="button" class="btn icon-btn" id="rp-start-archive-btn" title="Scegli dall'archivio">${I.contacts(15)}</button>
             </div>
           </div>
           <input type="hidden" name="startLabel" id="rp-start-label-h" value="${escapeHtml(r.startLabel)}" />
@@ -1049,15 +1049,15 @@ function renderRoute() {
         <!-- Arrivo -->
         <div class="rp-endpoint-card rp-endpoint-card--end" id="rp-end-card">
           <div class="rp-ep-row">
-            <span class="rp-endpoint-icon">🏁</span>
+            <span class="rp-endpoint-icon">${I.checkCircle(16)}</span>
             <span class="rp-endpoint-name" id="rp-end-name">${escapeHtml(endDisplay)}</span>
             <label class="rp-same-label" onclick="event.stopPropagation()">
               <input name="endSameAsStart" type="checkbox" id="rp-end-same" ${r.endSameAsStart ? "checked" : ""} />
               <span>= partenza</span>
             </label>
             <div class="rp-ep-actions" id="rp-end-ep-actions"${r.endSameAsStart ? ' style="display:none"' : ""}>
-              <button type="button" class="btn ghost rp-ep-nav" id="rp-end-map-btn" title="Scegli sulla mappa">🗺</button>
-              <button type="button" class="btn ghost" id="rp-end-archive-btn" title="Scegli dall'archivio">📋</button>
+              <button type="button" class="btn icon-btn rp-ep-nav" id="rp-end-map-btn" title="Scegli sulla mappa">${I.map(15)}</button>
+              <button type="button" class="btn icon-btn" id="rp-end-archive-btn" title="Scegli dall'archivio">${I.contacts(15)}</button>
             </div>
           </div>
           <input type="hidden" name="endLabel" id="rp-end-label-h" value="${escapeHtml(r.endLabel)}" />
@@ -1073,7 +1073,7 @@ function renderRoute() {
       <div class="rp-section rp-lunch-row">
         <label class="rp-lunch-check">
           <input name="lunchBreak" type="checkbox" ${r.lunchBreak ? "checked" : ""} id="lunch-break-check" />
-          <span>🍽 Pausa pranzo</span>
+          <span>${I.fork(14)} Pausa pranzo</span>
         </label>
         <input name="lunchBreakMinutes" type="number" min="15" max="120" step="5"
           value="${escapeHtml(r.lunchBreakMinutes)}" id="lunch-break-minutes"
