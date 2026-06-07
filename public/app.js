@@ -1065,7 +1065,24 @@ async function renderGoogleMap(result) {
   const firstCoord = rows.find(r => r.lat) || result.start;
   const center = firstCoord?.lat ? { lat: Number(firstCoord.lat), lng: Number(firstCoord.lng) } : { lat: 46.0, lng: 11.0 };
 
-  const map = new google.maps.Map(el, { center, zoom: 10, mapTypeControl: false, fullscreenControl: false });
+  const _darkTheme = document.documentElement.dataset.theme;
+  const _isDarkMap = _darkTheme && !["day","neon-giorno","luxury-giorno","metallo-giorno","pietra-giorno","foresta-giorno","legno-giorno"].includes(_darkTheme);
+  const _nightStyles = _isDarkMap ? [
+    { elementType: "geometry", stylers: [{ color: "#0d1117" }] },
+    { elementType: "labels.text.fill", stylers: [{ color: "#8b9aaa" }] },
+    { elementType: "labels.text.stroke", stylers: [{ color: "#0d1117" }] },
+    { featureType: "road", elementType: "geometry", stylers: [{ color: "#1e2a38" }] },
+    { featureType: "road.arterial", elementType: "geometry", stylers: [{ color: "#263340" }] },
+    { featureType: "road.highway", elementType: "geometry", stylers: [{ color: "#14b8a6" }] },
+    { featureType: "road.highway", elementType: "geometry.stroke", stylers: [{ color: "#0d9488" }] },
+    { featureType: "water", elementType: "geometry", stylers: [{ color: "#071520" }] },
+    { featureType: "poi", elementType: "geometry", stylers: [{ color: "#111c26" }] },
+    { featureType: "poi", elementType: "labels.text.fill", stylers: [{ color: "#607080" }] },
+    { featureType: "transit", elementType: "geometry", stylers: [{ color: "#0d1117" }] },
+    { featureType: "administrative", elementType: "geometry.stroke", stylers: [{ color: "#1e3040" }] },
+    { featureType: "administrative.land_parcel", elementType: "labels.text.fill", stylers: [{ color: "#506070" }] },
+  ] : [];
+  const map = new google.maps.Map(el, { center, zoom: 10, mapTypeControl: false, fullscreenControl: false, styles: _nightStyles });
   const bounds = new google.maps.LatLngBounds();
   let hasPoints = false;
 
