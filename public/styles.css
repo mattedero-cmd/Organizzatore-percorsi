@@ -2517,6 +2517,12 @@ tbody tr:last-child td {
   -webkit-backdrop-filter: blur(16px);
 }
 
+@media (max-width: 700px) {
+  .rp-plan-sticky {
+    bottom: 68px;
+  }
+}
+
 /* ── Hamburger menu button ── */
 .menu-btn {
   background: rgba(255,255,255,0.05);
