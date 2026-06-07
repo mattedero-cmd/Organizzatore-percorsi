@@ -213,6 +213,20 @@ function applyTheme() {
   };
   state.theme = map[palette] || (isDark ? "night" : "day");
   document.documentElement.dataset.theme = state.theme;
+  try { localStorage.setItem("pl_theme", JSON.stringify({ mode, palette })); } catch {}
+}
+
+const _splashShown = Date.now();
+function hideSplash() {
+  const el = document.getElementById("splash");
+  if (!el) return;
+  const elapsed = Date.now() - _splashShown;
+  const delay = Math.max(0, 500 - elapsed);
+  setTimeout(() => {
+    el.classList.add("hiding");
+    el.addEventListener("transitionend", () => el.classList.add("hidden"), { once: true });
+    setTimeout(() => el.classList.add("hidden"), 400);
+  }, delay);
 }
 
 function setActiveTab(tab) {
@@ -4420,12 +4434,15 @@ async function init() {
     const meRes = await fetch('/api/auth/me');
     const me = await meRes.json().catch(() => ({}));
     if (!meRes.ok) {
+      hideSplash();
       renderAuthScreen(me.setup === true);
       return;
     }
     state.user = me;
     await initApp();
+    hideSplash();
   } catch {
+    hideSplash();
     renderAuthScreen(false);
   }
 }
