@@ -152,48 +152,48 @@ html[data-theme="nero"] {
 /* ─── Foresta Notte ──────────────────────────────────── */
 html[data-theme="foresta-notte"] {
   color-scheme: dark;
-  --bg:            #060d06;
-  --bg2:           rgba(10,20,10,0.80);
-  --surface:       rgba(255,255,255,0.038);
-  --surface-2:     rgba(255,255,255,0.06);
-  --surface-hover: rgba(255,255,255,0.08);
-  --line:          rgba(100,200,80,0.09);
-  --line-strong:   rgba(100,200,80,0.20);
-  --text:          #e8f5e2;
-  --muted:         #5a7a50;
-  --primary:       #7fff00;
-  --primary-dark:  #5cc400;
-  --accent:        #7fff00;
-  --accent-bg:     rgba(127,255,0,0.08);
-  --accent-border: rgba(127,255,0,0.22);
-  --accent-glow:   rgba(127,255,0,0.18);
-  --accent2:       rgba(34,139,34,0.15);
+  --bg:            #040b04;
+  --bg2:           rgba(6,16,6,0.82);
+  --surface:       rgba(40,180,40,0.04);
+  --surface-2:     rgba(40,180,40,0.07);
+  --surface-hover: rgba(40,180,40,0.10);
+  --line:          rgba(40,160,40,0.10);
+  --line-strong:   rgba(60,200,60,0.20);
+  --text:          #e0f4e0;
+  --muted:         #3a6a3a;
+  --primary:       #22c55e;
+  --primary-dark:  #16a34a;
+  --accent:        #22c55e;
+  --accent-bg:     rgba(34,197,94,0.08);
+  --accent-border: rgba(34,197,94,0.24);
+  --accent-glow:   rgba(34,197,94,0.20);
+  --accent2:       rgba(5,46,22,0.30);
   --danger:        #ef4444;
   --warning:       #ffd166;
-  --ok:            #7fff00;
-  --shadow:        0 8px 40px rgba(0,0,0,0.35), 0 1px 0 rgba(127,255,0,0.06) inset;
+  --ok:            #22c55e;
+  --shadow:        0 8px 40px rgba(0,0,0,0.40), 0 1px 0 rgba(34,197,94,0.06) inset;
   --radius:        12px;
-  --blob1:         rgba(127,255,0,0.15);
-  --blob2:         rgba(34,139,34,0.20);
-  --blob3:         rgba(0,100,0,0.18);
-  --blob4:         rgba(100,200,50,0.12);
-  --grid-line:     rgba(127,255,0,0.025);
-  --top-line-a:    rgba(127,255,0,0.75);
-  --top-line-b:    rgba(34,139,34,0.75);
-  --card-top-a:    rgba(127,255,0,0.55);
-  --card-top-b:    rgba(34,139,34,0.45);
-  --card-corner:   rgba(127,255,0,0.06);
-  --tab-bg:        rgba(6,13,6,0.88);
-  --tab-border:    rgba(127,255,0,0.07);
-  --tab-text:      #2a4020;
-  --tab-active-bg:     rgba(127,255,0,0.08);
-  --tab-active-border: rgba(127,255,0,0.22);
-  --tab-active-text:   rgba(127,255,0,0.9);
-  --btn-primary-bg:    linear-gradient(135deg, rgba(127,255,0,0.16), rgba(80,180,0,0.11), rgba(34,139,34,0.12));
-  --btn-primary-border: rgba(127,255,0,0.32);
-  --btn-primary-text:  #f0ffe0;
-  --btn-primary-glow:  rgba(127,255,0,0.22);
-  --btn-primary-shine: rgba(127,255,0,0.1);
+  --blob1:         rgba(34,197,94,0.18);
+  --blob2:         rgba(5,46,22,0.40);
+  --blob3:         rgba(20,120,40,0.22);
+  --blob4:         rgba(0,80,20,0.30);
+  --grid-line:     rgba(34,197,94,0.025);
+  --top-line-a:    rgba(34,197,94,0.80);
+  --top-line-b:    rgba(5,100,30,0.70);
+  --card-top-a:    rgba(34,197,94,0.55);
+  --card-top-b:    rgba(5,100,30,0.45);
+  --card-corner:   rgba(34,197,94,0.07);
+  --tab-bg:        rgba(4,11,4,0.90);
+  --tab-border:    rgba(34,197,94,0.08);
+  --tab-text:      #1a3a1a;
+  --tab-active-bg:     rgba(34,197,94,0.09);
+  --tab-active-border: rgba(34,197,94,0.26);
+  --tab-active-text:   rgba(60,220,100,0.94);
+  --btn-primary-bg:    linear-gradient(135deg,rgba(34,197,94,0.20),rgba(22,163,74,0.14),rgba(5,46,22,0.20));
+  --btn-primary-border: rgba(34,197,94,0.34);
+  --btn-primary-text:  #d4fce0;
+  --btn-primary-glow:  rgba(34,197,94,0.26);
+  --btn-primary-shine: rgba(34,197,94,0.12);
   --del-bg:     rgba(239,68,68,0.06);
   --del-border: rgba(239,68,68,0.22);
   --del-text:   #ef4444;
@@ -202,47 +202,47 @@ html[data-theme="foresta-notte"] {
 /* ─── Foresta Giorno ─────────────────────────────────── */
 html[data-theme="foresta-giorno"] {
   color-scheme: light;
-  --bg:            #d4eacc;
+  --bg:            #c8e8b0;
   --bg2:           rgba(255,255,255,0.55);
   --surface:       rgba(255,255,255,0.52);
   --surface-2:     rgba(255,255,255,0.70);
   --surface-hover: rgba(255,255,255,0.78);
-  --line:          rgba(60,120,30,0.14);
-  --line-strong:   rgba(60,120,30,0.28);
-  --text:          #0e1f08;
-  --muted:         #5a7a50;
-  --primary:       #3a7a10;
-  --primary-dark:  #2a5a08;
-  --accent:        #3a7a10;
-  --accent-bg:     rgba(58,122,16,0.10);
-  --accent-border: rgba(58,122,16,0.30);
-  --accent-glow:   rgba(58,122,16,0.18);
-  --accent2:       rgba(120,60,0,0.10);
+  --line:          rgba(20,100,20,0.14);
+  --line-strong:   rgba(20,100,20,0.28);
+  --text:          #071407;
+  --muted:         #3a6a2a;
+  --primary:       #166534;
+  --primary-dark:  #0d4a22;
+  --accent:        #166534;
+  --accent-bg:     rgba(22,101,52,0.10);
+  --accent-border: rgba(22,101,52,0.28);
+  --accent-glow:   rgba(22,101,52,0.18);
+  --accent2:       rgba(100,60,0,0.10);
   --danger:        #b84000;
   --warning:       #946200;
-  --ok:            #3a7a10;
-  --shadow:        0 8px 40px rgba(0,50,0,0.13), 0 1px 0 rgba(255,255,255,0.8) inset;
+  --ok:            #166534;
+  --shadow:        0 8px 40px rgba(0,40,0,0.12), 0 1px 0 rgba(255,255,255,0.8) inset;
   --radius:        12px;
-  --blob1:         rgba(58,180,20,0.22);
-  --blob2:         rgba(120,80,0,0.18);
-  --blob3:         rgba(20,100,0,0.16);
-  --blob4:         rgba(80,160,20,0.14);
-  --grid-line:     rgba(58,122,16,0.06);
-  --top-line-a:    rgba(58,180,20,0.9);
-  --top-line-b:    rgba(120,80,0,0.7);
-  --card-top-a:    rgba(58,180,20,0.5);
-  --card-top-b:    rgba(120,80,0,0.4);
-  --card-corner:   rgba(58,122,16,0.10);
-  --tab-bg:        rgba(200,228,188,0.92);
-  --tab-border:    rgba(58,122,16,0.14);
-  --tab-text:      #8aad70;
-  --tab-active-bg:     rgba(58,122,16,0.14);
-  --tab-active-border: rgba(58,122,16,0.32);
-  --tab-active-text:   #2a5a08;
-  --btn-primary-bg:    linear-gradient(135deg, #5aa820, #3a7a10, #2a6008);
-  --btn-primary-border: rgba(58,122,16,0.45);
+  --blob1:         rgba(34,197,94,0.28);
+  --blob2:         rgba(5,100,30,0.28);
+  --blob3:         rgba(22,101,52,0.22);
+  --blob4:         rgba(80,160,60,0.20);
+  --grid-line:     rgba(22,101,52,0.06);
+  --top-line-a:    rgba(34,197,94,0.9);
+  --top-line-b:    rgba(5,100,30,0.7);
+  --card-top-a:    rgba(34,197,94,0.5);
+  --card-top-b:    rgba(5,100,30,0.4);
+  --card-corner:   rgba(22,101,52,0.10);
+  --tab-bg:        rgba(185,228,160,0.92);
+  --tab-border:    rgba(22,101,52,0.14);
+  --tab-text:      #80b868;
+  --tab-active-bg:     rgba(22,101,52,0.14);
+  --tab-active-border: rgba(22,101,52,0.32);
+  --tab-active-text:   #0d4a22;
+  --btn-primary-bg:    linear-gradient(135deg,#22c55e,#166534,#0d4a22);
+  --btn-primary-border: rgba(22,101,52,0.45);
   --btn-primary-text:  #ffffff;
-  --btn-primary-glow:  rgba(58,122,16,0.28);
+  --btn-primary-glow:  rgba(22,101,52,0.28);
   --btn-primary-shine: rgba(255,255,255,0.28);
   --del-bg:     rgba(184,64,0,0.07);
   --del-border: rgba(184,64,0,0.26);
@@ -497,6 +497,206 @@ html[data-theme="legno"] {
   --del-bg:     rgba(239,68,68,0.06);
   --del-border: rgba(239,68,68,0.22);
   --del-text:   #ef4444;
+}
+
+/* ─── Neon Giorno ────────────────────────────────────── */
+html[data-theme="neon-giorno"] {
+  color-scheme: light;
+  --bg:            #f0fff8;
+  --bg2:           rgba(255,255,255,0.62);
+  --surface:       rgba(255,255,255,0.55);
+  --surface-2:     rgba(255,255,255,0.72);
+  --surface-hover: rgba(255,255,255,0.82);
+  --line:          rgba(0,200,160,0.16);
+  --line-strong:   rgba(0,200,160,0.30);
+  --text:          #021a14;
+  --muted:         #4a8070;
+  --primary:       #00b894;
+  --primary-dark:  #00917a;
+  --accent:        #00b894;
+  --accent-bg:     rgba(0,184,148,0.10);
+  --accent-border: rgba(0,184,148,0.30);
+  --accent-glow:   rgba(0,184,148,0.20);
+  --accent2:       rgba(255,80,20,0.10);
+  --danger:        #b84000;
+  --warning:       #946200;
+  --ok:            #006e5e;
+  --shadow:        0 8px 40px rgba(0,80,60,0.12), 0 1px 0 rgba(255,255,255,0.8) inset;
+  --radius:        12px;
+  --blob1:         rgba(0,184,148,0.24);
+  --blob2:         rgba(255,80,20,0.18);
+  --blob3:         rgba(0,140,110,0.16);
+  --blob4:         rgba(0,220,180,0.14);
+  --grid-line:     rgba(0,184,148,0.06);
+  --top-line-a:    rgba(0,220,180,0.9);
+  --top-line-b:    rgba(255,80,20,0.7);
+  --card-top-a:    rgba(0,220,180,0.5);
+  --card-top-b:    rgba(255,80,20,0.4);
+  --card-corner:   rgba(0,184,148,0.10);
+  --tab-bg:        rgba(220,255,248,0.92);
+  --tab-border:    rgba(0,184,148,0.16);
+  --tab-text:      #80c0b0;
+  --tab-active-bg:     rgba(0,184,148,0.14);
+  --tab-active-border: rgba(0,184,148,0.32);
+  --tab-active-text:   #00917a;
+  --btn-primary-bg:    linear-gradient(135deg,#00d4aa,#00b894,#00917a);
+  --btn-primary-border: rgba(0,184,148,0.45);
+  --btn-primary-text:  #ffffff;
+  --btn-primary-glow:  rgba(0,184,148,0.28);
+  --btn-primary-shine: rgba(255,255,255,0.28);
+  --del-bg:     rgba(184,64,0,0.07);
+  --del-border: rgba(184,64,0,0.26);
+  --del-text:   #b84000;
+}
+
+/* ─── Metallo Giorno ─────────────────────────────────── */
+html[data-theme="metallo-giorno"] {
+  color-scheme: light;
+  --bg:            #dce8f0;
+  --bg2:           rgba(255,255,255,0.58);
+  --surface:       rgba(255,255,255,0.54);
+  --surface-2:     rgba(255,255,255,0.72);
+  --surface-hover: rgba(255,255,255,0.80);
+  --line:          rgba(80,120,160,0.14);
+  --line-strong:   rgba(80,120,160,0.28);
+  --text:          #0c1a28;
+  --muted:         #5a7a9a;
+  --primary:       #2a6898;
+  --primary-dark:  #1a4878;
+  --accent:        #2a6898;
+  --accent-bg:     rgba(42,104,152,0.10);
+  --accent-border: rgba(42,104,152,0.28);
+  --accent-glow:   rgba(42,104,152,0.18);
+  --accent2:       rgba(180,120,60,0.10);
+  --danger:        #b84000;
+  --warning:       #946200;
+  --ok:            #1a6048;
+  --shadow:        0 8px 40px rgba(0,40,80,0.12), 0 1px 0 rgba(255,255,255,0.8) inset;
+  --radius:        12px;
+  --blob1:         rgba(42,104,152,0.22);
+  --blob2:         rgba(180,120,60,0.18);
+  --blob3:         rgba(20,80,140,0.16);
+  --blob4:         rgba(120,160,200,0.14);
+  --grid-line:     rgba(42,104,152,0.06);
+  --top-line-a:    rgba(100,160,220,0.9);
+  --top-line-b:    rgba(180,120,60,0.7);
+  --card-top-a:    rgba(100,160,220,0.5);
+  --card-top-b:    rgba(180,120,60,0.4);
+  --card-corner:   rgba(42,104,152,0.10);
+  --tab-bg:        rgba(210,228,244,0.92);
+  --tab-border:    rgba(42,104,152,0.14);
+  --tab-text:      #90b0d0;
+  --tab-active-bg:     rgba(42,104,152,0.14);
+  --tab-active-border: rgba(42,104,152,0.30);
+  --tab-active-text:   #1a4878;
+  --btn-primary-bg:    linear-gradient(135deg,#4088b8,#2a6898,#1a4878);
+  --btn-primary-border: rgba(42,104,152,0.45);
+  --btn-primary-text:  #ffffff;
+  --btn-primary-glow:  rgba(42,104,152,0.28);
+  --btn-primary-shine: rgba(255,255,255,0.28);
+  --del-bg:     rgba(184,64,0,0.07);
+  --del-border: rgba(184,64,0,0.26);
+  --del-text:   #b84000;
+}
+
+/* ─── Pietra Giorno ──────────────────────────────────── */
+html[data-theme="pietra-giorno"] {
+  color-scheme: light;
+  --bg:            #ede0d0;
+  --bg2:           rgba(255,255,255,0.55);
+  --surface:       rgba(255,255,255,0.52);
+  --surface-2:     rgba(255,255,255,0.70);
+  --surface-hover: rgba(255,255,255,0.78);
+  --line:          rgba(120,100,80,0.14);
+  --line-strong:   rgba(120,100,80,0.28);
+  --text:          #1a1410;
+  --muted:         #7a6858;
+  --primary:       #7a5838;
+  --primary-dark:  #5a3a20;
+  --accent:        #7a5838;
+  --accent-bg:     rgba(122,88,56,0.10);
+  --accent-border: rgba(122,88,56,0.28);
+  --accent-glow:   rgba(122,88,56,0.18);
+  --accent2:       rgba(80,100,60,0.10);
+  --danger:        #b84000;
+  --warning:       #946200;
+  --ok:            #4a6028;
+  --shadow:        0 8px 40px rgba(80,60,40,0.12), 0 1px 0 rgba(255,255,255,0.8) inset;
+  --radius:        12px;
+  --blob1:         rgba(180,140,100,0.28);
+  --blob2:         rgba(80,60,40,0.22);
+  --blob3:         rgba(140,110,80,0.18);
+  --blob4:         rgba(100,80,60,0.16);
+  --grid-line:     rgba(122,88,56,0.06);
+  --top-line-a:    rgba(180,140,100,0.9);
+  --top-line-b:    rgba(80,60,40,0.7);
+  --card-top-a:    rgba(180,140,100,0.5);
+  --card-top-b:    rgba(80,60,40,0.4);
+  --card-corner:   rgba(122,88,56,0.10);
+  --tab-bg:        rgba(228,212,196,0.92);
+  --tab-border:    rgba(122,88,56,0.14);
+  --tab-text:      #c0a888;
+  --tab-active-bg:     rgba(122,88,56,0.14);
+  --tab-active-border: rgba(122,88,56,0.30);
+  --tab-active-text:   #5a3a20;
+  --btn-primary-bg:    linear-gradient(135deg,#9a7858,#7a5838,#5a3a20);
+  --btn-primary-border: rgba(122,88,56,0.45);
+  --btn-primary-text:  #ffffff;
+  --btn-primary-glow:  rgba(122,88,56,0.28);
+  --btn-primary-shine: rgba(255,255,255,0.28);
+  --del-bg:     rgba(184,64,0,0.07);
+  --del-border: rgba(184,64,0,0.26);
+  --del-text:   #b84000;
+}
+
+/* ─── Legno Giorno ───────────────────────────────────── */
+html[data-theme="legno-giorno"] {
+  color-scheme: light;
+  --bg:            #f0dcc0;
+  --bg2:           rgba(255,255,255,0.55);
+  --surface:       rgba(255,255,255,0.52);
+  --surface-2:     rgba(255,255,255,0.70);
+  --surface-hover: rgba(255,255,255,0.78);
+  --line:          rgba(140,90,40,0.14);
+  --line-strong:   rgba(140,90,40,0.28);
+  --text:          #1a0c00;
+  --muted:         #8a6840;
+  --primary:       #8a5020;
+  --primary-dark:  #6a3800;
+  --accent:        #8a5020;
+  --accent-bg:     rgba(138,80,32,0.10);
+  --accent-border: rgba(138,80,32,0.28);
+  --accent-glow:   rgba(138,80,32,0.18);
+  --accent2:       rgba(60,40,20,0.12);
+  --danger:        #b84000;
+  --warning:       #946200;
+  --ok:            #4a6028;
+  --shadow:        0 8px 40px rgba(80,40,0,0.12), 0 1px 0 rgba(255,255,255,0.8) inset;
+  --radius:        12px;
+  --blob1:         rgba(180,110,50,0.30);
+  --blob2:         rgba(80,40,10,0.24);
+  --blob3:         rgba(140,80,30,0.20);
+  --blob4:         rgba(200,140,80,0.18);
+  --grid-line:     rgba(138,80,32,0.06);
+  --top-line-a:    rgba(200,130,60,0.9);
+  --top-line-b:    rgba(80,40,10,0.7);
+  --card-top-a:    rgba(200,130,60,0.5);
+  --card-top-b:    rgba(80,40,10,0.4);
+  --card-corner:   rgba(138,80,32,0.10);
+  --tab-bg:        rgba(232,208,172,0.92);
+  --tab-border:    rgba(138,80,32,0.14);
+  --tab-text:      #c0a070;
+  --tab-active-bg:     rgba(138,80,32,0.14);
+  --tab-active-border: rgba(138,80,32,0.30);
+  --tab-active-text:   #6a3800;
+  --btn-primary-bg:    linear-gradient(135deg,#b07040,#8a5020,#6a3800);
+  --btn-primary-border: rgba(138,80,32,0.45);
+  --btn-primary-text:  #ffffff;
+  --btn-primary-glow:  rgba(138,80,32,0.28);
+  --btn-primary-shine: rgba(255,255,255,0.28);
+  --del-bg:     rgba(184,64,0,0.07);
+  --del-border: rgba(184,64,0,0.26);
+  --del-text:   #b84000;
 }
 
 * {
@@ -2023,6 +2223,52 @@ tbody tr:last-child td {
   color: var(--muted);
   padding: 6px 0 2px;
   opacity: 0.7;
+}
+
+.settings-palette-group {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.palette-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  letter-spacing: 0.02em;
+}
+
+.palette-chip:hover {
+  border-color: var(--accent-border);
+  color: var(--text);
+  background: var(--surface-2);
+}
+
+.palette-chip.active {
+  border-color: var(--accent-border);
+  background: var(--accent-bg);
+  color: var(--accent);
+  box-shadow: 0 0 12px var(--accent-glow);
+}
+
+.palette-swatch {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: block;
+  border: 2px solid rgba(255,255,255,0.12);
+  flex-shrink: 0;
 }
 
 .phone-pref-star {

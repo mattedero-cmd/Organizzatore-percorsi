@@ -642,7 +642,7 @@ function renderMenuGuide() {
         </ul>
       `)}
 
-      ${section("☕ Soste automatiche", `
+      ${section(`${_svg('<path d="M17 8h1a4 4 0 1 1 0 8h-1"/><path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V8z"/><line x1="6" y1="2" x2="6" y2="4"/><line x1="10" y1="2" x2="10" y2="4"/><line x1="14" y1="2" x2="14" y2="4"/>',15)} Soste automatiche`, `
         <ul>
           <li>Il sistema inserisce soste ogni <b>~2 ore</b> di guida+lavoro cumulati.</li>
           <li>Per soste in luoghi specifici, aggiungi contatti di tipo <b>☕ Sosta</b> nell'archivio: verranno usati per prime.</li>
