@@ -56,8 +56,15 @@ const mimeTypes = {
   ".jpeg": "image/jpeg"
 };
 
+const SECURITY_HEADERS = {
+  "X-Content-Type-Options": "nosniff",
+  "X-Frame-Options": "DENY",
+  "Referrer-Policy": "strict-origin-when-cross-origin",
+  "Permissions-Policy": "geolocation=(self), camera=(), microphone=(self)"
+};
+
 function sendJson(response, status, payload) {
-  response.writeHead(status, { "Content-Type": "application/json; charset=utf-8" });
+  response.writeHead(status, { "Content-Type": "application/json; charset=utf-8", ...SECURITY_HEADERS });
   response.end(JSON.stringify(payload));
 }
 
@@ -118,12 +125,13 @@ function serveStatic(request, response) {
 
   fs.readFile(filePath, (error, content) => {
     if (error) {
-      response.writeHead(404);
+      response.writeHead(404, SECURITY_HEADERS);
       response.end("Not found");
       return;
     }
     response.writeHead(200, {
-      "Content-Type": mimeTypes[path.extname(filePath)] || "application/octet-stream"
+      "Content-Type": mimeTypes[path.extname(filePath)] || "application/octet-stream",
+      ...SECURITY_HEADERS
     });
     response.end(content);
   });
@@ -139,12 +147,6 @@ async function handleApi(request, response) {
         ok: true,
         mapApiConfigured: Boolean(process.env.GOOGLE_MAPS_API_KEY),
         whisperConfigured: Boolean(process.env.OPENAI_API_KEY)
-      });
-    }
-
-    if (method === "GET" && url.pathname === "/api/config") {
-      return sendJson(response, 200, {
-        googleMapsKey: process.env.GOOGLE_MAPS_API_KEY || ""
       });
     }
 
@@ -223,6 +225,12 @@ async function handleApi(request, response) {
     if (!userId) {
       const noUsers = !(await hasAnyUser());
       return sendJson(response, 401, { error: "Non autenticato", setup: noUsers });
+    }
+
+    if (method === "GET" && url.pathname === "/api/config") {
+      return sendJson(response, 200, {
+        googleMapsKey: process.env.GOOGLE_MAPS_API_KEY || ""
+      });
     }
 
     if (method === "GET" && url.pathname === "/api/addresses") {

@@ -359,20 +359,11 @@ function renderMenuSettings() {
   const s = state.settings;
   const nav = s.navigatorPref || "google";
   const theme = s.themePref || "auto";
-  const stepper = (name, val, min, max, step, unit = "") => `
+  const stepper = (name, val, min, max, step, unit = "", narrow = false) => `
     <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
       <div class="settings-stepper">
         <button type="button" data-stepper="${name}" data-dir="-1" data-step="${step}">−</button>
-        <input name="${name}" type="number" min="${min}" max="${max}" step="${step}" value="${val}" />
-        <button type="button" data-stepper="${name}" data-dir="1" data-step="${step}">+</button>
-      </div>
-      ${unit ? `<span class="stop-meta">${unit}</span>` : ""}
-    </div>`;
-  const stepperDec = (name, val, min, max, step, unit = "") => `
-    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-      <div class="settings-stepper">
-        <button type="button" data-stepper="${name}" data-dir="-1" data-step="${step}">−</button>
-        <input name="${name}" type="number" min="${min}" max="${max}" step="${step}" value="${val}" style="width:52px;" />
+        <input name="${name}" type="number" min="${min}" max="${max}" step="${step}" value="${val}"${narrow ? ' style="width:52px;"' : ""} />
         <button type="button" data-stepper="${name}" data-dir="1" data-step="${step}">+</button>
       </div>
       ${unit ? `<span class="stop-meta">${unit}</span>` : ""}
@@ -414,7 +405,7 @@ function renderMenuSettings() {
           </label>
           <div class="field">
             <span class="field-label">Deviazione massima</span>
-            ${stepperDec("maxDetourKm", s.maxDetourKm !== undefined ? s.maxDetourKm : 1.7, 0.5, 10, 0.5, "km")}
+            ${stepper("maxDetourKm", s.maxDetourKm !== undefined ? s.maxDetourKm : 1.7, 0.5, 10, 0.5, "km", true)}
           </div>
         </div>
 
