@@ -138,13 +138,16 @@ const emptyForm = {
   defaultDuration: 45, lat: "", lng: ""
 };
 
+// Pre-load theme from localStorage so applyTheme() uses correct values before settings load
+const _savedTheme = (function(){ try { return JSON.parse(localStorage.getItem("pl_theme")||"{}"); } catch(e){ return {}; } })();
+
 const state = {
   user: null,
   activeTab: "route",
   menuOpen: false, menuSection: null,
   theme: "day",
-  themeMode: "auto",      // "auto" | "light" | "dark"
-  themePalette: "default", // "default" | "neon" | "luxury" | "metallo" | "pietra" | "foresta" | "legno"
+  themeMode: _savedTheme.mode || "auto",
+  themePalette: _savedTheme.palette || "default",
   googleMapsKey: "",
   googleMapsReady: false,
   googleClientId: "",
@@ -4560,15 +4563,7 @@ bindEvents();
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("/service-worker.js").then(reg => {
-      reg.addEventListener("updatefound", () => {
-        const nw = reg.installing;
-        nw.addEventListener("statechange", () => {
-          // Auto-reload when new SW activates so updated HTML/theme is served immediately
-          if (nw.state === "activated") window.location.reload();
-        });
-      });
-    }).catch(() => {});
+    navigator.serviceWorker.register("/service-worker.js").catch(() => {});
   });
 }
 
