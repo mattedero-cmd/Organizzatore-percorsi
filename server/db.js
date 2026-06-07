@@ -647,6 +647,10 @@ export async function deleteSession(token) {
   await runSql(`DELETE FROM sessions WHERE token = ${sqlValue(token)};`);
 }
 
+export async function purgeExpiredSessions() {
+  await runSql(`DELETE FROM sessions WHERE expires_at < ${sqlValue(new Date().toISOString())};`);
+}
+
 export async function hasAnyUser() {
   const rows = await runSql("SELECT COUNT(*) AS count FROM users;", true);
   return Number(rows[0]?.count ?? 0) > 0;

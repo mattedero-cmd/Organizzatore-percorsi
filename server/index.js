@@ -24,7 +24,8 @@ import {
   getSession,
   deleteSession,
   hasAnyUser,
-  assignOrphanedData
+  assignOrphanedData,
+  purgeExpiredSessions
 } from "./db.js";
 import { hashPassword, verifyPassword, generateToken } from "./auth.js";
 import { loadEnv } from "./env.js";
@@ -43,6 +44,9 @@ loadEnv(rootDir);
 await initDb(rootDir);
 
 const PORT = Number(process.env.PORT || 5174);
+
+// Pulizia sessioni scadute ogni 6 ore
+setInterval(() => purgeExpiredSessions().catch(console.error), 6 * 60 * 60 * 1000).unref();
 const HOST = process.env.HOST || (process.env.NODE_ENV === "production" ? "0.0.0.0" : "127.0.0.1");
 
 const mimeTypes = {
@@ -55,6 +59,35 @@ const mimeTypes = {
   ".jpg": "image/jpeg",
   ".jpeg": "image/jpeg"
 };
+
+// ── Login rate limiting (in-memory, per IP) ───────────────────────────────────
+const loginAttempts = new Map(); // ip → { count, resetAt }
+const LOGIN_MAX_ATTEMPTS = 10;
+const LOGIN_WINDOW_MS = 15 * 60 * 1000; // 15 min
+
+function checkLoginRateLimit(ip) {
+  const now = Date.now();
+  const entry = loginAttempts.get(ip);
+  if (!entry || now > entry.resetAt) {
+    loginAttempts.set(ip, { count: 1, resetAt: now + LOGIN_WINDOW_MS });
+    return true;
+  }
+  entry.count++;
+  if (entry.count > LOGIN_MAX_ATTEMPTS) return false;
+  return true;
+}
+
+function resetLoginRateLimit(ip) {
+  loginAttempts.delete(ip);
+}
+
+// Periodically clean up stale entries (every 30 min)
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, entry] of loginAttempts) {
+    if (now > entry.resetAt) loginAttempts.delete(ip);
+  }
+}, 30 * 60 * 1000).unref();
 
 const SECURITY_HEADERS = {
   "X-Content-Type-Options": "nosniff",
@@ -70,18 +103,21 @@ function sendJson(response, status, payload) {
 
 function parseBody(request) {
   return new Promise((resolve, reject) => {
-    let body = "";
+    const chunks = [];
+    let size = 0;
     request.on("data", (chunk) => {
-      body += chunk;
-      if (body.length > 2_000_000) {
+      size += chunk.length;
+      if (size > 2_000_000) {
         request.destroy();
         reject(new Error("Payload troppo grande"));
+        return;
       }
+      chunks.push(chunk);
     });
     request.on("end", () => {
-      if (!body) return resolve({});
+      if (!chunks.length) return resolve({});
       try {
-        resolve(JSON.parse(body));
+        resolve(JSON.parse(Buffer.concat(chunks).toString("utf8")));
       } catch {
         reject(new Error("JSON non valido"));
       }
@@ -118,7 +154,7 @@ function serveStatic(request, response) {
   const filePath = path.join(publicDir, safePath);
 
   if (!filePath.startsWith(publicDir)) {
-    response.writeHead(403);
+    response.writeHead(403, SECURITY_HEADERS);
     response.end("Forbidden");
     return;
   }
@@ -174,7 +210,7 @@ async function handleApi(request, response) {
         await assignOrphanedData(user.id);
         const token = generateToken();
         await createSession(token, user.id);
-        response.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Set-Cookie": sessionCookie(token) });
+        response.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Set-Cookie": sessionCookie(token), ...SECURITY_HEADERS });
         response.end(JSON.stringify({ id: user.id, username: user.username }));
         return;
       }
@@ -190,12 +226,16 @@ async function handleApi(request, response) {
         if (!user) return sendJson(response, 500, { error: "Errore creazione utente" });
         const token = generateToken();
         await createSession(token, user.id);
-        response.writeHead(201, { "Content-Type": "application/json; charset=utf-8", "Set-Cookie": sessionCookie(token) });
+        response.writeHead(201, { "Content-Type": "application/json; charset=utf-8", "Set-Cookie": sessionCookie(token), ...SECURITY_HEADERS });
         response.end(JSON.stringify({ id: user.id, username: user.username }));
         return;
       }
 
       if (method === "POST" && url.pathname === "/api/auth/login") {
+        const ip = request.socket.remoteAddress || "unknown";
+        if (!checkLoginRateLimit(ip)) {
+          return sendJson(response, 429, { error: "Troppi tentativi. Riprova tra 15 minuti." });
+        }
         const body = await parseBody(request);
         const { username, password, remember } = body;
         if (!username || !password) return sendJson(response, 400, { error: "Username e password obbligatori" });
@@ -203,9 +243,10 @@ async function handleApi(request, response) {
         if (!user || !(await verifyPassword(password, user.password_hash))) {
           return sendJson(response, 401, { error: "Credenziali non valide" });
         }
+        resetLoginRateLimit(ip);
         const token = generateToken();
         await createSession(token, user.id);
-        response.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Set-Cookie": sessionCookie(token, remember !== false) });
+        response.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Set-Cookie": sessionCookie(token, remember !== false), ...SECURITY_HEADERS });
         response.end(JSON.stringify({ id: user.id, username: user.username }));
         return;
       }
