@@ -1313,8 +1313,8 @@ function renderWeeklyHoursSection(weeklyHours) {
     <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:6px;flex-wrap:wrap;">
       <label class="wh-label" style="margin-bottom:0">Orari settimanali</label>
       <div style="display:flex;gap:6px;">
-        ${state.googleMapsKey ? `<button type="button" class="btn ghost" id="complete-with-maps-btn" data-cwm-btn>🗺 Completa con Maps</button>` : ""}
-        <button type="button" class="btn ghost wh-fill-all" id="wh-fill-all-btn">↧ Applica a tutti</button>
+        ${state.googleMapsKey ? `<button type="button" class="btn" id="complete-with-maps-btn" data-cwm-btn>${I.map(14)} Completa con Maps</button>` : ""}
+        <button type="button" class="btn wh-fill-all" id="wh-fill-all-btn">${I.arrowDown(14)} Applica a tutti</button>
       </div>
     </div>
     <div class="wh-days-wrap">${rows}</div>
