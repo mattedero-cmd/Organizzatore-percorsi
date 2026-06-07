@@ -2194,7 +2194,9 @@ function _buildPrintDoc(withPhones, withCosts, result, routeName, date) {
     if (row.phone2) phoneLines.push(_esc(row.phone2) + (row.phone2Name ? '<br><span class="ph">'+_esc(row.phone2Name)+"</span>" : ""));
     const phoneCell = withPhones ? "<td>" + (phoneLines.join("<br>") || "—") + "</td>" : "";
     const sub = [row.activity, !row.activity && row.location ? row.location : null].filter(Boolean).map(_esc).join(" · ");
-    const nameCell = `<td colspan="2"><div class="n">${_esc(row.customer||"")}</div>${sub?`<div class="s">${sub}</div>`:""}<div class="s2">${_esc(row.address||"")}</div></td>`;
+    const wx = (result.weather || []).find(x => Number(x.stopNumber) === Number(row.stopNumber));
+    const wxStr = wx && wx.temperatureC != null ? `${Math.round(wx.temperatureC)}°C${wx.description ? " · " + _esc(wx.description) : ""}` : "";
+    const nameCell = `<td colspan="2"><div class="n">${_esc(row.customer||"")}</div>${sub?`<div class="s">${sub}</div>`:""}<div class="s2">${_esc(row.address||"")}${wxStr?` <span class="wx">${wxStr}</span>`:""}</div></td>`;
     return `<tr><td>${_esc(row.stopNumber)}</td>${nameCell}${phoneCell}<td class="num">${_esc(row.arrivalTime)}–${_esc(row.serviceEndTime)}</td><td>${_mins(row.durationMinutes)}</td><td class="num">${row.km?Number(row.km).toFixed(1):""}</td><td></td></tr>`;
   }).join("");
 
@@ -2221,16 +2223,10 @@ function _buildPrintDoc(withPhones, withCosts, result, routeName, date) {
   const startLabel = _esc(result.start?.label || result.startLabel || "");
   const startAddr  = _esc(result.start?.address || result.start?.fullAddress || result.startAddress || "");
   const depTime    = _esc(summary.dayStart || "");
-  const w0 = (result.weather || []).find(x => Number(x.stopNumber) === 0) || (result.weather || [])[0];
-  const weatherStr = w0
-    ? `${Math.round(w0.temperatureC ?? 0)}°C, ${_esc(w0.description || "")}${w0.windKmh > 10 ? ", vento " + Math.round(w0.windKmh) + " km/h" : ""}`
-    : "";
-
   const infoBar =
     `<div class="ib">` +
     (startLabel || startAddr ? `<div class="ib-item"><span class="ib-lbl">Partenza</span><span class="ib-val">${startLabel}${startAddr && startLabel ? " — " : ""}${startAddr}</span></div>` : "") +
     (depTime ? `<div class="ib-item"><span class="ib-lbl">Orario</span><span class="ib-val">${depTime}</span></div>` : "") +
-    (weatherStr ? `<div class="ib-item"><span class="ib-lbl">Meteo</span><span class="ib-val">${weatherStr}</span></div>` : "") +
     `</div>`;
 
   const now = new Date().toLocaleDateString("it-IT",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"});
@@ -2254,7 +2250,7 @@ function _buildPrintDoc(withPhones, withCosts, result, routeName, date) {
     "tbody tr:last-child{border-bottom:2px solid #1a1a2e}",
     "td{padding:8px 8px;vertical-align:top;font-size:10pt;color:#1a1a2e}",
     "td:first-child{text-align:center;color:#999;font-size:9pt;padding-top:10px;width:26px}",
-    ".n{font-weight:600;line-height:1.3}.s{font-size:8.5pt;color:#555;margin-top:2px;line-height:1.4}.s2{font-size:8pt;color:#999;margin-top:1px}.ph{font-size:8pt;color:#888}",
+    ".n{font-weight:600;line-height:1.3}.s{font-size:8.5pt;color:#555;margin-top:2px;line-height:1.4}.s2{font-size:8pt;color:#999;margin-top:1px}.ph{font-size:8pt;color:#888}.wx{color:#8899aa;font-size:7.5pt;margin-left:4px}",
     "tr.brk td{background:#fafafa;color:#666;font-size:9.5pt;padding:6px 8px}",
     "tr.home td{background:#f5f7fa;font-weight:600}tr.home td:first-child{color:#999}",
     ".num{font-variant-numeric:tabular-nums}",
