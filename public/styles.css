@@ -1436,7 +1436,7 @@ tbody tr:last-child td {
   color: #f0fffe;
   transform: translateY(130%);
   transition: transform 180ms ease;
-  z-index: 10;
+  z-index: 10000;
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   box-shadow: 0 0 20px var(--accent-glow);
