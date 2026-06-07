@@ -1391,9 +1391,19 @@ tbody tr:last-child td {
   .form-grid.three,
   .archive-list,
   .saved-list,
-  .summary-grid,
   .result-times {
     grid-template-columns: 1fr;
+  }
+
+  .summary-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+  .summary-grid .metric {
+    padding: 10px 12px;
+  }
+  .summary-grid .metric-value {
+    font-size: 1rem;
   }
 
   .section-head {
