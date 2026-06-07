@@ -1693,6 +1693,50 @@ tbody tr:last-child td {
 }
 
 /* compact weekly hours 3-column: day | am | pm */
+/* Today-only hours row with expand toggle */
+.wh-day-row { margin-top: 4px; }
+
+.wh-day-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--accent-bg);
+  border: 1px solid var(--accent-bd);
+  border-radius: 8px;
+  padding: 5px 10px;
+  color: var(--accent);
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  letter-spacing: 0.01em;
+}
+.wh-day-btn:hover { background: rgba(var(--accent-rgb, 0,255,224), 0.12); }
+.wh-day-btn.wh-closed-btn { color: var(--muted); background: transparent; border-color: var(--line); }
+.wh-day-expand { display: flex; align-items: center; opacity: 0.6; }
+
+.wh-full-panel {
+  margin-top: 8px;
+  padding: 10px 12px 8px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.wh-close-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 8px;
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-size: 0.75rem;
+  color: var(--muted);
+  cursor: pointer;
+}
+.wh-close-btn:hover { border-color: var(--accent-bd); color: var(--accent); }
+
 .wh-inline {
   border-collapse: collapse;
   font-size: 0.76rem;

@@ -1640,22 +1640,35 @@ function stopDetailExtra(result, row, addr) {
     parts.push(`<div class="stop-detail-section"><span class="rc-section-label">Meteo</span><div class="stop-weather-full">${weatherIcon(w)} <strong>${temp}</strong> ${escapeHtml(w.description || "")}${humidity}${wind}${alerts ? " " + alerts : ""}</div></div>`);
   }
 
-  // Weekly hours — collapse consecutive days with identical hours
+  // Hours — show only the scheduled day, expandable to full week
   const wh = addr?.weeklyHours || row.weeklyHours;
   if (wh) {
-    const scheduledDow = result.scheduledDate ? new Date(result.scheduledDate + "T12:00:00").getDay() : -1;
+    const scheduledDow = result.scheduledDate ? new Date(result.scheduledDate + "T12:00:00").getDay() : new Date().getDay();
+    const dayData = wh[scheduledDow] || wh[String(scheduledDow)] || null;
+    let todayStr = "—";
+    let isClosed = false;
+    if (dayData) {
+      if (dayData.closed) { todayStr = "Chiuso"; isClosed = true; }
+      else if (dayData.continuous && dayData.openMorning && dayData.closeAfternoon) todayStr = `${dayData.openMorning}–${dayData.closeAfternoon}`;
+      else {
+        const p = [];
+        if (dayData.openMorning && dayData.closeMorning) p.push(`${dayData.openMorning}–${dayData.closeMorning}`);
+        if (dayData.openAfternoon && dayData.closeAfternoon) p.push(`${dayData.openAfternoon}–${dayData.closeAfternoon}`);
+        todayStr = p.join(" / ") || "—";
+      }
+    }
+    // Full week table for expand panel
     const ORDER = [1,2,3,4,5,6,0];
     const dayKey = d => { const h = wh[d] || wh[String(d)] || { closed: true }; return h.closed ? "chiuso" : h.continuous ? `cont:${h.openMorning}-${h.closeAfternoon}` : `${h.openMorning}-${h.closeMorning}|${h.openAfternoon}-${h.closeAfternoon}`; };
-    // Group consecutive days with same key
     const groups = [];
     for (const d of ORDER) {
       const k = dayKey(d);
       if (groups.length && groups[groups.length-1].key === k) { groups[groups.length-1].days.push(d); }
       else groups.push({ key: k, days: [d] });
     }
-    const dayRows = groups.map(g => {
-      const hasToday = g.days.includes(scheduledDow);
-      const tr = hasToday ? `<tr class="wh-today">` : `<tr>`;
+    const fullRows = groups.map(g => {
+      const isToday = g.days.includes(scheduledDow);
+      const tr = isToday ? `<tr class="wh-today">` : `<tr>`;
       const label = g.days.length === 1 ? DAYS_IT[g.days[0]] : `${DAYS_IT[g.days[0]]}–${DAYS_IT[g.days[g.days.length-1]]}`;
       const h = wh[g.days[0]] || wh[String(g.days[0])] || { closed: true };
       if (h.closed) return `${tr}<td class="wh-day">${label}</td><td class="wh-hours wh-muted" colspan="2">Chiuso</td></tr>`;
@@ -1664,7 +1677,21 @@ function stopDetailExtra(result, row, addr) {
       const pm = (h.openAfternoon && h.closeAfternoon) ? `${h.openAfternoon}–${h.closeAfternoon}` : "";
       return `${tr}<td class="wh-day">${label}</td><td class="wh-hours">${am}</td><td class="wh-hours wh-muted">${pm}</td></tr>`;
     }).join("");
-    parts.push(`<div class="stop-detail-section"><span class="rc-section-label">Orari</span><table class="wh-inline"><colgroup><col class="wh-col-day"><col class="wh-col-am"><col class="wh-col-pm"></colgroup><tbody>${dayRows}</tbody></table></div>`);
+    const uid = `wh-${row.stopNumber}${row.stopPart ? "-" + row.stopPart : ""}`;
+    parts.push(`
+      <div class="stop-detail-section">
+        <span class="rc-section-label">Orari</span>
+        <div class="wh-day-row">
+          <button class="wh-day-btn${isClosed ? " wh-closed-btn" : ""}" data-toggle-hours="${uid}" aria-expanded="false">
+            <span class="wh-day-hours">${todayStr}</span>
+            <span class="wh-day-expand">${I.arrowDown(12)}</span>
+          </button>
+        </div>
+        <div class="wh-full-panel" id="${uid}" hidden>
+          <table class="wh-inline"><colgroup><col class="wh-col-day"><col class="wh-col-am"><col class="wh-col-pm"></colgroup><tbody>${fullRows}</tbody></table>
+          <button class="wh-close-btn" data-toggle-hours="${uid}">${I.close(12)} Chiudi</button>
+        </div>
+      </div>`);
   }
 
   return parts.length ? `<div class="stop-detail-extra">${parts.join("")}</div>` : "";
@@ -3614,6 +3641,21 @@ function bindEvents() {
       return;
     }
     // accordion expand/collapse by clicking the head row (not on a link or button)
+    const toggleHours = e.target.closest("[data-toggle-hours]");
+    if (toggleHours) {
+      const uid = toggleHours.dataset.toggleHours;
+      const panel = document.getElementById(uid);
+      const btn = document.querySelector(`.wh-day-btn[data-toggle-hours="${uid}"]`);
+      if (panel) {
+        panel.hidden = !panel.hidden;
+        if (btn) {
+          btn.setAttribute("aria-expanded", String(!panel.hidden));
+          btn.querySelector(".wh-day-expand")?.replaceWith(Object.assign(document.createElement("span"), { className: "wh-day-expand", innerHTML: panel.hidden ? I.arrowDown(12) : I.arrowUp(12) }));
+        }
+      }
+      return;
+    }
+
     const expandHead = e.target.closest("[data-expand-stop]");
     if (expandHead && !e.target.closest("a, button")) {
       const id = expandHead.dataset.expandStop;
