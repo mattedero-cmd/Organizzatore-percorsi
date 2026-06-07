@@ -82,7 +82,8 @@ function rowToSettings(row) {
     driveMarkupMinPerHour: Number(row.drive_markup_min_per_hour ?? 10),
     earliestBreakTime: row.earliest_break_time ?? "08:00",
     maxDetourKm: Number(row.max_detour_km ?? 1.7),
-    maxReturnTime: row.max_return_time ?? ""
+    maxReturnTime: row.max_return_time ?? "",
+    iconStyle: row.icon_style ?? "color"
   };
 }
 
@@ -235,6 +236,7 @@ export async function initDb(rootDir) {
 
   await migrateSettingsColumns();
   await migrateUserSettingsCols();
+  await migrateUserNickname();
   await migrateAuth();
 
   return databasePath;
@@ -323,6 +325,7 @@ async function initPostgresDb() {
 
   await migrateSettingsColumns();
   await migrateUserSettingsCols();
+  await migrateUserNickname();
   await migrateAuth();
 }
 
@@ -431,11 +434,19 @@ async function migrateUserSettingsCols() {
   const toAdd = [
     ["theme_mode", "TEXT DEFAULT 'auto'"],
     ["theme_palette", "TEXT DEFAULT 'default'"],
+    ["icon_style", "TEXT DEFAULT 'color'"],
   ];
   for (const [col, def] of toAdd) {
     if (!cols.includes(col)) {
       try { await runSql(`ALTER TABLE user_settings ADD COLUMN ${col} ${def};`); } catch (e) { if (!isAlreadyExistsError(e)) console.warn("migrateUserSettingsCols:", e.message); }
     }
+  }
+}
+
+async function migrateUserNickname() {
+  const cols = await tableColumns("users");
+  if (!cols.includes("nickname")) {
+    try { await runSql("ALTER TABLE users ADD COLUMN nickname TEXT DEFAULT NULL;"); } catch (e) { if (!isAlreadyExistsError(e)) console.warn("migrateUserNickname:", e.message); }
   }
 }
 
@@ -551,7 +562,8 @@ export async function updateSettings(userId, settings) {
     drive_markup_min_per_hour: Number(settings.driveMarkupMinPerHour ?? 10),
     earliest_break_time: settings.earliestBreakTime || "08:00",
     max_detour_km: Number(settings.maxDetourKm ?? 1.7),
-    max_return_time: settings.maxReturnTime || ""
+    max_return_time: settings.maxReturnTime || "",
+    icon_style: settings.iconStyle || "color"
   };
   const cols = Object.keys(vals).join(", ");
   const sqlVals = Object.values(vals).map(v => typeof v === "string" ? sqlValue(v) : String(v)).join(", ");
@@ -651,6 +663,15 @@ export async function findUserById(id) {
 
 export async function updateUserPassword(userId, newHash) {
   await runSql(`UPDATE users SET password_hash = ${sqlValue(newHash)} WHERE id = ${sqlValue(Number(userId))};`);
+}
+
+export async function updateUserNickname(userId, nickname) {
+  await runSql(`UPDATE users SET nickname = ${sqlValue(nickname || null)} WHERE id = ${sqlValue(Number(userId))};`);
+}
+
+export async function getUserById(id) {
+  const rows = await runSql(`SELECT id, username, nickname FROM users WHERE id = ${sqlValue(Number(id))};`, true);
+  return rows[0] || null;
 }
 
 export async function createSession(token, userId) {

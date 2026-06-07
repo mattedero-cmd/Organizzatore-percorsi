@@ -221,6 +221,22 @@ function applyTheme() {
   } catch {}
 }
 
+function updateGreeting() {
+  const nick = state.user?.nickname;
+  const eyebrow = document.querySelector(".topbar .eyebrow");
+  const h1 = document.querySelector(".topbar h1");
+  if (!eyebrow || !h1) return;
+  if (nick) {
+    const h = new Date().getHours();
+    const saluto = h < 5 ? "Buonanotte" : h < 12 ? "Buongiorno" : h < 18 ? "Buon pomeriggio" : "Buonasera";
+    eyebrow.textContent = saluto + ",";
+    h1.textContent = nick;
+  } else {
+    eyebrow.textContent = "Pianificazione giornaliera";
+    h1.textContent = "Percorsi lavoro";
+  }
+}
+
 const _splashShown = Date.now();
 function hideSplash() {
   const el = document.getElementById("splash");
@@ -362,7 +378,32 @@ function renderMenu() {
         errEl.textContent = "Errore di rete";
       }
     });
+    ov.querySelector("#nickname-form")?.addEventListener("submit", async e => {
+      e.preventDefault();
+      const v = readForm(e.target);
+      const errEl = document.getElementById("nickname-error");
+      try {
+        const res = await fetch("/api/auth/profile", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ nickname: v.nickname }) });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) { if (errEl) errEl.textContent = data.error || "Errore"; return; }
+        state.user = { ...state.user, nickname: data.nickname };
+        updateGreeting();
+        showToast("Nickname salvato");
+      } catch { if (errEl) errEl.textContent = "Errore di rete"; }
+    });
     ov.addEventListener("click", e => {
+      const iconChip = e.target.closest("[data-icon-style]");
+      if (iconChip) {
+        const style = iconChip.dataset.iconStyle;
+        ov.querySelectorAll(".icon-style-chip").forEach(c => c.classList.toggle("active", c.dataset.iconStyle === style));
+        if (state.settings) state.settings.iconStyle = style;
+        // Persist via settings API
+        api("/api/settings", { method: "PUT", body: JSON.stringify({ ...state.settings, iconStyle: style }) })
+          .then(s => { state.settings = s; }).catch(() => {});
+        // Update splash icon if shown again
+        try { localStorage.setItem("pl_icon_style", style); } catch {}
+        return;
+      }
       const paletteChip = e.target.closest("[data-palette]");
       if (paletteChip && document.getElementById("themePaletteInput")) {
         document.querySelectorAll(".palette-chip").forEach(c => c.classList.remove("active"));
@@ -482,7 +523,16 @@ function renderMenuSection(section) {
   return renderMenuRoot();
 }
 
+const _iconStyles = [
+  { id: "color",   label: "Color",    src: "/icons/icon-192.svg" },
+  { id: "light",   label: "Light",    src: "/icons/icon-192-light.svg" },
+  { id: "bw",      label: "B&W",      src: "/icons/icon-192-bw.svg" },
+  { id: "outline", label: "Outline",  src: "/icons/icon-192-outline.svg" },
+];
+
 function renderMenuAccount() {
+  const nick = state.user?.nickname || "";
+  const iconStyle = state.settings?.iconStyle || "color";
   return `
     ${menuHeader("Account", true)}
     <div class="bsheet-section-body" style="padding:16px;">
@@ -490,11 +540,29 @@ function renderMenuAccount() {
         <div class="account-avatar">${_svg('<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>', 36)}</div>
         <div class="account-profile-info">
           <div class="account-profile-name">${escapeHtml(state.user?.username || "")}</div>
-          <div class="account-profile-role">Utente</div>
+          <div class="account-profile-role">${nick ? escapeHtml(nick) : '<span style="color:var(--muted);font-style:italic">Nessun nickname</span>'}</div>
         </div>
       </div>
 
-      <div class="account-section-title">Sicurezza</div>
+      <div class="account-section-title">Profilo</div>
+      <form id="nickname-form" class="change-pw-form" autocomplete="off">
+        <label class="field">Nickname <span style="color:var(--muted);font-size:.8rem">(visibile nell'intestazione)</span>
+          <input type="text" name="nickname" maxlength="40" placeholder="Come vuoi essere chiamato?" value="${escapeHtml(nick)}" />
+        </label>
+        <p class="change-pw-error" id="nickname-error"></p>
+        <button class="btn primary" type="submit" style="width:100%">Salva nickname</button>
+      </form>
+
+      <div class="account-section-title" style="margin-top:24px;">Icona app</div>
+      <div class="icon-style-grid">
+        ${_iconStyles.map(s => `
+          <button type="button" class="icon-style-chip${s.id === iconStyle ? " active" : ""}" data-icon-style="${s.id}">
+            <img src="${s.src}" alt="${s.label}" class="icon-style-preview" />
+            <span>${s.label}</span>
+          </button>`).join("")}
+      </div>
+
+      <div class="account-section-title" style="margin-top:24px;">Sicurezza</div>
       <details class="change-pw-details">
         <summary class="change-pw-summary">${I.lock(14)} Cambia password</summary>
         <form id="change-pw-form" class="change-pw-form" autocomplete="off">
@@ -509,6 +577,11 @@ function renderMenuAccount() {
       <div class="account-section-title" style="margin-top:24px;">Sessione</div>
       <button class="btn danger" id="logout-btn" style="width:100%;margin-top:4px;">${I.arrowLeft(14)} Esci dall'account</button>
     </div>`;
+}
+
+function showNicknameSetup() {
+  // Mostra un toast invito a impostare il nickname
+  showToast("Benvenuto! Imposta il tuo nickname in Menu → Account");
 }
 
 function renderMenuSettings() {
@@ -615,16 +688,16 @@ function renderMenuSettings() {
             <span class="palette-swatch" style="background:linear-gradient(135deg,#0a0800 50%,#f5eec8 50%)"></span>Luxury
           </button>
           <button type="button" class="palette-chip${(s.themePalette||"default")==="metallo"?" active":""}" data-palette="metallo">
-            <span class="palette-swatch" style="background:linear-gradient(135deg,#0c0e10 50%,#dce8f0 50%)"></span>Metallo
+            <span class="palette-swatch" style="background:linear-gradient(135deg,#0c0e10 50%,#dce8f0 50%)"></span>Steel
           </button>
           <button type="button" class="palette-chip${(s.themePalette||"default")==="pietra"?" active":""}" data-palette="pietra">
-            <span class="palette-swatch" style="background:linear-gradient(135deg,#0e0d0c 50%,#ede0d0 50%)"></span>Pietra
+            <span class="palette-swatch" style="background:linear-gradient(135deg,#0e0d0c 50%,#ede0d0 50%)"></span>Stone
           </button>
           <button type="button" class="palette-chip${(s.themePalette||"default")==="foresta"?" active":""}" data-palette="foresta">
-            <span class="palette-swatch" style="background:linear-gradient(135deg,#060d06 50%,#c8e8b0 50%)"></span>Foresta
+            <span class="palette-swatch" style="background:linear-gradient(135deg,#060d06 50%,#c8e8b0 50%)"></span>Forest
           </button>
           <button type="button" class="palette-chip${(s.themePalette||"default")==="legno"?" active":""}" data-palette="legno">
-            <span class="palette-swatch" style="background:linear-gradient(135deg,#0c0800 50%,#f0dcc0 50%)"></span>Legno
+            <span class="palette-swatch" style="background:linear-gradient(135deg,#0c0800 50%,#f0dcc0 50%)"></span>Wood
           </button>
         </div>
         <input type="hidden" name="themePalette" id="themePaletteInput" value="${s.themePalette||"default"}" />
@@ -4469,7 +4542,9 @@ async function init() {
     }
     state.user = me;
     await initApp();
+    updateGreeting();
     hideSplash();
+    if (!me.nickname) showNicknameSetup();
   } catch {
     hideSplash();
     renderAuthScreen(false);
@@ -4484,7 +4559,17 @@ window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () 
 bindEvents();
 
 if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => navigator.serviceWorker.register("/service-worker.js").catch(() => {}));
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/service-worker.js").then(reg => {
+      reg.addEventListener("updatefound", () => {
+        const nw = reg.installing;
+        nw.addEventListener("statechange", () => {
+          // Auto-reload when new SW activates so updated HTML/theme is served immediately
+          if (nw.state === "activated") window.location.reload();
+        });
+      });
+    }).catch(() => {});
+  });
 }
 
 init().catch(err => {

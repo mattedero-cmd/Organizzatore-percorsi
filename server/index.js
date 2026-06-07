@@ -20,7 +20,9 @@ import {
   createUser,
   findUserByUsername,
   findUserById,
+  getUserById,
   updateUserPassword,
+  updateUserNickname,
   createSession,
   getSession,
   deleteSession,
@@ -286,9 +288,19 @@ async function handleApi(request, response) {
           const noUsers = !(await hasAnyUser());
           return sendJson(response, 401, { error: "Non autenticato", setup: noUsers });
         }
-        const user = await findUserById(userId);
+        const user = await getUserById(userId);
         if (!user) return sendJson(response, 401, { error: "Utente non trovato" });
-        return sendJson(response, 200, { id: user.id, username: user.username });
+        return sendJson(response, 200, { id: user.id, username: user.username, nickname: user.nickname || null });
+      }
+
+      if (method === "PUT" && url.pathname === "/api/auth/profile") {
+        const userId = await authenticate(request);
+        if (!userId) return sendJson(response, 401, { error: "Non autenticato" });
+        const body = await parseBody(request);
+        const nickname = (body.nickname || "").trim().slice(0, 40) || null;
+        await updateUserNickname(userId, nickname);
+        const user = await getUserById(userId);
+        return sendJson(response, 200, { id: user.id, username: user.username, nickname: user.nickname || null });
       }
 
       if (method === "POST" && url.pathname === "/api/auth/setup") {
