@@ -1131,13 +1131,14 @@ async function renderGoogleMap(result) {
   }
   if (endCoord) allPoints.push(endCoord);
 
+  const _routeColor = "#7c3aed";
   const drawFallbackPolyline = () => {
     new google.maps.Polyline({
       path: allPoints.map(p => new google.maps.LatLng(p.lat, p.lng)),
       map,
-      strokeColor: "#00a99d",
-      strokeOpacity: 0.75,
-      strokeWeight: 4
+      strokeColor: _routeColor,
+      strokeOpacity: 0.85,
+      strokeWeight: 5
     });
   };
 
@@ -1146,7 +1147,7 @@ async function renderGoogleMap(result) {
     const dr = new google.maps.DirectionsRenderer({
       map,
       suppressMarkers: true,
-      polylineOptions: { strokeColor: "#00a99d", strokeOpacity: 0.9, strokeWeight: 4 }
+      polylineOptions: { strokeColor: _routeColor, strokeOpacity: 0.9, strokeWeight: 5 }
     });
 
     // Directions API max 25 waypoints; split if needed
