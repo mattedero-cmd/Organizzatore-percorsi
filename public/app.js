@@ -1902,14 +1902,19 @@ function stopDetailExtra(result, row, addr) {
     }
     const fullRows = groups.map(g => {
       const isToday = g.days.includes(scheduledDow);
-      const tr = isToday ? `<tr class="wh-today">` : `<tr>`;
       const label = g.days.length === 1 ? DAYS_IT[g.days[0]] : `${DAYS_IT[g.days[0]]}–${DAYS_IT[g.days[g.days.length-1]]}`;
       const h = wh[g.days[0]] || wh[String(g.days[0])] || { closed: true };
-      if (h.closed) return `${tr}<td class="wh-day">${label}</td><td class="wh-hours wh-muted" colspan="2">Chiuso</td></tr>`;
-      if (h.continuous) return `${tr}<td class="wh-day">${label}</td><td class="wh-hours" colspan="2">${h.openMorning}–${h.closeAfternoon}</td></tr>`;
-      const am = (h.openMorning && h.closeMorning) ? `${h.openMorning}–${h.closeMorning}` : "—";
-      const pm = (h.openAfternoon && h.closeAfternoon) ? `${h.openAfternoon}–${h.closeAfternoon}` : "";
-      return `${tr}<td class="wh-day">${label}</td><td class="wh-hours">${am}</td><td class="wh-hours wh-muted">${pm}</td></tr>`;
+      let hoursHtml;
+      if (h.closed) {
+        hoursHtml = `<span class="wh-row-closed">Chiuso</span>`;
+      } else if (h.continuous) {
+        hoursHtml = `<span class="wh-row-time">${h.openMorning}–${h.closeAfternoon}</span>`;
+      } else {
+        const am = (h.openMorning && h.closeMorning) ? `${h.openMorning}–${h.closeMorning}` : null;
+        const pm = (h.openAfternoon && h.closeAfternoon) ? `${h.openAfternoon}–${h.closeAfternoon}` : null;
+        hoursHtml = [am, pm].filter(Boolean).map(t => `<span class="wh-row-time">${t}</span>`).join(`<span class="wh-row-sep">·</span>`);
+      }
+      return `<div class="wh-row${isToday ? " wh-row-today" : ""}"><span class="wh-row-day">${label}</span><span class="wh-row-hours">${hoursHtml}</span></div>`;
     }).join("");
     const uid = `wh-${row.stopNumber}${row.stopPart ? "-" + row.stopPart : ""}`;
     parts.push(`
@@ -1922,7 +1927,7 @@ function stopDetailExtra(result, row, addr) {
           </button>
         </div>
         <div class="wh-full-panel" id="${uid}" hidden>
-          <table class="wh-inline"><colgroup><col class="wh-col-day"><col class="wh-col-am"><col class="wh-col-pm"></colgroup><tbody>${fullRows}</tbody></table>
+          <div class="wh-rows">${fullRows}</div>
           <button class="wh-close-btn" data-toggle-hours="${uid}">${I.close(12)} Chiudi</button>
         </div>
       </div>`);
