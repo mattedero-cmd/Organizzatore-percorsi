@@ -96,12 +96,13 @@ setInterval(() => {
   }
 }, 30 * 60 * 1000).unref();
 
-// ── Admin authentication ──────────────────────────────────────────────────────
-const adminSessions = new Map(); // token → { expiresAt }
-const ADMIN_SESSION_MS = 2 * 60 * 60 * 1000; // 2 ore
+// ── Admin authentication (stateless HMAC token — serverless-safe) ────────────
+import { createHmac, timingSafeEqual } from "node:crypto";
+
 const adminAttempts = new Map();
 const ADMIN_MAX_ATTEMPTS = 3;
 const ADMIN_LOCK_MS = 30 * 60 * 1000;
+const ADMIN_SESSION_MS = 2 * 60 * 60 * 1000; // 2 ore
 
 function checkAdminRateLimit(ip) {
   const now = Date.now();
@@ -115,22 +116,27 @@ function checkAdminRateLimit(ip) {
 }
 
 function generateAdminToken() {
-  return [...Array(40)].map(() => Math.floor(Math.random() * 36).toString(36)).join("");
+  const secret = process.env.ADMIN_SECRET || "";
+  const expiresAt = Date.now() + ADMIN_SESSION_MS;
+  const payload = String(expiresAt);
+  const sig = createHmac("sha256", secret).update(payload).digest("hex");
+  return `${payload}.${sig}`;
 }
 
 function authenticateAdmin(request) {
   const token = request.headers["x-admin-token"] || "";
   if (!token) return false;
-  const session = adminSessions.get(token);
-  if (!session || Date.now() > session.expiresAt) { adminSessions.delete(token); return false; }
-  return true;
+  const secret = process.env.ADMIN_SECRET || "";
+  const dot = token.lastIndexOf(".");
+  if (dot < 0) return false;
+  const payload = token.slice(0, dot);
+  const sig = token.slice(dot + 1);
+  const expected = createHmac("sha256", secret).update(payload).digest("hex");
+  try {
+    if (!timingSafeEqual(Buffer.from(sig, "hex"), Buffer.from(expected, "hex"))) return false;
+  } catch { return false; }
+  return Date.now() < Number(payload);
 }
-
-// Pulizia sessioni admin scadute ogni ora
-setInterval(() => {
-  const now = Date.now();
-  for (const [t, s] of adminSessions) if (now > s.expiresAt) adminSessions.delete(t);
-}, 60 * 60 * 1000).unref();
 
 const SECURITY_HEADERS = {
   "X-Content-Type-Options": "nosniff",
