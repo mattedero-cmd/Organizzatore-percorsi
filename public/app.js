@@ -599,23 +599,37 @@ function showNicknameSetup() {
 function renderMenuSettings() {
   const s = state.settings;
   const nav = s.navigatorPref || "google";
-  const stepper = (name, val, min, max, step, unit = "") => `
-    <div class="stp-row">
-      <div class="settings-stepper">
-        <button type="button" data-stepper="${name}" data-dir="-1" data-step="${step}">−</button>
-        <input name="${name}" type="number" min="${min}" max="${max}" step="${step}" value="${val}" />
-        <button type="button" data-stepper="${name}" data-dir="1" data-step="${step}">+</button>
-      </div>
-      ${unit ? `<span class="stp-unit">${unit}</span>` : ""}
+
+  // stepper: − [val] + unità
+  const stp = (name, val, min, max, step) => `
+    <div class="settings-stepper">
+      <button type="button" data-stepper="${name}" data-dir="-1" data-step="${step}">−</button>
+      <input name="${name}" type="number" min="${min}" max="${max}" step="${step}" value="${val}" />
+      <button type="button" data-stepper="${name}" data-dir="1" data-step="${step}">+</button>
     </div>`;
+
+  // Riga inline: [etichetta a sinistra] [controllo + unità a destra]
+  const irow = (label, control, unit = "") => `
+    <div class="si-row">
+      <span class="si-label">${label}</span>
+      <div class="si-ctrl">${control}${unit ? `<span class="si-unit">${unit}</span>` : ""}</div>
+    </div>`;
+
+  // Due colonne simmetriche (solo per campi brevi)
+  const pair = (a, b) => `<div class="sg-pair">${a}${b}</div>`;
+
+  // Campo verticale etichetta+controllo (per 2-col)
+  const vcol = (label, control, unit = "") => `
+    <div class="sg-vcol">
+      <span class="sg-label">${label}</span>
+      <div class="si-ctrl">${control}${unit ? `<span class="si-unit">${unit}</span>` : ""}</div>
+    </div>`;
+
   const secTitle = (icon, label) =>
     `<h3 class="settings-section-title">${_svg(icon, 15)} ${label}</h3>`;
-  const row2 = (...items) =>
-    `<div class="sg-row">${items.map(i => `<div class="sg-cell">${i}</div>`).join("")}</div>`;
-  const fld = (label, input) =>
-    `<div class="sg-field"><span class="sg-label">${label}</span>${input}</div>`;
-  const timeInput = (name, val, placeholder = "") =>
-    `<input name="${name}" type="time" value="${escapeHtml(val || "")}" placeholder="${placeholder}" class="sg-time" />`;
+
+  const timeInput = (name, val) =>
+    `<input name="${name}" type="time" value="${escapeHtml(val || "")}" class="sg-time" />`;
 
   return `
     ${menuHeader("Impostazioni", true)}
@@ -623,80 +637,84 @@ function renderMenuSettings() {
       <form id="settings-form">
 
         ${secTitle('<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/>', "Partenza e rientro")}
-        <div class="sg-stack">
-          ${row2(
-            `<label class="field">Nome<input name="defaultStartLabel" id="settings-start-label" value="${escapeHtml(s.defaultStartLabel || "")}" placeholder="Casa, Ufficio…" /></label>`,
-            fld("Rientro massimo", timeInput("maxReturnTime", s.maxReturnTime))
-          )}
-          <label class="field">Indirizzo<input name="defaultStartAddress" id="settings-start-address" value="${escapeHtml(s.defaultStartAddress || "")}" placeholder="Via, città…" /></label>
+        <div class="sg-card">
+          <label class="field">Nome punto di partenza
+            <input name="defaultStartLabel" id="settings-start-label" value="${escapeHtml(s.defaultStartLabel || "")}" placeholder="Casa, Ufficio…" />
+          </label>
+          <label class="field">Indirizzo
+            <input name="defaultStartAddress" id="settings-start-address" value="${escapeHtml(s.defaultStartAddress || "")}" placeholder="Via, città…" />
+          </label>
           <div style="position:relative;">
             <input id="settings-start-search" placeholder="Cerca nell'archivio…" autocomplete="off" class="sg-search" />
             <div id="settings-start-sugg" class="stop-suggestions" style="display:none;"></div>
           </div>
+          ${irow("Orario rientro massimo", timeInput("maxReturnTime", s.maxReturnTime))}
         </div>
 
         ${secTitle('<path d="M17 8h1a4 4 0 1 1 0 8h-1"/><path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V8z"/><line x1="6" y1="2" x2="6" y2="4"/><line x1="10" y1="2" x2="10" y2="4"/><line x1="14" y1="2" x2="14" y2="4"/>', "Soste automatiche")}
-        <div class="sg-stack">
-          ${row2(
-            fld("Intervallo guida+lavoro", stepper("restIntervalMin", s.restIntervalMin || 120, 60, 300, 10, "min")),
-            fld("Tolleranza ±", stepper("restMaxDeviationMin", s.restMaxDeviationMin || 40, 10, 90, 5, "min"))
+        <div class="sg-card">
+          ${pair(
+            vcol("Intervallo", stp("restIntervalMin", s.restIntervalMin || 120, 60, 300, 10), "min"),
+            vcol("Tolleranza ±", stp("restMaxDeviationMin", s.restMaxDeviationMin || 40, 10, 90, 5), "min")
           )}
-          ${row2(
-            fld("Durata sosta", stepper("restDurationMin", s.restDurationMin || 15, 5, 60, 5, "min")),
-            fld("Deviazione massima", stepper("maxDetourKm", s.maxDetourKm !== undefined ? Math.round(s.maxDetourKm * 2) / 2 : 1.5, 0.5, 10, 0.5, "km"))
+          ${pair(
+            vcol("Durata sosta", stp("restDurationMin", s.restDurationMin || 15, 5, 60, 5), "min"),
+            vcol("Deviazione max", stp("maxDetourKm", s.maxDetourKm !== undefined ? Math.round(s.maxDetourKm * 2) / 2 : 1.5, 0.5, 10, 0.5), "km")
           )}
-          ${row2(
-            fld("Prima sosta non prima delle", timeInput("earliestBreakTime", s.earliestBreakTime || "08:00")),
-            fld("No sosta nelle prime", stepper("noBreakEarlyMin", s.noBreakEarlyMin ?? 120, 0, 240, 10, "min"))
-          )}
-          ${fld("No sosta nell'ultima", stepper("noBreakBeforeHomeMin", s.noBreakBeforeHomeMin ?? 60, 0, 120, 10, "min prima del rientro"))}
+          ${irow("Prima sosta non prima delle", timeInput("earliestBreakTime", s.earliestBreakTime || "08:00"))}
+          ${irow("Pausa vietata nelle prime", stp("noBreakEarlyMin", s.noBreakEarlyMin ?? 120, 0, 240, 10), "min di giornata")}
+          ${irow("Pausa vietata nell'ultima", stp("noBreakBeforeHomeMin", s.noBreakBeforeHomeMin ?? 60, 0, 120, 10), "min prima di rientrare")}
         </div>
 
         ${secTitle('<line x1="8" y1="6" x2="8" y2="2"/><line x1="16" y1="6" x2="16" y2="2"/><path d="M8 6a4 4 0 0 0 0 8v8"/><path d="M16 6a4 4 0 0 1 0 8v-4h-4"/>', "Pausa pranzo")}
-        <div class="sg-stack">
+        <div class="sg-card">
           <label class="field checkbox-field">
             <input type="checkbox" name="lunchBreakEnabled" ${s.lunchBreakEnabled !== false ? "checked" : ""} />
             <span>Pausa pranzo abilitata di default</span>
           </label>
-          ${row2(
-            fld("Durata", stepper("lunchBreakMinutes", s.lunchBreakMinutes || 45, 15, 120, 5, "min")),
-            fld("Finestra: dalle", timeInput("lunchOpenTime", s.lunchOpenTime || "11:30")) +
-            fld("alle", timeInput("lunchCloseTime", s.lunchCloseTime || "14:00"))
-          )}
-          ${row2(
-            fld("No sosta nei", stepper("noBreakBeforeLunchMin", s.noBreakBeforeLunchMin ?? 60, 0, 120, 10, "min prima")),
-            fld("No sosta nei", stepper("noBreakAfterLunchMin", s.noBreakAfterLunchMin ?? 120, 0, 180, 10, "min dopo"))
-          )}
+          ${irow("Durata pausa", stp("lunchBreakMinutes", s.lunchBreakMinutes || 45, 15, 120, 5), "min")}
+          <div class="si-row">
+            <span class="si-label">Fascia oraria pranzo</span>
+            <div class="si-ctrl si-timepair">
+              <span class="si-unit">dalle</span>${timeInput("lunchOpenTime", s.lunchOpenTime || "11:30")}
+              <span class="si-unit">alle</span>${timeInput("lunchCloseTime", s.lunchCloseTime || "14:00")}
+            </div>
+          </div>
+          ${irow("Pausa vietata nei", stp("noBreakBeforeLunchMin", s.noBreakBeforeLunchMin ?? 60, 0, 120, 10), "min prima del pranzo")}
+          ${irow("Pausa vietata nei", stp("noBreakAfterLunchMin", s.noBreakAfterLunchMin ?? 120, 0, 180, 10), "min dopo il pranzo")}
           <p class="sg-hint">Cerca prima i ristoranti salvati in archivio, poi su Maps.</p>
         </div>
 
         ${secTitle('<path d="M5 17H3a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v9a2 2 0 0 1-2 2h-3"/><circle cx="7.5" cy="17.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/>', "Guida e tariffe")}
-        <div class="sg-stack">
-          ${fld("Maggiorazione traffico stimata", stepper("driveMarkupMinPerHour", s.driveMarkupMinPerHour !== undefined ? s.driveMarkupMinPerHour : 10, 0, 30, 1, "min/ora"))}
-          ${row2(
-            `<label class="field">€/km<input name="kmRate" type="number" min="0" step="0.01" value="${escapeHtml(s.kmRate)}" /></label>`,
-            `<label class="field">€/ora guida<input name="driveHourRate" type="number" min="0" step="0.01" value="${escapeHtml(s.driveHourRate)}" /></label>`,
-            `<label class="field">€/ora lavoro<input name="workHourRate" type="number" min="0" step="0.01" value="${escapeHtml(s.workHourRate)}" /></label>`
-          )}
+        <div class="sg-card">
+          ${irow("Maggiorazione traffico stimata", stp("driveMarkupMinPerHour", s.driveMarkupMinPerHour !== undefined ? s.driveMarkupMinPerHour : 10, 0, 30, 1), "min/ora")}
+          <div class="sg-tariffe">
+            <label class="field">€ / km<input name="kmRate" type="number" min="0" step="0.01" value="${escapeHtml(s.kmRate)}" /></label>
+            <label class="field">€ / ora guida<input name="driveHourRate" type="number" min="0" step="0.01" value="${escapeHtml(s.driveHourRate)}" /></label>
+            <label class="field">€ / ora lavoro<input name="workHourRate" type="number" min="0" step="0.01" value="${escapeHtml(s.workHourRate)}" /></label>
+          </div>
         </div>
 
         ${secTitle('<circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/>', "App")}
-        <div class="sg-stack">
-          <div class="sg-field"><span class="sg-label">Navigatore</span>
+        <div class="sg-card">
+          <div class="sg-approw">
+            <span class="sg-label">Navigatore</span>
             <div class="settings-radio-group">
               <label class="settings-radio"><input type="radio" name="navigatorPref" value="google" ${nav === "google" ? "checked" : ""} /> Google Maps</label>
               <label class="settings-radio"><input type="radio" name="navigatorPref" value="apple" ${nav === "apple" ? "checked" : ""} /> Apple Mappe</label>
               <label class="settings-radio"><input type="radio" name="navigatorPref" value="waze" ${nav === "waze" ? "checked" : ""} /> Waze</label>
             </div>
           </div>
-          <div class="sg-field"><span class="sg-label">Tema</span>
+          <div class="sg-approw">
+            <span class="sg-label">Tema</span>
             <div class="settings-radio-group">
-              <label class="settings-radio"><input type="radio" name="themeMode" value="auto" ${(s.themeMode||"auto") === "auto" ? "checked" : ""} /> Automatico</label>
+              <label class="settings-radio"><input type="radio" name="themeMode" value="auto" ${(s.themeMode||"auto") === "auto" ? "checked" : ""} /> Auto</label>
               <label class="settings-radio"><input type="radio" name="themeMode" value="light" ${(s.themeMode||"auto") === "light" ? "checked" : ""} /> Giorno</label>
               <label class="settings-radio"><input type="radio" name="themeMode" value="dark" ${(s.themeMode||"auto") === "dark" ? "checked" : ""} /> Notte</label>
             </div>
           </div>
-          <div class="sg-field"><span class="sg-label">Palette</span>
+          <div class="sg-approw">
+            <span class="sg-label">Palette colori</span>
             <div class="settings-palette-group">
               <button type="button" class="palette-chip${(s.themePalette||"default")==="default"?" active":""}" data-palette="default"><span class="palette-swatch" style="background:linear-gradient(135deg,#05080f 50%,#e6f2f0 50%)"></span>Default</button>
               <button type="button" class="palette-chip${(s.themePalette||"default")==="neon"?" active":""}" data-palette="neon"><span class="palette-swatch" style="background:linear-gradient(135deg,#000 50%,#e0fff8 50%)"></span>Neon</button>
