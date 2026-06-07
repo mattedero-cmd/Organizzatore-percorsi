@@ -139,16 +139,16 @@ body {
   --tab-active-border: rgba(0,180,160,0.3);
   --tab-active-text:   #007a6a;
 
-  --blob1: rgba(0,200,180,0.28);
-  --blob2: rgba(20,184,166,0.18);
-  --blob3: rgba(0,150,135,0.15);
-  --blob4: rgba(0,220,200,0.14);
+  --blob1: rgba(0,200,180,0.30);
+  --blob2: rgba(251,146,60,0.18);
+  --blob3: rgba(0,150,135,0.16);
+  --blob4: rgba(234,88,12,0.12);
 
   --grid-line: rgba(0,180,160,0.07);
   --top-line-a: rgba(0,200,180,0.9);
-  --top-line-b: rgba(0,150,135,0.7);
+  --top-line-b: rgba(234,88,12,0.65);
   --card-top-line-a: rgba(0,200,180,0.5);
-  --card-top-line-b: rgba(0,150,135,0.35);
+  --card-top-line-b: rgba(251,146,60,0.4);
   --card-corner: rgba(0,200,180,0.09);
   --divider: rgba(0,180,160,0.1);
   --title-shadow: rgba(0,180,160,0.15);
@@ -161,16 +161,16 @@ body {
 body { background: var(--bg); color: var(--text); }
 
 [data-theme="day"] body {
-  background: linear-gradient(160deg, #d4eeea 0%, #e8f4f2 40%, #cce8e4 75%, #d8f0ec 100%);
+  background: linear-gradient(160deg, #ceeae6 0%, #e8f4f2 38%, #fdf0e8 72%, #d8f0ec 100%);
 }
 
 [data-theme="day"] .bg::before {
   background:
-    radial-gradient(ellipse 55% 40% at 15% 10%,  rgba(0,200,180,0.32) 0%, transparent 65%),
-    radial-gradient(ellipse 45% 50% at 88%  5%,  rgba(0,160,145,0.22) 0%, transparent 60%),
-    radial-gradient(ellipse 60% 35% at 70% 60%,  rgba(0,180,160,0.18) 0%, transparent 55%),
-    radial-gradient(ellipse 50% 45% at  5% 85%,  rgba(20,184,166,0.2) 0%, transparent 60%),
-    radial-gradient(ellipse 40% 30% at 92% 90%,  rgba(0,220,200,0.14) 0%, transparent 50%);
+    radial-gradient(ellipse 55% 40% at 12%  8%,  rgba(0,200,180,0.34) 0%, transparent 65%),
+    radial-gradient(ellipse 45% 45% at 90%  5%,  rgba(251,146,60,0.22) 0%, transparent 60%),
+    radial-gradient(ellipse 50% 35% at 75% 62%,  rgba(234,88,12,0.14) 0%, transparent 55%),
+    radial-gradient(ellipse 50% 45% at  5% 85%,  rgba(0,180,160,0.2)  0%, transparent 60%),
+    radial-gradient(ellipse 35% 30% at 50% 30%,  rgba(20,184,166,0.1) 0%, transparent 50%);
 }
 
 .bg { position: fixed; inset: 0; z-index: 0; overflow: hidden; }
