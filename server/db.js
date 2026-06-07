@@ -656,6 +656,53 @@ export async function hasAnyUser() {
   return Number(rows[0]?.count ?? 0) > 0;
 }
 
+export async function adminListUsers() {
+  return runSql(`
+    SELECT u.id, u.username, u.created_at,
+      (SELECT COUNT(*) FROM sessions s WHERE s.user_id = u.id AND s.expires_at > CURRENT_TIMESTAMP) AS active_sessions,
+      (SELECT COUNT(*) FROM planned_routes r WHERE r.user_id = u.id) AS route_count,
+      (SELECT COUNT(*) FROM addresses a WHERE a.user_id = u.id) AS address_count
+    FROM users u ORDER BY u.created_at DESC;
+  `, true);
+}
+
+export async function adminListSessions() {
+  return runSql(`
+    SELECT s.token, s.user_id, s.created_at, s.expires_at, u.username
+    FROM sessions s JOIN users u ON u.id = s.user_id
+    WHERE s.expires_at > CURRENT_TIMESTAMP
+    ORDER BY s.created_at DESC;
+  `, true);
+}
+
+export async function adminDeleteUserSessions(userId) {
+  await runSql(`DELETE FROM sessions WHERE user_id = ${sqlValue(Number(userId))};`);
+}
+
+export async function adminDeleteUser(userId) {
+  await runSql(`DELETE FROM sessions WHERE user_id = ${sqlValue(Number(userId))};`);
+  await runSql(`DELETE FROM planned_routes WHERE user_id = ${sqlValue(Number(userId))};`);
+  await runSql(`DELETE FROM addresses WHERE user_id = ${sqlValue(Number(userId))};`);
+  await runSql(`DELETE FROM user_settings WHERE user_id = ${sqlValue(Number(userId))};`);
+  await runSql(`DELETE FROM users WHERE id = ${sqlValue(Number(userId))};`);
+}
+
+export async function adminGetStats() {
+  const [users] = await runSql(`SELECT COUNT(*) AS c FROM users;`, true);
+  const [routes] = await runSql(`SELECT COUNT(*) AS c FROM planned_routes;`, true);
+  const [addresses] = await runSql(`SELECT COUNT(*) AS c FROM addresses;`, true);
+  const [sessions] = await runSql(`SELECT COUNT(*) AS c FROM sessions WHERE expires_at > CURRENT_TIMESTAMP;`, true);
+  return {
+    users: Number(users?.c || 0),
+    routes: Number(routes?.c || 0),
+    addresses: Number(addresses?.c || 0),
+    activeSessions: Number(sessions?.c || 0)
+  };
+}
+
+export function getDbMode() { return dbMode; }
+export function getDbPath() { return databasePath || null; }
+
 export async function assignOrphanedData(userId) {
   await runSql(`UPDATE addresses SET user_id = ${sqlValue(Number(userId))} WHERE user_id IS NULL;`);
   await runSql(`UPDATE planned_routes SET user_id = ${sqlValue(Number(userId))} WHERE user_id IS NULL;`);

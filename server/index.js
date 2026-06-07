@@ -25,7 +25,14 @@ import {
   deleteSession,
   hasAnyUser,
   assignOrphanedData,
-  purgeExpiredSessions
+  purgeExpiredSessions,
+  adminListUsers,
+  adminListSessions,
+  adminDeleteUserSessions,
+  adminDeleteUser,
+  adminGetStats,
+  getDbMode,
+  getDbPath
 } from "./db.js";
 import { hashPassword, verifyPassword, generateToken } from "./auth.js";
 import { loadEnv } from "./env.js";
@@ -88,6 +95,42 @@ setInterval(() => {
     if (now > entry.resetAt) loginAttempts.delete(ip);
   }
 }, 30 * 60 * 1000).unref();
+
+// ── Admin authentication ──────────────────────────────────────────────────────
+const adminSessions = new Map(); // token → { expiresAt }
+const ADMIN_SESSION_MS = 2 * 60 * 60 * 1000; // 2 ore
+const adminAttempts = new Map();
+const ADMIN_MAX_ATTEMPTS = 3;
+const ADMIN_LOCK_MS = 30 * 60 * 1000;
+
+function checkAdminRateLimit(ip) {
+  const now = Date.now();
+  const entry = adminAttempts.get(ip);
+  if (!entry || now > entry.resetAt) {
+    adminAttempts.set(ip, { count: 1, resetAt: now + ADMIN_LOCK_MS });
+    return true;
+  }
+  entry.count++;
+  return entry.count <= ADMIN_MAX_ATTEMPTS;
+}
+
+function generateAdminToken() {
+  return [...Array(40)].map(() => Math.floor(Math.random() * 36).toString(36)).join("");
+}
+
+function authenticateAdmin(request) {
+  const token = request.headers["x-admin-token"] || "";
+  if (!token) return false;
+  const session = adminSessions.get(token);
+  if (!session || Date.now() > session.expiresAt) { adminSessions.delete(token); return false; }
+  return true;
+}
+
+// Pulizia sessioni admin scadute ogni ora
+setInterval(() => {
+  const now = Date.now();
+  for (const [t, s] of adminSessions) if (now > s.expiresAt) adminSessions.delete(t);
+}, 60 * 60 * 1000).unref();
 
 const SECURITY_HEADERS = {
   "X-Content-Type-Options": "nosniff",
@@ -263,6 +306,82 @@ async function handleApi(request, response) {
         response.end(JSON.stringify({ ok: true }));
         return;
       }
+    }
+
+    // ── Admin routes ──────────────────────────────────────────────────────────
+    if (url.pathname.startsWith("/api/admin")) {
+      // Login admin — non richiede token
+      if (method === "POST" && url.pathname === "/api/admin/login") {
+        const ip = request.socket.remoteAddress || "unknown";
+        if (!checkAdminRateLimit(ip)) {
+          return sendJson(response, 429, { error: "Troppi tentativi. Riprova tra 30 minuti." });
+        }
+        const secret = process.env.ADMIN_SECRET;
+        if (!secret) return sendJson(response, 503, { error: "Admin non configurato" });
+        const body = await parseBody(request);
+        if (body.secret !== secret) {
+          return sendJson(response, 401, { error: "Credenziali non valide" });
+        }
+        const token = generateAdminToken();
+        adminSessions.set(token, { expiresAt: Date.now() + ADMIN_SESSION_MS });
+        return sendJson(response, 200, { token });
+      }
+
+      // Tutte le altre rotte admin richiedono il token
+      if (!authenticateAdmin(request)) {
+        return sendJson(response, 401, { error: "Non autenticato" });
+      }
+
+      if (method === "GET" && url.pathname === "/api/admin/stats") {
+        const stats = await adminGetStats();
+        return sendJson(response, 200, {
+          ...stats,
+          dbMode: getDbMode(),
+          dbPath: getDbPath()
+        });
+      }
+
+      if (method === "GET" && url.pathname === "/api/admin/users") {
+        const users = await adminListUsers();
+        return sendJson(response, 200, users.map(u => ({
+          id: Number(u.id),
+          username: u.username,
+          createdAt: u.created_at,
+          activeSessions: Number(u.active_sessions || 0),
+          routeCount: Number(u.route_count || 0),
+          addressCount: Number(u.address_count || 0)
+        })));
+      }
+
+      if (method === "GET" && url.pathname === "/api/admin/sessions") {
+        const sessions = await adminListSessions();
+        return sendJson(response, 200, sessions.map(s => ({
+          token: s.token.slice(0, 8) + "…",
+          userId: Number(s.user_id),
+          username: s.username,
+          createdAt: s.created_at,
+          expiresAt: s.expires_at
+        })));
+      }
+
+      const kickMatch = url.pathname.match(/^\/api\/admin\/users\/(\d+)\/kick$/);
+      if (kickMatch && method === "POST") {
+        await adminDeleteUserSessions(kickMatch[1]);
+        return sendJson(response, 200, { ok: true });
+      }
+
+      const deleteMatch = url.pathname.match(/^\/api\/admin\/users\/(\d+)$/);
+      if (deleteMatch && method === "DELETE") {
+        await adminDeleteUser(deleteMatch[1]);
+        return sendJson(response, 200, { ok: true });
+      }
+
+      if (method === "POST" && url.pathname === "/api/admin/purge-sessions") {
+        await purgeExpiredSessions();
+        return sendJson(response, 200, { ok: true });
+      }
+
+      return sendJson(response, 404, { error: "Rotta non trovata" });
     }
 
     // ── All routes below require authentication ───────────────────────────────
