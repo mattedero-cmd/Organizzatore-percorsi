@@ -2197,38 +2197,68 @@ function printRoute() {
 
   const payload = JSON.stringify({ result: { ...result, rows: enrichedRows }, routeName, date });
 
+  const _dt = document.documentElement.dataset.theme || "night";
+  const _isDk = !["day","neon-giorno","luxury-giorno","metallo-giorno","pietra-giorno","foresta-giorno","legno-giorno"].includes(_dt);
+  const _bg    = _isDk ? "#0d1117" : "#f0f4f8";
+  const _bg2   = _isDk ? "#161d27" : "#ffffff";
+  const _text  = _isDk ? "#e2e8f0" : "#1a202c";
+  const _muted = _isDk ? "#64748b" : "#64748b";
+  const _line  = _isDk ? "#1e293b" : "#e2e8f0";
+  const _acc   = "#14b8a6";
+  const _accDk = "#0d9488";
+
   const html = `<!DOCTYPE html>
 <html lang="it">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Stampa — ${routeName}</title>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: -apple-system, Arial, sans-serif; background: #f4f4f5; display: flex; align-items: center; justify-content: center; min-height: 100vh; }
-  .card { background: #fff; border-radius: 12px; padding: 28px 32px; max-width: 360px; width: 100%; box-shadow: 0 4px 24px rgba(0,0,0,.10); }
-  h2 { font-size: 1.1rem; margin-bottom: 4px; }
-  .sub { font-size: .85rem; color: #666; margin-bottom: 22px; }
-  label { display: flex; align-items: center; gap: 10px; font-size: .95rem; cursor: pointer; padding: 10px 0; border-bottom: 1px solid #eee; }
-  label:last-of-type { border-bottom: none; margin-bottom: 20px; }
-  input[type=checkbox] { width: 18px; height: 18px; accent-color: #2563eb; flex-shrink: 0; }
-  .desc { font-size: .78rem; color: #888; margin-top: 1px; }
-  button { width: 100%; padding: 11px; border: none; border-radius: 8px; font-size: 1rem; font-weight: 600; cursor: pointer; background: #2563eb; color: #fff; }
-  button:hover { background: #1d4ed8; }
-  @media print { body { background: white; } .card { box-shadow: none; } }
+  body { font-family: -apple-system, "Segoe UI", Arial, sans-serif; background: ${_bg}; display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 24px 16px; color: ${_text}; }
+  .card { background: ${_bg2}; border-radius: 18px; padding: 28px 28px 24px; max-width: 420px; width: 100%; border: 1px solid ${_line}; box-shadow: 0 8px 32px rgba(0,0,0,${_isDk ? ".4" : ".08"}); }
+  .card-header { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+  .card-icon { width: 36px; height: 36px; border-radius: 10px; background: ${_acc}22; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; flex-shrink: 0; }
+  h2 { font-size: 1.15rem; font-weight: 700; color: ${_text}; }
+  .sub { font-size: .875rem; color: ${_muted}; margin-bottom: 22px; padding-left: 46px; }
+  .options { display: flex; flex-direction: column; gap: 0; margin-bottom: 20px; border: 1px solid ${_line}; border-radius: 12px; overflow: hidden; }
+  label { display: flex; align-items: flex-start; gap: 14px; font-size: 1rem; cursor: pointer; padding: 14px 16px; background: transparent; border-bottom: 1px solid ${_line}; transition: background .12s; }
+  label:last-of-type { border-bottom: none; }
+  label:hover { background: ${_acc}11; }
+  .check-wrap { padding-top: 2px; flex-shrink: 0; }
+  input[type=checkbox] { width: 20px; height: 20px; accent-color: ${_acc}; cursor: pointer; }
+  .opt-text { display: flex; flex-direction: column; gap: 3px; }
+  .opt-label { font-weight: 600; font-size: .95rem; color: ${_text}; }
+  .opt-desc { font-size: .8rem; color: ${_muted}; line-height: 1.4; }
+  button { width: 100%; padding: 14px; border: none; border-radius: 12px; font-size: 1rem; font-weight: 700; cursor: pointer; background: ${_acc}; color: #fff; letter-spacing: .01em; transition: background .15s, transform .1s; }
+  button:hover { background: ${_accDk}; }
+  button:active { transform: scale(.98); }
+  @media print { body { background: white; } .card { box-shadow: none; border: none; } }
 </style>
 </head>
 <body>
 <div class="card">
-  <h2>🖨 Opzioni stampa</h2>
+  <div class="card-header">
+    <div class="card-icon">🖨</div>
+    <h2>Opzioni stampa</h2>
+  </div>
   <div class="sub">${routeName}${date ? " · " + date : ""}</div>
-  <label>
-    <input type="checkbox" id="opt-phones" checked>
-    <span>Numeri di telefono<br><span class="desc">Aggiunge una colonna con i contatti di ogni tappa</span></span>
-  </label>
-  <label>
-    <input type="checkbox" id="opt-costs">
-    <span>Riepilogo costi<br><span class="desc">Costo km, guida, lavoro e totale giornata</span></span>
-  </label>
+  <div class="options">
+    <label>
+      <div class="check-wrap"><input type="checkbox" id="opt-phones" checked></div>
+      <div class="opt-text">
+        <span class="opt-label">Numeri di telefono</span>
+        <span class="opt-desc">Aggiunge una colonna con i contatti di ogni tappa</span>
+      </div>
+    </label>
+    <label>
+      <div class="check-wrap"><input type="checkbox" id="opt-costs"></div>
+      <div class="opt-text">
+        <span class="opt-label">Riepilogo costi</span>
+        <span class="opt-desc">Costo km, guida, lavoro e totale giornata</span>
+      </div>
+    </label>
+  </div>
   <button onclick="generate()">Stampa / Salva PDF</button>
 </div>
 <script>
