@@ -494,11 +494,11 @@ export async function listAddresses(search = "", userId = null) {
   const userFilter = userId != null ? ` AND user_id = ${sqlValue(Number(userId))}` : "";
   if (dbMode === "postgres") {
     const where = term ? `WHERE lower(concat_ws(' ', customer, activity, location, full_address, notes)) LIKE ${sqlValue(`%${term}%`)}${userFilter}` : (userFilter ? `WHERE 1=1${userFilter}` : "");
-    const rows = await runSql(`SELECT * FROM addresses ${where} ORDER BY lower(coalesce(nullif(activity,''),customer)), lower(location);`, true);
+    const rows = await runSql(`SELECT * FROM addresses ${where} ORDER BY lower(nullif(trim(coalesce(activity,'')), '')) NULLS LAST, lower(nullif(trim(coalesce(customer,'')), '')) NULLS LAST, lower(coalesce(location,'')), id ASC;`, true);
     return rows.map(rowToAddress);
   }
   const where = term ? `WHERE lower(customer || ' ' || coalesce(activity,'') || ' ' || location || ' ' || full_address || ' ' || notes) LIKE ${sqlValue(`%${term}%`)}${userFilter}` : (userFilter ? `WHERE 1=1${userFilter}` : "");
-  const rows = await runSql(`SELECT * FROM addresses ${where} ORDER BY coalesce(nullif(activity,''),customer) COLLATE NOCASE, location COLLATE NOCASE;`, true);
+  const rows = await runSql(`SELECT * FROM addresses ${where} ORDER BY nullif(trim(coalesce(activity,'')), '') COLLATE NOCASE, nullif(trim(coalesce(customer,'')), '') COLLATE NOCASE, location COLLATE NOCASE, id ASC;`, true);
   return rows.map(rowToAddress);
 }
 
