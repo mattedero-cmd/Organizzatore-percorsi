@@ -155,6 +155,75 @@ body {
   --badge-text: #006e5e;
 }
 
+:root[data-theme="nero"] {
+  --bg:            #000000;
+  --bg2:           rgba(12,12,14,0.75);
+  --surface:       rgba(18,18,20,0.8);
+  --surface-hover: rgba(26,26,28,0.9);
+  --border:        rgba(0,255,200,0.08);
+  --border-card:   rgba(255,255,255,0.06);
+  --text:          #ffffff;
+  --text-sub:      #444450;
+  --text-meta:     #555560;
+  --text-chip:     #ccccdd;
+  --muted:         #1a1a20;
+
+  --accent:        #00ffc8;
+  --accent-bg:     rgba(0,255,200,0.07);
+  --accent-border: rgba(0,255,200,0.28);
+  --accent-glow:   rgba(0,255,200,0.22);
+  --accent2:       rgba(255,80,20,0.1);
+
+  --btn-primary-bg: linear-gradient(135deg, rgba(0,255,200,0.18) 0%, rgba(0,200,155,0.13) 50%, rgba(255,80,20,0.12) 100%);
+  --btn-primary-border: rgba(0,255,200,0.4);
+  --btn-primary-text: #e0fff8;
+  --btn-primary-glow: rgba(0,255,200,0.28);
+  --btn-primary-shine: rgba(0,255,200,0.12);
+
+  --btn-action-bg:     rgba(255,255,255,0.03);
+  --btn-action-border: rgba(255,255,255,0.07);
+  --btn-action-text:   #555560;
+  --btn-action-shine:  rgba(255,255,255,0.04);
+
+  --del-bg:     rgba(255,60,20,0.07);
+  --del-border: rgba(255,80,20,0.28);
+  --del-text:   #ff5020;
+  --del-shine:  rgba(255,80,20,0.06);
+
+  --chip-bg:     rgba(255,255,255,0.03);
+  --chip-border: rgba(255,255,255,0.06);
+  --chip-text:   #444450;
+  --chip-cost:   #00ffc8;
+
+  --stop-bg:     rgba(0,0,0,0.4);
+  --stop-border: rgba(255,255,255,0.04);
+  --stop-tag-bg: rgba(255,255,255,0.02);
+  --stop-tag-border: rgba(255,255,255,0.05);
+  --stop-tag-text: #333340;
+
+  --tab-bg:     rgba(0,0,0,0.9);
+  --tab-border: rgba(255,255,255,0.05);
+  --tab-text:   #222228;
+  --tab-active-bg:     rgba(0,255,200,0.07);
+  --tab-active-border: rgba(0,255,200,0.25);
+  --tab-active-text:   #00ffc8;
+
+  --blob1: rgba(0,255,200,0.14);
+  --blob2: rgba(255,80,20,0.12);
+  --blob3: rgba(0,200,155,0.09);
+  --blob4: rgba(255,100,40,0.08);
+
+  --grid-line: rgba(0,255,200,0.03);
+  --top-line-a: rgba(0,255,200,0.9);
+  --top-line-b: rgba(255,80,20,0.8);
+  --card-top-line-a: rgba(0,255,200,0.6);
+  --card-top-line-b: rgba(255,80,20,0.5);
+  --card-corner: rgba(0,255,200,0.06);
+  --divider: rgba(255,255,255,0.05);
+  --title-shadow: rgba(0,255,200,0.3);
+  --badge-text: #00ffc8;
+}
+
 /* ═══════════════════════════════════════════
    SFONDO
 ═══════════════════════════════════════════ */
@@ -162,6 +231,16 @@ body { background: var(--bg); color: var(--text); }
 
 [data-theme="day"] body {
   background: linear-gradient(150deg, #c8eae4 0%, #daf0ec 35%, #f2e4d8 68%, #d8ece8 100%);
+}
+
+[data-theme="nero"] body { background: #000; }
+
+[data-theme="nero"] .bg::before {
+  background:
+    radial-gradient(ellipse 50% 38% at 10%  8%,  rgba(0,255,200,0.16) 0%, transparent 65%),
+    radial-gradient(ellipse 45% 45% at 92%  4%,  rgba(255,80,20,0.14)  0%, transparent 60%),
+    radial-gradient(ellipse 40% 32% at 68% 70%,  rgba(255,100,40,0.1)  0%, transparent 55%),
+    radial-gradient(ellipse 45% 40% at  4% 88%,  rgba(0,200,155,0.1)   0%, transparent 60%);
 }
 
 [data-theme="day"] .bg::before {
@@ -442,22 +521,18 @@ body { background: var(--bg); color: var(--text); }
 <div class="top-line"></div>
 
 <!-- Toggle tema -->
-<div class="theme-toggle" onclick="toggleTheme()">
-  <button class="toggle-btn active" id="btn-night">
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
-    </svg>
-    Notturna
+<div class="theme-toggle">
+  <button class="toggle-btn active" id="btn-night" onclick="setTheme('night')">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+    Notte
   </button>
-  <button class="toggle-btn" id="btn-day">
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-      <circle cx="12" cy="12" r="5"/>
-      <line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
-      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
-      <line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>
-      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
-    </svg>
-    Diurna
+  <button class="toggle-btn" id="btn-nero" onclick="setTheme('nero')">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><path d="M12 2v20M2 12h20"/></svg>
+    Neon Nero
+  </button>
+  <button class="toggle-btn" id="btn-day" onclick="setTheme('day')">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+    Giorno
   </button>
 </div>
 
@@ -588,12 +663,11 @@ body { background: var(--bg); color: var(--text); }
 </div>
 
 <script>
-function toggleTheme() {
-  const html = document.documentElement;
-  const isNight = html.getAttribute("data-theme") === "night";
-  html.setAttribute("data-theme", isNight ? "day" : "night");
-  document.getElementById("btn-night").classList.toggle("active", !isNight);
-  document.getElementById("btn-day").classList.toggle("active", isNight);
+function setTheme(t) {
+  document.documentElement.setAttribute("data-theme", t);
+  ["night","nero","day"].forEach(id => {
+    document.getElementById("btn-" + id).classList.toggle("active", id === t);
+  });
 }
 </script>
 </body>
