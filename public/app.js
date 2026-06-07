@@ -104,6 +104,7 @@ const state = {
   themePref: "auto",
   googleMapsKey: "",
   googleMapsReady: false,
+  googleClientId: "",
   navigatorPref: (() => { try { return localStorage.getItem("navigatorPref") || "google"; } catch { return "google"; } })(),
   mapApiConfigured: false,
   addresses: [],
@@ -657,6 +658,7 @@ async function loadInitialData() {
   state.mapApiConfigured = health.mapApiConfigured || false;
   state.whisperConfigured = health.whisperConfigured || false;
   state.googleMapsKey = config.googleMapsKey || "";
+  state.googleClientId = config.googleClientId || "";
   state.settings = settings;
   state.navigatorPref = settings.navigatorPref || localStorage.getItem("navigatorPref") || "google";
   state.themePref = settings.themePref || "auto";
@@ -1459,6 +1461,7 @@ function renderArchive() {
           <h2>Archivio</h2>
           <div class="row">
             <button class="btn" id="import-contacts">📱 Importa</button>
+            ${state.googleClientId ? `<button class="btn" id="import-google-contacts">🔗 Google</button>` : ""}
             <button class="btn" id="new-address">+ Nuovo</button>
           </div>
         </div>
@@ -2601,6 +2604,110 @@ async function importFromVcf(file) {
   }
 }
 
+let _gsiLoadPromise = null;
+
+function loadGsiScript() {
+  if (window.google?.accounts?.oauth2) return Promise.resolve(true);
+  if (_gsiLoadPromise) return _gsiLoadPromise;
+  _gsiLoadPromise = new Promise(resolve => {
+    const s = document.createElement("script");
+    s.src = "https://accounts.google.com/gsi/client";
+    s.onload = () => { _gsiLoadPromise = null; resolve(true); };
+    s.onerror = () => { _gsiLoadPromise = null; resolve(false); };
+    document.head.appendChild(s);
+  });
+  return _gsiLoadPromise;
+}
+
+function mapGoogleConnection(conn) {
+  const name = conn.names?.[0];
+  const org = conn.organizations?.[0];
+  const email = conn.emailAddresses?.[0]?.value || "";
+  const phones = conn.phoneNumbers || [];
+  const addr = conn.addresses?.[0];
+
+  const customer = name ? [name.givenName, name.familyName].filter(Boolean).join(" ") : "";
+  const activity = org?.name || "";
+
+  let phone = "", phoneType = "mobile", phoneName = "";
+  let phone2 = "", phone2Type = "mobile", phone2Name = "";
+
+  if (phones[0]) {
+    phone = phones[0].value || "";
+    phoneType = phones[0].type === "home" ? "fisso" : phones[0].type === "other" ? "altro" : "mobile";
+    phoneName = phones[0].formattedType || "";
+  }
+  if (phones[1]) {
+    phone2 = phones[1].value || "";
+    phone2Type = phones[1].type === "home" ? "fisso" : phones[1].type === "other" ? "altro" : "mobile";
+    phone2Name = phones[1].formattedType || "";
+  }
+
+  let fullAddress = "", street = "", city = "", postalCode = "", province = "";
+  if (addr) {
+    street = [addr.streetAddress, addr.extendedAddress].filter(Boolean).join(", ");
+    city = addr.city || "";
+    postalCode = addr.postalCode || "";
+    province = addr.region || "";
+    fullAddress = [street, postalCode, city, province].filter(Boolean).join(" ").trim()
+      || addr.formattedValue || "";
+  }
+
+  return { customer, activity, location: "", fullAddress, street, city, postalCode, province,
+    country: "Italia", phone, phoneType, phoneName, phone2, phone2Type, phone2Name,
+    email, notes: "", lat: null, lng: null };
+}
+
+async function fetchGoogleConnections(token) {
+  const allConnections = [];
+  let pageToken = "";
+  do {
+    const url = new URL("https://people.googleapis.com/v1/people/me/connections");
+    url.searchParams.set("personFields", "names,emailAddresses,phoneNumbers,addresses,organizations");
+    url.searchParams.set("pageSize", "1000");
+    if (pageToken) url.searchParams.set("pageToken", pageToken);
+
+    const response = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    if (!response.ok) throw new Error(`People API error ${response.status}`);
+    const data = await response.json();
+    for (const conn of data.connections || []) allConnections.push(conn);
+    pageToken = data.nextPageToken || "";
+  } while (pageToken);
+  return allConnections;
+}
+
+async function importFromGoogleContacts() {
+  if (!state.googleClientId) { showToast("Google Client ID non configurato"); return; }
+
+  const loaded = await loadGsiScript();
+  if (!loaded) { showToast("Impossibile caricare Google Sign-In"); return; }
+
+  return new Promise(resolve => {
+    const client = google.accounts.oauth2.initTokenClient({
+      client_id: state.googleClientId,
+      scope: "https://www.googleapis.com/auth/contacts.readonly",
+      callback: async tokenResponse => {
+        if (tokenResponse.error) { showToast("Accesso Google negato"); resolve(); return; }
+        showSpinner("Importazione contatti Google…");
+        try {
+          const connections = await fetchGoogleConnections(tokenResponse.access_token);
+          hideSpinner();
+          if (!connections.length) { showToast("Nessun contatto trovato"); resolve(); return; }
+          const contacts = connections
+            .map(mapGoogleConnection)
+            .filter(c => c.customer || c.phone || c.email);
+          showImportPreview(contacts);
+        } catch (err) {
+          hideSpinner();
+          showToast("Errore importazione: " + err.message);
+        }
+        resolve();
+      }
+    });
+    client.requestAccessToken({ prompt: "consent" });
+  });
+}
+
 // ── save address form ─────────────────────────────────────────────────────────
 
 async function saveAddressForm(form) {
@@ -3731,6 +3838,11 @@ function bindEvents() {
 
     if (e.target.closest("#import-contacts")) {
       await importFromContactPicker();
+      return;
+    }
+
+    if (e.target.closest("#import-google-contacts")) {
+      await importFromGoogleContacts();
       return;
     }
 

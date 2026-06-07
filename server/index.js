@@ -274,7 +274,8 @@ async function handleApi(request, response) {
 
     if (method === "GET" && url.pathname === "/api/config") {
       return sendJson(response, 200, {
-        googleMapsKey: process.env.GOOGLE_MAPS_API_KEY || ""
+        googleMapsKey: process.env.GOOGLE_MAPS_API_KEY || "",
+        googleClientId: process.env.GOOGLE_CLIENT_ID || ""
       });
     }
 
