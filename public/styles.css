@@ -2800,6 +2800,8 @@ tbody tr:last-child td {
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
+  overflow: hidden;
+  overscroll-behavior: contain;
 }
 .bsheet {
   background: var(--bg2);
@@ -2807,6 +2809,7 @@ tbody tr:last-child td {
   padding: 0 0 20px;
   max-height: 92vh;
   overflow-y: auto;
+  overflow-x: hidden;
   box-shadow: 0 8px 40px rgba(0,0,0,0.28);
   backdrop-filter: blur(28px);
   -webkit-backdrop-filter: blur(28px);

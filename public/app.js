@@ -3796,17 +3796,29 @@ function bindEvents() {
     // archive search
     if (e.target.id === "archive-search") {
       const q = e.target.value;
+      const cursor = e.target.selectionStart;
       state.addressSearch = q;
       state.archiveShowAll = Boolean(q);
-      // Immediate client-side filter from already-loaded list, then server confirms
-      if (q) {
-        const ql = q.toLowerCase();
-        state.addresses = state.allAddresses.filter(a =>
-          [a.customer, a.activity, a.location, a.fullAddress, a.notes].some(v => (v || "").toLowerCase().includes(ql))
-        );
-        renderArchive();
-      }
-      refreshAllData().then(() => renderArchive());
+      // Client-side filter from already-loaded list
+      const ql = q.toLowerCase();
+      state.addresses = q
+        ? state.allAddresses.filter(a =>
+            [a.customer, a.activity, a.location, a.fullAddress, a.notes].some(v => (v || "").toLowerCase().includes(ql))
+          )
+        : [];
+      renderArchive();
+      // Restore focus + cursor after DOM replacement
+      const inp = document.getElementById("archive-search");
+      if (inp) { inp.focus(); inp.setSelectionRange(cursor, cursor); }
+      // Then confirm with server (only refreshAddresses, not all data)
+      clearTimeout(state._archiveSearchTimer);
+      state._archiveSearchTimer = setTimeout(() => {
+        refreshAddresses().then(() => {
+          renderArchive();
+          const inp2 = document.getElementById("archive-search");
+          if (inp2 && document.activeElement !== inp2) { inp2.focus(); inp2.setSelectionRange(inp2.value.length, inp2.value.length); }
+        });
+      }, 300);
     }
     // stop autocomplete
     if (e.target.id === "stop-search") {
