@@ -3081,7 +3081,13 @@ tbody tr:last-child td {
   font-weight: 700;
   text-align: center;
   margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--accent);
 }
+.auth-logo svg { color: var(--accent); flex-shrink: 0; }
 .auth-subtitle {
   font-size: 0.85rem;
   color: var(--muted);

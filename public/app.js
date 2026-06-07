@@ -4316,7 +4316,7 @@ function renderAuthScreen(isSetup = false) {
     app.innerHTML = `
       <div class="auth-screen">
         <div class="auth-card">
-          <div class="auth-logo">📍 Percorsi Lavoro</div>
+          <div class="auth-logo">${_svg('<polygon points="3 11 22 2 13 21 11 13 3 11"/>',24)} Percorsi Lavoro</div>
           ${isSetup
             ? `<p class="auth-subtitle">Prima configurazione — crea il tuo account</p>`
             : `<div class="auth-tabs">
