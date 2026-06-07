@@ -213,7 +213,12 @@ function applyTheme() {
   };
   state.theme = map[palette] || (isDark ? "night" : "day");
   document.documentElement.dataset.theme = state.theme;
-  try { localStorage.setItem("pl_theme", JSON.stringify({ mode, palette })); } catch {}
+  try {
+    localStorage.setItem("pl_theme", JSON.stringify({ mode, palette }));
+    // cookie per il server-side theme injection (no-JS path e primo caricamento)
+    const d = isDark ? "1" : "0";
+    document.cookie = `pl_dark=${d};path=/;max-age=31536000;samesite=strict`;
+  } catch {}
 }
 
 const _splashShown = Date.now();

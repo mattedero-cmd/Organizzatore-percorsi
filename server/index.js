@@ -197,6 +197,43 @@ async function authenticate(request) {
   return getSession(cookies.session || "");
 }
 
+const _themeMap = {
+  default: { dark: "night",         light: "day" },
+  neon:    { dark: "nero",          light: "neon-giorno" },
+  luxury:  { dark: "luxury-notte",  light: "luxury-giorno" },
+  metallo: { dark: "metallo",       light: "metallo-giorno" },
+  pietra:  { dark: "pietra",        light: "pietra-giorno" },
+  foresta: { dark: "foresta-notte", light: "foresta-giorno" },
+  legno:   { dark: "legno",         light: "legno-giorno" },
+};
+
+async function serveIndex(request, response, filePath) {
+  let content;
+  try { content = fs.readFileSync(filePath, "utf8"); } catch {
+    response.writeHead(404, SECURITY_HEADERS); response.end("Not found"); return;
+  }
+  try {
+    const cookies = parseCookies(request.headers.cookie);
+    const userId = await getSession(cookies.session || "");
+    if (userId) {
+      const s = await getSettings(userId);
+      const mode = s.themeMode || "auto";
+      const palette = s.themePalette || "default";
+      let variant = "dark";
+      if (mode === "light") variant = "light";
+      else if (mode === "dark") variant = "dark";
+      else {
+        // auto: read the OS preference cookie set by JS on previous visits
+        variant = (cookies.pl_dark === "0") ? "light" : "dark";
+      }
+      const theme = (_themeMap[palette] || _themeMap.default)[variant];
+      content = content.replace('data-theme="night"', `data-theme="${theme}"`);
+    }
+  } catch {}
+  response.writeHead(200, { "Content-Type": "text/html; charset=utf-8", ...SECURITY_HEADERS });
+  response.end(content);
+}
+
 function serveStatic(request, response) {
   const url = new URL(request.url, `http://${request.headers.host}`);
   const pathname = decodeURIComponent(url.pathname === "/" ? "/index.html" : url.pathname);
@@ -206,6 +243,11 @@ function serveStatic(request, response) {
   if (!filePath.startsWith(publicDir)) {
     response.writeHead(403, SECURITY_HEADERS);
     response.end("Forbidden");
+    return;
+  }
+
+  if (safePath === "/index.html" || url.pathname === "/") {
+    serveIndex(request, response, filePath);
     return;
   }
 

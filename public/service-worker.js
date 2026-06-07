@@ -1,10 +1,8 @@
-const CACHE_NAME = "percorsi-lavoro-v159";
+const CACHE_NAME = "percorsi-lavoro-v160";
 const STATIC_ASSETS = [
-  "/?v=20260607-354",
-  "/index.html?v=20260607-354",
-  "/styles.css?v=20260607-354",
-  "/app.js?v=20260607-354",
-  "/manifest.webmanifest?v=20260607-354",
+  "/styles.css?v=20260607-355",
+  "/app.js?v=20260607-355",
+  "/manifest.webmanifest?v=20260607-355",
   "/icons/icon-180.svg",
   "/icons/icon-192.svg",
   "/icons/icon-512.svg"
@@ -38,10 +36,19 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
+  // index.html: sempre dal server (contiene il tema SSR), mai da cache
+  if (requestUrl.pathname === "/" || requestUrl.pathname === "/index.html") {
+    event.respondWith(
+      fetch(event.request, { cache: "no-store" }).catch(() => caches.match("/index.html"))
+    );
+    return;
+  }
+
+  // Tutti gli altri asset: network-first con fallback cache
   event.respondWith(
     fetch(event.request)
       .then((response) => {
-        if (event.request.method === "GET" && response.ok) {
+        if (response.ok) {
           const copy = response.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
         }
