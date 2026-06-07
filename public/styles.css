@@ -2015,6 +2015,16 @@ tbody tr:last-child td {
   flex-shrink: 0;
 }
 
+.settings-theme-divider {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.10em;
+  color: var(--muted);
+  padding: 6px 0 2px;
+  opacity: 0.7;
+}
+
 .phone-pref-star {
   display: flex;
   align-items: center;

@@ -192,13 +192,17 @@ const state = {
 
 // ── theme ────────────────────────────────────────────────────────────────────
 
+const THEME_MAP = {
+  dark: "night", light: "day", nero: "nero",
+  "foresta-notte": "foresta-notte", "foresta-giorno": "foresta-giorno",
+  "luxury-notte": "luxury-notte", "luxury-giorno": "luxury-giorno",
+  metallo: "metallo", pietra: "pietra", legno: "legno",
+};
+
 function applyTheme() {
-  if (state.themePref === "dark") {
-    state.theme = "night";
-  } else if (state.themePref === "light") {
-    state.theme = "day";
-  } else if (state.themePref === "nero") {
-    state.theme = "nero";
+  const mapped = THEME_MAP[state.themePref];
+  if (mapped) {
+    state.theme = mapped;
   } else {
     state.theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "night" : "day";
   }
@@ -492,6 +496,14 @@ function renderMenuSettings() {
           <label class="settings-radio"><input type="radio" name="themePref" value="light" ${theme === "light" ? "checked" : ""} /> Giorno</label>
           <label class="settings-radio"><input type="radio" name="themePref" value="dark" ${theme === "dark" ? "checked" : ""} /> Notte</label>
           <label class="settings-radio"><input type="radio" name="themePref" value="nero" ${theme === "nero" ? "checked" : ""} /> Neon Nero</label>
+          <div class="settings-theme-divider">Palette</div>
+          <label class="settings-radio"><input type="radio" name="themePref" value="foresta-notte" ${theme === "foresta-notte" ? "checked" : ""} /> Foresta Notte</label>
+          <label class="settings-radio"><input type="radio" name="themePref" value="foresta-giorno" ${theme === "foresta-giorno" ? "checked" : ""} /> Foresta Giorno</label>
+          <label class="settings-radio"><input type="radio" name="themePref" value="luxury-notte" ${theme === "luxury-notte" ? "checked" : ""} /> Luxury Notte</label>
+          <label class="settings-radio"><input type="radio" name="themePref" value="luxury-giorno" ${theme === "luxury-giorno" ? "checked" : ""} /> Luxury Giorno</label>
+          <label class="settings-radio"><input type="radio" name="themePref" value="metallo" ${theme === "metallo" ? "checked" : ""} /> Metallo</label>
+          <label class="settings-radio"><input type="radio" name="themePref" value="pietra" ${theme === "pietra" ? "checked" : ""} /> Pietra</label>
+          <label class="settings-radio"><input type="radio" name="themePref" value="legno" ${theme === "legno" ? "checked" : ""} /> Legno</label>
         </div>
 
         <div class="actions" style="margin-top:20px;">
