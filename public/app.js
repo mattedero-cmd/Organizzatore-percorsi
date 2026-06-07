@@ -294,7 +294,7 @@ function renderMenu() {
         restMaxDeviationMin: Number(v.restMaxDeviationMin || 40),
         restDurationMin: Number(v.restDurationMin || 15),
         earliestBreakTime: v.earliestBreakTime || "08:00",
-        maxDetourKm: Number(v.maxDetourKm || 1.7),
+        maxDetourKm: Math.round((Number(v.maxDetourKm) || 1.5) * 2) / 2,
         maxReturnTime: v.maxReturnTime || "",
         driveMarkupMinPerHour: Number(v.driveMarkupMinPerHour || 10)
       };
@@ -476,7 +476,7 @@ function renderMenuSettings() {
           </label>
           <div class="field">
             <span class="field-label">Deviazione massima</span>
-            ${stepper("maxDetourKm", s.maxDetourKm !== undefined ? s.maxDetourKm : 1.7, 0.5, 10, 0.5, "km", true)}
+            ${stepper("maxDetourKm", s.maxDetourKm !== undefined ? Math.round(s.maxDetourKm * 2) / 2 : 1.5, 0.5, 10, 0.5, "km", true)}
           </div>
         </div>
 
