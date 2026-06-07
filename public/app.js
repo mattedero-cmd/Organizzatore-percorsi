@@ -141,7 +141,8 @@ const state = {
   activeTab: "route",
   menuOpen: false, menuSection: null,
   theme: "day",
-  themePref: "auto",
+  themeMode: "auto",      // "auto" | "light" | "dark"
+  themePalette: "default", // "default" | "neon" | "luxury" | "metallo" | "pietra" | "foresta" | "legno"
   googleMapsKey: "",
   googleMapsReady: false,
   googleClientId: "",
@@ -192,20 +193,23 @@ const state = {
 
 // ── theme ────────────────────────────────────────────────────────────────────
 
-const THEME_MAP = {
-  dark: "night", light: "day", nero: "nero",
-  "foresta-notte": "foresta-notte", "foresta-giorno": "foresta-giorno",
-  "luxury-notte": "luxury-notte", "luxury-giorno": "luxury-giorno",
-  metallo: "metallo", pietra: "pietra", legno: "legno",
-};
-
 function applyTheme() {
-  const mapped = THEME_MAP[state.themePref];
-  if (mapped) {
-    state.theme = mapped;
-  } else {
-    state.theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "night" : "day";
-  }
+  const mode = state.themeMode || "auto";
+  const palette = state.themePalette || "default";
+  const isDark = mode === "auto"
+    ? window.matchMedia("(prefers-color-scheme: dark)").matches
+    : mode === "dark";
+
+  const map = {
+    default: isDark ? "night"          : "day",
+    neon:    isDark ? "nero"            : "neon-giorno",
+    luxury:  isDark ? "luxury-notte"   : "luxury-giorno",
+    metallo: isDark ? "metallo"        : "metallo-giorno",
+    pietra:  isDark ? "pietra"         : "pietra-giorno",
+    foresta: isDark ? "foresta-notte"  : "foresta-giorno",
+    legno:   isDark ? "legno"          : "legno-giorno",
+  };
+  state.theme = map[palette] || (isDark ? "night" : "day");
   document.documentElement.dataset.theme = state.theme;
 }
 
@@ -280,7 +284,8 @@ function renderMenu() {
         driveHourRate: Number(v.driveHourRate),
         workHourRate: Number(v.workHourRate),
         navigatorPref: v.navigatorPref || "google",
-        themePref: v.themePref || "auto",
+        themeMode: v.themeMode || "auto",
+        themePalette: v.themePalette || "default",
         lunchBreakMinutes: Number(v.lunchBreakMinutes || 45),
         lunchBreakEnabled: v.lunchBreakEnabled === "on",
         defaultStartLabel: v.defaultStartLabel || "",
@@ -296,7 +301,8 @@ function renderMenu() {
       state.settings = await api("/api/settings", { method: "PUT", body: JSON.stringify(newSettings) });
       state.navigatorPref = state.settings.navigatorPref;
       try { localStorage.setItem("navigatorPref", state.navigatorPref); } catch {}
-      state.themePref = state.settings.themePref;
+      state.themeMode = state.settings.themeMode || "auto";
+      state.themePalette = state.settings.themePalette || "default";
       state.route.lunchBreak = state.settings.lunchBreakEnabled !== false;
       state.route.lunchBreakMinutes = state.settings.lunchBreakMinutes || 45;
       if (state.settings.defaultStartLabel || state.settings.defaultStartAddress) {
@@ -306,6 +312,15 @@ function renderMenu() {
       applyTheme();
       showToast("Impostazioni salvate");
       closeMenu();
+    });
+    ov.addEventListener("click", e => {
+      const paletteChip = e.target.closest("[data-palette]");
+      if (paletteChip && document.getElementById("themePaletteInput")) {
+        document.querySelectorAll(".palette-chip").forEach(c => c.classList.remove("active"));
+        paletteChip.classList.add("active");
+        document.getElementById("themePaletteInput").value = paletteChip.dataset.palette;
+        return;
+      }
     });
     ov.querySelectorAll("[data-stepper]").forEach(btn => {
       btn.addEventListener("click", () => {
@@ -406,7 +421,6 @@ function renderMenuSection(section) {
 function renderMenuSettings() {
   const s = state.settings;
   const nav = s.navigatorPref || "google";
-  const theme = s.themePref || "auto";
   const stepper = (name, val, min, max, step, unit = "", narrow = false) => `
     <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
       <div class="settings-stepper">
@@ -421,7 +435,7 @@ function renderMenuSettings() {
     <div class="bsheet-section-body">
       <form id="settings-form">
 
-        <h3 class="settings-section-title">📍 Partenza e rientro</h3>
+        <h3 class="settings-section-title">${_svg('<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/>',15)} Partenza e rientro</h3>
         <div class="form-grid">
           <label class="field">Nome<input name="defaultStartLabel" id="settings-start-label" value="${escapeHtml(s.defaultStartLabel || "")}" placeholder="Casa, Ufficio…" /></label>
           <label class="field full">Indirizzo<input name="defaultStartAddress" id="settings-start-address" value="${escapeHtml(s.defaultStartAddress || "")}" placeholder="Via, città…" /></label>
@@ -434,7 +448,7 @@ function renderMenuSettings() {
           <input name="maxReturnTime" type="time" value="${escapeHtml(s.maxReturnTime || "")}" placeholder="es. 18:30" />
         </label>
 
-        <h3 class="settings-section-title">☕ Soste automatiche</h3>
+        <h3 class="settings-section-title">${_svg('<path d="M17 8h1a4 4 0 1 1 0 8h-1"/><path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V8z"/><line x1="6" y1="2" x2="6" y2="4"/><line x1="10" y1="2" x2="10" y2="4"/><line x1="14" y1="2" x2="14" y2="4"/>',15)} Soste automatiche</h3>
         <div class="form-grid">
           <div class="field">
             <span class="field-label">Intervallo</span>
@@ -457,7 +471,7 @@ function renderMenuSettings() {
           </div>
         </div>
 
-        <h3 class="settings-section-title">🍽 Pausa pranzo</h3>
+        <h3 class="settings-section-title">${_svg('<line x1="8" y1="6" x2="8" y2="2"/><line x1="16" y1="6" x2="16" y2="2"/><path d="M8 6a4 4 0 0 0 0 8v8"/><path d="M16 6a4 4 0 0 1 0 8v-4h-4"/>',15)} Pausa pranzo</h3>
         <div class="form-grid">
           <label class="field checkbox-field full">
             <input type="checkbox" name="lunchBreakEnabled" ${s.lunchBreakEnabled !== false ? "checked" : ""} />
@@ -483,28 +497,44 @@ function renderMenuSettings() {
           <label class="field full">€/ora lavoro<input name="workHourRate" type="number" min="0" step="0.01" value="${escapeHtml(s.workHourRate)}" /></label>
         </div>
 
-        <h3 class="settings-section-title">🧭 App</h3>
+        <h3 class="settings-section-title">${_svg('<circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/>',15)} App</h3>
         <p class="stop-meta" style="margin-bottom:6px;">Navigatore</p>
         <div class="settings-radio-group">
           <label class="settings-radio"><input type="radio" name="navigatorPref" value="google" ${nav === "google" ? "checked" : ""} /> Google Maps</label>
           <label class="settings-radio"><input type="radio" name="navigatorPref" value="apple" ${nav === "apple" ? "checked" : ""} /> Apple Mappe</label>
           <label class="settings-radio"><input type="radio" name="navigatorPref" value="waze" ${nav === "waze" ? "checked" : ""} /> Waze</label>
         </div>
-        <p class="stop-meta" style="margin:10px 0 6px;">Tema</p>
+        <p class="stop-meta" style="margin:10px 0 6px;">Modalità</p>
         <div class="settings-radio-group">
-          <label class="settings-radio"><input type="radio" name="themePref" value="auto" ${theme === "auto" ? "checked" : ""} /> Automatico</label>
-          <label class="settings-radio"><input type="radio" name="themePref" value="light" ${theme === "light" ? "checked" : ""} /> Giorno</label>
-          <label class="settings-radio"><input type="radio" name="themePref" value="dark" ${theme === "dark" ? "checked" : ""} /> Notte</label>
-          <label class="settings-radio"><input type="radio" name="themePref" value="nero" ${theme === "nero" ? "checked" : ""} /> Neon Nero</label>
-          <div class="settings-theme-divider">Palette</div>
-          <label class="settings-radio"><input type="radio" name="themePref" value="foresta-notte" ${theme === "foresta-notte" ? "checked" : ""} /> Foresta Notte</label>
-          <label class="settings-radio"><input type="radio" name="themePref" value="foresta-giorno" ${theme === "foresta-giorno" ? "checked" : ""} /> Foresta Giorno</label>
-          <label class="settings-radio"><input type="radio" name="themePref" value="luxury-notte" ${theme === "luxury-notte" ? "checked" : ""} /> Luxury Notte</label>
-          <label class="settings-radio"><input type="radio" name="themePref" value="luxury-giorno" ${theme === "luxury-giorno" ? "checked" : ""} /> Luxury Giorno</label>
-          <label class="settings-radio"><input type="radio" name="themePref" value="metallo" ${theme === "metallo" ? "checked" : ""} /> Metallo</label>
-          <label class="settings-radio"><input type="radio" name="themePref" value="pietra" ${theme === "pietra" ? "checked" : ""} /> Pietra</label>
-          <label class="settings-radio"><input type="radio" name="themePref" value="legno" ${theme === "legno" ? "checked" : ""} /> Legno</label>
+          <label class="settings-radio"><input type="radio" name="themeMode" value="auto" ${(s.themeMode||"auto") === "auto" ? "checked" : ""} /> Automatico</label>
+          <label class="settings-radio"><input type="radio" name="themeMode" value="light" ${(s.themeMode||"auto") === "light" ? "checked" : ""} /> Giorno</label>
+          <label class="settings-radio"><input type="radio" name="themeMode" value="dark" ${(s.themeMode||"auto") === "dark" ? "checked" : ""} /> Notte</label>
         </div>
+        <p class="stop-meta" style="margin:10px 0 6px;">Palette</p>
+        <div class="settings-palette-group">
+          <button type="button" class="palette-chip${(s.themePalette||"default")==="default"?" active":""}" data-palette="default">
+            <span class="palette-swatch" style="background:linear-gradient(135deg,#05080f 50%,#e6f2f0 50%)"></span>Default
+          </button>
+          <button type="button" class="palette-chip${(s.themePalette||"default")==="neon"?" active":""}" data-palette="neon">
+            <span class="palette-swatch" style="background:linear-gradient(135deg,#000 50%,#e0fff8 50%)"></span>Neon
+          </button>
+          <button type="button" class="palette-chip${(s.themePalette||"default")==="luxury"?" active":""}" data-palette="luxury">
+            <span class="palette-swatch" style="background:linear-gradient(135deg,#0a0800 50%,#f5eec8 50%)"></span>Luxury
+          </button>
+          <button type="button" class="palette-chip${(s.themePalette||"default")==="metallo"?" active":""}" data-palette="metallo">
+            <span class="palette-swatch" style="background:linear-gradient(135deg,#0c0e10 50%,#dce8f0 50%)"></span>Metallo
+          </button>
+          <button type="button" class="palette-chip${(s.themePalette||"default")==="pietra"?" active":""}" data-palette="pietra">
+            <span class="palette-swatch" style="background:linear-gradient(135deg,#0e0d0c 50%,#ede0d0 50%)"></span>Pietra
+          </button>
+          <button type="button" class="palette-chip${(s.themePalette||"default")==="foresta"?" active":""}" data-palette="foresta">
+            <span class="palette-swatch" style="background:linear-gradient(135deg,#060d06 50%,#c8e8b0 50%)"></span>Foresta
+          </button>
+          <button type="button" class="palette-chip${(s.themePalette||"default")==="legno"?" active":""}" data-palette="legno">
+            <span class="palette-swatch" style="background:linear-gradient(135deg,#0c0800 50%,#f0dcc0 50%)"></span>Legno
+          </button>
+        </div>
+        <input type="hidden" name="themePalette" id="themePaletteInput" value="${s.themePalette||"default"}" />
 
         <div class="actions" style="margin-top:20px;">
           <button class="btn primary" type="submit" style="width:100%">Salva impostazioni</button>
@@ -717,7 +747,8 @@ async function loadInitialData() {
   state.googleClientId = config.googleClientId || "";
   state.settings = settings;
   state.navigatorPref = settings.navigatorPref || localStorage.getItem("navigatorPref") || "google";
-  state.themePref = settings.themePref || "auto";
+  state.themeMode = settings.themeMode || (settings.themePref === "light" ? "light" : settings.themePref === "dark" ? "dark" : "auto");
+  state.themePalette = settings.themePalette || "default";
   state.route.lunchBreak = settings.lunchBreakEnabled !== false;
   state.route.lunchBreakMinutes = settings.lunchBreakMinutes || 45;
   if (settings.defaultStartLabel || settings.defaultStartAddress) {
@@ -4351,7 +4382,7 @@ async function init() {
 applyTheme();
 // Follow OS dark/light preference in real time when set to "auto"
 window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
-  if (state.themePref === "auto") applyTheme();
+  if ((state.themeMode || "auto") === "auto") applyTheme();
 });
 bindEvents();
 
