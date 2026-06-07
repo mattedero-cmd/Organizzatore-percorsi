@@ -329,7 +329,6 @@ async function handleApi(request, response) {
           return sendJson(response, 401, { error: "Credenziali non valide" });
         }
         const token = generateAdminToken();
-        adminSessions.set(token, { expiresAt: Date.now() + ADMIN_SESSION_MS });
         return sendJson(response, 200, { token });
       }
 

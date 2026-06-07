@@ -105,6 +105,7 @@ const state = {
   googleMapsKey: "",
   googleMapsReady: false,
   googleClientId: "",
+  googleContactsData: null,
   navigatorPref: (() => { try { return localStorage.getItem("navigatorPref") || "google"; } catch { return "google"; } })(),
   mapApiConfigured: false,
   addresses: [],
@@ -2083,6 +2084,7 @@ function render() {
   else if (state.activeTab === "saved") renderSaved();
   else if (state.activeTab === "archive") renderArchive();
   else if (state.activeTab === "result") renderResult();
+  else if (state.activeTab === "google-contacts") renderGoogleContactsTab();
 }
 
 // ── route form helpers ────────────────────────────────────────────────────────
@@ -2678,93 +2680,83 @@ async function fetchGoogleConnections(token) {
 
 function showGoogleContactsSelector(rawContacts) {
   const existing = new Set(state.addresses.map(a => a.customer.toLowerCase().trim()));
-  const contacts = rawContacts.map(c => ({ ...c, _dup: existing.has(c.customer.toLowerCase().trim()) }));
-  let searchQuery = "";
+  state.googleContactsData = {
+    contacts: rawContacts.map(c => ({ ...c, _dup: existing.has(c.customer.toLowerCase().trim()), _selected: false })),
+    search: "",
+    allSelected: false
+  };
+  state.activeTab = "google-contacts";
+  render();
+}
 
-  const overlay = document.createElement("div");
-  overlay.id = "google-contacts-selector";
-  overlay.className = "map-picker-overlay";
+function renderGoogleContactsTab() {
+  const data = state.googleContactsData;
+  if (!data) { setActiveTab("archive"); return; }
 
-  function renderList() {
-    const q = searchQuery.trim().toLowerCase();
-    const filtered = q
-      ? contacts.filter(c =>
-          (c.customer + c.phone + c.email + c.fullAddress + c.activity)
-            .toLowerCase().includes(q))
-      : contacts;
-    overlay.querySelector("#gc-list").innerHTML = filtered.map((c, i) => `
-      <label class="import-contact-row${c._dup ? " import-dup" : ""}">
-        <input type="checkbox" class="import-cb" data-idx="${contacts.indexOf(c)}"
-          ${c._dup ? "" : "checked"} style="width:16px;min-height:16px;height:16px;flex-shrink:0;" />
-        <div style="min-width:0;">
-          <div style="font-weight:700;font-size:0.88rem;">
-            ${escapeHtml(c.customer || c.email || c.phone)}
-            ${c.activity ? `<span style="font-weight:400;color:var(--muted)"> — ${escapeHtml(c.activity)}</span>` : ""}
-            ${c._dup ? ' <span class="badge" style="font-size:0.7rem;vertical-align:middle;">già presente</span>' : ""}
-          </div>
-          ${c.phone ? `<div class="stop-meta">${phoneIcon(c.phoneType)} ${escapeHtml(c.phone)}${c.phone2 ? ` · ${escapeHtml(c.phone2)}` : ""}</div>` : ""}
-          ${c.email ? `<div class="stop-meta" style="font-size:0.78rem;">✉ ${escapeHtml(c.email)}</div>` : ""}
-          ${c.fullAddress ? `<div class="stop-meta" style="font-size:0.78rem;">📍 ${escapeHtml(c.fullAddress)}</div>` : ""}
+  const { contacts, search, allSelected } = data;
+  const q = search.trim().toLowerCase();
+  const filtered = q
+    ? contacts.filter(c => (c.customer + c.phone + c.email + c.fullAddress + c.activity).toLowerCase().includes(q))
+    : contacts;
+
+  const selectedCount = contacts.filter(c => c._selected).length;
+
+  app.innerHTML = `
+    <section class="grid" style="display:flex;flex-direction:column;height:100%;">
+      <div class="panel" style="display:flex;flex-direction:column;flex:1;min-height:0;">
+        <div class="section-head">
+          <button class="btn ghost" id="gc-back">← Indietro</button>
+          <h2 style="flex:1;text-align:center;">Contatti Google</h2>
+          <span class="stop-meta" style="white-space:nowrap;">${contacts.length} totali</span>
         </div>
-      </label>`).join("") || `<div class="empty">Nessun risultato</div>`;
-    updateCount();
-  }
 
-  function updateCount() {
-    const total = overlay.querySelectorAll(".import-cb").length;
-    const checked = overlay.querySelectorAll(".import-cb:checked").length;
-    const countEl = overlay.querySelector("#gc-count");
-    if (countEl) countEl.textContent = `${checked} selezionati su ${total}`;
-  }
+        <div style="display:flex;gap:8px;padding:10px 0;flex-wrap:wrap;align-items:center;">
+          <input id="gc-search" placeholder="Cerca per nome, telefono, email…"
+            value="${escapeHtml(search)}" style="flex:1;min-width:160px;" autocomplete="off" />
+          <button class="btn" id="gc-toggle-all" style="white-space:nowrap;">
+            ${allSelected ? "Deseleziona tutti" : "Seleziona tutti"}
+          </button>
+        </div>
 
-  overlay.innerHTML = `
-    <div class="map-picker-box" style="max-height:90dvh;display:flex;flex-direction:column;">
-      <div class="map-picker-header">
-        <span>Seleziona contatti Google (${contacts.length})</span>
-        <button class="btn ghost" id="gc-close-x">×</button>
+        <div class="stop-meta" style="padding:2px 0 8px;">
+          ${selectedCount > 0 ? `<b>${selectedCount}</b> selezionati` : "Nessun contatto selezionato"}
+          ${q ? ` · ${filtered.length} risultati` : ""}
+        </div>
+
+        <div style="flex:1;overflow-y:auto;display:grid;gap:6px;padding-bottom:4px;">
+          ${filtered.length === 0
+            ? `<div class="empty">Nessun risultato</div>`
+            : filtered.map(c => {
+                const idx = contacts.indexOf(c);
+                return `
+                <label class="import-contact-row${c._dup ? " import-dup" : ""}${c._selected ? " import-selected" : ""}"
+                  style="cursor:pointer;">
+                  <input type="checkbox" class="gc-cb" data-idx="${idx}"
+                    ${c._selected ? "checked" : ""}
+                    style="width:18px;min-height:18px;height:18px;flex-shrink:0;" />
+                  <div style="min-width:0;flex:1;">
+                    <div style="font-weight:700;font-size:0.9rem;">
+                      ${escapeHtml(c.customer || c.email || c.phone)}
+                      ${c.activity ? `<span style="font-weight:400;color:var(--muted)"> — ${escapeHtml(c.activity)}</span>` : ""}
+                      ${c._dup ? ' <span class="badge" style="font-size:0.7rem;vertical-align:middle;">già presente</span>' : ""}
+                    </div>
+                    ${c.phone ? `<div class="stop-meta">${phoneIcon(c.phoneType)} ${escapeHtml(c.phone)}${c.phone2 ? ` · ${escapeHtml(c.phone2)}` : ""}</div>` : ""}
+                    ${c.email ? `<div class="stop-meta">✉ ${escapeHtml(c.email)}</div>` : ""}
+                    ${c.fullAddress ? `<div class="stop-meta">📍 ${escapeHtml(c.fullAddress)}</div>` : ""}
+                  </div>
+                </label>`;
+              }).join("")}
+        </div>
+
+        <div style="padding-top:12px;border-top:1px solid var(--line);display:flex;gap:8px;">
+          <button class="btn" id="gc-back-btn">Annulla</button>
+          <button class="btn primary" id="gc-confirm-btn" style="flex:1;"
+            ${selectedCount === 0 ? "disabled" : ""}>
+            Importa ${selectedCount > 0 ? selectedCount : ""} selezionati →
+          </button>
+        </div>
       </div>
-      <div style="padding:10px 14px;border-bottom:1px solid var(--line);display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
-        <input id="gc-search" placeholder="Cerca…" style="flex:1;min-width:120px;" autocomplete="off" value="" />
-        <label style="display:flex;align-items:center;gap:6px;font-size:0.82rem;">
-          <input type="checkbox" id="gc-select-all" checked style="width:16px;min-height:16px;height:16px;" />
-          Tutti
-        </label>
-        <span id="gc-count" class="stop-meta" style="white-space:nowrap;"></span>
-      </div>
-      <div id="gc-list" style="flex:1;overflow-y:auto;padding:8px 12px;display:grid;gap:6px;"></div>
-      <div style="padding:12px 16px;border-top:1px solid var(--line);display:flex;gap:8px;">
-        <button class="btn" id="gc-cancel">Annulla</button>
-        <button class="btn primary" id="gc-confirm" style="flex:1;">Rivedi e importa selezionati →</button>
-      </div>
-    </div>`;
-  document.body.appendChild(overlay);
-  renderList();
-
-  const close = () => overlay.remove();
-  overlay.querySelector("#gc-close-x").addEventListener("click", close);
-  overlay.querySelector("#gc-cancel").addEventListener("click", close);
-
-  overlay.querySelector("#gc-search").addEventListener("input", e => {
-    searchQuery = e.target.value;
-    renderList();
-  });
-
-  overlay.querySelector("#gc-select-all").addEventListener("change", e => {
-    overlay.querySelectorAll(".import-cb").forEach(cb => { cb.checked = e.target.checked; });
-    updateCount();
-  });
-
-  overlay.querySelector("#gc-list").addEventListener("change", e => {
-    if (e.target.classList.contains("import-cb")) updateCount();
-  });
-
-  overlay.querySelector("#gc-confirm").addEventListener("click", () => {
-    const selected = [...overlay.querySelectorAll(".import-cb:checked")]
-      .map(cb => { const c = { ...contacts[Number(cb.dataset.idx)] }; delete c._dup; return c; });
-    if (!selected.length) { showToast("Nessun contatto selezionato"); return; }
-    close();
-    startImportWizard(selected);
-  });
+    </section>`;
 }
 
 async function importFromGoogleContacts() {
@@ -3512,6 +3504,12 @@ function bindEvents() {
       const stop = state.route.stops.find(s => s.uid === uid);
       if (stop) stop[key] = key === "durationMinutes" ? Number(sf.value || 0) : sf.value;
     }
+    // google contacts search
+    if (e.target.id === "gc-search" && state.googleContactsData) {
+      state.googleContactsData.search = e.target.value;
+      render();
+      return;
+    }
     // archive search
     if (e.target.id === "archive-search") {
       const q = e.target.value;
@@ -3934,6 +3932,51 @@ function bindEvents() {
 
     if (e.target.closest("#import-google-contacts")) {
       await importFromGoogleContacts();
+      return;
+    }
+
+    if (e.target.closest("#gc-back") || e.target.closest("#gc-back-btn")) {
+      state.googleContactsData = null;
+      setActiveTab("archive");
+      return;
+    }
+
+    if (e.target.closest("#gc-toggle-all")) {
+      const data = state.googleContactsData;
+      if (!data) return;
+      data.allSelected = !data.allSelected;
+      data.contacts.forEach(c => { c._selected = data.allSelected; });
+      render();
+      return;
+    }
+
+    if (e.target.closest("#gc-confirm-btn")) {
+      const data = state.googleContactsData;
+      if (!data) return;
+      const selected = data.contacts.filter(c => c._selected).map(c => { const copy = { ...c }; delete copy._dup; delete copy._selected; return copy; });
+      if (!selected.length) { showToast("Nessun contatto selezionato"); return; }
+      state.googleContactsData = null;
+      startImportWizard(selected);
+      return;
+    }
+
+    if (e.target.classList.contains("gc-cb")) {
+      const data = state.googleContactsData;
+      if (!data) return;
+      const idx = Number(e.target.dataset.idx);
+      data.contacts[idx]._selected = e.target.checked;
+      data.allSelected = data.contacts.every(c => c._selected);
+      // aggiorna solo contatore e pulsante senza re-render completo
+      const countEl = document.querySelector(".stop-meta b");
+      const confirmBtn = document.querySelector("#gc-confirm-btn");
+      const toggleBtn = document.querySelector("#gc-toggle-all");
+      const selectedCount = data.contacts.filter(c => c._selected).length;
+      if (countEl?.closest(".stop-meta")) {
+        const meta = document.querySelector("[style*='padding:2px']");
+        if (meta) meta.innerHTML = selectedCount > 0 ? `<b>${selectedCount}</b> selezionati` : "Nessun contatto selezionato";
+      }
+      if (confirmBtn) { confirmBtn.disabled = selectedCount === 0; confirmBtn.textContent = `Importa ${selectedCount > 0 ? selectedCount : ""} selezionati →`; }
+      if (toggleBtn) toggleBtn.textContent = data.allSelected ? "Deseleziona tutti" : "Seleziona tutti";
       return;
     }
 
