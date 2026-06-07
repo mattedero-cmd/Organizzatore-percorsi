@@ -462,7 +462,7 @@ async function insertBreaks(rows, options) {
   const EARLIEST_BREAK = options?.earliestBreakTime ?? (8 * 60);
   const NO_BREAK_BEFORE_LUNCH = 60;
   const NO_BREAK_AFTER_LUNCH = 120;
-  const maxDetourKm = Number(options?.maxDetourKm ?? 1.7);
+  const maxDetourKm = Number(options?.maxDetourKm ?? 1.5);
 
   // ── insertions list ──────────────────────────────────────────────────────────
   const insertions = [];
@@ -752,7 +752,7 @@ export async function planRoute(payload, settings, restStops = []) {
     restMaxDeviationMin: settings?.restMaxDeviationMin ?? 40,
     restDurationMin: settings?.restDurationMin ?? 15,
     earliestBreakTime: settings?.earliestBreakTime != null ? parseTime(settings.earliestBreakTime) : (8 * 60),
-    maxDetourKm: settings?.maxDetourKm ?? 1.7,
+    maxDetourKm: settings?.maxDetourKm ?? 1.5,
     scheduledDate
   });
   best = {
