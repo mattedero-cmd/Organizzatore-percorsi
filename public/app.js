@@ -1018,9 +1018,9 @@ function renderRoute() {
         <div style="margin-top:8px;">
           <label class="rp-label" style="display:block;margin-bottom:4px;">Modalità arrivo</label>
           <select name="timingMode" style="width:100%;font-size:0.85rem;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--text);">
-            <option value="first_open_minus" ${dm === "first_open_minus" ? "selected" : ""}>⏰ Prima dell'apertura</option>
-            <option value="arrive_at" ${dm === "arrive_at" ? "selected" : ""}>🎯 Arrivo a orario fisso</option>
-            <option value="depart_at" ${dm === "depart_at" ? "selected" : ""}>🚀 Partenza a orario fisso</option>
+            <option value="first_open_minus" ${dm === "first_open_minus" ? "selected" : ""}>Prima dell'apertura</option>
+            <option value="arrive_at" ${dm === "arrive_at" ? "selected" : ""}>Arrivo a orario fisso</option>
+            <option value="depart_at" ${dm === "depart_at" ? "selected" : ""}>Partenza a orario fisso</option>
           </select>
         </div>
         ${dm === "first_open_minus" ? `<div style="margin-top:6px;"><label class="field">Anticipo (min)<input name="arrivalLeadMinutes" type="number" min="0" max="60" step="5" value="${escapeHtml(r.arrivalLeadMinutes)}" /></label></div>` : ""}
@@ -1586,10 +1586,10 @@ function renderArchive() {
             </div>
           </div>
           <label class="field">Tipo contatto<select name="addressType">
-            <option value="customer" ${!form.addressType || form.addressType === "customer" ? "selected" : ""}>👤 Cliente</option>
-            <option value="rest" ${form.addressType === "rest" ? "selected" : ""}>☕ Sosta (bar/autogrill)</option>
-            <option value="restaurant" ${form.addressType === "restaurant" ? "selected" : ""}>🍽 Ristorante (pranzo)</option>
-            <option value="favorite" ${form.addressType === "favorite" ? "selected" : ""}>⭐ Preferito (casa, ecc.)</option>
+            <option value="customer" ${!form.addressType || form.addressType === "customer" ? "selected" : ""}>Cliente</option>
+            <option value="rest" ${form.addressType === "rest" ? "selected" : ""}>Sosta (bar/autogrill)</option>
+            <option value="restaurant" ${form.addressType === "restaurant" ? "selected" : ""}>Ristorante (pranzo)</option>
+            <option value="favorite" ${form.addressType === "favorite" ? "selected" : ""}>Preferito (casa, ecc.)</option>
           </select></label>
           <label class="field">Email<input name="email" type="email" value="${escapeHtml(form.email)}" /></label>
           <label class="field full">Note<textarea name="notes" id="contact-notes">${escapeHtml(form.notes)}</textarea></label>
