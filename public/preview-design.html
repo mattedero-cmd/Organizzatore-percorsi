@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Anteprima Premium</title>
+<title>Anteprima Premium Neon</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -12,483 +12,451 @@ body {
   min-height: 100vh;
   overflow-x: hidden;
   color: #e8eaf0;
+  background: #05080f;
 }
 
-/* ═══════════════════════════════════════
-   SFONDO RICCO — necessario per il blur
-═══════════════════════════════════════ */
+/* ═══════════════════════════════════════════
+   SFONDO
+═══════════════════════════════════════════ */
 .bg {
-  position: fixed;
-  inset: 0;
-  background: #060912;
-  z-index: 0;
+  position: fixed; inset: 0; z-index: 0;
+  background: #05080f;
+  overflow: hidden;
 }
-
-/* Blob colorati che danno profondità */
-.bg::before {
-  content: "";
+.bg-blob {
   position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(ellipse 55% 40% at 15% 10%,  rgba(20,184,166,0.28) 0%, transparent 65%),
-    radial-gradient(ellipse 45% 50% at 88%  5%,  rgba(99,102,241,0.22) 0%, transparent 60%),
-    radial-gradient(ellipse 60% 35% at 70% 55%,  rgba(168,85,247,0.14) 0%, transparent 55%),
-    radial-gradient(ellipse 50% 45% at  5% 80%,  rgba(59,130,246,0.16) 0%, transparent 60%),
-    radial-gradient(ellipse 40% 30% at 92% 90%,  rgba(20,184,166,0.12) 0%, transparent 50%);
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0.55;
+  animation: breathe 8s ease-in-out infinite;
+}
+.bg-blob-1 {
+  width: 380px; height: 280px;
+  top: -60px; left: -80px;
+  background: radial-gradient(ellipse, #00ffe0 0%, transparent 70%);
+  opacity: 0.18;
+  animation-delay: 0s;
+}
+.bg-blob-2 {
+  width: 300px; height: 300px;
+  top: -40px; right: -60px;
+  background: radial-gradient(ellipse, #a855f7 0%, transparent 70%);
+  opacity: 0.15;
+  animation-delay: 3s;
+}
+.bg-blob-3 {
+  width: 260px; height: 200px;
+  bottom: 120px; left: -40px;
+  background: radial-gradient(ellipse, #3b82f6 0%, transparent 70%);
+  opacity: 0.13;
+  animation-delay: 5s;
+}
+.bg-blob-4 {
+  width: 200px; height: 200px;
+  bottom: 80px; right: -30px;
+  background: radial-gradient(ellipse, #00ffe0 0%, transparent 70%);
+  opacity: 0.1;
+  animation-delay: 1.5s;
+}
+@keyframes breathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.12); }
 }
 
-/* Griglia sottile per texture di profondità */
+/* Griglia di sfondo */
 .bg::after {
   content: "";
-  position: absolute;
-  inset: 0;
+  position: absolute; inset: 0;
   background-image:
-    linear-gradient(rgba(255,255,255,0.022) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255,255,255,0.022) 1px, transparent 1px);
-  background-size: 40px 40px;
+    linear-gradient(rgba(0,255,224,0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,255,224,0.025) 1px, transparent 1px);
+  background-size: 44px 44px;
 }
 
-/* Barra orizzontale luminosa in cima */
-.top-glow {
-  position: fixed;
-  top: 0; left: 0; right: 0;
-  height: 1px;
+/* Linea neon in cima */
+.top-line {
+  position: fixed; top: 0; left: 0; right: 0; height: 1px; z-index: 100;
   background: linear-gradient(90deg,
     transparent 0%,
-    rgba(20,184,166,0.6) 30%,
-    rgba(99,102,241,0.6) 70%,
+    rgba(0,255,224,0.7) 20%,
+    rgba(168,85,247,0.7) 80%,
     transparent 100%);
-  z-index: 100;
+  box-shadow: 0 0 12px rgba(0,255,224,0.5), 0 0 24px rgba(168,85,247,0.3);
 }
 
-/* ═══════════════════════════════════════
+/* ═══════════════════════════════════════════
    LAYOUT
-═══════════════════════════════════════ */
+═══════════════════════════════════════════ */
 .page {
-  position: relative;
-  z-index: 1;
-  max-width: 430px;
-  margin: 0 auto;
+  position: relative; z-index: 1;
+  max-width: 430px; margin: 0 auto;
   padding: 22px 16px 110px;
 }
 
-/* ═══════════════════════════════════════
+/* ═══════════════════════════════════════════
    HEADER
-═══════════════════════════════════════ */
+═══════════════════════════════════════════ */
 .section-header {
-  display: flex;
-  align-items: center;
+  display: flex; align-items: flex-start;
   justify-content: space-between;
-  margin-bottom: 8px;
+  margin-bottom: 22px;
   padding: 0 2px;
 }
-
 .section-title {
-  font-size: 1.5rem;
-  font-weight: 800;
-  letter-spacing: -0.03em;
-  background: linear-gradient(135deg, #f1f5f9 0%, #94a3b8 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  font-size: 1.65rem; font-weight: 800;
+  letter-spacing: -0.035em;
+  color: #f1f5f9;
+  text-shadow: 0 0 30px rgba(0,255,224,0.2);
+  line-height: 1.15;
 }
-
-.section-count {
-  font-size: 0.75rem;
-  color: #475569;
-  margin-bottom: 18px;
-  padding-left: 2px;
-  letter-spacing: 0.04em;
+.section-sub {
+  font-size: 0.72rem; font-weight: 500;
+  color: #334155; letter-spacing: 0.06em;
   text-transform: uppercase;
+  margin-top: 3px;
 }
 
-/* ═══════════════════════════════════════
-   PULSANTE GHOST VETRO
-═══════════════════════════════════════ */
-.btn-glass {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 16px;
+/* ═══════════════════════════════════════════
+   PULSANTE VETRO PICCOLO
+═══════════════════════════════════════════ */
+.btn-ghost {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 9px 16px;
   border-radius: 22px;
-  border: 1px solid rgba(255,255,255,0.14);
-  background: rgba(255,255,255,0.06);
-  color: #94a3b8;
-  font-size: 0.8rem;
-  font-weight: 600;
-  cursor: pointer;
-  letter-spacing: 0.01em;
+  border: 1px solid rgba(0,255,224,0.2);
+  background: rgba(0,255,224,0.05);
+  color: rgba(0,255,224,0.7);
+  font-size: 0.79rem; font-weight: 600;
+  cursor: pointer; letter-spacing: 0.01em;
   backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  box-shadow: 0 2px 8px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.1);
+  box-shadow: 0 0 14px rgba(0,255,224,0.08), inset 0 1px 0 rgba(0,255,224,0.1);
   transition: all 0.22s ease;
 }
-.btn-glass:hover {
-  background: rgba(255,255,255,0.11);
-  color: #e2e8f0;
-  border-color: rgba(255,255,255,0.22);
-  box-shadow: 0 4px 14px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.15);
+.btn-ghost:hover {
+  background: rgba(0,255,224,0.1);
+  color: #00ffe0;
+  border-color: rgba(0,255,224,0.4);
+  box-shadow: 0 0 20px rgba(0,255,224,0.18), inset 0 1px 0 rgba(0,255,224,0.15);
 }
+.btn-ghost svg { flex-shrink: 0; }
 
-/* ═══════════════════════════════════════
-   CARD — effetto vetro pieno
-═══════════════════════════════════════ */
+/* ═══════════════════════════════════════════
+   CARD
+═══════════════════════════════════════════ */
 .route-card {
   position: relative;
-  background: rgba(14, 22, 42, 0.55);
-  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(8, 14, 28, 0.7);
+  border: 1px solid rgba(255,255,255,0.07);
   border-radius: 22px;
-  padding: 0;
   margin-bottom: 16px;
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
+  backdrop-filter: blur(28px);
+  -webkit-backdrop-filter: blur(28px);
   overflow: hidden;
   box-shadow:
-    0 8px 32px rgba(0,0,0,0.45),
-    0 1px 0 rgba(255,255,255,0.08) inset,
-    0 -1px 0 rgba(0,0,0,0.3) inset;
-  animation: cardIn 0.4s cubic-bezier(0.22,1,0.36,1) both;
+    0 8px 40px rgba(0,0,0,0.6),
+    0 1px 0 rgba(255,255,255,0.06) inset,
+    0 -1px 0 rgba(0,0,0,0.4) inset;
+  animation: cardIn 0.45s cubic-bezier(0.22,1,0.36,1) both;
   transition: transform 0.25s ease, box-shadow 0.25s ease;
 }
 .route-card:hover {
   transform: translateY(-3px);
-  box-shadow: 0 16px 48px rgba(0,0,0,0.55), 0 1px 0 rgba(255,255,255,0.1) inset;
+  box-shadow: 0 16px 56px rgba(0,0,0,0.65), 0 0 0 1px rgba(0,255,224,0.08), 0 1px 0 rgba(255,255,255,0.08) inset;
 }
-
 .route-card:nth-child(1) { animation-delay: 0.04s; }
-.route-card:nth-child(2) { animation-delay: 0.11s; }
-.route-card:nth-child(3) { animation-delay: 0.18s; }
+.route-card:nth-child(2) { animation-delay: 0.12s; }
+.route-card:nth-child(3) { animation-delay: 0.20s; }
 
 @keyframes cardIn {
-  from { opacity: 0; transform: translateY(18px) scale(0.97); }
-  to   { opacity: 1; transform: translateY(0)   scale(1); }
+  from { opacity: 0; transform: translateY(20px) scale(0.96); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
 }
 
-/* Bordo superiore colorato */
+/* Bordo neon superiore */
 .route-card::before {
   content: "";
-  position: absolute;
-  top: 0; left: 20px; right: 20px;
-  height: 1px;
+  position: absolute; top: 0; left: 24px; right: 24px; height: 1px;
   background: linear-gradient(90deg,
     transparent,
-    rgba(20,184,166,0.6) 30%,
-    rgba(99,102,241,0.5) 70%,
+    rgba(0,255,224,0.55) 35%,
+    rgba(168,85,247,0.45) 65%,
     transparent);
+  box-shadow: 0 0 8px rgba(0,255,224,0.3);
 }
 
-/* ─ Card body ─ */
+/* Riflesso angolo top-left */
+.route-card::after {
+  content: "";
+  position: absolute; top: 0; left: 0;
+  width: 120px; height: 120px;
+  background: radial-gradient(circle at 0% 0%, rgba(0,255,224,0.07), transparent 70%);
+  pointer-events: none;
+}
+
 .card-body { padding: 18px 18px 16px; }
 
-/* ─ Card top row ─ */
+/* ─ Top row ─ */
 .card-top {
-  display: flex;
-  align-items: center;
+  display: flex; align-items: center;
   justify-content: space-between;
   margin-bottom: 14px;
 }
-
-.card-title-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
+.card-title-row { display: flex; align-items: center; gap: 11px; }
 
 .route-icon {
-  width: 36px; height: 36px;
-  border-radius: 11px;
-  background: linear-gradient(135deg, rgba(20,184,166,0.25), rgba(99,102,241,0.2));
-  border: 1px solid rgba(20,184,166,0.3);
+  width: 38px; height: 38px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(0,255,224,0.12), rgba(168,85,247,0.1));
+  border: 1px solid rgba(0,255,224,0.22);
   display: flex; align-items: center; justify-content: center;
-  font-size: 16px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.12);
+  box-shadow: 0 0 14px rgba(0,255,224,0.1), inset 0 1px 0 rgba(0,255,224,0.15);
   flex-shrink: 0;
+  color: rgba(0,255,224,0.8);
 }
 
 .card-name {
-  font-size: 1rem;
-  font-weight: 700;
-  color: #f1f5f9;
-  letter-spacing: -0.02em;
+  font-size: 1rem; font-weight: 700;
+  color: #f1f5f9; letter-spacing: -0.02em;
 }
 
 .badge-opt {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 10px;
-  border-radius: 20px;
-  font-size: 0.68rem;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  background: linear-gradient(135deg, rgba(20,184,166,0.18), rgba(99,102,241,0.14));
-  border: 1px solid rgba(20,184,166,0.28);
-  color: #2dd4bf;
-  box-shadow: 0 0 10px rgba(20,184,166,0.12);
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 4px 11px;
+  border-radius: 20px; font-size: 0.68rem; font-weight: 700;
+  letter-spacing: 0.06em; text-transform: uppercase;
+  background: rgba(0,255,224,0.07);
+  border: 1px solid rgba(0,255,224,0.22);
+  color: rgba(0,255,224,0.85);
+  box-shadow: 0 0 12px rgba(0,255,224,0.1);
+}
+.badge-dot {
+  width: 5px; height: 5px; border-radius: 50%;
+  background: #00ffe0;
+  box-shadow: 0 0 6px #00ffe0;
 }
 
-/* ─ Chips metadati ─ */
+/* ─ Chips ─ */
 .card-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+  display: flex; flex-wrap: wrap; gap: 6px;
   margin-bottom: 11px;
 }
-
 .chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
+  display: inline-flex; align-items: center; gap: 6px;
   padding: 5px 11px;
   border-radius: 9px;
-  background: rgba(255,255,255,0.045);
-  border: 1px solid rgba(255,255,255,0.08);
-  font-size: 0.78rem;
-  color: #64748b;
-  font-weight: 500;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.07);
+  font-size: 0.78rem; color: #64748b; font-weight: 500;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
 }
 .chip b { color: #cbd5e1; font-weight: 700; }
-.chip-em b { color: #34d399; }
+.chip svg { opacity: 0.45; flex-shrink: 0; }
+.chip-cost b { color: #34d399; }
+.chip-cost svg { opacity: 0.6; color: #34d399; }
 
 .route-line {
-  font-size: 0.77rem;
-  color: #475569;
-  margin-bottom: 14px;
-  padding-left: 1px;
-  letter-spacing: 0.01em;
-}
-
-/* ═══════════════════════════════════════
-   DIVISORE CON GRADIENTE
-═══════════════════════════════════════ */
-.card-divider {
-  height: 1px;
-  background: linear-gradient(90deg,
-    transparent,
-    rgba(255,255,255,0.07) 30%,
-    rgba(255,255,255,0.07) 70%,
-    transparent);
-  margin: 0 -18px 14px;
-}
-
-/* ═══════════════════════════════════════
-   PULSANTE PRIMARIO — vetro verde
-═══════════════════════════════════════ */
-.btn-primary {
-  width: 100%;
-  padding: 13px;
-  border-radius: 14px;
-  border: 1px solid rgba(20,184,166,0.4);
-  background: linear-gradient(135deg,
-    rgba(20,184,166,0.35) 0%,
-    rgba(13,148,136,0.28) 50%,
-    rgba(99,102,241,0.18) 100%);
-  color: #e0fdf4;
-  font-size: 0.92rem;
-  font-weight: 700;
+  font-size: 0.76rem; color: #334155;
+  margin-bottom: 14px; padding-left: 1px;
   letter-spacing: 0.02em;
-  cursor: pointer;
-  margin-bottom: 11px;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  box-shadow:
-    0 4px 20px rgba(20,184,166,0.2),
-    inset 0 1px 0 rgba(255,255,255,0.18),
-    inset 0 -1px 0 rgba(0,0,0,0.15);
-  transition: all 0.22s ease;
-  position: relative;
-  overflow: hidden;
 }
+
+.divider {
+  height: 1px; margin: 0 -18px 14px;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.06) 30%, rgba(255,255,255,0.06) 70%, transparent);
+}
+
+/* ═══════════════════════════════════════════
+   PULSANTE PRIMARIO NEON
+═══════════════════════════════════════════ */
+.btn-primary {
+  width: 100%; padding: 13px;
+  border-radius: 13px;
+  border: 1px solid rgba(0,255,224,0.3);
+  background: linear-gradient(135deg,
+    rgba(0,255,224,0.14) 0%,
+    rgba(0,200,180,0.1) 50%,
+    rgba(168,85,247,0.1) 100%);
+  color: #e0fdf4;
+  font-size: 0.91rem; font-weight: 700; letter-spacing: 0.02em;
+  cursor: pointer; margin-bottom: 11px;
+  backdrop-filter: blur(8px);
+  box-shadow:
+    0 0 20px rgba(0,255,224,0.12),
+    0 4px 18px rgba(0,0,0,0.4),
+    inset 0 1px 0 rgba(0,255,224,0.2),
+    inset 0 -1px 0 rgba(0,0,0,0.2);
+  transition: all 0.22s ease;
+  position: relative; overflow: hidden;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+}
+/* Lucentezza superiore */
 .btn-primary::before {
   content: "";
-  position: absolute;
-  top: 0; left: 0; right: 0;
-  height: 50%;
-  background: linear-gradient(rgba(255,255,255,0.07), transparent);
-  border-radius: 14px 14px 0 0;
+  position: absolute; top: 0; left: 0; right: 0; height: 48%;
+  background: linear-gradient(rgba(0,255,224,0.08), transparent);
   pointer-events: none;
 }
 .btn-primary:hover {
   background: linear-gradient(135deg,
-    rgba(20,184,166,0.48) 0%,
-    rgba(13,148,136,0.38) 50%,
-    rgba(99,102,241,0.25) 100%);
-  box-shadow: 0 6px 28px rgba(20,184,166,0.32), inset 0 1px 0 rgba(255,255,255,0.22);
+    rgba(0,255,224,0.22) 0%,
+    rgba(0,200,180,0.16) 50%,
+    rgba(168,85,247,0.15) 100%);
+  box-shadow: 0 0 30px rgba(0,255,224,0.22), 0 6px 24px rgba(0,0,0,0.5), inset 0 1px 0 rgba(0,255,224,0.28);
   transform: translateY(-1px);
 }
 .btn-primary:active { transform: scale(0.98); }
+.btn-primary svg { flex-shrink: 0; }
 
-/* ═══════════════════════════════════════
-   PULSANTI AZIONI — vetro neutro e rosso
-═══════════════════════════════════════ */
+/* ═══════════════════════════════════════════
+   PULSANTI AZIONI
+═══════════════════════════════════════════ */
 .card-actions { display: flex; gap: 7px; }
 
 .btn-action {
-  flex: 1;
-  padding: 9px 6px;
-  border-radius: 12px;
-  border: 1px solid rgba(255,255,255,0.09);
-  background: rgba(255,255,255,0.045);
-  color: #94a3b8;
-  font-size: 0.76rem;
-  font-weight: 700;
+  flex: 1; padding: 9px 6px;
+  border-radius: 11px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.04);
+  color: #64748b;
+  font-size: 0.74rem; font-weight: 700; letter-spacing: 0.01em;
   cursor: pointer;
-  letter-spacing: 0.01em;
   backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 2px 6px rgba(0,0,0,0.25);
-  transition: all 0.18s ease;
-  display: flex; align-items: center; justify-content: center; gap: 5px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 2px 8px rgba(0,0,0,0.3);
+  transition: all 0.2s ease;
+  display: flex; align-items: center; justify-content: center; gap: 6px;
   position: relative; overflow: hidden;
 }
 .btn-action::before {
   content: "";
   position: absolute; top: 0; left: 0; right: 0; height: 45%;
-  background: linear-gradient(rgba(255,255,255,0.06), transparent);
+  background: linear-gradient(rgba(255,255,255,0.05), transparent);
   pointer-events: none;
 }
 .btn-action:hover {
-  background: rgba(255,255,255,0.09);
-  color: #e2e8f0;
-  border-color: rgba(255,255,255,0.16);
+  background: rgba(255,255,255,0.08);
+  color: #94a3b8; border-color: rgba(255,255,255,0.14);
   transform: translateY(-1px);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.12), 0 4px 10px rgba(0,0,0,0.35);
 }
 
 .btn-action-del {
-  flex: 1;
-  padding: 9px 6px;
-  border-radius: 12px;
-  border: 1px solid rgba(239,68,68,0.22);
-  background: rgba(239,68,68,0.06);
-  color: #f87171;
-  font-size: 0.76rem;
-  font-weight: 700;
+  flex: 1; padding: 9px 6px;
+  border-radius: 11px;
+  border: 1px solid rgba(248,113,113,0.18);
+  background: rgba(239,68,68,0.05);
+  color: #ef4444;
+  font-size: 0.74rem; font-weight: 700; letter-spacing: 0.01em;
   cursor: pointer;
-  letter-spacing: 0.01em;
   backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  box-shadow: inset 0 1px 0 rgba(255,100,100,0.08), 0 2px 6px rgba(0,0,0,0.25);
-  transition: all 0.18s ease;
-  display: flex; align-items: center; justify-content: center; gap: 5px;
+  box-shadow: 0 0 10px rgba(239,68,68,0.05), inset 0 1px 0 rgba(255,80,80,0.07), 0 2px 8px rgba(0,0,0,0.3);
+  transition: all 0.2s ease;
+  display: flex; align-items: center; justify-content: center; gap: 6px;
   position: relative; overflow: hidden;
 }
 .btn-action-del::before {
   content: "";
   position: absolute; top: 0; left: 0; right: 0; height: 45%;
-  background: linear-gradient(rgba(255,80,80,0.07), transparent);
+  background: linear-gradient(rgba(255,80,80,0.05), transparent);
   pointer-events: none;
 }
 .btn-action-del:hover {
-  background: rgba(239,68,68,0.14);
-  border-color: rgba(239,68,68,0.38);
+  background: rgba(239,68,68,0.12);
+  border-color: rgba(248,113,113,0.32);
   color: #fca5a5;
+  box-shadow: 0 0 18px rgba(239,68,68,0.18), inset 0 1px 0 rgba(255,100,100,0.1);
   transform: translateY(-1px);
-  box-shadow: 0 4px 14px rgba(239,68,68,0.18), inset 0 1px 0 rgba(255,100,100,0.12);
 }
 
 /* ─ Stop tags ─ */
 .stop-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
-  padding: 12px 18px 14px;
-  border-top: 1px solid rgba(255,255,255,0.05);
-  background: rgba(0,0,0,0.15);
+  display: flex; flex-wrap: wrap; gap: 5px;
+  padding: 11px 18px 13px;
+  border-top: 1px solid rgba(255,255,255,0.04);
+  background: rgba(0,0,0,0.2);
 }
 .stop-tag {
-  font-size: 0.71rem;
-  color: #475569;
-  background: rgba(255,255,255,0.03);
-  border: 1px solid rgba(255,255,255,0.06);
-  border-radius: 7px;
-  padding: 3px 9px;
-  letter-spacing: 0.01em;
+  font-size: 0.7rem; color: #334155;
+  background: rgba(255,255,255,0.025);
+  border: 1px solid rgba(255,255,255,0.055);
+  border-radius: 7px; padding: 3px 9px;
 }
 
-/* ═══════════════════════════════════════
-   TAB BAR — vetro pieno
-═══════════════════════════════════════ */
+/* ═══════════════════════════════════════════
+   TAB BAR
+═══════════════════════════════════════════ */
 .tab-bar {
-  position: fixed;
-  bottom: 0; left: 0; right: 0;
+  position: fixed; bottom: 0; left: 0; right: 0;
   padding: 10px 12px 30px;
-  background: rgba(6,9,18,0.7);
-  backdrop-filter: blur(28px);
-  -webkit-backdrop-filter: blur(28px);
-  border-top: 1px solid rgba(255,255,255,0.07);
-  box-shadow: 0 -8px 32px rgba(0,0,0,0.5);
-  display: flex;
-  justify-content: space-around;
-  align-items: center;
+  background: rgba(5,8,15,0.8);
+  backdrop-filter: blur(32px);
+  -webkit-backdrop-filter: blur(32px);
+  border-top: 1px solid rgba(255,255,255,0.06);
+  box-shadow: 0 -1px 0 rgba(0,255,224,0.08), 0 -12px 40px rgba(0,0,0,0.6);
+  display: flex; justify-content: space-around; align-items: center;
   z-index: 50;
 }
-/* Bordo superiore luminoso tab bar */
 .tab-bar::before {
   content: "";
-  position: absolute;
-  top: -1px; left: 0; right: 0;
-  height: 1px;
+  position: absolute; top: -1px; left: 0; right: 0; height: 1px;
   background: linear-gradient(90deg,
     transparent 0%,
-    rgba(20,184,166,0.35) 25%,
-    rgba(99,102,241,0.3) 75%,
+    rgba(0,255,224,0.4) 25%,
+    rgba(168,85,247,0.3) 75%,
     transparent 100%);
+  box-shadow: 0 0 10px rgba(0,255,224,0.2);
 }
 
 .tab-item {
   display: flex; flex-direction: column; align-items: center; gap: 4px;
-  padding: 8px 16px;
-  border-radius: 14px;
-  cursor: pointer;
-  font-size: 0.67rem;
-  font-weight: 600;
-  color: #334155;
-  letter-spacing: 0.02em;
-  border: 1px solid transparent;
-  background: none;
+  padding: 8px 14px; border-radius: 14px;
+  cursor: pointer; font-size: 0.65rem; font-weight: 600;
+  color: #1e293b; letter-spacing: 0.03em;
+  border: 1px solid transparent; background: none;
   transition: all 0.22s ease;
 }
-.tab-item svg { transition: transform 0.22s ease, filter 0.22s ease; }
-.tab-item:hover { color: #64748b; }
-
+.tab-item svg { transition: all 0.22s ease; }
+.tab-item:hover { color: #475569; }
 .tab-item.active {
-  color: #2dd4bf;
-  background: rgba(20,184,166,0.1);
-  border-color: rgba(20,184,166,0.2);
-  box-shadow:
-    0 0 20px rgba(20,184,166,0.1),
-    inset 0 1px 0 rgba(255,255,255,0.08);
+  color: rgba(0,255,224,0.9);
+  background: rgba(0,255,224,0.07);
+  border-color: rgba(0,255,224,0.18);
+  box-shadow: 0 0 20px rgba(0,255,224,0.1), inset 0 1px 0 rgba(0,255,224,0.1);
 }
 .tab-item.active svg {
-  filter: drop-shadow(0 0 5px rgba(20,184,166,0.55));
+  filter: drop-shadow(0 0 5px rgba(0,255,224,0.6));
   transform: translateY(-1px);
 }
-
 .tab-dot {
-  width: 3px; height: 3px;
-  border-radius: 50%;
-  background: #14b8a6;
-  box-shadow: 0 0 6px #14b8a6, 0 0 12px rgba(20,184,166,0.5);
+  width: 3px; height: 3px; border-radius: 50%;
+  background: #00ffe0;
+  box-shadow: 0 0 6px #00ffe0, 0 0 12px rgba(0,255,224,0.5);
   margin-top: -1px;
 }
 </style>
 </head>
 <body>
-<div class="bg"></div>
-<div class="top-glow"></div>
+
+<div class="bg">
+  <div class="bg-blob bg-blob-1"></div>
+  <div class="bg-blob bg-blob-2"></div>
+  <div class="bg-blob bg-blob-3"></div>
+  <div class="bg-blob bg-blob-4"></div>
+</div>
+<div class="top-line"></div>
 
 <div class="page">
 
   <div class="section-header">
     <div>
       <div class="section-title">Giri salvati</div>
-      <div class="section-count">3 percorsi · ultima settimana</div>
+      <div class="section-sub">3 percorsi · ultima settimana</div>
     </div>
-    <button class="btn-glass">
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+    <button class="btn-ghost">
+      <!-- Refresh icon -->
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3">
+        <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
+        <path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
+        <path d="M3 21v-5h5"/>
+      </svg>
       Aggiorna
     </button>
   </div>
@@ -498,35 +466,78 @@ body {
     <div class="card-body">
       <div class="card-top">
         <div class="card-title-row">
-          <div class="route-icon">🗺</div>
+          <div class="route-icon">
+            <!-- Route icon -->
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+              <circle cx="6" cy="19" r="3"/><circle cx="18" cy="5" r="3"/>
+              <path d="M6 16V9a3 3 0 0 1 3-3h6"/>
+              <path d="M13 5l3-3 3 3"/>
+            </svg>
+          </div>
           <span class="card-name">Percorso giornaliero</span>
         </div>
-        <span class="badge-opt">✦ ottimizzato</span>
+        <span class="badge-opt"><span class="badge-dot"></span>ottimizzato</span>
       </div>
 
       <div class="card-chips">
-        <span class="chip">📅 <b>8 giu 2026</b></span>
-        <span class="chip">🕖 <b>07:00</b></span>
-        <span class="chip">📍 <b>110.2 km</b></span>
-        <span class="chip chip-em">💶 <b>300,76 €</b></span>
+        <span class="chip">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+          <b>8 giu 2026</b>
+        </span>
+        <span class="chip">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+          <b>07:00</b>
+        </span>
+        <span class="chip">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 12h18M3 6l9-3 9 3M3 18l9 3 9-3"/></svg>
+          <b>110.2 km</b>
+        </span>
+        <span class="chip chip-cost">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><path d="M14.5 7.5a4 4 0 1 0 0 9M14.5 7.5H9m5.5 0V6M14.5 16.5H9m5.5 0V18"/></svg>
+          <b>300,76 €</b>
+        </span>
       </div>
 
       <div class="route-line">CASA &nbsp;—&nbsp; tappe lavoro &nbsp;—&nbsp; CASA</div>
+      <div class="divider"></div>
 
-      <div class="card-divider"></div>
-
-      <button class="btn-primary">Apri percorso</button>
+      <button class="btn-primary">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+          <polygon points="5 3 19 12 5 21 5 3"/>
+        </svg>
+        Apri percorso
+      </button>
 
       <div class="card-actions">
-        <button class="btn-action">✏ Rinomina</button>
-        <button class="btn-action">⧉ Duplica</button>
-        <button class="btn-action-del">✕ Elimina</button>
+        <button class="btn-action">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+          </svg>
+          Rinomina
+        </button>
+        <button class="btn-action">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+            <rect x="9" y="9" width="13" height="13" rx="2"/>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+          </svg>
+          Duplica
+        </button>
+        <button class="btn-action-del">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+            <polyline points="3 6 5 6 21 6"/>
+            <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+            <path d="M10 11v6M14 11v6"/>
+            <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+          </svg>
+          Elimina
+        </button>
       </div>
     </div>
     <div class="stop-row">
       <span class="stop-tag">1. Cesare Sesti</span>
       <span class="stop-tag">2. Bar Cles</span>
-      <span class="stop-tag">3. Farmacia</span>
+      <span class="stop-tag">3. Farmacia Trento</span>
     </div>
   </div>
 
@@ -535,29 +546,57 @@ body {
     <div class="card-body">
       <div class="card-top">
         <div class="card-title-row">
-          <div class="route-icon">🗺</div>
+          <div class="route-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+              <circle cx="6" cy="19" r="3"/><circle cx="18" cy="5" r="3"/>
+              <path d="M6 16V9a3 3 0 0 1 3-3h6"/><path d="M13 5l3-3 3 3"/>
+            </svg>
+          </div>
           <span class="card-name">Percorso giornaliero</span>
         </div>
-        <span class="badge-opt">✦ ottimizzato</span>
+        <span class="badge-opt"><span class="badge-dot"></span>ottimizzato</span>
       </div>
 
       <div class="card-chips">
-        <span class="chip">📅 <b>6 giu 2026</b></span>
-        <span class="chip">🕖 <b>07:00</b></span>
-        <span class="chip">📍 <b>109.6 km</b></span>
-        <span class="chip chip-em">💶 <b>164,27 €</b></span>
+        <span class="chip">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+          <b>6 giu 2026</b>
+        </span>
+        <span class="chip">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+          <b>07:00</b>
+        </span>
+        <span class="chip">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 12h18M3 6l9-3 9 3M3 18l9 3 9-3"/></svg>
+          <b>109.6 km</b>
+        </span>
+        <span class="chip chip-cost">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><path d="M14.5 7.5a4 4 0 1 0 0 9M14.5 7.5H9m5.5 0V6M14.5 16.5H9m5.5 0V18"/></svg>
+          <b>164,27 €</b>
+        </span>
       </div>
 
       <div class="route-line">CASA &nbsp;—&nbsp; tappe lavoro &nbsp;—&nbsp; CASA</div>
+      <div class="divider"></div>
 
-      <div class="card-divider"></div>
-
-      <button class="btn-primary">Apri percorso</button>
+      <button class="btn-primary">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        Apri percorso
+      </button>
 
       <div class="card-actions">
-        <button class="btn-action">✏ Rinomina</button>
-        <button class="btn-action">⧉ Duplica</button>
-        <button class="btn-action-del">✕ Elimina</button>
+        <button class="btn-action">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          Rinomina
+        </button>
+        <button class="btn-action">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          Duplica
+        </button>
+        <button class="btn-action-del">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+          Elimina
+        </button>
       </div>
     </div>
     <div class="stop-row">
@@ -570,29 +609,57 @@ body {
     <div class="card-body">
       <div class="card-top">
         <div class="card-title-row">
-          <div class="route-icon">🗺</div>
+          <div class="route-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+              <circle cx="6" cy="19" r="3"/><circle cx="18" cy="5" r="3"/>
+              <path d="M6 16V9a3 3 0 0 1 3-3h6"/><path d="M13 5l3-3 3 3"/>
+            </svg>
+          </div>
           <span class="card-name">Percorso giornaliero</span>
         </div>
-        <span class="badge-opt">✦ ottimizzato</span>
+        <span class="badge-opt"><span class="badge-dot"></span>ottimizzato</span>
       </div>
 
       <div class="card-chips">
-        <span class="chip">📅 <b>4 giu 2026</b></span>
-        <span class="chip">🕖 <b>08:30</b></span>
-        <span class="chip">📍 <b>87.4 km</b></span>
-        <span class="chip chip-em">💶 <b>218,50 €</b></span>
+        <span class="chip">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+          <b>4 giu 2026</b>
+        </span>
+        <span class="chip">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+          <b>08:30</b>
+        </span>
+        <span class="chip">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 12h18M3 6l9-3 9 3M3 18l9 3 9-3"/></svg>
+          <b>87.4 km</b>
+        </span>
+        <span class="chip chip-cost">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><path d="M14.5 7.5a4 4 0 1 0 0 9M14.5 7.5H9m5.5 0V6M14.5 16.5H9m5.5 0V18"/></svg>
+          <b>218,50 €</b>
+        </span>
       </div>
 
       <div class="route-line">CASA &nbsp;—&nbsp; tappe lavoro &nbsp;—&nbsp; CASA</div>
+      <div class="divider"></div>
 
-      <div class="card-divider"></div>
-
-      <button class="btn-primary">Apri percorso</button>
+      <button class="btn-primary">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        Apri percorso
+      </button>
 
       <div class="card-actions">
-        <button class="btn-action">✏ Rinomina</button>
-        <button class="btn-action">⧉ Duplica</button>
-        <button class="btn-action-del">✕ Elimina</button>
+        <button class="btn-action">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          Rinomina
+        </button>
+        <button class="btn-action">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          Duplica
+        </button>
+        <button class="btn-action-del">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+          Elimina
+        </button>
       </div>
     </div>
     <div class="stop-row">
@@ -606,29 +673,36 @@ body {
 <!-- TAB BAR -->
 <div class="tab-bar">
   <button class="tab-item">
-    <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">
-      <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+      <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+      <path d="M2 17l10 5 10-5"/>
+      <path d="M2 12l10 5 10-5"/>
     </svg>
     Nuovo
   </button>
   <button class="tab-item active">
-    <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">
-      <rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/>
-      <rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+      <rect x="3" y="3" width="7" height="7" rx="1.5"/>
+      <rect x="14" y="3" width="7" height="7" rx="1.5"/>
+      <rect x="3" y="14" width="7" height="7" rx="1.5"/>
+      <rect x="14" y="14" width="7" height="7" rx="1.5"/>
     </svg>
     Giri salvati
     <div class="tab-dot"></div>
   </button>
   <button class="tab-item">
-    <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">
-      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
-      <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+      <circle cx="9" cy="7" r="4"/>
+      <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+      <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
     </svg>
     Archivio
   </button>
   <button class="tab-item">
-    <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">
-      <circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/>
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+      <circle cx="12" cy="12" r="10"/>
+      <path d="M12 6v6l4 2"/>
     </svg>
     Percorso
   </button>
