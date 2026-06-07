@@ -321,7 +321,13 @@ function renderMenu() {
         earliestBreakTime: v.earliestBreakTime || "08:00",
         maxDetourKm: Math.round((Number(v.maxDetourKm) || 1.5) * 2) / 2,
         maxReturnTime: v.maxReturnTime || "",
-        driveMarkupMinPerHour: Number(v.driveMarkupMinPerHour || 10)
+        driveMarkupMinPerHour: Number(v.driveMarkupMinPerHour || 10),
+        lunchOpenTime: v.lunchOpenTime || "11:30",
+        lunchCloseTime: v.lunchCloseTime || "14:00",
+        noBreakEarlyMin: Number(v.noBreakEarlyMin ?? 120),
+        noBreakBeforeHomeMin: Number(v.noBreakBeforeHomeMin ?? 60),
+        noBreakBeforeLunchMin: Number(v.noBreakBeforeLunchMin ?? 60),
+        noBreakAfterLunchMin: Number(v.noBreakAfterLunchMin ?? 120)
       };
       state.settings = await api("/api/settings", { method: "PUT", body: JSON.stringify(newSettings) });
       state.navigatorPref = state.settings.navigatorPref;
@@ -514,126 +520,121 @@ function renderMenuAccount() {
 function renderMenuSettings() {
   const s = state.settings;
   const nav = s.navigatorPref || "google";
-  const stepper = (name, val, min, max, step, unit = "", narrow = false) => `
-    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+  const stepper = (name, val, min, max, step, unit = "") => `
+    <div class="stp-row">
       <div class="settings-stepper">
         <button type="button" data-stepper="${name}" data-dir="-1" data-step="${step}">−</button>
-        <input name="${name}" type="number" min="${min}" max="${max}" step="${step}" value="${val}"${narrow ? ' style="width:52px;"' : ""} />
+        <input name="${name}" type="number" min="${min}" max="${max}" step="${step}" value="${val}" />
         <button type="button" data-stepper="${name}" data-dir="1" data-step="${step}">+</button>
       </div>
-      ${unit ? `<span class="stop-meta">${unit}</span>` : ""}
+      ${unit ? `<span class="stp-unit">${unit}</span>` : ""}
     </div>`;
+  const secTitle = (icon, label) =>
+    `<h3 class="settings-section-title">${_svg(icon, 15)} ${label}</h3>`;
+  const row2 = (...items) =>
+    `<div class="sg-row">${items.map(i => `<div class="sg-cell">${i}</div>`).join("")}</div>`;
+  const fld = (label, input) =>
+    `<div class="sg-field"><span class="sg-label">${label}</span>${input}</div>`;
+  const timeInput = (name, val, placeholder = "") =>
+    `<input name="${name}" type="time" value="${escapeHtml(val || "")}" placeholder="${placeholder}" class="sg-time" />`;
+
   return `
     ${menuHeader("Impostazioni", true)}
     <div class="bsheet-section-body">
       <form id="settings-form">
 
-        <h3 class="settings-section-title">${_svg('<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/>',15)} Partenza e rientro</h3>
-        <div class="form-grid">
-          <label class="field">Nome<input name="defaultStartLabel" id="settings-start-label" value="${escapeHtml(s.defaultStartLabel || "")}" placeholder="Casa, Ufficio…" /></label>
-          <label class="field full">Indirizzo<input name="defaultStartAddress" id="settings-start-address" value="${escapeHtml(s.defaultStartAddress || "")}" placeholder="Via, città…" /></label>
-        </div>
-        <div style="position:relative;margin-top:6px;">
-          <input id="settings-start-search" placeholder="Cerca nell'archivio (preferiti, ristoranti…)" autocomplete="off" style="width:100%;font-size:0.82rem;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--text);" />
-          <div id="settings-start-sugg" class="stop-suggestions" style="display:none;"></div>
-        </div>
-        <label class="field" style="margin-top:10px;">Rientro massimo
-          <input name="maxReturnTime" type="time" value="${escapeHtml(s.maxReturnTime || "")}" placeholder="es. 18:30" />
-        </label>
-
-        <h3 class="settings-section-title">${_svg('<path d="M17 8h1a4 4 0 1 1 0 8h-1"/><path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V8z"/><line x1="6" y1="2" x2="6" y2="4"/><line x1="10" y1="2" x2="10" y2="4"/><line x1="14" y1="2" x2="14" y2="4"/>',15)} Soste automatiche</h3>
-        <div class="form-grid">
-          <div class="field">
-            <span class="field-label">Intervallo</span>
-            ${stepper("restIntervalMin", s.restIntervalMin || 120, 60, 240, 10, "min")}
-          </div>
-          <div class="field">
-            <span class="field-label">Tolleranza finestra</span>
-            ${stepper("restMaxDeviationMin", s.restMaxDeviationMin || 40, 10, 90, 5, "min ±")}
-          </div>
-          <div class="field">
-            <span class="field-label">Durata sosta</span>
-            ${stepper("restDurationMin", s.restDurationMin || 15, 5, 60, 5, "min")}
-          </div>
-          <label class="field">Prima sosta non prima delle
-            <input name="earliestBreakTime" type="time" value="${escapeHtml(s.earliestBreakTime || "08:00")}" />
-          </label>
-          <div class="field">
-            <span class="field-label">Deviazione massima</span>
-            ${stepper("maxDetourKm", s.maxDetourKm !== undefined ? Math.round(s.maxDetourKm * 2) / 2 : 1.5, 0.5, 10, 0.5, "km", true)}
+        ${secTitle('<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/>', "Partenza e rientro")}
+        <div class="sg-stack">
+          ${row2(
+            `<label class="field">Nome<input name="defaultStartLabel" id="settings-start-label" value="${escapeHtml(s.defaultStartLabel || "")}" placeholder="Casa, Ufficio…" /></label>`,
+            fld("Rientro massimo", timeInput("maxReturnTime", s.maxReturnTime))
+          )}
+          <label class="field">Indirizzo<input name="defaultStartAddress" id="settings-start-address" value="${escapeHtml(s.defaultStartAddress || "")}" placeholder="Via, città…" /></label>
+          <div style="position:relative;">
+            <input id="settings-start-search" placeholder="Cerca nell'archivio…" autocomplete="off" class="sg-search" />
+            <div id="settings-start-sugg" class="stop-suggestions" style="display:none;"></div>
           </div>
         </div>
 
-        <h3 class="settings-section-title">${_svg('<line x1="8" y1="6" x2="8" y2="2"/><line x1="16" y1="6" x2="16" y2="2"/><path d="M8 6a4 4 0 0 0 0 8v8"/><path d="M16 6a4 4 0 0 1 0 8v-4h-4"/>',15)} Pausa pranzo</h3>
-        <div class="form-grid">
-          <label class="field checkbox-field full">
+        ${secTitle('<path d="M17 8h1a4 4 0 1 1 0 8h-1"/><path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V8z"/><line x1="6" y1="2" x2="6" y2="4"/><line x1="10" y1="2" x2="10" y2="4"/><line x1="14" y1="2" x2="14" y2="4"/>', "Soste automatiche")}
+        <div class="sg-stack">
+          ${row2(
+            fld("Intervallo guida+lavoro", stepper("restIntervalMin", s.restIntervalMin || 120, 60, 300, 10, "min")),
+            fld("Tolleranza ±", stepper("restMaxDeviationMin", s.restMaxDeviationMin || 40, 10, 90, 5, "min"))
+          )}
+          ${row2(
+            fld("Durata sosta", stepper("restDurationMin", s.restDurationMin || 15, 5, 60, 5, "min")),
+            fld("Deviazione massima", stepper("maxDetourKm", s.maxDetourKm !== undefined ? Math.round(s.maxDetourKm * 2) / 2 : 1.5, 0.5, 10, 0.5, "km"))
+          )}
+          ${row2(
+            fld("Prima sosta non prima delle", timeInput("earliestBreakTime", s.earliestBreakTime || "08:00")),
+            fld("No sosta nelle prime", stepper("noBreakEarlyMin", s.noBreakEarlyMin ?? 120, 0, 240, 10, "min"))
+          )}
+          ${fld("No sosta nell'ultima", stepper("noBreakBeforeHomeMin", s.noBreakBeforeHomeMin ?? 60, 0, 120, 10, "min prima del rientro"))}
+        </div>
+
+        ${secTitle('<line x1="8" y1="6" x2="8" y2="2"/><line x1="16" y1="6" x2="16" y2="2"/><path d="M8 6a4 4 0 0 0 0 8v8"/><path d="M16 6a4 4 0 0 1 0 8v-4h-4"/>', "Pausa pranzo")}
+        <div class="sg-stack">
+          <label class="field checkbox-field">
             <input type="checkbox" name="lunchBreakEnabled" ${s.lunchBreakEnabled !== false ? "checked" : ""} />
-            <span>Pausa pranzo di default</span>
+            <span>Pausa pranzo abilitata di default</span>
           </label>
-          <div class="field">
-            <span class="field-label">Durata pranzo</span>
-            ${stepper("lunchBreakMinutes", s.lunchBreakMinutes || 45, 15, 120, 5, "min")}
+          ${row2(
+            fld("Durata", stepper("lunchBreakMinutes", s.lunchBreakMinutes || 45, 15, 120, 5, "min")),
+            fld("Finestra: dalle", timeInput("lunchOpenTime", s.lunchOpenTime || "11:30")) +
+            fld("alle", timeInput("lunchCloseTime", s.lunchCloseTime || "14:00"))
+          )}
+          ${row2(
+            fld("No sosta nei", stepper("noBreakBeforeLunchMin", s.noBreakBeforeLunchMin ?? 60, 0, 120, 10, "min prima")),
+            fld("No sosta nei", stepper("noBreakAfterLunchMin", s.noBreakAfterLunchMin ?? 120, 0, 180, 10, "min dopo"))
+          )}
+          <p class="sg-hint">Cerca prima i ristoranti salvati in archivio, poi su Maps.</p>
+        </div>
+
+        ${secTitle('<path d="M5 17H3a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v9a2 2 0 0 1-2 2h-3"/><circle cx="7.5" cy="17.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/>', "Guida e tariffe")}
+        <div class="sg-stack">
+          ${fld("Maggiorazione traffico stimata", stepper("driveMarkupMinPerHour", s.driveMarkupMinPerHour !== undefined ? s.driveMarkupMinPerHour : 10, 0, 30, 1, "min/ora"))}
+          ${row2(
+            `<label class="field">€/km<input name="kmRate" type="number" min="0" step="0.01" value="${escapeHtml(s.kmRate)}" /></label>`,
+            `<label class="field">€/ora guida<input name="driveHourRate" type="number" min="0" step="0.01" value="${escapeHtml(s.driveHourRate)}" /></label>`,
+            `<label class="field">€/ora lavoro<input name="workHourRate" type="number" min="0" step="0.01" value="${escapeHtml(s.workHourRate)}" /></label>`
+          )}
+        </div>
+
+        ${secTitle('<circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/>', "App")}
+        <div class="sg-stack">
+          <div class="sg-field"><span class="sg-label">Navigatore</span>
+            <div class="settings-radio-group">
+              <label class="settings-radio"><input type="radio" name="navigatorPref" value="google" ${nav === "google" ? "checked" : ""} /> Google Maps</label>
+              <label class="settings-radio"><input type="radio" name="navigatorPref" value="apple" ${nav === "apple" ? "checked" : ""} /> Apple Mappe</label>
+              <label class="settings-radio"><input type="radio" name="navigatorPref" value="waze" ${nav === "waze" ? "checked" : ""} /> Waze</label>
+            </div>
           </div>
+          <div class="sg-field"><span class="sg-label">Tema</span>
+            <div class="settings-radio-group">
+              <label class="settings-radio"><input type="radio" name="themeMode" value="auto" ${(s.themeMode||"auto") === "auto" ? "checked" : ""} /> Automatico</label>
+              <label class="settings-radio"><input type="radio" name="themeMode" value="light" ${(s.themeMode||"auto") === "light" ? "checked" : ""} /> Giorno</label>
+              <label class="settings-radio"><input type="radio" name="themeMode" value="dark" ${(s.themeMode||"auto") === "dark" ? "checked" : ""} /> Notte</label>
+            </div>
+          </div>
+          <div class="sg-field"><span class="sg-label">Palette</span>
+            <div class="settings-palette-group">
+              <button type="button" class="palette-chip${(s.themePalette||"default")==="default"?" active":""}" data-palette="default"><span class="palette-swatch" style="background:linear-gradient(135deg,#05080f 50%,#e6f2f0 50%)"></span>Default</button>
+              <button type="button" class="palette-chip${(s.themePalette||"default")==="neon"?" active":""}" data-palette="neon"><span class="palette-swatch" style="background:linear-gradient(135deg,#000 50%,#e0fff8 50%)"></span>Neon</button>
+              <button type="button" class="palette-chip${(s.themePalette||"default")==="luxury"?" active":""}" data-palette="luxury"><span class="palette-swatch" style="background:linear-gradient(135deg,#0a0800 50%,#f5eec8 50%)"></span>Luxury</button>
+              <button type="button" class="palette-chip${(s.themePalette||"default")==="metallo"?" active":""}" data-palette="metallo"><span class="palette-swatch" style="background:linear-gradient(135deg,#0c0e10 50%,#dce8f0 50%)"></span>Metallo</button>
+              <button type="button" class="palette-chip${(s.themePalette||"default")==="pietra"?" active":""}" data-palette="pietra"><span class="palette-swatch" style="background:linear-gradient(135deg,#0e0d0c 50%,#ede0d0 50%)"></span>Pietra</button>
+              <button type="button" class="palette-chip${(s.themePalette||"default")==="foresta"?" active":""}" data-palette="foresta"><span class="palette-swatch" style="background:linear-gradient(135deg,#060d06 50%,#c8e8b0 50%)"></span>Foresta</button>
+              <button type="button" class="palette-chip${(s.themePalette||"default")==="legno"?" active":""}" data-palette="legno"><span class="palette-swatch" style="background:linear-gradient(135deg,#0c0800 50%,#f0dcc0 50%)"></span>Legno</button>
+            </div>
+          </div>
+          <input type="hidden" name="themePalette" id="themePaletteInput" value="${s.themePalette||"default"}" />
         </div>
-        <p class="stop-meta" style="margin-top:4px;">Cerca prima tra i ristoranti salvati in archivio, poi su Maps. Aggiungi indirizzi con tipo "Ristorante" per dargli priorità.</p>
 
-        <h3 class="settings-section-title">${_svg('<path d="M5 17H3a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v9a2 2 0 0 1-2 2h-3"/><circle cx="7.5" cy="17.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/>',15)} Guida</h3>
-        <div class="field">
-          <span class="field-label">Maggiorazione stimata traffico</span>
-          ${stepper("driveMarkupMinPerHour", s.driveMarkupMinPerHour !== undefined ? s.driveMarkupMinPerHour : 10, 0, 30, 1, "min/h")}
-        </div>
-
-        <h3 class="settings-section-title">${_svg('<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',15)} Tariffe</h3>
-        <div class="form-grid">
-          <label class="field">€ per km<input name="kmRate" type="number" min="0" step="0.01" value="${escapeHtml(s.kmRate)}" /></label>
-          <label class="field">€/ora guida<input name="driveHourRate" type="number" min="0" step="0.01" value="${escapeHtml(s.driveHourRate)}" /></label>
-          <label class="field full">€/ora lavoro<input name="workHourRate" type="number" min="0" step="0.01" value="${escapeHtml(s.workHourRate)}" /></label>
-        </div>
-
-        <h3 class="settings-section-title">${_svg('<circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/>',15)} App</h3>
-        <p class="stop-meta" style="margin-bottom:6px;">Navigatore</p>
-        <div class="settings-radio-group">
-          <label class="settings-radio"><input type="radio" name="navigatorPref" value="google" ${nav === "google" ? "checked" : ""} /> Google Maps</label>
-          <label class="settings-radio"><input type="radio" name="navigatorPref" value="apple" ${nav === "apple" ? "checked" : ""} /> Apple Mappe</label>
-          <label class="settings-radio"><input type="radio" name="navigatorPref" value="waze" ${nav === "waze" ? "checked" : ""} /> Waze</label>
-        </div>
-        <p class="stop-meta" style="margin:10px 0 6px;">Modalità</p>
-        <div class="settings-radio-group">
-          <label class="settings-radio"><input type="radio" name="themeMode" value="auto" ${(s.themeMode||"auto") === "auto" ? "checked" : ""} /> Automatico</label>
-          <label class="settings-radio"><input type="radio" name="themeMode" value="light" ${(s.themeMode||"auto") === "light" ? "checked" : ""} /> Giorno</label>
-          <label class="settings-radio"><input type="radio" name="themeMode" value="dark" ${(s.themeMode||"auto") === "dark" ? "checked" : ""} /> Notte</label>
-        </div>
-        <p class="stop-meta" style="margin:10px 0 6px;">Palette</p>
-        <div class="settings-palette-group">
-          <button type="button" class="palette-chip${(s.themePalette||"default")==="default"?" active":""}" data-palette="default">
-            <span class="palette-swatch" style="background:linear-gradient(135deg,#05080f 50%,#e6f2f0 50%)"></span>Default
-          </button>
-          <button type="button" class="palette-chip${(s.themePalette||"default")==="neon"?" active":""}" data-palette="neon">
-            <span class="palette-swatch" style="background:linear-gradient(135deg,#000 50%,#e0fff8 50%)"></span>Neon
-          </button>
-          <button type="button" class="palette-chip${(s.themePalette||"default")==="luxury"?" active":""}" data-palette="luxury">
-            <span class="palette-swatch" style="background:linear-gradient(135deg,#0a0800 50%,#f5eec8 50%)"></span>Luxury
-          </button>
-          <button type="button" class="palette-chip${(s.themePalette||"default")==="metallo"?" active":""}" data-palette="metallo">
-            <span class="palette-swatch" style="background:linear-gradient(135deg,#0c0e10 50%,#dce8f0 50%)"></span>Metallo
-          </button>
-          <button type="button" class="palette-chip${(s.themePalette||"default")==="pietra"?" active":""}" data-palette="pietra">
-            <span class="palette-swatch" style="background:linear-gradient(135deg,#0e0d0c 50%,#ede0d0 50%)"></span>Pietra
-          </button>
-          <button type="button" class="palette-chip${(s.themePalette||"default")==="foresta"?" active":""}" data-palette="foresta">
-            <span class="palette-swatch" style="background:linear-gradient(135deg,#060d06 50%,#c8e8b0 50%)"></span>Foresta
-          </button>
-          <button type="button" class="palette-chip${(s.themePalette||"default")==="legno"?" active":""}" data-palette="legno">
-            <span class="palette-swatch" style="background:linear-gradient(135deg,#0c0800 50%,#f0dcc0 50%)"></span>Legno
-          </button>
-        </div>
-        <input type="hidden" name="themePalette" id="themePaletteInput" value="${s.themePalette||"default"}" />
-
-        <div class="actions" style="margin-top:20px;">
+        <div class="actions" style="margin-top:24px;">
           <button class="btn primary" type="submit" style="width:100%">Salva impostazioni</button>
         </div>
       </form>
-
     </div>`;
 }
 
