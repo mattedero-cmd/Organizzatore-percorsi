@@ -2030,7 +2030,6 @@ function renderMenuStats() {
     return t;
   }, { km: 0, driveMin: 0, workMin: 0, cost: 0, count: 0 });
 
-  const fmtDate = d => d ? new Date(d + "T00:00:00").toLocaleDateString("it-IT", { day: "numeric", month: "short", year: "numeric" }) : "—";
   const tab = state.statsTab || "summary";
 
   const tabBar = `<div class="stats-tabs">
