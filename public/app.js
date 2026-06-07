@@ -390,6 +390,7 @@ function renderMenu() {
         const data = await res.json().catch(() => ({}));
         if (!res.ok) { if (errEl) errEl.textContent = data.error || "Errore"; return; }
         state.user = { ...state.user, nickname: data.nickname };
+        try { localStorage.removeItem("pl_nickname_prompt_shown"); } catch {}
         updateGreeting();
         showToast("Nickname salvato");
       } catch { if (errEl) errEl.textContent = "Errore di rete"; }
@@ -583,8 +584,10 @@ function renderMenuAccount() {
 }
 
 function showNicknameSetup() {
-  // Mostra un toast invito a impostare il nickname
-  showToast("Benvenuto! Imposta il tuo nickname in Menu → Account");
+  const key = "pl_nickname_prompt_shown";
+  if (localStorage.getItem(key)) return;
+  localStorage.setItem(key, "1");
+  showToast("Imposta il tuo nickname in Menu → Account", 4000);
 }
 
 function renderMenuSettings() {
