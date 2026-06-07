@@ -70,6 +70,8 @@ function rowToSettings(row) {
     workHourRate: Number(row.work_hour_rate ?? 60),
     navigatorPref: row.navigator_pref ?? "google",
     themePref: row.theme_pref ?? "auto",
+    themeMode: row.theme_mode ?? "auto",
+    themePalette: row.theme_palette ?? "default",
     lunchBreakMinutes: Number(row.lunch_break_minutes ?? 45),
     lunchBreakEnabled: row.lunch_break_enabled === undefined || row.lunch_break_enabled === null ? true : Boolean(Number(row.lunch_break_enabled)),
     defaultStartLabel: row.default_start_label ?? "",
@@ -219,8 +221,10 @@ export async function initDb(rootDir) {
       rest_duration_min INTEGER DEFAULT 15,
       drive_markup_min_per_hour REAL DEFAULT 10,
       earliest_break_time TEXT DEFAULT '08:00',
-      max_detour_km REAL DEFAULT 1.7,
-      max_return_time TEXT DEFAULT ''
+      max_detour_km REAL DEFAULT 1.5,
+      max_return_time TEXT DEFAULT '',
+      theme_mode TEXT DEFAULT 'auto',
+      theme_palette TEXT DEFAULT 'default'
     );
     INSERT OR IGNORE INTO settings (id, km_rate, drive_hour_rate, work_hour_rate)
     VALUES (1, 0.65, 22, 60);
@@ -230,6 +234,7 @@ export async function initDb(rootDir) {
   await migrateWeeklyHours();
 
   await migrateSettingsColumns();
+  await migrateUserSettingsCols();
   await migrateAuth();
 
   return databasePath;
@@ -317,6 +322,7 @@ async function initPostgresDb() {
   await migrateWeeklyHours();
 
   await migrateSettingsColumns();
+  await migrateUserSettingsCols();
   await migrateAuth();
 }
 
@@ -403,8 +409,10 @@ export async function migrateSettingsColumns() {
   }
   const newSettingsCols = [
     "earliest_break_time TEXT DEFAULT '08:00'",
-    "max_detour_km REAL DEFAULT 1.7",
-    "max_return_time TEXT DEFAULT ''"
+    "max_detour_km REAL DEFAULT 1.5",
+    "max_return_time TEXT DEFAULT ''",
+    "theme_mode TEXT DEFAULT 'auto'",
+    "theme_palette TEXT DEFAULT 'default'"
   ];
   for (const col of newSettingsCols) {
     try { await runSql(`ALTER TABLE settings ADD COLUMN ${col};`); } catch (err) { if (!isAlreadyExistsError(err)) console.warn("migrateSettingsColumns:", err.message); }
@@ -415,6 +423,19 @@ export async function migrateSettingsColumns() {
   }
   if (!addrCols.includes("activity")) {
     await runSql("ALTER TABLE addresses ADD COLUMN activity TEXT DEFAULT '';");
+  }
+}
+
+async function migrateUserSettingsCols() {
+  const cols = await tableColumns("user_settings");
+  const toAdd = [
+    ["theme_mode", "TEXT DEFAULT 'auto'"],
+    ["theme_palette", "TEXT DEFAULT 'default'"],
+  ];
+  for (const [col, def] of toAdd) {
+    if (!cols.includes(col)) {
+      try { await runSql(`ALTER TABLE user_settings ADD COLUMN ${col} ${def};`); } catch (e) { if (!isAlreadyExistsError(e)) console.warn("migrateUserSettingsCols:", e.message); }
+    }
   }
 }
 
@@ -518,6 +539,8 @@ export async function updateSettings(userId, settings) {
     work_hour_rate: Number(settings.workHourRate ?? 60),
     navigator_pref: settings.navigatorPref || "google",
     theme_pref: settings.themePref || "auto",
+    theme_mode: settings.themeMode || "auto",
+    theme_palette: settings.themePalette || "default",
     lunch_break_minutes: Number(settings.lunchBreakMinutes ?? 45),
     lunch_break_enabled: settings.lunchBreakEnabled === false ? 0 : 1,
     default_start_label: settings.defaultStartLabel || "",
