@@ -1461,7 +1461,7 @@ function renderArchive() {
           <h2>Archivio</h2>
           <div class="row">
             <button class="btn" id="import-contacts">📱 Importa</button>
-            ${state.googleClientId ? `<button class="btn" id="import-google-contacts">🔗 Google</button>` : ""}
+            <button class="btn" id="import-google-contacts">🔗 Google</button>
             <button class="btn" id="new-address">+ Nuovo</button>
           </div>
         </div>
@@ -2768,7 +2768,10 @@ function showGoogleContactsSelector(rawContacts) {
 }
 
 async function importFromGoogleContacts() {
-  if (!state.googleClientId) { showToast("Google Client ID non configurato"); return; }
+  if (!state.googleClientId) {
+    showToast("Configura GOOGLE_CLIENT_ID nelle variabili d'ambiente per abilitare l'import da Google");
+    return;
+  }
 
   const loaded = await loadGsiScript();
   if (!loaded) { showToast("Impossibile caricare Google Sign-In"); return; }
