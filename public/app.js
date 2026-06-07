@@ -104,7 +104,7 @@ const state = {
   themePref: "auto",
   googleMapsKey: "",
   googleMapsReady: false,
-  navigatorPref: localStorage.getItem("navigatorPref") || "google",
+  navigatorPref: (() => { try { return localStorage.getItem("navigatorPref") || "google"; } catch { return "google"; } })(),
   mapApiConfigured: false,
   addresses: [],
   allAddresses: [],
@@ -113,7 +113,7 @@ const state = {
   archiveShowAll: false,
   stopSearchText: "",
   visitCalendar: {}, // { [addressId]: { year, month } }
-  statsTab: "summary", // "summary" | "months" | "clients"
+  statsTab: "summary", // "summary" | "months"
   addressForm: { ...emptyForm },
   settings: { kmRate: 0.65, driveHourRate: 22, workHourRate: 60 },
   route: {
@@ -247,7 +247,7 @@ function renderMenu() {
       };
       state.settings = await api("/api/settings", { method: "PUT", body: JSON.stringify(newSettings) });
       state.navigatorPref = state.settings.navigatorPref;
-      localStorage.setItem("navigatorPref", state.navigatorPref);
+      try { localStorage.setItem("navigatorPref", state.navigatorPref); } catch {}
       state.themePref = state.settings.themePref;
       state.route.lunchBreak = state.settings.lunchBreakEnabled !== false;
       state.route.lunchBreakMinutes = state.settings.lunchBreakMinutes || 45;
@@ -635,6 +635,11 @@ async function refreshSavedRoutes() {
 }
 
 async function migrateContactNotes() {
+  const MIGRATION_KEY = "contactNotesMigrated_v1";
+  let done = false;
+  try { done = localStorage.getItem(MIGRATION_KEY) === "1"; } catch {}
+  if (done) return;
+
   const all = await api("/api/addresses?search=").catch(() => []);
   const emailRe = /[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/;
   const phoneRe = /(?:\+39[\s.\-]?)?(?:0\d{1,4}[\s.\-]?\d{4,8}|3\d{2}[\s.\-]?\d{6,7})/;
@@ -649,6 +654,7 @@ async function migrateContactNotes() {
     if (needsPhone) patch.phone = notes.match(phoneRe)[0].trim();
     await api(`/api/addresses/${addr.id}`, { method: "PUT", body: JSON.stringify(patch) }).catch(() => {});
   }
+  try { localStorage.setItem(MIGRATION_KEY, "1"); } catch {}
 }
 
 async function loadInitialData() {

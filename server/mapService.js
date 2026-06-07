@@ -18,17 +18,22 @@ const CITY_COORDS = [
   ["padova", 45.407, 11.877],
   ["vicenza", 45.546, 11.535],
   ["venezia", 45.440, 12.315],
-  ["mantova", 45.156, 10.791],
-  ["via vittoria", 46.004, 11.196],
-  ["vigolana", 46.004, 11.196],
-  ["casa", 46.004, 11.196]
+  ["mantova", 45.156, 10.791]
 ];
 
 const GEOCODE_TIMEOUT_MS = Number(process.env.GEOCODE_TIMEOUT_MS || 2500);
 const ROUTE_TIMEOUT_MS = Number(process.env.ROUTE_TIMEOUT_MS || 3000);
 const USE_EXTERNAL_DISTANCE_API = process.env.USE_EXTERNAL_DISTANCE_API === "1";
+const CACHE_MAX_SIZE = 2000;
 const placeCache = new Map();
 const routeCache = new Map();
+
+function cacheSet(map, key, value) {
+  if (map.size >= CACHE_MAX_SIZE) {
+    map.delete(map.keys().next().value);
+  }
+  map.set(key, value);
+}
 
 function hashString(value) {
   let hash = 0;
@@ -279,14 +284,14 @@ export async function resolvePlace(place) {
 
   const local = fallbackCoords(label);
   if (local.source === "local-city") {
-    placeCache.set(cacheKey, local);
+    cacheSet(placeCache, cacheKey, local);
     return local;
   }
 
   try {
     const mapQuest = await mapQuestGeocode(label);
     if (mapQuest) {
-      placeCache.set(cacheKey, mapQuest);
+      cacheSet(placeCache, cacheKey, mapQuest);
       return mapQuest;
     }
   } catch (error) {
@@ -296,14 +301,14 @@ export async function resolvePlace(place) {
   try {
     const geocoded = await orsGeocode(label);
     if (geocoded) {
-      placeCache.set(cacheKey, geocoded);
+      cacheSet(placeCache, cacheKey, geocoded);
       return geocoded;
     }
   } catch (error) {
     console.warn(error.message);
   }
 
-  placeCache.set(cacheKey, local);
+  cacheSet(placeCache, cacheKey, local);
   return local;
 }
 
@@ -327,14 +332,14 @@ export async function routeBetween(a, b) {
   };
 
   if (!USE_EXTERNAL_DISTANCE_API) {
-    routeCache.set(cacheKey, fallback);
+    cacheSet(routeCache, cacheKey, fallback);
     return fallback;
   }
 
   try {
     const mapQuest = await mapQuestRoute(from, to);
     if (mapQuest) {
-      routeCache.set(cacheKey, mapQuest);
+      cacheSet(routeCache, cacheKey, mapQuest);
       return mapQuest;
     }
   } catch (error) {
@@ -344,14 +349,14 @@ export async function routeBetween(a, b) {
   try {
     const routed = await orsRoute(from, to);
     if (routed) {
-      routeCache.set(cacheKey, routed);
+      cacheSet(routeCache, cacheKey, routed);
       return routed;
     }
   } catch (error) {
     console.warn(error.message);
   }
 
-  routeCache.set(cacheKey, fallback);
+  cacheSet(routeCache, cacheKey, fallback);
   return fallback;
 }
 

@@ -32,10 +32,6 @@ function sqlValue(value) {
   return `'${String(value).replaceAll("'", "''")}'`;
 }
 
-function safeJsonInline(value, fallback = null) {
-  try { return value ? JSON.parse(value) : fallback; } catch { return fallback; }
-}
-
 function rowToAddress(row) {
   return {
     id: row.id,
@@ -58,7 +54,7 @@ function rowToAddress(row) {
     openAfternoon: row.open_afternoon ?? "",
     closeAfternoon: row.close_afternoon ?? "",
     defaultDuration: Number(row.default_duration ?? 45),
-    weeklyHours: safeJsonInline(row.weekly_hours, null),
+    weeklyHours: safeJson(row.weekly_hours, null),
     lat: row.lat === null || row.lat === undefined ? null : Number(row.lat),
     lng: row.lng === null || row.lng === undefined ? null : Number(row.lng),
     placeId: row.place_id ?? null,
@@ -411,10 +407,15 @@ async function migrateIntesaFriday() {
   }
 }
 
+function isAlreadyExistsError(err) {
+  const msg = String(err?.message || "").toLowerCase();
+  return msg.includes("duplicate column") || msg.includes("already exists") || msg.includes("column") && msg.includes("exist");
+}
+
 export async function migrateSettingsColumns() {
   const cols = ["default_start_label TEXT DEFAULT ''", "default_start_address TEXT DEFAULT ''", "rest_interval_min INTEGER DEFAULT 120", "rest_max_deviation_min INTEGER DEFAULT 40", "rest_duration_min INTEGER DEFAULT 15", "drive_markup_min_per_hour INTEGER DEFAULT 10"];
   for (const col of cols) {
-    try { await runSql(`ALTER TABLE settings ADD COLUMN ${col};`); } catch {}
+    try { await runSql(`ALTER TABLE settings ADD COLUMN ${col};`); } catch (err) { if (!isAlreadyExistsError(err)) console.warn("migrateSettingsColumns:", err.message); }
   }
   const newSettingsCols = [
     "earliest_break_time TEXT DEFAULT '08:00'",
@@ -422,7 +423,7 @@ export async function migrateSettingsColumns() {
     "max_return_time TEXT DEFAULT ''"
   ];
   for (const col of newSettingsCols) {
-    try { await runSql(`ALTER TABLE settings ADD COLUMN ${col};`); } catch {}
+    try { await runSql(`ALTER TABLE settings ADD COLUMN ${col};`); } catch (err) { if (!isAlreadyExistsError(err)) console.warn("migrateSettingsColumns:", err.message); }
   }
   const addrCols = await tableColumns("addresses");
   if (!addrCols.includes("place_id")) {
@@ -500,7 +501,7 @@ export async function createAddress(address, userId = null) {
     return rowToAddress(rows[0]);
   }
   await runSql(`INSERT INTO addresses (${cols}) VALUES (${vals});`);
-  const rows = await runSql("SELECT * FROM addresses ORDER BY id DESC LIMIT 1;", true);
+  const rows = await runSql("SELECT * FROM addresses WHERE id = last_insert_rowid();", true);
   return rowToAddress(rows[0]);
 }
 
@@ -570,7 +571,7 @@ export async function saveRoute(route, userId = null) {
     INSERT INTO planned_routes (name, scheduled_date, start_label, start_address, end_label, end_address, start_time, first_arrival_required, total_km, total_drive_minutes, total_work_minutes, total_cost, weather_captured_at, payload_json, user_id)
     VALUES (${sqlValue(route.name || "")}, ${sqlValue(route.scheduledDate || route.scheduled_date || "")}, ${sqlValue(route.startLabel || "")}, ${sqlValue(route.startAddress || "")}, ${sqlValue(route.endLabel || "")}, ${sqlValue(route.endAddress || "")}, ${sqlValue(route.startTime || "")}, ${sqlValue(route.firstArrivalRequired || "")}, ${sqlValue(Number(route.summary?.totalKm || 0))}, ${sqlValue(Number(route.summary?.totalDriveMinutes || 0))}, ${sqlValue(Number(route.summary?.totalWorkMinutes || 0))}, ${sqlValue(Number(route.summary?.totalCost || 0))}, ${sqlValue(route.weatherCapturedAt || "")}, ${sqlValue(JSON.stringify(route))}, ${userIdVal});
   `);
-  const rows = await runSql("SELECT id FROM planned_routes ORDER BY id DESC LIMIT 1;", true);
+  const rows = await runSql("SELECT last_insert_rowid() AS id;", true);
   return { id: rows[0]?.id };
 }
 
@@ -627,7 +628,7 @@ export async function createUser(username, passwordHash) {
     return rows[0] ? { id: rows[0].id, username: rows[0].username } : null;
   }
   await runSql(`INSERT INTO users (username, password_hash) VALUES (${sqlValue(username)}, ${sqlValue(passwordHash)});`);
-  const rows = await runSql("SELECT id, username FROM users ORDER BY id DESC LIMIT 1;", true);
+  const rows = await runSql("SELECT id, username FROM users WHERE id = last_insert_rowid();", true);
   return rows[0] ? { id: rows[0].id, username: rows[0].username } : null;
 }
 

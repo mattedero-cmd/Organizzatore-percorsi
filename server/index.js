@@ -447,7 +447,12 @@ ${addressList}
         return sendJson(response, 500, { error: err.error?.message || "Errore OpenAI" });
       }
       const oaiData = await oaiRes.json();
-      const parsed = JSON.parse(oaiData.choices[0].message.content);
+      let parsed;
+      try {
+        parsed = JSON.parse(oaiData.choices[0].message.content);
+      } catch {
+        return sendJson(response, 500, { error: "Risposta AI non valida" });
+      }
       parsed.transcript = text;
       return sendJson(response, 200, parsed);
     }
@@ -457,8 +462,18 @@ ${addressList}
         return sendJson(response, 400, { error: "OPENAI_API_KEY non configurata" });
       }
       const chunks = [];
+      let audioSize = 0;
+      const AUDIO_MAX_BYTES = 25 * 1024 * 1024; // 25 MB — Whisper limit
       await new Promise((resolve, reject) => {
-        request.on("data", chunk => chunks.push(chunk));
+        request.on("data", chunk => {
+          audioSize += chunk.length;
+          if (audioSize > AUDIO_MAX_BYTES) {
+            request.destroy();
+            reject(new Error("File audio troppo grande (max 25 MB)"));
+            return;
+          }
+          chunks.push(chunk);
+        });
         request.on("end", resolve);
         request.on("error", reject);
       });
