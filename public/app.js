@@ -82,11 +82,11 @@ function addressName(a) {
   return `${primary}${secondary ? ` — ${secondary}` : ""}`.trim();
 }
 
-function showToast(message) {
+function showToast(message, duration = 2800) {
   toastEl.textContent = message;
   toastEl.classList.add("show");
   clearTimeout(showToast._t);
-  showToast._t = setTimeout(() => toastEl.classList.remove("show"), 2800);
+  showToast._t = setTimeout(() => toastEl.classList.remove("show"), duration);
 }
 
 function showSpinner(msg = "Calcolo in corso…") {
@@ -403,8 +403,8 @@ function renderMenu() {
         // Persist via settings API
         api("/api/settings", { method: "PUT", body: JSON.stringify({ ...state.settings, iconStyle: style }) })
           .then(s => { state.settings = s; }).catch(() => {});
-        // Update splash icon if shown again
         try { localStorage.setItem("pl_icon_style", style); } catch {}
+        showToast("Icona salvata. Per vederla sulla schermata home rimuovi l'app e aggiungila di nuovo dal browser.", 5000);
         return;
       }
       const paletteChip = e.target.closest("[data-palette]");
