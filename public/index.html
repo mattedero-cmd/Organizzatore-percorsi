@@ -8,10 +8,10 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Percorsi lavoro" />
     <title>Percorsi lavoro</title>
-    <link rel="manifest" href="/manifest.webmanifest?v=20260607-355" />
+    <link rel="manifest" href="/manifest.webmanifest?v=20260607-356" />
     <link rel="apple-touch-icon" href="/icons/icon-180.svg" />
     <link rel="icon" href="/icons/icon-192.svg" />
-    <link rel="stylesheet" href="/styles.css?v=20260607-355" />
+    <link rel="stylesheet" href="/styles.css?v=20260607-356" />
     <!-- Applica il tema salvato PRIMA del render per evitare il flash -->
     <script>
     (function(){try{
@@ -32,10 +32,20 @@
   <body>
     <!-- Splash screen — visibile finché l'app non è pronta -->
     <div id="splash" aria-hidden="true">
-      <div class="splash-logo">
-        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>
+      <div class="splash-blob splash-blob-1"></div>
+      <div class="splash-blob splash-blob-2"></div>
+      <div class="splash-blob splash-blob-3"></div>
+      <div class="splash-content">
+        <div class="splash-logo">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>
+        </div>
+        <div class="splash-wordmark">Percorsi lavoro</div>
+        <div class="splash-bar-wrap">
+          <div class="splash-bar-track">
+            <div class="splash-bar-fill" id="splash-bar"></div>
+          </div>
+        </div>
       </div>
-      <div class="splash-spinner"></div>
     </div>
 
     <!-- Sfondo decorativo -->
@@ -82,6 +92,6 @@
     </div>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script type="module" src="/app.js?v=20260607-355"></script>
+    <script type="module" src="/app.js?v=20260607-356"></script>
   </body>
 </html>

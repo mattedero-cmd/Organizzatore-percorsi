@@ -228,9 +228,13 @@ function hideSplash() {
   const elapsed = Date.now() - _splashShown;
   const delay = Math.max(0, 500 - elapsed);
   setTimeout(() => {
-    el.classList.add("hiding");
-    el.addEventListener("transitionend", () => el.classList.add("hidden"), { once: true });
-    setTimeout(() => el.classList.add("hidden"), 400);
+    const bar = document.getElementById("splash-bar");
+    if (bar) bar.classList.add("complete");
+    setTimeout(() => {
+      el.classList.add("hiding");
+      el.addEventListener("transitionend", () => el.classList.add("hidden"), { once: true });
+      setTimeout(() => el.classList.add("hidden"), 450);
+    }, 220);
   }, delay);
 }
 
@@ -458,10 +462,15 @@ function renderMenuRoot() {
       <span class="bsheet-menu-label">Info app</span>
       <span class="bsheet-menu-arrow">${I.arrowR(14)}</span>
     </button>
-    <div style="padding: 12px 16px; border-top: 1px solid var(--line); margin-top: 8px;">
-      <div style="font-size:0.8rem;color:var(--muted);margin-bottom:8px;">Connesso come <strong>${escapeHtml(state.user?.username || "")}</strong></div>
-      <button class="btn" id="logout-btn" style="width:100%">${I.arrowLeft(14)} Esci</button>
-    </div>`;
+    <div class="bsheet-menu-divider"></div>
+    <button class="bsheet-menu-item bsheet-menu-item--account" data-menu-go="account">
+      <span class="bsheet-menu-icon bsheet-menu-icon--account">${_svg('<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>', 18)}</span>
+      <span class="bsheet-menu-label">
+        <span class="account-menu-name">${escapeHtml(state.user?.username || "Account")}</span>
+        <span class="account-menu-sub">Gestisci account</span>
+      </span>
+      <span class="bsheet-menu-arrow">${I.arrowR(14)}</span>
+    </button>`;
 }
 
 function renderMenuSection(section) {
@@ -469,7 +478,37 @@ function renderMenuSection(section) {
   if (section === "settings") return renderMenuSettings();
   if (section === "guide") return renderMenuGuide();
   if (section === "info") return renderMenuInfo();
+  if (section === "account") return renderMenuAccount();
   return renderMenuRoot();
+}
+
+function renderMenuAccount() {
+  return `
+    ${menuHeader("Account", true)}
+    <div class="bsheet-section-body" style="padding:16px;">
+      <div class="account-profile-card">
+        <div class="account-avatar">${_svg('<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>', 36)}</div>
+        <div class="account-profile-info">
+          <div class="account-profile-name">${escapeHtml(state.user?.username || "")}</div>
+          <div class="account-profile-role">Utente</div>
+        </div>
+      </div>
+
+      <div class="account-section-title">Sicurezza</div>
+      <details class="change-pw-details">
+        <summary class="change-pw-summary">${I.lock(14)} Cambia password</summary>
+        <form id="change-pw-form" class="change-pw-form" autocomplete="off">
+          <label class="field">Password attuale<input type="password" name="currentPassword" autocomplete="current-password" required /></label>
+          <label class="field">Nuova password<input type="password" name="newPassword" autocomplete="new-password" minlength="6" required /></label>
+          <label class="field">Conferma nuova password<input type="password" name="confirmPassword" autocomplete="new-password" minlength="6" required /></label>
+          <p class="change-pw-error"></p>
+          <button class="btn primary" type="submit" style="width:100%">Aggiorna password</button>
+        </form>
+      </details>
+
+      <div class="account-section-title" style="margin-top:24px;">Sessione</div>
+      <button class="btn danger" id="logout-btn" style="width:100%;margin-top:4px;">${I.arrowLeft(14)} Esci dall'account</button>
+    </div>`;
 }
 
 function renderMenuSettings() {
@@ -595,21 +634,6 @@ function renderMenuSettings() {
         </div>
       </form>
 
-      <div class="bsheet-section" style="margin-top:8px;">
-        <div class="bsheet-section-title">${I.key ? I.key(14) : ""} ACCOUNT</div>
-        <div class="bsheet-section-body">
-          <details class="change-pw-details">
-            <summary class="change-pw-summary">${I.lock ? I.lock(14) : "🔒"} Cambia password</summary>
-            <form id="change-pw-form" class="change-pw-form" autocomplete="off">
-              <label class="field">Password attuale<input type="password" name="currentPassword" autocomplete="current-password" required /></label>
-              <label class="field">Nuova password<input type="password" name="newPassword" autocomplete="new-password" minlength="6" required /></label>
-              <label class="field">Conferma nuova password<input type="password" name="confirmPassword" autocomplete="new-password" minlength="6" required /></label>
-              <p class="change-pw-error"></p>
-              <button class="btn primary" type="submit" style="width:100%">Aggiorna password</button>
-            </form>
-          </details>
-        </div>
-      </div>
     </div>`;
 }
 
