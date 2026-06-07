@@ -2172,6 +2172,92 @@ function renderResult() {
 
 // ── print / PDF export ────────────────────────────────────────────────────────
 
+function _buildPrintDoc(withPhones, withCosts, result, routeName, date) {
+  const { rows, finalLeg, summary } = result;
+
+  const _esc = s => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+  const _mins = v => { const n=Number(v||0),h=Math.floor(n/60),m=n%60; return !h?m+" min":!m?h+" h":h+" h "+m+" min"; };
+  const _eur = v => new Intl.NumberFormat("it-IT",{style:"currency",currency:"EUR"}).format(Number(v||0));
+
+  const stopRows = rows.map(row => {
+    if (row.type === "lunch") {
+      const name = row.customer && row.customer !== "Pausa pranzo" ? row.customer : "Pausa pranzo";
+      const extra = withPhones ? "<td></td>" : "";
+      return `<tr class="brk"><td>🍽</td><td colspan="2"><span class="n">${_esc(name)}${row.location ? " — " + _esc(row.location) : ""}</span></td>${extra}<td class="num">${_esc(row.serviceStartTime)}–${_esc(row.serviceEndTime)}</td><td>${_mins(row.durationMinutes)}</td><td></td><td></td></tr>`;
+    }
+    if (row.type === "rest") {
+      const extra = withPhones ? "<td></td>" : "";
+      return `<tr class="brk"><td>☕</td><td colspan="2"><span class="n">${_esc(row.customer)}${row.location ? " — " + _esc(row.location) : ""}</span></td>${extra}<td class="num">${_esc(row.serviceStartTime)}–${_esc(row.serviceEndTime)}</td><td>${_mins(row.durationMinutes)}</td><td></td><td></td></tr>`;
+    }
+    const phoneLines = [];
+    if (row.phone) phoneLines.push(_esc(row.phone) + (row.phoneName ? '<br><span class="ph">'+_esc(row.phoneName)+"</span>" : ""));
+    if (row.phone2) phoneLines.push(_esc(row.phone2) + (row.phone2Name ? '<br><span class="ph">'+_esc(row.phone2Name)+"</span>" : ""));
+    const phoneCell = withPhones ? "<td>" + (phoneLines.join("<br>") || "—") + "</td>" : "";
+    const sub = [row.activity, !row.activity && row.location ? row.location : null].filter(Boolean).map(_esc).join(" · ");
+    const nameCell = `<td colspan="2"><div class="n">${_esc(row.customer||"")}</div>${sub?`<div class="s">${sub}</div>`:""}<div class="s2">${_esc(row.address||"")}</div></td>`;
+    return `<tr><td>${_esc(row.stopNumber)}</td>${nameCell}${phoneCell}<td class="num">${_esc(row.arrivalTime)}–${_esc(row.serviceEndTime)}</td><td>${_mins(row.durationMinutes)}</td><td class="num">${row.km?Number(row.km).toFixed(1):""}</td><td></td></tr>`;
+  }).join("");
+
+  const homeRow = `<tr class="home"><td>↩</td><td colspan="2"><span class="n">${_esc(result.end?.label||"Casa")}</span><div class="s2">${_esc(result.end?.address||result.end?.fullAddress||"")}</div></td>${withPhones?"<td></td>":""}<td class="num">${_esc(finalLeg.arrivalTime)}</td><td></td><td class="num">${Number(finalLeg.km).toFixed(1)}</td><td></td></tr>`;
+
+  const sumDay =
+    `<div class="sc"><div class="sl">Orario</div><div class="sv num">${_esc(summary.dayStart)} – ${_esc(summary.dayEnd)}</div></div>` +
+    `<div class="sc"><div class="sl">Km totali</div><div class="sv num">${summary.totalKm.toFixed(1)} km</div></div>` +
+    `<div class="sc"><div class="sl">Ore guida</div><div class="sv num">${_mins(summary.totalDriveMinutes)}</div></div>` +
+    `<div class="sc"><div class="sl">Ore lavoro</div><div class="sv num">${_mins(summary.totalWorkMinutes)}</div></div>`;
+  const sumCost = withCosts
+    ? `<div class="sc"><div class="sl">Costo km</div><div class="sv num">${_eur(summary.costKm)}</div></div>` +
+      `<div class="sc"><div class="sl">Costo guida</div><div class="sv num">${_eur(summary.costDrive)}</div></div>` +
+      `<div class="sc"><div class="sl">Costo lavoro</div><div class="sv num">${_eur(summary.costWork)}</div></div>` +
+      `<div class="sc"><div class="sl">Totale giornata</div><div class="sv sv-total num">${_eur(summary.totalCost)}</div></div>`
+    : "";
+  const summaryHtml =
+    `<div class="summary"><div class="ss"><div class="stitle">Giornata</div><div class="sg">${sumDay}</div></div>` +
+    (withCosts ? `<div class="ss"><div class="stitle">Costi</div><div class="sg">${sumCost}</div></div>` : "") +
+    `</div>`;
+
+  const phoneHeader = withPhones ? "<th>Telefono</th>" : "";
+  const now = new Date().toLocaleDateString("it-IT",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"});
+
+  const css = [
+    "*{box-sizing:border-box;margin:0;padding:0}",
+    "body{font-family:-apple-system,'Helvetica Neue',Arial,sans-serif;font-size:10.5pt;color:#1a1a2e;background:#fff;padding:28px 32px}",
+    ".dh{margin-bottom:20px;padding-bottom:14px;border-bottom:2px solid #1a1a2e}",
+    ".dt{font-size:17pt;font-weight:700;letter-spacing:-.01em}",
+    ".ds{font-size:10pt;color:#555;margin-top:3px}",
+    "table{width:100%;border-collapse:collapse;margin-bottom:20px;font-size:10pt}",
+    "thead tr{border-bottom:2px solid #1a1a2e}",
+    "th{padding:7px 8px;text-align:left;font-size:8.5pt;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#444;white-space:nowrap}",
+    "th:first-child{width:26px;text-align:center}th:nth-child(2){width:auto}th:nth-child(3){min-width:80px}",
+    "tbody tr{border-bottom:1px solid #e8e8e8}",
+    "tbody tr:last-child{border-bottom:2px solid #1a1a2e}",
+    "td{padding:8px 8px;vertical-align:top;font-size:10pt;color:#1a1a2e}",
+    "td:first-child{text-align:center;color:#999;font-size:9pt;padding-top:10px;width:26px}",
+    ".n{font-weight:600;line-height:1.3}.s{font-size:8.5pt;color:#555;margin-top:2px;line-height:1.4}.s2{font-size:8pt;color:#999;margin-top:1px}.ph{font-size:8pt;color:#888}",
+    "tr.brk td{background:#fafafa;color:#666;font-size:9.5pt;padding:6px 8px}",
+    "tr.home td{background:#f5f7fa;font-weight:600}tr.home td:first-child{color:#999}",
+    ".num{font-variant-numeric:tabular-nums}",
+    ".summary{margin-top:4px;page-break-inside:avoid}",
+    ".ss{margin-bottom:14px}.stitle{font-size:8pt;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#888;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid #e0e0e0}",
+    ".sg{display:grid;grid-template-columns:1fr 1fr;border:1px solid #e0e0e0;border-radius:4px;overflow:hidden}",
+    ".sc{padding:9px 12px;border-right:1px solid #e0e0e0;border-bottom:1px solid #e0e0e0}",
+    ".sc:nth-child(2n){border-right:none}.sc:nth-last-child(-n+2){border-bottom:none}",
+    ".sl{font-size:8pt;color:#888;text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px}",
+    ".sv{font-size:11pt;font-weight:700}.sv-total{font-size:13pt;color:#1d4ed8}",
+    ".df{margin-top:24px;padding-top:10px;border-top:1px solid #ddd;display:flex;justify-content:space-between;font-size:8pt;color:#aaa}",
+    "@media print{body{padding:0}.df{position:fixed;bottom:0;left:32px;right:32px}}",
+  ].join("");
+
+  return `<!DOCTYPE html><html lang="it"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${_esc(routeName)}${date?" – "+date:""}</title><style>${css}</style></head><body>` +
+    `<div class="dh"><div class="dt">${_esc(routeName)}</div>${date?`<div class="ds">${_esc(date)}</div>`:""}</div>` +
+    `<table><thead><tr><th>#</th><th>Tappa</th><th>&nbsp;</th>${phoneHeader}<th>Orario</th><th>Durata</th><th>Km</th><th>Note</th></tr></thead><tbody>` +
+    stopRows + homeRow +
+    `</tbody></table>` +
+    summaryHtml +
+    `<div class="df"><span>organizzatore-percorsi.vercel.app</span><span>${now}</span></div>` +
+    `</body></html>`;
+}
+
 function printRoute() {
   if (!state.result) return;
   const result = normalizeSavedRoute(state.result);
@@ -2195,7 +2281,14 @@ function printRoute() {
     };
   });
 
-  const payload = JSON.stringify({ result: { ...result, rows: enrichedRows }, routeName, date });
+  const _r = { ...result, rows: enrichedRows };
+  const variants = {
+    "":   _buildPrintDoc(false, false, _r, routeName, date),
+    "p":  _buildPrintDoc(true,  false, _r, routeName, date),
+    "c":  _buildPrintDoc(false, true,  _r, routeName, date),
+    "pc": _buildPrintDoc(true,  true,  _r, routeName, date),
+  };
+  const payload = JSON.stringify({ variants, routeName, date });
 
   const _dt = document.documentElement.dataset.theme || "night";
   const _isDk = !["day","neon-giorno","luxury-giorno","metallo-giorno","pietra-giorno","foresta-giorno","legno-giorno"].includes(_dt);
@@ -2263,68 +2356,14 @@ function printRoute() {
 </div>
 <script>
 const DATA = ${payload};
-
-function esc(s) {
-  return String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
-}
-function mins(v) {
-  const n = Number(v || 0), h = Math.floor(n / 60), m = n % 60;
-  if (!h) return m + " min";
-  if (!m) return h + " h";
-  return h + " h " + m + " min";
-}
-function eur(v) {
-  return new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR" }).format(Number(v || 0));
-}
-
 function generate() {
-  const withPhones = document.getElementById("opt-phones").checked;
-  const withCosts  = document.getElementById("opt-costs").checked;
-  const { result, routeName, date } = DATA;
-  const { rows, finalLeg, summary } = result;
-
-  const colCount = withPhones ? 6 : 5;
-  const stopRows = rows.map(row => {
-    if (row.type === "lunch") {
-      const name = row.customer && row.customer !== "Pausa pranzo" ? row.customer : "Pausa pranzo";
-      return '<tr class="br"><td colspan="' + colCount + '">🍽 ' + esc(name) + (row.location ? " — " + esc(row.location) : "") + "</td><td>" + esc(row.serviceStartTime) + "–" + esc(row.serviceEndTime) + "</td><td>" + mins(row.durationMinutes) + "</td></tr>";
-    }
-    if (row.type === "rest") {
-      return '<tr class="br"><td colspan="' + colCount + '">☕ ' + esc(row.customer) + (row.location ? " — " + esc(row.location) : "") + "</td><td>" + esc(row.serviceStartTime) + "–" + esc(row.serviceEndTime) + "</td><td>" + mins(row.durationMinutes) + "</td></tr>";
-    }
-    const phoneCell = (() => {
-      if (!withPhones) return "";
-      const lines = [];
-      if (row.phone) lines.push(esc(row.phone) + (row.phoneName ? " <small>(" + esc(row.phoneName) + ")</small>" : ""));
-      if (row.phone2) lines.push(esc(row.phone2) + (row.phone2Name ? " <small>(" + esc(row.phone2Name) + ")</small>" : ""));
-      return "<td>" + (lines.join("<br>") || "—") + "</td>";
-    })();
-    const nameCell = "<td>" + esc(row.customer || "") + (row.activity ? "<br><small>" + esc(row.activity) + "</small>" : "") + (row.location && !row.activity ? "<br><small>" + esc(row.location) + "</small>" : "") + "<br><small class='a'>" + esc(row.address || "") + "</small></td>";
-    return "<tr><td>" + esc(row.stopNumber) + "</td>" + nameCell + phoneCell + "<td>" + esc(row.arrivalTime) + "–" + esc(row.serviceEndTime) + "</td><td>" + mins(row.durationMinutes) + "</td><td>" + (row.km ? Number(row.km).toFixed(1) : "") + "</td><td class='note'></td></tr>";
-  }).join("");
-
-  const phoneHeader = withPhones ? "<th>Telefono</th>" : "";
-  const endColspan = withPhones ? 3 : 2;
-
-  // Summary block: clean 2-column label/value rows grouped by topic
-  const summaryRows =
-    '<tr class="sg"><td colspan="4" class="sh">Giornata</td></tr>' +
-    '<tr><td>Orario</td><td>' + esc(summary.dayStart) + ' – ' + esc(summary.dayEnd) + '</td><td>Km totali</td><td>' + summary.totalKm.toFixed(1) + ' km</td></tr>' +
-    '<tr><td>Ore guida</td><td>' + mins(summary.totalDriveMinutes) + '</td><td>Ore lavoro</td><td>' + mins(summary.totalWorkMinutes) + '</td></tr>' +
-    (withCosts
-      ? '<tr class="sg"><td colspan="4" class="sh">Costi</td></tr>' +
-        '<tr><td>Costo km</td><td>' + eur(summary.costKm) + '</td><td>Costo guida</td><td>' + eur(summary.costDrive) + '</td></tr>' +
-        '<tr><td>Costo lavoro</td><td>' + eur(summary.costWork) + '</td><td class="tl">Totale giornata</td><td class="tv">' + eur(summary.totalCost) + '</td></tr>'
-      : '');
-  const costsBlock = '<table class="st"><tbody>' + summaryRows + '</tbody></table>';
-
-  const styles = '*{box-sizing:border-box;margin:0;padding:0}body{font-family:Arial,sans-serif;font-size:11pt;color:#111;padding:20px}h1{font-size:16pt;margin-bottom:2px}.sub{font-size:10pt;color:#555;margin-bottom:14px}table{width:100%;border-collapse:collapse;margin-bottom:16px}th{background:#222;color:#fff;padding:6px 8px;text-align:left;font-size:10pt}td{padding:5px 8px;border-bottom:1px solid #ddd;font-size:10pt;vertical-align:top}tr.br td{background:#f5f5f5;font-style:italic;color:#555}small{color:#666}.a{font-size:9pt}.st td{padding:5px 10px;border-bottom:1px solid #eee;font-size:10pt}.st td:first-child,.st td:nth-child(3){color:#666;width:18%}.st .sh{font-weight:700;background:#f0f0f0;color:#111;padding:5px 10px;font-size:9pt;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid #ccc}.st .tl{font-weight:700;color:#111!important}.st .tv{font-weight:700;font-size:12pt}.note{min-width:60px}@media print{body{padding:0}}';
-
-  document.open();
-  document.write('<!DOCTYPE html><html lang="it"><head><meta charset="utf-8"><title>' + esc(routeName) + (date ? " – " + date : "") + '</title><style>' + styles + '</style></head><body><h1>' + esc(routeName) + '</h1>' + (date ? '<div class="sub">' + date + '</div>' : '') + '<table><thead><tr><th>#</th><th>Tappa</th>' + phoneHeader + '<th>Orario</th><th>Durata</th><th>Km</th><th class="note">Note</th></tr></thead><tbody>' + stopRows + '<tr><td colspan="' + endColspan + '"><strong>↩ ' + esc(result.end?.label || "Casa") + '</strong><br><small>' + esc(result.end?.address || result.end?.fullAddress || "") + '</small></td><td>' + esc(finalLeg.arrivalTime) + '</td><td></td><td>' + Number(finalLeg.km).toFixed(1) + '</td><td></td></tr></tbody></table>' + costsBlock + '</body></html>');
-  document.close();
-  window.addEventListener('afterprint', () => window.close());
-  setTimeout(() => window.print(), 300);
+  const p = document.getElementById("opt-phones").checked;
+  const c = document.getElementById("opt-costs").checked;
+  const key = (p?"p":"")+(c?"c":"");
+  const doc = DATA.variants[key] || DATA.variants[""];
+  document.open(); document.write(doc); document.close();
+  window.addEventListener("afterprint", function(){ window.close(); });
+  setTimeout(function(){ window.print(); }, 300);
 }
 <\/script>
 </body>
