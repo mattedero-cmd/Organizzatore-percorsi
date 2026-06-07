@@ -1567,9 +1567,9 @@ function renderArchive() {
             <div class="phone-row">
               <label class="phone-pref-star" title="Preferito"><input type="radio" name="phonePreferred" value="phone" ${form.phonePreferred !== "phone2" ? "checked" : ""} />★</label>
               <select name="phoneType" class="phone-type-select">
-                <option value="cell" ${form.phoneType === "cell" ? "selected" : ""}>📱</option>
-                <option value="fisso" ${form.phoneType === "fisso" ? "selected" : ""}>☎</option>
-                <option value="altro" ${form.phoneType === "altro" ? "selected" : ""}>📞</option>
+                <option value="cell" ${form.phoneType === "cell" ? "selected" : ""}>Cell</option>
+                <option value="fisso" ${form.phoneType === "fisso" ? "selected" : ""}>Fisso</option>
+                <option value="altro" ${form.phoneType === "altro" ? "selected" : ""}>Altro</option>
               </select>
               <input name="phone" type="tel" value="${escapeHtml(form.phone)}" placeholder="Tel 1" style="flex:2;min-width:0" />
               <input name="phoneName" value="${escapeHtml(form.phoneName)}" placeholder="Intestatario" style="flex:1;min-width:0" />
@@ -1577,9 +1577,9 @@ function renderArchive() {
             <div class="phone-row">
               <label class="phone-pref-star" title="Preferito"><input type="radio" name="phonePreferred" value="phone2" ${form.phonePreferred === "phone2" ? "checked" : ""} />★</label>
               <select name="phone2Type" class="phone-type-select">
-                <option value="cell" ${form.phone2Type === "cell" ? "selected" : ""}>📱</option>
-                <option value="fisso" ${form.phone2Type === "fisso" ? "selected" : ""}>☎</option>
-                <option value="altro" ${form.phone2Type === "altro" ? "selected" : ""}>📞</option>
+                <option value="cell" ${form.phone2Type === "cell" ? "selected" : ""}>Cell</option>
+                <option value="fisso" ${form.phone2Type === "fisso" ? "selected" : ""}>Fisso</option>
+                <option value="altro" ${form.phone2Type === "altro" ? "selected" : ""}>Altro</option>
               </select>
               <input name="phone2" type="tel" value="${escapeHtml(form.phone2)}" placeholder="Tel 2" style="flex:2;min-width:0" />
               <input name="phone2Name" value="${escapeHtml(form.phone2Name)}" placeholder="Intestatario" style="flex:1;min-width:0" />
@@ -2554,7 +2554,7 @@ function showImportPreview(rawContacts) {
               <div style="font-weight:700;font-size:0.88rem;">${escapeHtml(c.customer)}${c.location ? ` <span style="font-weight:400;color:var(--muted)">— ${escapeHtml(c.location)}</span>` : ""}${c._dup ? ' <span class="badge" style="font-size:0.7rem;vertical-align:middle;">già presente</span>' : ""}</div>
               ${c.phone ? `<div class="stop-meta">${phoneIcon(c.phoneType)} ${escapeHtml(c.phone)}${c.phone2 ? ` · ${phoneIcon(c.phone2Type)} ${escapeHtml(c.phone2)}` : ""}</div>` : ""}
               ${c.fullAddress ? `<div class="stop-meta" style="font-size:0.78rem;">${escapeHtml(c.fullAddress)}</div>` : ""}
-              ${c.email ? `<div class="stop-meta" style="font-size:0.78rem;">✉ ${escapeHtml(c.email)}</div>` : ""}
+              ${c.email ? `<div class="stop-meta" style="font-size:0.78rem;">${I.email(12)} ${escapeHtml(c.email)}</div>` : ""}
             </div>
           </label>`).join("")}
       </div>
@@ -2811,8 +2811,8 @@ function renderGoogleContactsTab() {
                       ${c._dup ? ' <span class="badge" style="font-size:0.7rem;vertical-align:middle;">già presente</span>' : ""}
                     </div>
                     ${c.phone ? `<div class="stop-meta">${phoneIcon(c.phoneType)} ${escapeHtml(c.phone)}${c.phone2 ? ` · ${escapeHtml(c.phone2)}` : ""}</div>` : ""}
-                    ${c.email ? `<div class="stop-meta">✉ ${escapeHtml(c.email)}</div>` : ""}
-                    ${c.fullAddress ? `<div class="stop-meta">📍 ${escapeHtml(c.fullAddress)}</div>` : ""}
+                    ${c.email ? `<div class="stop-meta">${I.email(12)} ${escapeHtml(c.email)}</div>` : ""}
+                    ${c.fullAddress ? `<div class="stop-meta">${I.location(12)} ${escapeHtml(c.fullAddress)}</div>` : ""}
                   </div>
                 </label>`;
               }).join("")}
