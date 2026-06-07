@@ -1,518 +1,442 @@
 <!DOCTYPE html>
 <html lang="it" data-theme="night">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Anteprima Premium</title>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Anteprima — Tab Percorso</title>
 <style>
-* { box-sizing: border-box; margin: 0; padding: 0; }
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif; min-height: 100vh; overflow-x: hidden; transition: background 0.4s, color 0.4s; }
 
-body {
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif;
-  min-height: 100vh;
-  overflow-x: hidden;
-  transition: background 0.4s ease, color 0.4s ease;
-}
-
-/* ═══════════════════════════════════════════
-   VARIABILI TEMA
-═══════════════════════════════════════════ */
+/* ══ TEMI ══════════════════════════════════════════════════════════════════ */
 :root[data-theme="night"] {
-  --bg:            #05080f;
-  --bg2:           rgba(8, 14, 28, 0.72);
-  --surface:       rgba(255,255,255,0.035);
-  --surface-hover: rgba(255,255,255,0.07);
-  --border:        rgba(255,255,255,0.07);
-  --border-card:   rgba(255,255,255,0.07);
-  --text:          #f1f5f9;
-  --text-sub:      #334155;
-  --text-meta:     #64748b;
-  --text-chip:     #cbd5e1;
-  --muted:         #1e293b;
-
-  --accent:        #00ffe0;
-  --accent-bg:     rgba(0,255,224,0.08);
-  --accent-border: rgba(0,255,224,0.22);
-  --accent-glow:   rgba(0,255,224,0.18);
-  --accent2:       rgba(168,85,247,0.15);
-
-  --btn-primary-bg: linear-gradient(135deg, rgba(0,255,224,0.16) 0%, rgba(0,200,180,0.11) 50%, rgba(168,85,247,0.1) 100%);
-  --btn-primary-border: rgba(0,255,224,0.32);
-  --btn-primary-text: #e0fdf4;
-  --btn-primary-glow: rgba(0,255,224,0.22);
-  --btn-primary-shine: rgba(0,255,224,0.1);
-
-  --btn-action-bg:     rgba(255,255,255,0.04);
-  --btn-action-border: rgba(255,255,255,0.08);
-  --btn-action-text:   #475569;
-  --btn-action-shine:  rgba(255,255,255,0.05);
-
-  --del-bg:     rgba(239,68,68,0.06);
-  --del-border: rgba(239,68,68,0.2);
-  --del-text:   #ef4444;
-  --del-shine:  rgba(255,80,80,0.06);
-
-  --chip-bg:     rgba(255,255,255,0.03);
-  --chip-border: rgba(255,255,255,0.07);
-  --chip-text:   #64748b;
-  --chip-cost:   #34d399;
-
-  --stop-bg:     rgba(0,0,0,0.18);
-  --stop-border: rgba(255,255,255,0.04);
-  --stop-tag-bg: rgba(255,255,255,0.025);
-  --stop-tag-border: rgba(255,255,255,0.055);
-  --stop-tag-text: #334155;
-
-  --tab-bg:     rgba(5,8,15,0.82);
-  --tab-border: rgba(255,255,255,0.06);
-  --tab-text:   #1e293b;
-  --tab-active-bg:     rgba(0,255,224,0.08);
-  --tab-active-border: rgba(0,255,224,0.2);
-  --tab-active-text:   rgba(0,255,224,0.9);
-
-  --blob1: rgba(0,255,224,0.22);
-  --blob2: rgba(168,85,247,0.17);
-  --blob3: rgba(59,130,246,0.14);
-  --blob4: rgba(0,255,224,0.11);
-
-  --grid-line: rgba(0,255,224,0.025);
-  --top-line-a: rgba(0,255,224,0.7);
-  --top-line-b: rgba(168,85,247,0.7);
-  --card-top-line-a: rgba(0,255,224,0.55);
-  --card-top-line-b: rgba(168,85,247,0.45);
-  --card-corner: rgba(0,255,224,0.07);
-  --divider: rgba(255,255,255,0.06);
-  --title-shadow: rgba(0,255,224,0.2);
-  --badge-text: rgba(0,255,224,0.85);
+  --bg: #05080f; --bg2: rgba(8,14,28,0.78); --bg3: rgba(5,8,15,0.85);
+  --surface: rgba(255,255,255,0.038); --surface-h: rgba(255,255,255,0.07);
+  --border: rgba(255,255,255,0.07); --border-s: rgba(255,255,255,0.13);
+  --text: #f1f5f9; --muted: #64748b; --muted2: #334155;
+  --accent: #00ffe0; --accent-bg: rgba(0,255,224,0.08); --accent-bd: rgba(0,255,224,0.22); --accent-glow: rgba(0,255,224,0.18); --accent2: rgba(168,85,247,0.15);
+  --top-a: rgba(0,255,224,0.7); --top-b: rgba(168,85,247,0.7);
+  --card-a: rgba(0,255,224,0.55); --card-b: rgba(168,85,247,0.45); --card-c: rgba(0,255,224,0.07);
+  --tab-bg: rgba(5,8,15,0.85); --tab-bd: rgba(255,255,255,0.06);
+  --tab-at: rgba(0,255,224,0.9); --tab-abg: rgba(0,255,224,0.08); --tab-abd: rgba(0,255,224,0.2);
+  --btn-bg: linear-gradient(135deg,rgba(0,255,224,0.16),rgba(0,200,180,0.11),rgba(168,85,247,0.1));
+  --btn-bd: rgba(0,255,224,0.32); --btn-t: #e0fdf4; --btn-glow: rgba(0,255,224,0.22); --btn-shine: rgba(0,255,224,0.1);
+  --del-bg: rgba(239,68,68,0.06); --del-bd: rgba(239,68,68,0.22); --del-t: #ef4444;
+  --warn-t: #ffd166; --ok-t: #34d399;
+  --blob1: rgba(0,255,224,0.22); --blob2: rgba(168,85,247,0.17); --blob3: rgba(59,130,246,0.14); --blob4: rgba(0,255,224,0.11);
+  --grid: rgba(0,255,224,0.025);
 }
-
 :root[data-theme="day"] {
-  --bg:            #e6f2f0;
-  --bg2:           rgba(255,255,255,0.45);
-  --surface:       rgba(255,255,255,0.5);
-  --surface-hover: rgba(255,255,255,0.7);
-  --border:        rgba(0,168,150,0.13);
-  --border-card:   rgba(0,168,150,0.14);
-  --text:          #0e2422;
-  --text-sub:      #6a9490;
-  --text-meta:     #4a7470;
-  --text-chip:     #1a3432;
-  --muted:         #b8d8d4;
-
-  --accent:        #00a896;
-  --accent-bg:     rgba(0,168,150,0.1);
-  --accent-border: rgba(0,168,150,0.3);
-  --accent-glow:   rgba(0,168,150,0.18);
-  --accent2:       rgba(234,88,12,0.1);
-
-  --btn-primary-bg: linear-gradient(135deg, #00c4ae 0%, #00a896 55%, #00887a 100%);
-  --btn-primary-border: rgba(0,168,150,0.45);
-  --btn-primary-text: #fff;
-  --btn-primary-glow: rgba(0,168,150,0.28);
-  --btn-primary-shine: rgba(255,255,255,0.28);
-
-  --btn-action-bg:     rgba(255,255,255,0.35);
-  --btn-action-border: rgba(0,168,150,0.18);
-  --btn-action-text:   #3a6460;
-  --btn-action-shine:  rgba(255,255,255,0.5);
-
-  --del-bg:     rgba(234,88,12,0.07);
-  --del-border: rgba(234,88,12,0.25);
-  --del-text:   #b84000;
-  --del-shine:  rgba(255,255,255,0.3);
-
-  --chip-bg:     rgba(255,255,255,0.4);
-  --chip-border: rgba(0,168,150,0.16);
-  --chip-text:   #4a7470;
-  --chip-cost:   #c05000;
-
-  --stop-bg:     rgba(0,168,150,0.05);
-  --stop-border: rgba(0,168,150,0.1);
-  --stop-tag-bg: rgba(255,255,255,0.3);
-  --stop-tag-border: rgba(0,168,150,0.14);
-  --stop-tag-text: #6a9490;
-
-  --tab-bg:     rgba(210,238,234,0.88);
-  --tab-border: rgba(0,168,150,0.14);
-  --tab-text:   #8abcb8;
-  --tab-active-bg:     rgba(0,168,150,0.14);
-  --tab-active-border: rgba(0,168,150,0.32);
-  --tab-active-text:   #006e5e;
-
-  --blob1: rgba(0,200,178,0.26);
-  --blob2: rgba(234,88,12,0.22);
-  --blob3: rgba(0,155,138,0.18);
-  --blob4: rgba(249,115,22,0.16);
-
-  --grid-line: rgba(0,168,150,0.06);
-  --top-line-a: rgba(0,200,178,0.9);
-  --top-line-b: rgba(234,88,12,0.7);
-  --card-top-line-a: rgba(0,200,178,0.5);
-  --card-top-line-b: rgba(234,88,12,0.4);
-  --card-corner: rgba(0,200,178,0.1);
-  --divider: rgba(0,168,150,0.1);
-  --title-shadow: rgba(0,168,150,0.15);
-  --badge-text: #006e5e;
+  --bg: #e6f2f0; --bg2: rgba(255,255,255,0.55); --bg3: rgba(210,238,234,0.9);
+  --surface: rgba(255,255,255,0.52); --surface-h: rgba(255,255,255,0.78);
+  --border: rgba(0,168,150,0.14); --border-s: rgba(0,168,150,0.30);
+  --text: #0e2422; --muted: #6a9490; --muted2: #b8d8d4;
+  --accent: #00a896; --accent-bg: rgba(0,168,150,0.1); --accent-bd: rgba(0,168,150,0.3); --accent-glow: rgba(0,168,150,0.18); --accent2: rgba(234,88,12,0.1);
+  --top-a: rgba(0,200,178,0.9); --top-b: rgba(234,88,12,0.7);
+  --card-a: rgba(0,200,178,0.5); --card-b: rgba(234,88,12,0.4); --card-c: rgba(0,200,178,0.1);
+  --tab-bg: rgba(210,238,234,0.9); --tab-bd: rgba(0,168,150,0.14);
+  --tab-at: #006e5e; --tab-abg: rgba(0,168,150,0.14); --tab-abd: rgba(0,168,150,0.32);
+  --btn-bg: linear-gradient(135deg,#00c4ae,#00a896,#00887a);
+  --btn-bd: rgba(0,168,150,0.45); --btn-t: #fff; --btn-glow: rgba(0,168,150,0.28); --btn-shine: rgba(255,255,255,0.28);
+  --del-bg: rgba(234,88,12,0.07); --del-bd: rgba(234,88,12,0.26); --del-t: #b84000;
+  --warn-t: #946200; --ok-t: #006e5e;
+  --blob1: rgba(0,200,178,0.26); --blob2: rgba(234,88,12,0.22); --blob3: rgba(0,155,138,0.18); --blob4: rgba(249,115,22,0.16);
+  --grid: rgba(0,168,150,0.06);
 }
-
 :root[data-theme="nero"] {
-  --bg:            #000000;
-  --bg2:           rgba(12,12,14,0.75);
-  --surface:       rgba(18,18,20,0.8);
-  --surface-hover: rgba(26,26,28,0.9);
-  --border:        rgba(0,255,200,0.08);
-  --border-card:   rgba(255,255,255,0.06);
-  --text:          #ffffff;
-  --text-sub:      #444450;
-  --text-meta:     #555560;
-  --text-chip:     #ccccdd;
-  --muted:         #1a1a20;
-
-  --accent:        #00ffc8;
-  --accent-bg:     rgba(0,255,200,0.07);
-  --accent-border: rgba(0,255,200,0.28);
-  --accent-glow:   rgba(0,255,200,0.22);
-  --accent2:       rgba(255,80,20,0.1);
-
-  --btn-primary-bg: linear-gradient(135deg, rgba(0,255,200,0.18) 0%, rgba(0,200,155,0.13) 50%, rgba(255,80,20,0.12) 100%);
-  --btn-primary-border: rgba(0,255,200,0.4);
-  --btn-primary-text: #e0fff8;
-  --btn-primary-glow: rgba(0,255,200,0.28);
-  --btn-primary-shine: rgba(0,255,200,0.12);
-
-  --btn-action-bg:     rgba(255,255,255,0.03);
-  --btn-action-border: rgba(255,255,255,0.07);
-  --btn-action-text:   #555560;
-  --btn-action-shine:  rgba(255,255,255,0.04);
-
-  --del-bg:     rgba(255,60,20,0.07);
-  --del-border: rgba(255,80,20,0.28);
-  --del-text:   #ff5020;
-  --del-shine:  rgba(255,80,20,0.06);
-
-  --chip-bg:     rgba(255,255,255,0.03);
-  --chip-border: rgba(255,255,255,0.06);
-  --chip-text:   #444450;
-  --chip-cost:   #00ffc8;
-
-  --stop-bg:     rgba(0,0,0,0.4);
-  --stop-border: rgba(255,255,255,0.04);
-  --stop-tag-bg: rgba(255,255,255,0.02);
-  --stop-tag-border: rgba(255,255,255,0.05);
-  --stop-tag-text: #333340;
-
-  --tab-bg:     rgba(0,0,0,0.9);
-  --tab-border: rgba(255,255,255,0.05);
-  --tab-text:   #222228;
-  --tab-active-bg:     rgba(0,255,200,0.07);
-  --tab-active-border: rgba(0,255,200,0.25);
-  --tab-active-text:   #00ffc8;
-
-  --blob1: rgba(0,255,200,0.14);
-  --blob2: rgba(255,80,20,0.12);
-  --blob3: rgba(0,200,155,0.09);
-  --blob4: rgba(255,100,40,0.08);
-
-  --grid-line: rgba(0,255,200,0.03);
-  --top-line-a: rgba(0,255,200,0.9);
-  --top-line-b: rgba(255,80,20,0.8);
-  --card-top-line-a: rgba(0,255,200,0.6);
-  --card-top-line-b: rgba(255,80,20,0.5);
-  --card-corner: rgba(0,255,200,0.06);
-  --divider: rgba(255,255,255,0.05);
-  --title-shadow: rgba(0,255,200,0.3);
-  --badge-text: #00ffc8;
+  --bg: #000; --bg2: rgba(10,10,12,0.82); --bg3: rgba(0,0,0,0.92);
+  --surface: rgba(18,18,20,0.8); --surface-h: rgba(34,34,38,0.92);
+  --border: rgba(0,255,200,0.08); --border-s: rgba(255,255,255,0.14);
+  --text: #ffffff; --muted: #555560; --muted2: #222228;
+  --accent: #00ffc8; --accent-bg: rgba(0,255,200,0.07); --accent-bd: rgba(0,255,200,0.28); --accent-glow: rgba(0,255,200,0.22); --accent2: rgba(255,80,20,0.1);
+  --top-a: rgba(0,255,200,0.9); --top-b: rgba(255,80,20,0.8);
+  --card-a: rgba(0,255,200,0.6); --card-b: rgba(255,80,20,0.5); --card-c: rgba(0,255,200,0.06);
+  --tab-bg: rgba(0,0,0,0.92); --tab-bd: rgba(255,255,255,0.05);
+  --tab-at: #00ffc8; --tab-abg: rgba(0,255,200,0.07); --tab-abd: rgba(0,255,200,0.25);
+  --btn-bg: linear-gradient(135deg,rgba(0,255,200,0.18),rgba(0,200,155,0.13),rgba(255,80,20,0.12));
+  --btn-bd: rgba(0,255,200,0.4); --btn-t: #e0fff8; --btn-glow: rgba(0,255,200,0.28); --btn-shine: rgba(0,255,200,0.12);
+  --del-bg: rgba(255,60,20,0.07); --del-bd: rgba(255,80,20,0.28); --del-t: #ff5020;
+  --warn-t: #ffd166; --ok-t: #00ffc8;
+  --blob1: rgba(0,255,200,0.14); --blob2: rgba(255,80,20,0.12); --blob3: rgba(0,200,155,0.09); --blob4: rgba(255,100,40,0.08);
+  --grid: rgba(0,255,200,0.03);
 }
 
-/* ═══════════════════════════════════════════
-   SFONDO
-═══════════════════════════════════════════ */
+/* ══ BG ════════════════════════════════════════════════════════════════════ */
 body { background: var(--bg); color: var(--text); }
-
-[data-theme="day"] body {
-  background: linear-gradient(150deg, #c8eae4 0%, #daf0ec 35%, #f2e4d8 68%, #d8ece8 100%);
-}
-
+[data-theme="day"] body { background: linear-gradient(150deg,#c8eae4 0%,#daf0ec 35%,#f2e4d8 68%,#d8ece8 100%); }
 [data-theme="nero"] body { background: #000; }
 
-[data-theme="nero"] .bg::before {
-  background:
-    radial-gradient(ellipse 50% 38% at 10%  8%,  rgba(0,255,200,0.16) 0%, transparent 65%),
-    radial-gradient(ellipse 45% 45% at 92%  4%,  rgba(255,80,20,0.14)  0%, transparent 60%),
-    radial-gradient(ellipse 40% 32% at 68% 70%,  rgba(255,100,40,0.1)  0%, transparent 55%),
-    radial-gradient(ellipse 45% 40% at  4% 88%,  rgba(0,200,155,0.1)   0%, transparent 60%);
-}
-
-[data-theme="day"] .bg::before {
-  background:
-    radial-gradient(ellipse 55% 42% at 10%  6%,  rgba(0,200,178,0.30) 0%, transparent 62%),
-    radial-gradient(ellipse 50% 50% at 94%  4%,  rgba(234,88,12,0.26)  0%, transparent 58%),
-    radial-gradient(ellipse 45% 38% at 72% 68%,  rgba(249,115,22,0.18) 0%, transparent 55%),
-    radial-gradient(ellipse 50% 44% at  3% 90%,  rgba(0,168,150,0.20)  0%, transparent 60%),
-    radial-gradient(ellipse 40% 35% at 50% 40%,  rgba(255,255,255,0.18) 0%, transparent 55%);
-}
-
-.bg { position: fixed; inset: 0; z-index: 0; overflow: hidden; }
-.bg-blob {
-  position: absolute; border-radius: 50%;
-  filter: blur(80px);
-  animation: breathe 8s ease-in-out infinite;
-  transition: background 0.5s ease;
-}
-.bg-blob-1 { width: 380px; height: 280px; top: -60px; left: -80px; background: radial-gradient(ellipse, var(--blob1) 0%, transparent 70%); animation-delay: 0s; }
+.bg { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+.bg-blob { position: absolute; border-radius: 50%; filter: blur(80px); animation: breathe 8s ease-in-out infinite; }
+.bg-blob-1 { width: 380px; height: 280px; top: -60px; left: -80px; background: radial-gradient(ellipse, var(--blob1) 0%, transparent 70%); }
 .bg-blob-2 { width: 300px; height: 300px; top: -40px; right: -60px; background: radial-gradient(ellipse, var(--blob2) 0%, transparent 70%); animation-delay: 3s; }
 .bg-blob-3 { width: 260px; height: 200px; bottom: 120px; left: -40px; background: radial-gradient(ellipse, var(--blob3) 0%, transparent 70%); animation-delay: 5s; }
 .bg-blob-4 { width: 200px; height: 200px; bottom: 80px; right: -30px; background: radial-gradient(ellipse, var(--blob4) 0%, transparent 70%); animation-delay: 1.5s; }
+@keyframes breathe { 0%,100%{transform:scale(1)} 50%{transform:scale(1.12)} }
+.bg::after { content:""; position:absolute; inset:0; background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px); background-size:44px 44px; }
+.top-line { position:fixed; top:0; left:0; right:0; height:2px; z-index:500; background:linear-gradient(90deg,transparent 0%,var(--top-a) 20%,var(--top-b) 80%,transparent 100%); box-shadow:0 0 12px var(--accent-glow); pointer-events:none; }
 
-@keyframes breathe { 0%,100% { transform: scale(1); } 50% { transform: scale(1.12); } }
+/* ══ SHELL ═════════════════════════════════════════════════════════════════ */
+.shell { position: relative; z-index: 1; max-width: 430px; margin: 0 auto; min-height: 100vh; display: flex; flex-direction: column; }
 
-.bg::after {
-  content: ""; position: absolute; inset: 0;
-  background-image: linear-gradient(var(--grid-line) 1px, transparent 1px), linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
-  background-size: 44px 44px;
-}
-
-.top-line {
-  position: fixed; top: 0; left: 0; right: 0; height: 1px; z-index: 100;
-  background: linear-gradient(90deg, transparent 0%, var(--top-line-a) 20%, var(--top-line-b) 80%, transparent 100%);
-  box-shadow: 0 0 12px var(--accent-glow);
-}
-
-/* ═══════════════════════════════════════════
-   TOGGLE TEMA
-═══════════════════════════════════════════ */
-.theme-toggle {
-  position: fixed; top: 14px; right: 16px; z-index: 200;
-  display: flex; align-items: center; gap: 0;
-  background: var(--bg2);
-  border: 1px solid var(--border);
-  border-radius: 24px; padding: 4px;
-  backdrop-filter: blur(16px);
-  box-shadow: 0 4px 16px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.1);
-  cursor: pointer;
-}
-.toggle-btn {
-  display: flex; align-items: center; gap: 6px;
-  padding: 6px 13px; border-radius: 18px;
-  font-size: 0.75rem; font-weight: 700; letter-spacing: 0.02em;
-  border: none; cursor: pointer; transition: all 0.28s ease;
-  color: var(--text-meta); background: transparent;
-}
-.toggle-btn.active {
-  background: var(--accent-bg);
-  color: var(--accent);
-  border: 1px solid var(--accent-border);
-  box-shadow: 0 0 12px var(--accent-glow);
-}
-.toggle-btn svg { flex-shrink: 0; }
-
-/* ═══════════════════════════════════════════
-   LAYOUT
-═══════════════════════════════════════════ */
-.page { position: relative; z-index: 1; max-width: 430px; margin: 0 auto; padding: 22px 16px 110px; }
-
-/* ═══════════════════════════════════════════
-   HEADER
-═══════════════════════════════════════════ */
-.section-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 22px; padding: 0 2px; }
-.section-title {
-  font-size: 1.65rem; font-weight: 800; letter-spacing: -0.035em;
-  color: var(--text); text-shadow: 0 0 30px var(--title-shadow); line-height: 1.15;
-}
-.section-sub { font-size: 0.72rem; font-weight: 500; color: var(--text-sub); letter-spacing: 0.06em; text-transform: uppercase; margin-top: 3px; }
-
-.btn-ghost {
-  display: inline-flex; align-items: center; gap: 7px;
-  padding: 9px 16px; border-radius: 22px;
-  border: 1px solid var(--accent-border);
-  background: var(--accent-bg);
-  color: var(--accent);
-  font-size: 0.79rem; font-weight: 600; cursor: pointer; letter-spacing: 0.01em;
-  backdrop-filter: blur(12px);
-  box-shadow: 0 0 14px var(--accent-glow), inset 0 1px 0 rgba(255,255,255,0.08);
-  transition: all 0.22s ease;
-}
-.btn-ghost:hover { box-shadow: 0 0 22px var(--accent-glow); }
-
-/* ═══════════════════════════════════════════
-   CARD
-═══════════════════════════════════════════ */
-.route-card {
-  position: relative;
-  background: var(--bg2);
-  border: 1px solid var(--border-card);
-  border-radius: 22px; margin-bottom: 16px;
+/* ══ TOPBAR ════════════════════════════════════════════════════════════════ */
+.topbar {
+  position: sticky; top: 0; z-index: 150;
+  display: flex; align-items: center; justify-content: space-between; gap: 14px;
+  padding: 16px 18px 12px;
+  background: var(--bg2); border-bottom: 1px solid var(--border);
   backdrop-filter: blur(28px); -webkit-backdrop-filter: blur(28px);
-  overflow: hidden;
-  box-shadow: 0 8px 40px rgba(0,0,0,0.18), 0 1px 0 rgba(255,255,255,0.08) inset;
-  animation: cardIn 0.45s cubic-bezier(0.22,1,0.36,1) both;
-  transition: transform 0.25s ease, box-shadow 0.25s ease;
 }
-.route-card:hover { transform: translateY(-3px); box-shadow: 0 16px 56px rgba(0,0,0,0.25), 0 0 0 1px var(--accent-border); }
-.route-card:nth-child(1) { animation-delay: 0.04s; }
-.route-card:nth-child(2) { animation-delay: 0.12s; }
-.route-card:nth-child(3) { animation-delay: 0.20s; }
-
-@keyframes cardIn { from { opacity:0; transform:translateY(20px) scale(0.96); } to { opacity:1; transform:translateY(0) scale(1); } }
-
-.route-card::before {
-  content: ""; position: absolute; top: 0; left: 24px; right: 24px; height: 1px;
-  background: linear-gradient(90deg, transparent, var(--card-top-line-a) 35%, var(--card-top-line-b) 65%, transparent);
+.topbar-left { display: flex; flex-direction: column; gap: 1px; }
+.topbar-eyebrow { font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--accent); opacity: 0.75; }
+.topbar-title { font-size: 1.15rem; font-weight: 800; letter-spacing: -0.025em; text-shadow: 0 0 18px var(--accent-glow); }
+.topbar-right { display: flex; align-items: center; gap: 8px; }
+.status-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 12px; border-radius: 999px;
+  background: var(--accent-bg); border: 1px solid var(--accent-bd);
+  color: var(--accent); font-size: 0.72rem; font-weight: 600;
   box-shadow: 0 0 8px var(--accent-glow);
 }
-.route-card::after {
-  content: ""; position: absolute; top: 0; left: 0; width: 120px; height: 120px;
-  background: radial-gradient(circle at 0% 0%, var(--card-corner), transparent 70%);
-  pointer-events: none;
-}
-
-.card-body { padding: 18px 18px 16px; }
-
-.card-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
-.card-title-row { display: flex; align-items: center; gap: 11px; }
-
-.route-icon {
-  width: 38px; height: 38px; border-radius: 12px;
-  background: linear-gradient(135deg, var(--accent-bg), var(--accent2));
-  border: 1px solid var(--accent-border);
+.status-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+.menu-btn {
+  background: rgba(255,255,255,0.05); border: 1px solid var(--border);
+  border-radius: 10px; width: 36px; height: 36px;
   display: flex; align-items: center; justify-content: center;
-  box-shadow: 0 0 14px var(--accent-glow), inset 0 1px 0 rgba(255,255,255,0.1);
-  flex-shrink: 0; color: var(--accent);
-}
-
-.card-name { font-size: 1rem; font-weight: 700; color: var(--text); letter-spacing: -0.02em; }
-
-.badge-opt {
-  display: inline-flex; align-items: center; gap: 5px;
-  padding: 4px 11px; border-radius: 20px;
-  font-size: 0.68rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
-  background: var(--accent-bg); border: 1px solid var(--accent-border);
-  color: var(--badge-text); box-shadow: 0 0 12px var(--accent-glow);
-}
-.badge-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 6px var(--accent); }
-
-.card-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 11px; }
-.chip {
-  display: inline-flex; align-items: center; gap: 6px;
-  padding: 5px 11px; border-radius: 9px;
-  background: var(--chip-bg); border: 1px solid var(--chip-border);
-  font-size: 0.78rem; color: var(--chip-text); font-weight: 500;
-}
-.chip b { color: var(--text-chip); font-weight: 700; }
-.chip svg { opacity: 0.45; flex-shrink: 0; }
-.chip-cost b { color: var(--chip-cost); }
-.chip-cost svg { opacity: 0.6; color: var(--chip-cost); }
-
-.route-line { font-size: 0.76rem; color: var(--text-sub); margin-bottom: 14px; padding-left: 1px; letter-spacing: 0.02em; }
-
-.divider { height: 1px; margin: 0 -18px 14px; background: linear-gradient(90deg, transparent, var(--divider) 30%, var(--divider) 70%, transparent); }
-
-/* ─ Primario ─ */
-.btn-primary {
-  width: 100%; padding: 13px;
-  border-radius: 13px;
-  border: 1px solid var(--btn-primary-border);
-  background: var(--btn-primary-bg);
-  color: var(--btn-primary-text);
-  font-size: 0.91rem; font-weight: 700; letter-spacing: 0.02em;
-  cursor: pointer; margin-bottom: 11px;
+  cursor: pointer; color: var(--text); transition: all 0.2s;
   backdrop-filter: blur(8px);
-  box-shadow: 0 0 20px var(--btn-primary-glow), 0 4px 18px rgba(0,0,0,0.15), inset 0 1px 0 var(--btn-primary-shine);
-  transition: all 0.22s ease; position: relative; overflow: hidden;
-  display: flex; align-items: center; justify-content: center; gap: 8px;
 }
-.btn-primary::before {
-  content: ""; position: absolute; top: 0; left: 0; right: 0; height: 48%;
-  background: linear-gradient(var(--btn-primary-shine), transparent); pointer-events: none;
+.menu-btn:hover { background: var(--surface-h); border-color: var(--accent-bd); }
+
+/* ══ TABS ══════════════════════════════════════════════════════════════════ */
+.tabs {
+  position: sticky; top: 64px; z-index: 140;
+  display: flex; gap: 6px; padding: 9px 14px;
+  background: var(--bg2); border-bottom: 1px solid var(--border);
+  backdrop-filter: blur(28px); -webkit-backdrop-filter: blur(28px);
+  overflow-x: auto;
 }
-.btn-primary:hover { transform: translateY(-1px); box-shadow: 0 0 30px var(--btn-primary-glow), 0 6px 24px rgba(0,0,0,0.2), inset 0 1px 0 var(--btn-primary-shine); }
-.btn-primary:active { transform: scale(0.98); }
+.tab {
+  flex: 0 0 auto; min-height: 36px; padding: 0 13px;
+  border-radius: 18px; background: transparent;
+  color: var(--muted); font-weight: 700; font-size: 0.82rem;
+  border: 1px solid transparent; cursor: pointer; transition: all 0.22s;
+  white-space: nowrap;
+}
+.tab.active {
+  background: var(--tab-abg); color: var(--tab-at);
+  border-color: var(--tab-abd); box-shadow: 0 0 14px var(--accent-glow);
+}
 
-/* ─ Azioni ─ */
-.card-actions { display: flex; gap: 7px; }
+/* ══ CONTENT ════════════════════════════════════════════════════════════════ */
+.content { padding: 14px 14px 110px; flex: 1; }
 
+/* ══ THEME TOGGLE ══════════════════════════════════════════════════════════ */
+.theme-toggle {
+  position: fixed; bottom: 90px; right: 14px; z-index: 200;
+  display: flex; gap: 4px; padding: 4px;
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 24px; backdrop-filter: blur(16px);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+}
+.t-btn {
+  padding: 6px 11px; border-radius: 16px; border: 1px solid transparent;
+  font-size: 0.68rem; font-weight: 700; letter-spacing: 0.03em;
+  cursor: pointer; color: var(--muted); background: transparent; transition: all 0.22s;
+}
+.t-btn.active { background: var(--accent-bg); color: var(--accent); border-color: var(--accent-bd); box-shadow: 0 0 10px var(--accent-glow); }
+
+/* ══ ROUTE HEADER ══════════════════════════════════════════════════════════ */
+.route-header {
+  position: relative; overflow: hidden;
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 18px; padding: 16px 16px 14px; margin-bottom: 12px;
+  backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
+  box-shadow: 0 8px 40px rgba(0,0,0,0.22);
+  animation: cardIn 0.4s cubic-bezier(0.22,1,0.36,1) both;
+}
+.route-header::before {
+  content:""; position:absolute; top:0; left:16px; right:16px; height:1px;
+  background:linear-gradient(90deg,transparent,var(--card-a) 35%,var(--card-b) 65%,transparent);
+}
+.route-header::after {
+  content:""; position:absolute; top:0; left:0; width:100px; height:100px;
+  background:radial-gradient(circle at 0% 0%,var(--card-c),transparent 70%); pointer-events:none;
+}
+@keyframes cardIn { from{opacity:0;transform:translateY(14px) scale(0.97)} to{opacity:1;transform:none} }
+
+.rh-top { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; margin-bottom:14px; }
+.rh-name { font-size:1.05rem; font-weight:800; color:var(--text); letter-spacing:-0.02em; }
+.rh-date { font-size:0.72rem; color:var(--muted); margin-top:3px; display:flex; align-items:center; gap:5px; }
+.rh-badge {
+  display:inline-flex; align-items:center; gap:5px;
+  padding:4px 11px; border-radius:20px; font-size:0.65rem; font-weight:700; letter-spacing:0.06em; text-transform:uppercase;
+  background:var(--accent-bg); border:1px solid var(--accent-bd); color:var(--accent); box-shadow:0 0 10px var(--accent-glow);
+}
+.rh-badge-dot { width:5px;height:5px;border-radius:50%;background:var(--accent);box-shadow:0 0 5px var(--accent); }
+
+.rh-chips { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:14px; }
+.chip {
+  display:inline-flex; align-items:center; gap:5px;
+  padding:5px 11px; border-radius:9px;
+  background:var(--accent-bg); border:1px solid var(--accent-bd);
+  font-size:0.75rem; color:var(--muted); font-weight:500;
+}
+.chip b { color:var(--text); font-weight:700; }
+.chip svg { opacity:0.55; flex-shrink:0; color:var(--accent); }
+
+.rh-divider { height:1px; margin:0 -16px 14px; background:linear-gradient(90deg,transparent,var(--border) 30%,var(--border) 70%,transparent); }
+
+.btn-nav {
+  width:100%; padding:13px; border-radius:13px;
+  border:1px solid var(--btn-bd); background:var(--btn-bg);
+  color:var(--btn-t); font-size:0.9rem; font-weight:700; letter-spacing:0.02em;
+  cursor:pointer; backdrop-filter:blur(8px);
+  box-shadow:0 0 20px var(--btn-glow),0 4px 18px rgba(0,0,0,0.15),inset 0 1px 0 var(--btn-shine);
+  transition:all 0.22s; position:relative; overflow:hidden;
+  display:flex; align-items:center; justify-content:center; gap:8px; margin-bottom:10px;
+}
+.btn-nav::before { content:""; position:absolute; top:0; left:0; right:0; height:48%; background:linear-gradient(var(--btn-shine),transparent); pointer-events:none; }
+.btn-nav:hover { transform:translateY(-1px); box-shadow:0 0 30px var(--btn-glow),0 6px 24px rgba(0,0,0,0.2); }
+
+.rh-actions { display:flex; gap:7px; }
 .btn-action {
-  flex: 1; padding: 9px 6px; border-radius: 11px;
-  border: 1px solid var(--btn-action-border);
-  background: var(--btn-action-bg);
-  color: var(--btn-action-text);
-  font-size: 0.74rem; font-weight: 700; letter-spacing: 0.01em;
-  cursor: pointer; backdrop-filter: blur(8px);
-  box-shadow: inset 0 1px 0 var(--btn-action-shine), 0 2px 8px rgba(0,0,0,0.1);
-  transition: all 0.2s ease;
-  display: flex; align-items: center; justify-content: center; gap: 6px;
-  position: relative; overflow: hidden;
+  flex:1; padding:9px 6px; border-radius:11px;
+  border:1px solid var(--border); background:var(--surface);
+  color:var(--muted); font-size:0.74rem; font-weight:700;
+  cursor:pointer; backdrop-filter:blur(8px);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.06); transition:all 0.2s;
+  display:flex; align-items:center; justify-content:center; gap:5px;
 }
-.btn-action::before { content: ""; position: absolute; top:0; left:0; right:0; height:45%; background: linear-gradient(var(--btn-action-shine), transparent); pointer-events: none; }
-.btn-action:hover { background: var(--surface-hover); color: var(--text); border-color: var(--accent-border); transform: translateY(-1px); }
+.btn-action:hover { background:var(--surface-h); color:var(--text); border-color:var(--accent-bd); }
 
-.btn-action-del {
-  flex: 1; padding: 9px 6px; border-radius: 11px;
-  border: 1px solid var(--del-border);
-  background: var(--del-bg);
-  color: var(--del-text);
-  font-size: 0.74rem; font-weight: 700; letter-spacing: 0.01em;
-  cursor: pointer; backdrop-filter: blur(8px);
-  box-shadow: inset 0 1px 0 var(--del-shine), 0 2px 8px rgba(0,0,0,0.1);
-  transition: all 0.2s ease;
-  display: flex; align-items: center; justify-content: center; gap: 6px;
-  position: relative; overflow: hidden;
+/* ══ STOP CARD ═════════════════════════════════════════════════════════════ */
+.stop-card {
+  position:relative; overflow:hidden;
+  background:var(--bg2); border:1px solid var(--border);
+  border-radius:18px; margin-bottom:10px;
+  backdrop-filter:blur(24px); -webkit-backdrop-filter:blur(24px);
+  box-shadow:0 8px 36px rgba(0,0,0,0.2);
+  animation:cardIn 0.4s cubic-bezier(0.22,1,0.36,1) both;
 }
-.btn-action-del::before { content: ""; position: absolute; top:0; left:0; right:0; height:45%; background: linear-gradient(var(--del-shine), transparent); pointer-events: none; }
-.btn-action-del:hover { background: rgba(239,68,68,0.14); border-color: rgba(239,68,68,0.38); transform: translateY(-1px); }
-
-.stop-row {
-  display: flex; flex-wrap: wrap; gap: 5px;
-  padding: 11px 18px 13px;
-  border-top: 1px solid var(--stop-border);
-  background: var(--stop-bg);
+.stop-card::before {
+  content:""; position:absolute; top:0; left:14px; right:14px; height:1px;
+  background:linear-gradient(90deg,transparent,var(--card-a) 35%,var(--card-b) 65%,transparent);
 }
-.stop-tag {
-  font-size: 0.7rem; color: var(--stop-tag-text);
-  background: var(--stop-tag-bg); border: 1px solid var(--stop-tag-border);
-  border-radius: 7px; padding: 3px 9px;
+.stop-card::after {
+  content:""; position:absolute; top:0; left:0; width:80px; height:80px;
+  background:radial-gradient(circle at 0% 0%,var(--card-c),transparent 70%); pointer-events:none;
 }
 
-/* ═══════════════════════════════════════════
-   TAB BAR
-═══════════════════════════════════════════ */
+.stop-card.card-warn { border-left: 3px solid var(--warn-t); }
+.stop-card.card-error { border-left: 3px solid var(--del-t); }
+
+/* card header */
+.sc-head {
+  display:flex; align-items:flex-start; gap:12px;
+  padding:14px 14px 10px; cursor:pointer; user-select:none;
+}
+.sc-head:active { background:rgba(255,255,255,0.02); }
+
+.sc-icon {
+  width:40px; height:40px; border-radius:12px; flex-shrink:0;
+  display:flex; align-items:center; justify-content:center;
+  background:linear-gradient(135deg,var(--accent-bg),var(--accent2));
+  border:1px solid var(--accent-bd);
+  box-shadow:0 0 12px var(--accent-glow),inset 0 1px 0 rgba(255,255,255,0.1);
+  color:var(--accent);
+}
+
+.sc-left { flex:1; min-width:0; }
+.sc-name { font-size:1rem; font-weight:700; color:var(--text); letter-spacing:-0.01em; line-height:1.3; }
+.sc-addr { font-size:0.72rem; color:var(--muted); margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.sc-warn-badge { display:inline-flex; align-items:center; gap:4px; margin-top:5px; padding:3px 9px; border-radius:7px; font-size:0.7rem; font-weight:700; background:var(--del-bg); border:1px solid var(--del-bd); color:var(--del-t); }
+
+.sc-arrival { text-align:right; flex-shrink:0; }
+.sc-time { font-size:1.45rem; font-weight:800; color:var(--accent); letter-spacing:-0.035em; line-height:1; text-shadow:0 0 16px var(--accent-glow); }
+.sc-time-label { font-size:0.58rem; color:var(--muted); text-transform:uppercase; letter-spacing:0.08em; margin-top:2px; }
+.sc-weather { display:flex; align-items:center; justify-content:flex-end; gap:4px; margin-top:5px; font-size:0.7rem; color:var(--muted); }
+
+/* action row */
+.sc-actions { display:flex; gap:6px; padding:0 12px 12px; }
+
+.btn-naviga {
+  flex:1; min-height:42px; border-radius:12px;
+  border:1px solid var(--btn-bd); background:var(--btn-bg);
+  color:var(--btn-t); font-size:0.88rem; font-weight:700; letter-spacing:0.02em;
+  cursor:pointer; backdrop-filter:blur(8px);
+  box-shadow:0 0 18px var(--btn-glow),0 4px 14px rgba(0,0,0,0.14),inset 0 1px 0 var(--btn-shine);
+  transition:all 0.22s; position:relative; overflow:hidden;
+  display:flex; align-items:center; justify-content:center; gap:7px;
+}
+.btn-naviga::before { content:""; position:absolute; top:0; left:0; right:0; height:48%; background:linear-gradient(var(--btn-shine),transparent); pointer-events:none; }
+.btn-naviga:hover { transform:translateY(-1px); box-shadow:0 0 26px var(--btn-glow); }
+
+.btn-phone, .btn-email {
+  width:42px; height:42px; border-radius:11px; flex-shrink:0;
+  border:1px solid var(--border); background:rgba(255,255,255,0.04);
+  color:var(--muted); cursor:pointer; backdrop-filter:blur(8px);
+  display:flex; align-items:center; justify-content:center; transition:all 0.2s;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.06);
+}
+.btn-phone:hover, .btn-email:hover { background:var(--surface-h); border-color:var(--accent-bd); color:var(--accent); }
+
+/* details (expanded) */
+.sc-details { border-top:1px solid var(--border); padding:12px 14px 14px; display:flex; flex-direction:column; gap:10px; }
+
+/* timing chips */
+.sc-timing { display:flex; flex-wrap:wrap; gap:5px; padding-bottom:10px; border-bottom:1px solid var(--border); }
+.tc {
+  display:inline-flex; align-items:center; gap:4px;
+  padding:4px 10px; border-radius:8px;
+  background:rgba(255,255,255,0.04); border:1px solid var(--border);
+  font-size:0.75rem; color:var(--text); white-space:nowrap;
+}
+.tc svg { color:var(--accent); opacity:0.7; }
+.tc-dep { color:var(--muted) !important; background:transparent !important; border-color:transparent !important; }
+
+/* contact rows */
+.sc-contacts { display:flex; flex-direction:column; gap:6px; }
+.sc-contact-row { display:flex; align-items:center; gap:8px; }
+.contact-btn {
+  display:inline-flex; align-items:center; gap:7px;
+  padding:7px 13px; border-radius:10px;
+  background:var(--accent-bg); border:1px solid var(--accent-bd);
+  color:var(--accent); font-size:0.82rem; font-weight:600; text-decoration:none;
+  transition:all 0.2s;
+  box-shadow:0 0 8px var(--accent-glow);
+}
+.contact-btn:hover { box-shadow:0 0 14px var(--accent-glow); }
+.contact-label { font-size:0.72rem; color:var(--muted); }
+
+/* section label */
+.sc-section-label { font-size:0.6rem; font-weight:700; text-transform:uppercase; letter-spacing:0.1em; color:var(--accent); opacity:0.7; display:block; margin-bottom:5px; }
+
+/* orari oggi */
+.today-hours {
+  display:flex; align-items:center; gap:10px;
+  padding:9px 12px; border-radius:10px;
+  background:rgba(255,255,255,0.03); border:1px solid var(--border);
+}
+.today-hours-badge {
+  display:inline-flex; align-items:center; gap:4px;
+  padding:3px 10px; border-radius:7px; font-size:0.72rem; font-weight:700;
+}
+.hours-open { background:rgba(52,211,153,0.1); border:1px solid rgba(52,211,153,0.3); color:var(--ok-t); }
+.hours-closed { background:var(--del-bg); border:1px solid var(--del-bd); color:var(--del-t); }
+.today-hours-time { font-size:0.82rem; color:var(--text); font-weight:600; }
+.today-hours-day { font-size:0.7rem; color:var(--muted); margin-left:auto; }
+
+/* weather chip */
+.sc-weather-detail {
+  display:flex; align-items:center; gap:8px;
+  padding:8px 12px; border-radius:10px;
+  background:rgba(255,255,255,0.03); border:1px solid var(--border);
+  font-size:0.8rem; color:var(--muted);
+}
+.sc-weather-detail b { color:var(--text); }
+
+/* notes */
+.sc-notes {
+  font-size:0.78rem; font-style:italic; color:var(--muted);
+  padding:7px 10px; background:rgba(255,255,255,0.02);
+  border-left:2px solid var(--accent-bd); border-radius:0 7px 7px 0;
+}
+
+/* ══ BREAK CARDS ═══════════════════════════════════════════════════════════ */
+.break-card {
+  position:relative; overflow:hidden;
+  border-radius:16px; margin-bottom:10px;
+  border:1px dashed;
+  animation:cardIn 0.35s cubic-bezier(0.22,1,0.36,1) both;
+}
+.lunch-card { border-color:rgba(251,146,60,0.35); background:rgba(251,146,60,0.05); }
+.rest-card  { border-color:rgba(139,92,246,0.3);  background:rgba(139,92,246,0.05); }
+.break-row { display:flex; align-items:center; gap:12px; padding:12px 14px; }
+.break-icon {
+  width:38px; height:38px; border-radius:11px; flex-shrink:0;
+  display:flex; align-items:center; justify-content:center; font-size:1.1rem;
+}
+.lunch-card .break-icon { background:rgba(251,146,60,0.14); border:1px solid rgba(251,146,60,0.3); }
+.rest-card  .break-icon { background:rgba(139,92,246,0.14); border:1px solid rgba(139,92,246,0.3); }
+.break-info { flex:1; min-width:0; }
+.break-name { font-size:0.88rem; font-weight:600; color:var(--text); }
+.break-meta { font-size:0.73rem; color:var(--muted); margin-top:2px; }
+
+/* ══ RETURN ROW ════════════════════════════════════════════════════════════ */
+.return-card {
+  position:relative; overflow:hidden;
+  background:var(--bg2); border:1px solid var(--border);
+  border-radius:16px; margin-bottom:10px;
+  backdrop-filter:blur(20px);
+  animation:cardIn 0.4s 0.12s cubic-bezier(0.22,1,0.36,1) both;
+}
+.return-card::before {
+  content:""; position:absolute; top:0; left:14px; right:14px; height:1px;
+  background:linear-gradient(90deg,transparent,var(--card-a) 50%,transparent);
+}
+.return-head { display:flex; align-items:center; gap:12px; padding:13px 14px; }
+.return-icon {
+  width:36px; height:36px; border-radius:10px; flex-shrink:0;
+  display:flex; align-items:center; justify-content:center;
+  background:var(--accent-bg); border:1px solid var(--accent-bd); color:var(--accent);
+  box-shadow:0 0 8px var(--accent-glow);
+}
+.return-label { flex:1; font-size:0.9rem; font-weight:700; color:var(--text); }
+.return-addr { font-size:0.7rem; color:var(--muted); margin-top:2px; }
+.return-time { font-size:1.2rem; font-weight:800; color:var(--accent); letter-spacing:-0.03em; text-shadow:0 0 12px var(--accent-glow); }
+.return-tc { display:flex; flex-wrap:wrap; gap:5px; padding:0 14px 12px; }
+
+/* ══ METRICS ═══════════════════════════════════════════════════════════════ */
+.metrics-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:10px; }
+.metric {
+  position:relative; overflow:hidden;
+  background:var(--bg2); border:1px solid var(--border);
+  border-radius:14px; padding:14px 14px 12px;
+  backdrop-filter:blur(16px); animation:cardIn 0.4s cubic-bezier(0.22,1,0.36,1) both;
+}
+.metric::before {
+  content:""; position:absolute; top:0; left:10px; right:10px; height:1px;
+  background:linear-gradient(90deg,transparent,var(--card-a) 50%,transparent);
+}
+.metric-label { font-size:0.6rem; font-weight:700; text-transform:uppercase; letter-spacing:0.1em; color:var(--accent); opacity:0.7; margin-bottom:6px; }
+.metric-value { font-size:1.2rem; font-weight:800; color:var(--text); text-shadow:0 0 18px var(--accent-glow); letter-spacing:-0.02em; }
+.metric-sub { font-size:0.68rem; color:var(--muted); margin-top:2px; }
+
+/* ══ TAB BAR ═══════════════════════════════════════════════════════════════ */
 .tab-bar {
-  position: fixed; bottom: 0; left: 0; right: 0;
-  padding: 10px 12px 30px;
-  background: var(--tab-bg);
-  backdrop-filter: blur(32px); -webkit-backdrop-filter: blur(32px);
-  border-top: 1px solid var(--tab-border);
-  box-shadow: 0 -12px 40px rgba(0,0,0,0.1);
-  display: flex; justify-content: space-around; align-items: center;
-  z-index: 50; position: fixed;
+  position:fixed; bottom:0; left:0; right:0;
+  padding:10px 12px 30px;
+  background:var(--tab-bg);
+  backdrop-filter:blur(32px); -webkit-backdrop-filter:blur(32px);
+  border-top:1px solid var(--tab-bd);
+  box-shadow:0 -12px 40px rgba(0,0,0,0.1);
+  display:flex; justify-content:space-around; align-items:center;
+  z-index:50;
 }
 .tab-bar::before {
-  content: ""; position: absolute; top: -1px; left: 0; right: 0; height: 1px;
-  background: linear-gradient(90deg, transparent 0%, var(--top-line-a) 25%, var(--top-line-b) 75%, transparent 100%);
-  box-shadow: 0 0 10px var(--accent-glow);
+  content:""; position:absolute; top:-1px; left:0; right:0; height:1px;
+  background:linear-gradient(90deg,transparent 0%,var(--top-a) 25%,var(--top-b) 75%,transparent 100%);
+  box-shadow:0 0 10px var(--accent-glow);
 }
 .tab-item {
-  display: flex; flex-direction: column; align-items: center; gap: 4px;
-  padding: 8px 14px; border-radius: 14px;
-  cursor: pointer; font-size: 0.65rem; font-weight: 600;
-  color: var(--tab-text); letter-spacing: 0.03em;
-  border: 1px solid transparent; background: none; transition: all 0.22s ease;
+  display:flex; flex-direction:column; align-items:center; gap:4px;
+  padding:8px 14px; border-radius:14px;
+  cursor:pointer; font-size:0.62rem; font-weight:600; letter-spacing:0.03em;
+  color:var(--muted2); border:1px solid transparent; background:none; transition:all 0.22s;
 }
-.tab-item svg { transition: all 0.22s ease; }
-.tab-item:hover { color: var(--text-meta); }
 .tab-item.active {
-  color: var(--tab-active-text);
-  background: var(--tab-active-bg);
-  border-color: var(--tab-active-border);
-  box-shadow: 0 0 20px var(--accent-glow), inset 0 1px 0 rgba(255,255,255,0.08);
+  color:var(--tab-at); background:var(--tab-abg); border-color:var(--tab-abd);
+  box-shadow:0 0 18px var(--accent-glow),inset 0 1px 0 rgba(255,255,255,0.08);
 }
-.tab-item.active svg { filter: drop-shadow(0 0 5px var(--accent)); transform: translateY(-1px); }
-.tab-dot { width: 3px; height: 3px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 6px var(--accent); margin-top: -1px; }
+.tab-item.active svg { filter:drop-shadow(0 0 5px var(--accent)); transform:translateY(-1px); }
+.tab-item svg { transition:all 0.22s; }
+.tab-dot { width:3px; height:3px; border-radius:50%; background:var(--accent); box-shadow:0 0 5px var(--accent); margin-top:-1px; }
 </style>
 </head>
 <body>
 
-<div class="bg">
+<div class="bg" aria-hidden="true">
   <div class="bg-blob bg-blob-1"></div>
   <div class="bg-blob bg-blob-2"></div>
   <div class="bg-blob bg-blob-3"></div>
@@ -520,155 +444,428 @@ body { background: var(--bg); color: var(--text); }
 </div>
 <div class="top-line"></div>
 
-<!-- Toggle tema -->
+<!-- Theme toggle -->
 <div class="theme-toggle">
-  <button class="toggle-btn active" id="btn-night" onclick="setTheme('night')">
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
-    Notte
-  </button>
-  <button class="toggle-btn" id="btn-nero" onclick="setTheme('nero')">
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><path d="M12 2v20M2 12h20"/></svg>
-    Neon Nero
-  </button>
-  <button class="toggle-btn" id="btn-day" onclick="setTheme('day')">
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
-    Giorno
-  </button>
+  <button class="t-btn active" onclick="setTheme('night')">Notte</button>
+  <button class="t-btn" onclick="setTheme('nero')">Neon Nero</button>
+  <button class="t-btn" onclick="setTheme('day')">Giorno</button>
 </div>
 
-<div class="page">
-  <div class="section-header">
-    <div>
-      <div class="section-title">Giri salvati</div>
-      <div class="section-sub">3 percorsi · ultima settimana</div>
+<div class="shell">
+
+  <!-- Topbar -->
+  <header class="topbar">
+    <div class="topbar-left">
+      <div class="topbar-eyebrow">Pianificazione giornaliera</div>
+      <div class="topbar-title">Percorsi lavoro</div>
     </div>
-    <button class="btn-ghost">
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3">
-        <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
-        <path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
-        <path d="M3 21v-5h5"/>
-      </svg>
-      Aggiorna
-    </button>
-  </div>
+    <div class="topbar-right">
+      <div class="status-pill"><span class="status-dot"></span>Online</div>
+      <button class="menu-btn" aria-label="Menu">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+    </div>
+  </header>
 
-  <!-- ── MACRO per card (ripetuta 3 volte) ── -->
+  <!-- Tabs -->
+  <nav class="tabs">
+    <button class="tab">Nuovo percorso</button>
+    <button class="tab">Giri salvati</button>
+    <button class="tab">Archivio</button>
+    <button class="tab active">Percorso</button>
+  </nav>
 
-  <!-- Card 1 -->
-  <div class="route-card">
-    <div class="card-body">
-      <div class="card-top">
-        <div class="card-title-row">
-          <div class="route-icon">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="6" cy="19" r="3"/><circle cx="18" cy="5" r="3"/><path d="M6 16V9a3 3 0 0 1 3-3h6"/><path d="M13 5l3-3 3 3"/></svg>
+  <!-- Content -->
+  <div class="content">
+
+    <!-- Route header -->
+    <div class="route-header">
+      <div class="rh-top">
+        <div>
+          <div class="rh-name">Giro del 9 giugno 2026</div>
+          <div class="rh-date">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+            Lunedì 9 giugno · partenza 07:00
           </div>
-          <span class="card-name">Percorso giornaliero</span>
         </div>
-        <span class="badge-opt"><span class="badge-dot"></span>ottimizzato</span>
+        <div class="rh-badge"><span class="rh-badge-dot"></span>ottimizzato</div>
       </div>
-      <div class="card-chips">
-        <span class="chip"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg><b>8 giu 2026</b></span>
-        <span class="chip"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg><b>07:00</b></span>
-        <span class="chip"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 12h18M3 6l9-3 9 3M3 18l9 3 9-3"/></svg><b>110.2 km</b></span>
-        <span class="chip chip-cost"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><path d="M14.5 7.5a4 4 0 1 0 0 9M14.5 7.5H9m5.5 0V6M14.5 16.5H9m5.5 0V18"/></svg><b>300,76 €</b></span>
+
+      <div class="rh-chips">
+        <div class="chip">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 12h18M3 6l9-3 9 3M3 18l9 3 9-3"/></svg>
+          <b>149.0 km</b>
+        </div>
+        <div class="chip">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+          <b>07:00 – 17:46</b>
+        </div>
+        <div class="chip">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M17 8h2a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2h-2"/><path d="M3 8h11v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8z"/><line x1="9" y1="3" x2="9" y2="8"/><line x1="6" y1="3" x2="6" y2="5"/></svg>
+          guida 3h 12min
+        </div>
+        <div class="chip">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><path d="M14.5 7.5a4 4 0 1 0 0 9M14.5 7.5H9m5.5 0V6M14.5 16.5H9m5.5 0V18"/></svg>
+          <b style="color:var(--ok-t)">301 €</b>
+        </div>
       </div>
-      <div class="route-line">CASA &nbsp;—&nbsp; tappe lavoro &nbsp;—&nbsp; CASA</div>
-      <div class="divider"></div>
-      <button class="btn-primary"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polygon points="5 3 19 12 5 21 5 3"/></svg>Apri percorso</button>
-      <div class="card-actions">
-        <button class="btn-action"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>Rinomina</button>
-        <button class="btn-action"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>Duplica</button>
-        <button class="btn-action-del"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>Elimina</button>
+
+      <div class="rh-divider"></div>
+
+      <button class="btn-nav">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>
+        Apri percorso completo su Maps
+      </button>
+
+      <div class="rh-actions">
+        <button class="btn-action">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          Giri salvati
+        </button>
+        <button class="btn-action">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/></svg>
+          Ricalcola
+        </button>
+        <button class="btn-action">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+          Rinomina
+        </button>
+        <button class="btn-action">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+          PDF
+        </button>
       </div>
     </div>
-    <div class="stop-row"><span class="stop-tag">1. Cesare Sesti</span><span class="stop-tag">2. Bar Cles</span><span class="stop-tag">3. Farmacia</span></div>
-  </div>
 
-  <!-- Card 2 -->
-  <div class="route-card">
-    <div class="card-body">
-      <div class="card-top">
-        <div class="card-title-row">
-          <div class="route-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="6" cy="19" r="3"/><circle cx="18" cy="5" r="3"/><path d="M6 16V9a3 3 0 0 1 3-3h6"/><path d="M13 5l3-3 3 3"/></svg></div>
-          <span class="card-name">Percorso giornaliero</span>
+    <!-- Stop 1 (with warning + expanded) -->
+    <div class="stop-card card-error" style="animation-delay:0.04s">
+      <div class="sc-head">
+        <div class="sc-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
         </div>
-        <span class="badge-opt"><span class="badge-dot"></span>ottimizzato</span>
+        <div class="sc-left">
+          <div class="sc-name">1. Fineco — Bolzano</div>
+          <div class="sc-addr">Via dei Bottai, 32, Bolzano BZ, Italia</div>
+          <span class="sc-warn-badge">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            sede chiusa in questo giorno
+          </span>
+        </div>
+        <div class="sc-arrival">
+          <div class="sc-time">08:16</div>
+          <div class="sc-time-label">arrivo</div>
+          <div class="sc-weather">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></svg>
+            17°C
+          </div>
+        </div>
       </div>
-      <div class="card-chips">
-        <span class="chip"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg><b>6 giu 2026</b></span>
-        <span class="chip"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg><b>07:00</b></span>
-        <span class="chip"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 12h18M3 6l9-3 9 3M3 18l9 3 9-3"/></svg><b>109.6 km</b></span>
-        <span class="chip chip-cost"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><path d="M14.5 7.5a4 4 0 1 0 0 9M14.5 7.5H9m5.5 0V6M14.5 16.5H9m5.5 0V18"/></svg><b>164,27 €</b></span>
+
+      <div class="sc-actions">
+        <button class="btn-naviga">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>
+          Naviga
+        </button>
+        <button class="btn-phone">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.28 2 2 0 0 1 3.6 1h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.6a16 16 0 0 0 6.29 6.29l.96-.96a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+        </button>
+        <button class="btn-email">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+        </button>
       </div>
-      <div class="route-line">CASA &nbsp;—&nbsp; tappe lavoro &nbsp;—&nbsp; CASA</div>
-      <div class="divider"></div>
-      <button class="btn-primary"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polygon points="5 3 19 12 5 21 5 3"/></svg>Apri percorso</button>
-      <div class="card-actions">
-        <button class="btn-action"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>Rinomina</button>
-        <button class="btn-action"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>Duplica</button>
-        <button class="btn-action-del"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>Elimina</button>
+
+      <div class="sc-details">
+        <!-- Timing chips -->
+        <div class="sc-timing">
+          <div class="tc">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M17 8h2a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2h-2"/><path d="M3 8h11v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8z"/><line x1="9" y1="3" x2="9" y2="8"/></svg>
+            1h 16min · 74.1 km
+          </div>
+          <div class="tc">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            30 min lavoro
+          </div>
+          <div class="tc">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="20 6 9 17 4 12"/></svg>
+            fine 08:46
+          </div>
+          <div class="tc tc-dep">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 5 5 12"/></svg>
+            partenza 07:00
+          </div>
+        </div>
+
+        <!-- Contacts -->
+        <div class="sc-contacts">
+          <div class="sc-contact-row">
+            <a href="tel:+393939169305" class="contact-btn">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.28 2 2 0 0 1 3.6 1h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.6a16 16 0 0 0 6.29 6.29l.96-.96a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+              393 916 9305
+            </a>
+            <span class="contact-label">cellulare ★</span>
+          </div>
+          <div class="sc-contact-row">
+            <a href="tel:+390471971210" class="contact-btn" style="background:var(--accent-bg);opacity:0.7">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.28 2 2 0 0 1 3.6 1h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.6a16 16 0 0 0 6.29 6.29l.96-.96a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+              0471 971 210
+            </a>
+            <span class="contact-label">fisso</span>
+          </div>
+        </div>
+
+        <!-- Orari oggi -->
+        <div>
+          <span class="sc-section-label">Orari di apertura — oggi</span>
+          <div class="today-hours">
+            <span class="today-hours-badge hours-closed">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+              Chiuso
+            </span>
+            <span class="today-hours-time">sede chiusa il lunedì</span>
+            <span class="today-hours-day">Lun</span>
+          </div>
+        </div>
+
+        <!-- Meteo -->
+        <div>
+          <span class="sc-section-label">Meteo all'arrivo</span>
+          <div class="sc-weather-detail">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></svg>
+            <b>17°C</b>
+            <span>Nuvoloso · vento 3 km/h</span>
+          </div>
+        </div>
       </div>
     </div>
-    <div class="stop-row"><span class="stop-tag">1. Albero Fellin</span></div>
-  </div>
 
-  <!-- Card 3 -->
-  <div class="route-card">
-    <div class="card-body">
-      <div class="card-top">
-        <div class="card-title-row">
-          <div class="route-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="6" cy="19" r="3"/><circle cx="18" cy="5" r="3"/><path d="M6 16V9a3 3 0 0 1 3-3h6"/><path d="M13 5l3-3 3 3"/></svg></div>
-          <span class="card-name">Percorso giornaliero</span>
+    <!-- Stop 2 (collapsed) -->
+    <div class="stop-card" style="animation-delay:0.10s">
+      <div class="sc-head">
+        <div class="sc-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
         </div>
-        <span class="badge-opt"><span class="badge-dot"></span>ottimizzato</span>
+        <div class="sc-left">
+          <div class="sc-name">2. Studio Legale Rossi</div>
+          <div class="sc-addr">Corso Italia, 18, Trento TN, Italia</div>
+        </div>
+        <div class="sc-arrival">
+          <div class="sc-time">09:30</div>
+          <div class="sc-time-label">arrivo</div>
+          <div class="sc-weather">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/></svg>
+            19°C
+          </div>
+        </div>
       </div>
-      <div class="card-chips">
-        <span class="chip"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg><b>4 giu 2026</b></span>
-        <span class="chip"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg><b>08:30</b></span>
-        <span class="chip"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 12h18M3 6l9-3 9 3M3 18l9 3 9-3"/></svg><b>87.4 km</b></span>
-        <span class="chip chip-cost"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><path d="M14.5 7.5a4 4 0 1 0 0 9M14.5 7.5H9m5.5 0V6M14.5 16.5H9m5.5 0V18"/></svg><b>218,50 €</b></span>
+      <div class="sc-actions">
+        <button class="btn-naviga">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>
+          Naviga
+        </button>
+        <button class="btn-phone">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.28 2 2 0 0 1 3.6 1h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.6a16 16 0 0 0 6.29 6.29l.96-.96a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+        </button>
       </div>
-      <div class="route-line">CASA &nbsp;—&nbsp; tappe lavoro &nbsp;—&nbsp; CASA</div>
-      <div class="divider"></div>
-      <button class="btn-primary"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polygon points="5 3 19 12 5 21 5 3"/></svg>Apri percorso</button>
-      <div class="card-actions">
-        <button class="btn-action"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>Rinomina</button>
-        <button class="btn-action"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>Duplica</button>
-        <button class="btn-action-del"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>Elimina</button>
+      <!-- details example (open) for second stop -->
+      <div class="sc-details">
+        <div class="sc-timing">
+          <div class="tc">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M17 8h2a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2h-2"/><path d="M3 8h11v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8z"/><line x1="9" y1="3" x2="9" y2="8"/></svg>
+            42min · 38.4 km
+          </div>
+          <div class="tc">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            45 min lavoro
+          </div>
+          <div class="tc">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="20 6 9 17 4 12"/></svg>
+            fine 10:15
+          </div>
+          <div class="tc tc-dep">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 5 5 12"/></svg>
+            partenza 08:48
+          </div>
+        </div>
+        <!-- Orari oggi (aperto) -->
+        <div>
+          <span class="sc-section-label">Orari di apertura — oggi</span>
+          <div class="today-hours">
+            <span class="today-hours-badge hours-open">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+              Aperto
+            </span>
+            <span class="today-hours-time">09:00 – 12:30 · 14:30 – 18:00</span>
+            <span class="today-hours-day">Lun</span>
+          </div>
+        </div>
+        <div class="sc-notes">Note: chiedere di Marco Rossi. Parcheggio in via Belenzani.</div>
       </div>
     </div>
-    <div class="stop-row"><span class="stop-tag">1. Studio Gori</span><span class="stop-tag">2. Banca Rovereto</span></div>
-  </div>
 
-</div>
+    <!-- Pausa pranzo -->
+    <div class="break-card lunch-card" style="animation-delay:0.18s">
+      <div class="break-row">
+        <div class="break-icon">🍽</div>
+        <div class="break-info">
+          <div class="break-name">Trattoria Al Moro</div>
+          <div class="break-meta">13:00 – 13:45 · 45 min</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:1.1rem;font-weight:800;color:rgba(251,146,60,0.9);letter-spacing:-0.02em">13:00</div>
+          <div style="font-size:0.6rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-top:1px">pranzo</div>
+        </div>
+      </div>
+    </div>
 
-<div class="tab-bar">
-  <button class="tab-item">
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
-    Nuovo
-  </button>
-  <button class="tab-item active">
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
-    Giri salvati
-    <div class="tab-dot"></div>
-  </button>
-  <button class="tab-item">
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-    Archivio
-  </button>
-  <button class="tab-item">
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
-    Percorso
-  </button>
-</div>
+    <!-- Stop 3 (collapsed) -->
+    <div class="stop-card" style="animation-delay:0.22s">
+      <div class="sc-head">
+        <div class="sc-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+        </div>
+        <div class="sc-left">
+          <div class="sc-name">3. Farmacia Centrale</div>
+          <div class="sc-addr">Piazza Dante, 3, Rovereto TN</div>
+        </div>
+        <div class="sc-arrival">
+          <div class="sc-time">14:22</div>
+          <div class="sc-time-label">arrivo</div>
+          <div class="sc-weather">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/></svg>
+            21°C
+          </div>
+        </div>
+      </div>
+      <div class="sc-actions">
+        <button class="btn-naviga">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>
+          Naviga
+        </button>
+        <button class="btn-phone">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.28 2 2 0 0 1 3.6 1h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.6a16 16 0 0 0 6.29 6.29l.96-.96a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Sosta caffè -->
+    <div class="break-card rest-card" style="animation-delay:0.26s">
+      <div class="break-row">
+        <div class="break-icon">☕</div>
+        <div class="break-info">
+          <div class="break-name">Bar Centrale</div>
+          <div class="break-meta">15:40 – 15:55 · 15 min</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:1.1rem;font-weight:800;color:rgba(139,92,246,0.9);letter-spacing:-0.02em">15:40</div>
+          <div style="font-size:0.6rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-top:1px">sosta</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Return row -->
+    <div class="return-card">
+      <div class="return-head">
+        <div class="return-icon">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+        </div>
+        <div style="flex:1;min-width:0">
+          <div class="return-label">↩ Casa — Altopiano della Vigolana</div>
+          <div class="return-addr">Via Vittoria, 11, Altopiano della Vigolana TN</div>
+        </div>
+        <div class="return-time">17:46</div>
+      </div>
+      <div class="return-tc">
+        <div class="tc">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M17 8h2a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2h-2"/><path d="M3 8h11v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8z"/><line x1="9" y1="3" x2="9" y2="8"/></svg>
+          1h 15min · 36.5 km
+        </div>
+        <div class="tc tc-dep">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 5 5 12"/></svg>
+          partenza 16:31
+        </div>
+      </div>
+    </div>
+
+    <!-- Metrics grid -->
+    <div class="metrics-grid">
+      <div class="metric" style="animation-delay:0.06s">
+        <div class="metric-label">Km totali</div>
+        <div class="metric-value">149.0</div>
+        <div class="metric-sub">km percorsi</div>
+      </div>
+      <div class="metric" style="animation-delay:0.10s">
+        <div class="metric-label">Ore guida</div>
+        <div class="metric-value">3h 12min</div>
+        <div class="metric-sub">al volante</div>
+      </div>
+      <div class="metric" style="animation-delay:0.14s">
+        <div class="metric-label">Ore lavoro</div>
+        <div class="metric-value">2h 15min</div>
+        <div class="metric-sub">presso clienti</div>
+      </div>
+      <div class="metric" style="animation-delay:0.18s">
+        <div class="metric-label">Giornata</div>
+        <div class="metric-value">07:00–17:46</div>
+        <div class="metric-sub">10h 46min</div>
+      </div>
+      <div class="metric" style="animation-delay:0.06s">
+        <div class="metric-label">Costo km</div>
+        <div class="metric-value">223 €</div>
+        <div class="metric-sub">0.40 €/km</div>
+      </div>
+      <div class="metric" style="animation-delay:0.10s">
+        <div class="metric-label">Costo guida</div>
+        <div class="metric-value">38 €</div>
+        <div class="metric-sub">rimborso orario</div>
+      </div>
+      <div class="metric" style="animation-delay:0.14s">
+        <div class="metric-label">Costo lavoro</div>
+        <div class="metric-value">40 €</div>
+        <div class="metric-sub">tariffario</div>
+      </div>
+      <div class="metric" style="animation-delay:0.18s">
+        <div class="metric-label">Totale</div>
+        <div class="metric-value" style="color:var(--accent)">301 €</div>
+        <div class="metric-sub">rimborso totale</div>
+      </div>
+    </div>
+
+  </div><!-- /content -->
+
+  <!-- Tab bar -->
+  <nav class="tab-bar">
+    <button class="tab-item">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/></svg>
+      Nuovo
+    </button>
+    <button class="tab-item">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+      Giri salvati
+    </button>
+    <button class="tab-item">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+      Archivio
+    </button>
+    <button class="tab-item active">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>
+      Percorso
+      <span class="tab-dot"></span>
+    </button>
+  </nav>
+
+</div><!-- /shell -->
 
 <script>
 function setTheme(t) {
-  document.documentElement.setAttribute("data-theme", t);
-  ["night","nero","day"].forEach(id => {
-    document.getElementById("btn-" + id).classList.toggle("active", id === t);
+  document.documentElement.dataset.theme = t;
+  document.querySelectorAll('.t-btn').forEach(b => {
+    b.classList.toggle('active', b.textContent.trim().toLowerCase().replace(' ','') === {night:'notte',day:'giorno',nero:'neonero'}[t]);
   });
 }
+// sync initial
+document.querySelectorAll('.t-btn').forEach(b => {
+  if (b.textContent.trim() === 'Notte') b.classList.add('active');
+});
 </script>
 </body>
 </html>
