@@ -284,8 +284,8 @@ function renderMenu() {
         driveHourRate: Number(v.driveHourRate),
         workHourRate: Number(v.workHourRate),
         navigatorPref: v.navigatorPref || "google",
-        themeMode: v.themeMode || "auto",
-        themePalette: v.themePalette || "default",
+        themeMode: v.themeMode || state.themeMode || "auto",
+        themePalette: v.themePalette || state.themePalette || "default",
         lunchBreakMinutes: Number(v.lunchBreakMinutes || 45),
         lunchBreakEnabled: v.lunchBreakEnabled === "on",
         defaultStartLabel: v.defaultStartLabel || "",
@@ -319,7 +319,16 @@ function renderMenu() {
         document.querySelectorAll(".palette-chip").forEach(c => c.classList.remove("active"));
         paletteChip.classList.add("active");
         document.getElementById("themePaletteInput").value = paletteChip.dataset.palette;
+        // live preview
+        state.themePalette = paletteChip.dataset.palette;
+        applyTheme();
         return;
+      }
+    });
+    ov.addEventListener("change", e => {
+      if (e.target.name === "themeMode") {
+        state.themeMode = e.target.value;
+        applyTheme();
       }
     });
     ov.querySelectorAll("[data-stepper]").forEach(btn => {
