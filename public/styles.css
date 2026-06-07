@@ -767,8 +767,10 @@ button {
 }
 
 .topbar {
-  position: sticky;
+  position: fixed;
   top: 0;
+  left: 0;
+  right: 0;
   z-index: 150;
   display: flex;
   align-items: center;
@@ -779,6 +781,10 @@ button {
   border-bottom: 1px solid var(--line);
   backdrop-filter: blur(28px);
   -webkit-backdrop-filter: blur(28px);
+}
+
+.tabs {
+  margin-top: 70px;
 }
 
 .eyebrow {
@@ -1962,6 +1968,7 @@ tbody tr:last-child td {
   .app {
     padding: 12px;
     padding-bottom: 86px;
+    padding-top: 16px;
   }
 
   .grid,
