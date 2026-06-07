@@ -8,10 +8,10 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Percorsi lavoro" />
     <title>Percorsi lavoro</title>
-    <link rel="manifest" href="/manifest.webmanifest?v=20260607-270" />
+    <link rel="manifest" href="/manifest.webmanifest?v=20260607-280" />
     <link rel="apple-touch-icon" href="/icons/icon-180.svg" />
     <link rel="icon" href="/icons/icon-192.svg" />
-    <link rel="stylesheet" href="/styles.css?v=20260607-270" />
+    <link rel="stylesheet" href="/styles.css?v=20260607-280" />
   </head>
   <body>
     <!-- Sfondo decorativo -->
@@ -36,16 +36,28 @@
       </header>
 
       <nav class="tabs" aria-label="Sezioni app">
-        <button class="tab active" data-tab="route">Nuovo percorso</button>
-        <button class="tab" data-tab="saved">Giri salvati</button>
-        <button class="tab" data-tab="archive">Archivio</button>
-        <button class="tab" data-tab="result">Percorso</button>
+        <button class="tab active" data-tab="route">
+  <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>
+  <span class="tab-label">Percorso</span>
+</button>
+<button class="tab" data-tab="saved">
+  <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+  <span class="tab-label">Salvati</span>
+</button>
+<button class="tab" data-tab="archive">
+  <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+  <span class="tab-label">Archivio</span>
+</button>
+<button class="tab" data-tab="result">
+  <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+  <span class="tab-label">Risultato</span>
+</button>
       </nav>
 
       <main id="app" class="app"></main>
     </div>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script type="module" src="/app.js?v=20260607-270"></script>
+    <script type="module" src="/app.js?v=20260607-280"></script>
   </body>
 </html>
