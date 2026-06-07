@@ -450,18 +450,20 @@ async function insertBreaks(rows, options) {
   } = options;
 
   // ── constants ────────────────────────────────────────────────────────────────
-  const LUNCH_OPEN = 11 * 60 + 30;
-  const LUNCH_CLOSE = 14 * 60;
+  const _lunchOpen = options?.lunchOpenTime ? (typeof options.lunchOpenTime === "number" ? options.lunchOpenTime : (() => { const [h,m] = String(options.lunchOpenTime).split(":"); return Number(h)*60+Number(m||0); })()) : (11*60+30);
+  const _lunchClose = options?.lunchCloseTime ? (typeof options.lunchCloseTime === "number" ? options.lunchCloseTime : (() => { const [h,m] = String(options.lunchCloseTime).split(":"); return Number(h)*60+Number(m||0); })()) : (14*60);
+  const LUNCH_OPEN = _lunchOpen;
+  const LUNCH_CLOSE = _lunchClose;
   const interval = Number(options?.restIntervalMin ?? 120);
   const deviation = Number(options?.restMaxDeviationMin ?? 40);
   const REST_MIN = interval - Math.floor(deviation / 4);
   const REST_MAX = interval + Math.floor(deviation * 3 / 4);
   const REST_DUR = Number(options?.restDurationMin ?? 15);
-  const NO_BREAK_EARLY = 120;
-  const NO_BREAK_BEFORE_HOME = 60;
+  const NO_BREAK_EARLY = Number(options?.noBreakEarlyMin ?? 120);
+  const NO_BREAK_BEFORE_HOME = Number(options?.noBreakBeforeHomeMin ?? 60);
   const EARLIEST_BREAK = options?.earliestBreakTime ?? (8 * 60);
-  const NO_BREAK_BEFORE_LUNCH = 60;
-  const NO_BREAK_AFTER_LUNCH = 120;
+  const NO_BREAK_BEFORE_LUNCH = Number(options?.noBreakBeforeLunchMin ?? 60);
+  const NO_BREAK_AFTER_LUNCH = Number(options?.noBreakAfterLunchMin ?? 120);
   const maxDetourKm = Number(options?.maxDetourKm ?? 1.5);
 
   // ── insertions list ──────────────────────────────────────────────────────────
@@ -753,6 +755,12 @@ export async function planRoute(payload, settings, restStops = []) {
     restDurationMin: settings?.restDurationMin ?? 15,
     earliestBreakTime: settings?.earliestBreakTime != null ? parseTime(settings.earliestBreakTime) : (8 * 60),
     maxDetourKm: settings?.maxDetourKm ?? 1.5,
+    lunchOpenTime: settings?.lunchOpenTime ?? "11:30",
+    lunchCloseTime: settings?.lunchCloseTime ?? "14:00",
+    noBreakEarlyMin: settings?.noBreakEarlyMin ?? 120,
+    noBreakBeforeHomeMin: settings?.noBreakBeforeHomeMin ?? 60,
+    noBreakBeforeLunchMin: settings?.noBreakBeforeLunchMin ?? 60,
+    noBreakAfterLunchMin: settings?.noBreakAfterLunchMin ?? 120,
     scheduledDate
   });
   best = {

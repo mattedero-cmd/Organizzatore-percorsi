@@ -81,9 +81,15 @@ function rowToSettings(row) {
     restDurationMin: Number(row.rest_duration_min ?? 15),
     driveMarkupMinPerHour: Number(row.drive_markup_min_per_hour ?? 10),
     earliestBreakTime: row.earliest_break_time ?? "08:00",
-    maxDetourKm: Number(row.max_detour_km ?? 1.7),
+    maxDetourKm: Number(row.max_detour_km ?? 1.5),
     maxReturnTime: row.max_return_time ?? "",
-    iconStyle: row.icon_style ?? "color"
+    iconStyle: row.icon_style ?? "color",
+    lunchOpenTime: row.lunch_open_time ?? "11:30",
+    lunchCloseTime: row.lunch_close_time ?? "14:00",
+    noBreakEarlyMin: Number(row.no_break_early_min ?? 120),
+    noBreakBeforeHomeMin: Number(row.no_break_before_home_min ?? 60),
+    noBreakBeforeLunchMin: Number(row.no_break_before_lunch_min ?? 60),
+    noBreakAfterLunchMin: Number(row.no_break_after_lunch_min ?? 120)
   };
 }
 
@@ -435,6 +441,12 @@ async function migrateUserSettingsCols() {
     ["theme_mode", "TEXT DEFAULT 'auto'"],
     ["theme_palette", "TEXT DEFAULT 'default'"],
     ["icon_style", "TEXT DEFAULT 'color'"],
+    ["lunch_open_time", "TEXT DEFAULT '11:30'"],
+    ["lunch_close_time", "TEXT DEFAULT '14:00'"],
+    ["no_break_early_min", "INTEGER DEFAULT 120"],
+    ["no_break_before_home_min", "INTEGER DEFAULT 60"],
+    ["no_break_before_lunch_min", "INTEGER DEFAULT 60"],
+    ["no_break_after_lunch_min", "INTEGER DEFAULT 120"],
   ];
   for (const [col, def] of toAdd) {
     if (!cols.includes(col)) {
@@ -561,9 +573,15 @@ export async function updateSettings(userId, settings) {
     rest_duration_min: Number(settings.restDurationMin ?? 15),
     drive_markup_min_per_hour: Number(settings.driveMarkupMinPerHour ?? 10),
     earliest_break_time: settings.earliestBreakTime || "08:00",
-    max_detour_km: Number(settings.maxDetourKm ?? 1.7),
+    max_detour_km: Number(settings.maxDetourKm ?? 1.5),
     max_return_time: settings.maxReturnTime || "",
-    icon_style: settings.iconStyle || "color"
+    icon_style: settings.iconStyle || "color",
+    lunch_open_time: settings.lunchOpenTime || "11:30",
+    lunch_close_time: settings.lunchCloseTime || "14:00",
+    no_break_early_min: Number(settings.noBreakEarlyMin ?? 120),
+    no_break_before_home_min: Number(settings.noBreakBeforeHomeMin ?? 60),
+    no_break_before_lunch_min: Number(settings.noBreakBeforeLunchMin ?? 60),
+    no_break_after_lunch_min: Number(settings.noBreakAfterLunchMin ?? 120)
   };
   const cols = Object.keys(vals).join(", ");
   const sqlVals = Object.values(vals).map(v => typeof v === "string" ? sqlValue(v) : String(v)).join(", ");
