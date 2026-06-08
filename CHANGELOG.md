@@ -5,6 +5,10 @@
 
 ---
 
+## v4.019 — 2026-06-08
+- Fix selettore modalità finestra oraria: ora compatto su una riga
+- Fix picker orario iOS: render() spostato su evento "change" invece di "input" — il picker non viene più chiuso mentre si scrolla
+
 ## v4.018 — 2026-06-08
 - Miglioramento finestra oraria tappa: due modalità — "Disponibilità" (lavoro dura X min, può iniziare in qualsiasi momento nella fascia) e "Fissa" (lavoro inizia e finisce esattamente agli orari indicati)
 

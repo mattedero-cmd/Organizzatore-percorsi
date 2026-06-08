@@ -1004,7 +1004,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.018 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.019 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -4365,9 +4365,10 @@ function bindEvents() {
         if (sf.type === "checkbox") stop[key] = sf.checked;
         else if (sf.type === "radio") { stop[key] = sf.value; render(); }
         else {
+          // timeFrom/timeTo: aggiorna lo stato ma NON fare render() — il picker iOS
+          // verrebbe distrutto mentre l'utente sta ancora scrollando.
+          // render() viene chiamato su "change" (evento che si attiva solo alla chiusura del picker).
           stop[key] = key === "durationMinutes" ? hhmmToMins(sf.value) : sf.value;
-          // re-render to show/hide mode selector and update badge
-          if (key === "timeFrom" || key === "timeTo") render();
         }
       }
     }
@@ -4436,6 +4437,17 @@ function bindEvents() {
         else aside.insertAdjacentHTML("beforeend", newHtml);
         if (filterInput) filterInput.focus();
       }
+    }
+  });
+
+  // timeFrom/timeTo: render solo su "change" (iOS picker si chiude, non ad ogni scroll)
+  app.addEventListener("change", e => {
+    const sf = e.target.closest("[data-stop]");
+    if (!sf) return;
+    const [uid, key] = sf.dataset.stop.split(":");
+    if (key === "timeFrom" || key === "timeTo") {
+      const stop = state.route.stops.find(s => s.uid === uid);
+      if (stop) { stop[key] = sf.value; render(); }
     }
   });
 
