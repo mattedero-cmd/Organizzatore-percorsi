@@ -206,6 +206,7 @@ const state = {
   },
   result: null,
   expandedStops: new Set(),
+  expandedPanels: new Set(),
   dirtyStops: new Set(),
   manualOrderRows: null,
   planning: false,
@@ -1006,7 +1007,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.033 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.034 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -2893,6 +2894,7 @@ async function replanFromResult() {
     state.result = await api("/api/plan", { method: "POST", body: JSON.stringify(routePayload) });
     state.manualOrderRows = null;
     state.expandedStops = new Set();
+    state.expandedPanels = new Set();
     state.dirtyStops = new Set();
     await refreshSavedRoutes();
     setActiveTab("result");
@@ -2919,7 +2921,7 @@ function renderResultEditPanels(result) {
   const firstArrivalTime = result.firstArrivalTime || "08:30";
 
   return `
-    <details class="rv-panel" id="rv-settings-panel">
+    <details class="rv-panel" id="rv-settings-panel"${state.expandedPanels.has("rv-settings-panel") ? " open" : ""}>
       <summary class="rv-panel-summary">
         ${I.edit(14)} Modifica impostazioni giro
       </summary>
@@ -2964,7 +2966,7 @@ function renderResultEditPanels(result) {
       </form>
     </details>
 
-    <details class="rv-panel" id="rv-add-stop-panel">
+    <details class="rv-panel" id="rv-add-stop-panel"${state.expandedPanels.has("rv-add-stop-panel") ? " open" : ""}>
       <summary class="rv-panel-summary">
         ${I.plus(14)} Aggiungi tappa al giro
       </summary>
@@ -3006,7 +3008,7 @@ function renderResultEditPanels(result) {
       </div>
     </details>
 
-    <details class="rv-panel" id="rv-notes-panel">
+    <details class="rv-panel" id="rv-notes-panel"${state.expandedPanels.has("rv-notes-panel") ? " open" : ""}>
       <summary class="rv-panel-summary">
         ${I.edit(14)} Note giro
       </summary>
@@ -3047,6 +3049,7 @@ async function planCurrentRoute() {
     });
     state.manualOrderRows = null;
     state.expandedStops = new Set();
+    state.expandedPanels = new Set();
     state.dirtyStops = new Set();
     state.route.stops = [];
     state.route.name = "";
@@ -3764,6 +3767,7 @@ async function replanWithOrder(manualOrder) {
     });
     state.manualOrderRows = null;
     state.expandedStops = new Set();
+    state.expandedPanels = new Set();
     state.dirtyStops = new Set();
     await refreshSavedRoutes();
     showToast("Percorso ricalcolato");
@@ -4442,8 +4446,12 @@ function bindEvents() {
     }
     // google contacts search
     if (e.target.id === "gc-search" && state.googleContactsData) {
-      state.googleContactsData.search = e.target.value;
+      const q = e.target.value;
+      const cursor = e.target.selectionStart;
+      state.googleContactsData.search = q;
       render();
+      const inp = document.getElementById("gc-search");
+      if (inp) { inp.focus(); inp.setSelectionRange(cursor, cursor); }
       return;
     }
     // archive search
@@ -4549,7 +4557,25 @@ function bindEvents() {
       }
       if (key === "timeWindowMode") {
         row.timeWindowMode = rvs.value;
-        render();
+        const editBlock = rvs.closest(".rv-stop-edit");
+        if (editBlock) {
+          const durInp = editBlock.querySelector("[data-rv-stop$=':durationMinutes']");
+          if (durInp) {
+            const isFixed = rvs.value === "fixed";
+            durInp.disabled = isFixed;
+            if (isFixed && row.timeFrom && row.timeTo) {
+              durInp.value = minsToHHMM(Math.max(0, hhmmToMins(row.timeTo) - hhmmToMins(row.timeFrom)));
+            } else if (!isFixed) {
+              durInp.value = minsToHHMM(row.durationMinutes);
+            }
+          }
+          // update active class on mode labels
+          editBlock.querySelectorAll(".stop-window-mode-opt").forEach(lbl => {
+            lbl.classList.toggle("active", lbl.querySelector("input")?.value === rvs.value);
+          });
+          const btn = editBlock.querySelector(".rv-stop-replan-btn");
+          if (btn) btn.classList.add("primary");
+        }
         return;
       }
       if (key === "fixedFirst" || key === "ignoreHours") {
@@ -4570,24 +4596,47 @@ function bindEvents() {
       const [, key] = sf.dataset.stop.split(":");
       if (key === "timeFrom" || key === "timeTo") render();
     }
-    // rv-stop time fields: render after picker closes to update mode selector state
+    // rv-stop time fields: update duration inline on blur (no render — avoids collapsing panels)
     const rvs = e.target.closest("[data-rv-stop]");
     if (rvs) {
-      const [, key] = rvs.dataset.rvStop.split(":");
-      if (key === "timeFrom" || key === "timeTo") render();
+      const [idx, key] = rvs.dataset.rvStop.split(":");
+      if (key === "timeFrom" || key === "timeTo") {
+        const row = getRvStopRow(idx);
+        if (row && row.timeWindowMode === "fixed") {
+          const editBlock = rvs.closest(".rv-stop-edit");
+          const durInp = editBlock?.querySelector("[data-rv-stop$=':durationMinutes']");
+          if (durInp && row.timeFrom && row.timeTo) {
+            durInp.value = minsToHHMM(Math.max(0, hhmmToMins(row.timeTo) - hhmmToMins(row.timeFrom)));
+          }
+        }
+      }
     }
   }, true);
 
 
+  // Track rv-panel open/close state so render() doesn't collapse them
+  app.addEventListener("toggle", e => {
+    const panel = e.target.closest(".rv-panel[id]");
+    if (panel) {
+      if (e.target.open) state.expandedPanels.add(panel.id);
+      else state.expandedPanels.delete(panel.id);
+    }
+  }, true);
+
   app.addEventListener("change", e => {
+    // Guard: only apply route-form handlers when inside #route-form
     if (e.target.name === "endSameAsStart" || e.target.name === "timingMode") {
-      updateRouteFromForm();
-      render();
+      if (e.target.closest("#route-form")) {
+        updateRouteFromForm();
+        render();
+      }
     }
     if (e.target.name === "lunchBreak") {
-      const minutesInput = document.getElementById("lunch-break-minutes");
-      if (minutesInput) minutesInput.disabled = !e.target.checked;
-      state.route.lunchBreak = e.target.checked;
+      if (e.target.closest("#route-form")) {
+        const minutesInput = document.getElementById("lunch-break-minutes");
+        if (minutesInput) minutesInput.disabled = !e.target.checked;
+        state.route.lunchBreak = e.target.checked;
+      }
     }
   });
 
@@ -4716,6 +4765,7 @@ function bindEvents() {
         });
         state.manualOrderRows = null;
     state.expandedStops = new Set();
+    state.expandedPanels = new Set();
     state.dirtyStops = new Set();
         showToast(hasLunch ? "Pausa pranzo rimossa" : "Pausa pranzo aggiunta");
         setActiveTab("result");
@@ -4945,6 +4995,7 @@ function bindEvents() {
         state.result = normalizeSavedRoute({ ...raw.payload, id: raw.id, ...raw });
         state.manualOrderRows = null;
     state.expandedStops = new Set();
+    state.expandedPanels = new Set();
     state.dirtyStops = new Set();
         setActiveTab("result");
       } catch (err) {
@@ -5258,6 +5309,7 @@ function bindEvents() {
     if (e.target.closest("#reset-order")) {
       state.manualOrderRows = null;
     state.expandedStops = new Set();
+    state.expandedPanels = new Set();
     state.dirtyStops = new Set();
       await replanWithOrder(false);
       return;
