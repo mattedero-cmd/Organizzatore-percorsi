@@ -208,6 +208,7 @@ const state = {
   expandedStops: new Set(),
   expandedPanels: new Set(),
   dirtyStops: new Set(),
+  resultLunchEnabled: null,
   manualOrderRows: null,
   planning: false,
   stopFilter: "",
@@ -1007,7 +1008,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.034 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.035 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -1190,6 +1191,27 @@ function stopNavUrl(row, pref) {
 
 let _mapsLoadPromise = null;
 
+function getMapDarkStyles() {
+  const theme = document.documentElement.dataset.theme;
+  const isDark = theme && !["day","neon-giorno","luxury-giorno","metallo-giorno","pietra-giorno","foresta-giorno","legno-giorno"].includes(theme);
+  if (!isDark) return [];
+  return [
+    { elementType: "geometry", stylers: [{ color: "#0d1117" }] },
+    { elementType: "labels.text.fill", stylers: [{ color: "#8b9aaa" }] },
+    { elementType: "labels.text.stroke", stylers: [{ color: "#0d1117" }] },
+    { featureType: "road", elementType: "geometry", stylers: [{ color: "#1e2a38" }] },
+    { featureType: "road.arterial", elementType: "geometry", stylers: [{ color: "#263340" }] },
+    { featureType: "road.highway", elementType: "geometry", stylers: [{ color: "#14b8a6" }] },
+    { featureType: "road.highway", elementType: "geometry.stroke", stylers: [{ color: "#0d9488" }] },
+    { featureType: "water", elementType: "geometry", stylers: [{ color: "#071520" }] },
+    { featureType: "poi", elementType: "geometry", stylers: [{ color: "#111c26" }] },
+    { featureType: "poi", elementType: "labels.text.fill", stylers: [{ color: "#607080" }] },
+    { featureType: "transit", elementType: "geometry", stylers: [{ color: "#0d1117" }] },
+    { featureType: "administrative", elementType: "geometry.stroke", stylers: [{ color: "#1e3040" }] },
+    { featureType: "administrative.land_parcel", elementType: "labels.text.fill", stylers: [{ color: "#506070" }] },
+  ];
+}
+
 async function loadGoogleMapsScript() {
   if (state.googleMapsReady) return true;
   if (!state.googleMapsKey) return false;
@@ -1236,24 +1258,7 @@ async function renderGoogleMap(result) {
   const firstCoord = rows.find(r => r.lat) || result.start;
   const center = firstCoord?.lat ? { lat: Number(firstCoord.lat), lng: Number(firstCoord.lng) } : { lat: 46.0, lng: 11.0 };
 
-  const _darkTheme = document.documentElement.dataset.theme;
-  const _isDarkMap = _darkTheme && !["day","neon-giorno","luxury-giorno","metallo-giorno","pietra-giorno","foresta-giorno","legno-giorno"].includes(_darkTheme);
-  const _nightStyles = _isDarkMap ? [
-    { elementType: "geometry", stylers: [{ color: "#0d1117" }] },
-    { elementType: "labels.text.fill", stylers: [{ color: "#8b9aaa" }] },
-    { elementType: "labels.text.stroke", stylers: [{ color: "#0d1117" }] },
-    { featureType: "road", elementType: "geometry", stylers: [{ color: "#1e2a38" }] },
-    { featureType: "road.arterial", elementType: "geometry", stylers: [{ color: "#263340" }] },
-    { featureType: "road.highway", elementType: "geometry", stylers: [{ color: "#14b8a6" }] },
-    { featureType: "road.highway", elementType: "geometry.stroke", stylers: [{ color: "#0d9488" }] },
-    { featureType: "water", elementType: "geometry", stylers: [{ color: "#071520" }] },
-    { featureType: "poi", elementType: "geometry", stylers: [{ color: "#111c26" }] },
-    { featureType: "poi", elementType: "labels.text.fill", stylers: [{ color: "#607080" }] },
-    { featureType: "transit", elementType: "geometry", stylers: [{ color: "#0d1117" }] },
-    { featureType: "administrative", elementType: "geometry.stroke", stylers: [{ color: "#1e3040" }] },
-    { featureType: "administrative.land_parcel", elementType: "labels.text.fill", stylers: [{ color: "#506070" }] },
-  ] : [];
-  const map = new google.maps.Map(el, { center, zoom: 10, mapTypeControl: false, fullscreenControl: false, styles: _nightStyles });
+  const map = new google.maps.Map(el, { center, zoom: 10, mapTypeControl: false, fullscreenControl: false, styles: getMapDarkStyles() });
   const bounds = new google.maps.LatLngBounds();
   let hasPoints = false;
 
@@ -2869,7 +2874,9 @@ async function replanFromResult() {
   if (!stops.length) { showToast("Nessuna tappa nel giro"); return; }
 
   const timingMode = v.timingMode || result.timingMode || "first_open_minus";
-  const lunchBreak = v.lunchBreak === "on" || v.lunchBreak === true;
+  const lunchBreak = state.resultLunchEnabled !== null
+    ? state.resultLunchEnabled
+    : (v.lunchBreak === "on" || v.lunchBreak === true);
   const routePayload = {
     name: result.name || "Percorso giornaliero",
     id: result.id,
@@ -2895,6 +2902,7 @@ async function replanFromResult() {
     state.manualOrderRows = null;
     state.expandedStops = new Set();
     state.expandedPanels = new Set();
+    state.resultLunchEnabled = null;
     state.dirtyStops = new Set();
     await refreshSavedRoutes();
     setActiveTab("result");
@@ -2957,7 +2965,7 @@ function renderResultEditPanels(result) {
         <div class="rv-field-full" style="display:flex;align-items:center;gap:12px;padding-top:4px;">
           <label class="stop-opt-check">
             <input type="hidden" name="lunchBreak" value="off" />
-            <input type="checkbox" name="lunchBreak" ${hasLunch ? "checked" : ""} />
+            <input type="checkbox" name="lunchBreak" ${(state.resultLunchEnabled ?? hasLunch) ? "checked" : ""} />
             <span>${I.fork(14)} Pausa pranzo</span>
           </label>
           <input name="lunchBreakMinutes" type="number" min="15" max="120" step="5" value="${lunchBreakMinutes}" style="width:64px;" /> <span class="stop-meta">min</span>
@@ -3050,6 +3058,7 @@ async function planCurrentRoute() {
     state.manualOrderRows = null;
     state.expandedStops = new Set();
     state.expandedPanels = new Set();
+    state.resultLunchEnabled = null;
     state.dirtyStops = new Set();
     state.route.stops = [];
     state.route.name = "";
@@ -3768,6 +3777,7 @@ async function replanWithOrder(manualOrder) {
     state.manualOrderRows = null;
     state.expandedStops = new Set();
     state.expandedPanels = new Set();
+    state.resultLunchEnabled = null;
     state.dirtyStops = new Set();
     await refreshSavedRoutes();
     showToast("Percorso ricalcolato");
@@ -3865,6 +3875,7 @@ async function completeFormWithMaps() {
       zoom: hasCoords ? 16 : 7,
       gestureHandling: "greedy",
       clickableIcons: true,
+      styles: getMapDarkStyles(),
     });
   } catch (err) {
     mapEl.innerHTML = `<div class="cwm-map-loading" style="color:#ef4444">Errore inizializzazione mappa: ${escapeHtml(err.message)}</div>`;
@@ -4064,7 +4075,8 @@ function openMapPicker() {
 
     const map = new google.maps.Map(document.getElementById("map-picker-map"), {
       center: { lat: startLat, lng: startLng }, zoom: 15,
-      mapTypeControl: false, fullscreenControl: false, streetViewControl: false
+      mapTypeControl: false, fullscreenControl: false, streetViewControl: false,
+      styles: getMapDarkStyles(),
     });
 
     const marker = new google.maps.Marker({
@@ -4636,6 +4648,8 @@ function bindEvents() {
         const minutesInput = document.getElementById("lunch-break-minutes");
         if (minutesInput) minutesInput.disabled = !e.target.checked;
         state.route.lunchBreak = e.target.checked;
+      } else if (e.target.closest("#rv-settings-form")) {
+        state.resultLunchEnabled = e.target.checked;
       }
     }
   });
@@ -4766,6 +4780,7 @@ function bindEvents() {
         state.manualOrderRows = null;
     state.expandedStops = new Set();
     state.expandedPanels = new Set();
+    state.resultLunchEnabled = null;
     state.dirtyStops = new Set();
         showToast(hasLunch ? "Pausa pranzo rimossa" : "Pausa pranzo aggiunta");
         setActiveTab("result");
@@ -4996,6 +5011,7 @@ function bindEvents() {
         state.manualOrderRows = null;
     state.expandedStops = new Set();
     state.expandedPanels = new Set();
+    state.resultLunchEnabled = null;
     state.dirtyStops = new Set();
         setActiveTab("result");
       } catch (err) {
@@ -5310,6 +5326,7 @@ function bindEvents() {
       state.manualOrderRows = null;
     state.expandedStops = new Set();
     state.expandedPanels = new Set();
+    state.resultLunchEnabled = null;
     state.dirtyStops = new Set();
       await replanWithOrder(false);
       return;
