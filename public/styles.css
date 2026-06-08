@@ -1267,38 +1267,33 @@ textarea:focus {
 }
 
 .stop-window-mode {
-  display: flex;
-  flex-direction: row;
-  gap: 6px;
-  margin-top: 6px;
+  display: inline-flex;
+  background: var(--surface-2);
+  border-radius: 6px;
+  padding: 2px;
+  gap: 0;
+  margin-top: 4px;
 }
 .stop-window-mode-opt {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 8px;
-  border-radius: 6px;
-  border: 1px solid var(--line);
+  padding: 3px 10px;
+  border-radius: 4px;
   cursor: pointer;
-  transition: border-color 0.15s;
-  flex: 1;
+  border: none;
 }
 .stop-window-mode-opt.active {
-  border-color: var(--accent-border);
   background: var(--accent-bg);
+  box-shadow: 0 0 0 1px var(--accent-border);
 }
-.stop-window-mode-opt input[type="radio"] {
-  flex-shrink: 0;
-  accent-color: var(--primary);
-}
+.stop-window-mode-opt input[type="radio"] { display: none; }
 .stop-window-mode-opt span {
-  font-size: 0.82rem;
+  font-size: 0.78rem;
   font-weight: 600;
-  color: var(--text);
+  color: var(--muted);
 }
-.stop-window-mode-opt small {
-  display: none;
-}
+.stop-window-mode-opt.active span { color: var(--primary); }
+.stop-window-mode-opt small { display: none; }
 
 .stop-options {
   display: flex;

@@ -5,6 +5,9 @@
 
 ---
 
+## v4.020 — 2026-06-08
+- Fix UI selettore modalità finestra oraria: segmented control compatto stile iOS, radio nascosti, testo 0.78rem
+
 ## v4.019 — 2026-06-08
 - Fix selettore modalità finestra oraria: ora compatto su una riga
 - Fix picker orario iOS: render() spostato su evento "change" invece di "input" — il picker non viene più chiuso mentre si scrolla
