@@ -1352,13 +1352,13 @@ textarea:focus {
   color: var(--muted);
 }
 .saved-card-btns {
-  display: grid;
-  grid-template-columns: 1fr;
+  display: flex;
+  flex-direction: column;
   gap: 5px;
 }
 .saved-card-btns-actions {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr 1fr 1fr;
   gap: 5px;
 }
 .saved-card-btn {
@@ -1368,6 +1368,10 @@ textarea:focus {
   text-align: center;
   justify-content: center;
   width: 100%;
+}
+.saved-card-delete {
+  width: 100%;
+  min-height: 38px;
 }
 .saved-card-meta {
   display: flex;

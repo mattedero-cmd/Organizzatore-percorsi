@@ -1739,23 +1739,22 @@ function renderSaved() {
       </div>
       <div class="saved-list">
         ${state.savedRoutes.map(route => `
-          <article class="card saved-card${route.source === "imported" ? " saved-card--imported" : ""}">
+          <article class="card saved-card${route.source === "imported" ? " saved-card--imported" : ""}" data-open-route="${route.id}" style="cursor:pointer;">
             <p class="saved-card-name">${escapeHtml(route.name)}${route.source === "imported" ? ` <span class="badge badge-imported">Importato</span>` : ""}</p>
             <div class="saved-card-info">
-              <input type="date" class="saved-date-input" data-reschedule-route="${route.id}" value="${escapeHtml(route.scheduledDate || "")}" title="Cambia data e ricalcola" />
+              <input type="date" class="saved-date-input" data-reschedule-route="${route.id}" value="${escapeHtml(route.scheduledDate || "")}" title="Cambia data e ricalcola" onclick="event.stopPropagation()" />
               <span>${escapeHtml(route.startTime || "--:--")}</span>
               <span>${Number(route.totalKm).toFixed(1)} km</span>
               <span>${euro(route.totalCost)}</span>
             </div>
             <div class="stop-meta saved-card-route">${escapeHtml(route.startLabel || "—")} → ${escapeHtml(route.endLabel || "—")}</div>
-            <div class="saved-card-btns">
-              <button class="btn primary saved-card-btn" data-open-route="${route.id}">${I.play(13)} Apri</button>
+            <div class="saved-card-btns" onclick="event.stopPropagation()">
               <div class="saved-card-btns-actions">
-                <button class="btn saved-card-btn" data-share-route="${route.id}" title="Condividi">${I.share(13)} Condividi</button>
-                <button class="btn saved-card-btn" data-rename-route="${route.id}" title="Rinomina">${I.edit(13)} Rinomina</button>
-                <button class="btn saved-card-btn" data-duplicate-route="${route.id}" title="Duplica">${I.copy(13)} Duplica</button>
-                <button class="btn danger saved-card-btn" data-delete-route="${route.id}" title="Elimina">${I.trash(13)} Elimina</button>
+                <button class="btn saved-card-btn" data-share-route="${route.id}">${I.share(13)} Condividi</button>
+                <button class="btn saved-card-btn" data-rename-route="${route.id}">${I.edit(13)} Rinomina</button>
+                <button class="btn saved-card-btn" data-duplicate-route="${route.id}">${I.copy(13)} Duplica</button>
               </div>
+              <button class="btn danger saved-card-btn saved-card-delete" data-delete-route="${route.id}">${I.trash(13)} Elimina</button>
             </div>
             ${route.plannedStops?.length ? `<div class="saved-stops-list">${route.plannedStops.filter((s, i, arr) => !s.stopPart || s.stopPart === "morning" || arr.findIndex(x => x.addressId === s.addressId) === i).map((s, i) => { const isRest = s.addressType === "rest" || s.customer?.includes("⭐") || s.customer?.includes("★"); return `<span class="saved-stop-chip">${i + 1}. ${escapeHtml(s.customer)}${!isRest && s.location ? ` — ${escapeHtml(s.location)}` : ""}</span>`; }).join("")}</div>` : ""}
           </article>`).join("") || `<div class="empty">Nessun giro salvato.</div>`}
