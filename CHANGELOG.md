@@ -5,6 +5,10 @@
 
 ---
 
+## v4.025 — 2026-06-08
+- Fix auto-ricalcolo: rimosso render() su blur per rv-row (tap fantasma iOS sul bottone Ricalcola)
+- UX: sezione "Finestre orarie tappe" spostata dentro "Modifica impostazioni giro", unico bottone Ricalcola
+
 ## v4.024 — 2026-06-08
 - Fix definitivo picker iOS Dalle/Alle: render() spostato su blur invece di change — il picker non viene più distrutto mentre è aperto
 

@@ -1004,7 +1004,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.024 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.025 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -2910,41 +2910,35 @@ function renderResultEditPanels(result) {
           </label>
           <input name="lunchBreakMinutes" type="number" min="15" max="120" step="5" value="${lunchBreakMinutes}" style="width:64px;" /> <span class="stop-meta">min</span>
         </div>
-        <button type="button" class="btn primary" id="rv-replan-btn" style="width:100%;margin-top:10px;">${I.navigate(14)} Ricalcola</button>
-      </form>
-    </details>
-
-    <details class="rv-panel" id="rv-stopwindow-panel">
-      <summary class="rv-panel-summary">
-        ${_svg('<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',14)} Finestre orarie tappe
-      </summary>
-      <div class="rv-add-stop-body">
-        ${(result.rows || []).filter(r => !r.type && (!r.stopPart || r.stopPart === "morning")).map((row, i) => {
-          const hasWindow = row.timeFrom && row.timeTo;
-          const mode = row.timeWindowMode || "available";
-          return `<div class="rv-stopwindow-row">
-            <span class="rv-stopwindow-name">${escapeHtml(row.customer)}${row.location ? ` <small>${escapeHtml(row.location)}</small>` : ""}</span>
-            <div class="stop-window-block">
-              <div class="stop-window-row">
-                <span class="stop-opt-label">Finestra oraria</span>
-                <div class="stop-window-mode${!hasWindow ? " disabled" : ""}">
-                  <label class="stop-window-mode-opt${mode !== "fixed" ? " active" : ""}">
-                    <input type="radio" name="rvtwm-${i}" value="available" data-rv-row="${i}:timeWindowMode" ${mode !== "fixed" ? "checked" : ""} ${!hasWindow ? "disabled" : ""} /><span>Disponibilità</span>
-                  </label>
-                  <label class="stop-window-mode-opt${mode === "fixed" ? " active" : ""}">
-                    <input type="radio" name="rvtwm-${i}" value="fixed" data-rv-row="${i}:timeWindowMode" ${mode === "fixed" ? "checked" : ""} ${!hasWindow ? "disabled" : ""} /><span>Fissa</span>
-                  </label>
+        <div style="margin-top:10px;border-top:1px solid var(--line);padding-top:10px;">
+          <p class="rp-label" style="margin-bottom:6px;">${_svg('<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',12)} Finestre orarie tappe</p>
+          ${(result.rows || []).filter(r => !r.type && (!r.stopPart || r.stopPart === "morning")).map((row, i) => {
+            const hasWindow = row.timeFrom && row.timeTo;
+            const mode = row.timeWindowMode || "available";
+            return `<div class="rv-stopwindow-row">
+              <span class="rv-stopwindow-name">${escapeHtml(row.customer)}${row.location ? ` <small>${escapeHtml(row.location)}</small>` : ""}</span>
+              <div class="stop-window-block">
+                <div class="stop-window-row">
+                  <span class="stop-opt-label">Finestra oraria</span>
+                  <div class="stop-window-mode${!hasWindow ? " disabled" : ""}">
+                    <label class="stop-window-mode-opt${mode !== "fixed" ? " active" : ""}">
+                      <input type="radio" name="rvtwm-${i}" value="available" data-rv-row="${i}:timeWindowMode" ${mode !== "fixed" ? "checked" : ""} ${!hasWindow ? "disabled" : ""} /><span>Disponibilità</span>
+                    </label>
+                    <label class="stop-window-mode-opt${mode === "fixed" ? " active" : ""}">
+                      <input type="radio" name="rvtwm-${i}" value="fixed" data-rv-row="${i}:timeWindowMode" ${mode === "fixed" ? "checked" : ""} ${!hasWindow ? "disabled" : ""} /><span>Fissa</span>
+                    </label>
+                  </div>
+                </div>
+                <div class="stop-window-inputs">
+                  <label class="stop-window-field">Dalle<input type="time" value="${escapeHtml(row.timeFrom || "")}" data-rv-row="${i}:timeFrom" /></label>
+                  <label class="stop-window-field">Alle<input type="time" value="${escapeHtml(row.timeTo || "")}" data-rv-row="${i}:timeTo" /></label>
                 </div>
               </div>
-              <div class="stop-window-inputs">
-                <label class="stop-window-field">Dalle<input type="time" value="${escapeHtml(row.timeFrom || "")}" data-rv-row="${i}:timeFrom" /></label>
-                <label class="stop-window-field">Alle<input type="time" value="${escapeHtml(row.timeTo || "")}" data-rv-row="${i}:timeTo" /></label>
-              </div>
-            </div>
-          </div>`;
-        }).join("")}
-        <button type="button" class="btn primary" id="rv-replan-stopwindow" style="width:100%;margin-top:10px;">${_svg('<polygon points="3 11 22 2 13 21 11 13 3 11"/>',14)} Ricalcola con queste finestre</button>
-      </div>
+            </div>`;
+          }).join("")}
+        </div>
+        <button type="button" class="btn primary" id="rv-replan-btn" style="width:100%;margin-top:10px;">${I.navigate(14)} Ricalcola</button>
+      </form>
     </details>
 
     <details class="rv-panel" id="rv-add-stop-panel">
@@ -4502,16 +4496,12 @@ function bindEvents() {
   });
 
   // render() solo su blur per timeFrom/timeTo — il picker è già chiuso a questo punto
+  // render() su blur solo per stop del form percorso (non rv-row: evita tap fantasma su iOS)
   app.addEventListener("blur", e => {
     const sf = e.target.closest("[data-stop]");
     if (sf) {
       const [, key] = sf.dataset.stop.split(":");
-      if (key === "timeFrom" || key === "timeTo") { render(); return; }
-    }
-    const rv = e.target.closest("[data-rv-row]");
-    if (rv) {
-      const [, key] = rv.dataset.rvRow.split(":");
-      if (key === "timeFrom" || key === "timeTo") { render(); return; }
+      if (key === "timeFrom" || key === "timeTo") render();
     }
   }, true);
 
