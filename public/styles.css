@@ -1202,9 +1202,9 @@ textarea:focus {
 }
 
 .stop-fields {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .stop-options {
@@ -2751,6 +2751,7 @@ tbody tr:last-child td {
 .rp-when-time {
   flex: 1;
   min-width: 0;
+  max-width: calc(33.33% - 8px);
   display: flex;
   flex-direction: column;
   gap: 6px;
