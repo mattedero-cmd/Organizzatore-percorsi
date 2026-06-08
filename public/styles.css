@@ -2052,8 +2052,8 @@ tbody tr:last-child td {
 .rv-fields {
   display: flex;
   flex-direction: row;
-  gap: 23px;
-  max-width: 75%;
+  gap: 12px;
+  max-width: 100%;
 }
 
 .rv-field-full {
@@ -2744,8 +2744,8 @@ tbody tr:last-child td {
 .rp-when-row {
   display: flex;
   flex-direction: row;
-  gap: 23px;
-  max-width: 75%;
+  gap: 12px;
+  max-width: 100%;
 }
 .rp-when-date,
 .rp-when-time {

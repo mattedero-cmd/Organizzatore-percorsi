@@ -13,6 +13,9 @@
 ## v4.002 — 2026-06-08
 - Fix: soste e ristoranti trovati via Places API non vengono più inseriti se tutti i candidati risultano chiusi all'orario previsto (restituisce `null` invece di inserire con warning)
 
+## v4.005 — 2026-06-08
+- Fix layout: tre campi orario (Data / Partenza / Entro le) ora sulla stessa riga, gap ridotto a 12px, max-width 100%
+
 ## v4.004 — 2026-06-08
 - Nuovo: note libere per ogni giro — textarea nel pannello "Note giro" dentro la vista risultato, con salvataggio separato dal ricalcolo
 - Nuovo: le note vengono mostrate nella card del giro salvato e nell'header della vista risultato

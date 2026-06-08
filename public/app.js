@@ -992,7 +992,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.004 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.005 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -1424,8 +1424,8 @@ function renderRoute() {
             <input name="startTime" type="time" value="${escapeHtml(r.startTime)}" />
           </label>
           <label class="rp-when-time">
-            <span class="rp-label">Non oltre le</span>
-            <input name="departureLatest" type="time" value="${escapeHtml(r.departureLatest || "")}" placeholder="--:--" />
+            <span class="rp-label">Entro le</span>
+            <input name="departureLatest" type="time" value="${escapeHtml(r.departureLatest || "")}" />
           </label>
         </div>
         <div style="margin-top:8px;">
