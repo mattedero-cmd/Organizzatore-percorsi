@@ -1006,7 +1006,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.030 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.031 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -4686,6 +4686,7 @@ function bindEvents() {
             arrivalLeadMinutes: result.arrivalLeadMinutes,
             firstArrivalTime: result.firstArrivalTime,
             firstArrivalRequired: result.firstArrivalRequired,
+            maxReturnTime: result.maxReturnTime,
             rates: state.settings,
             manualOrder: true,
             lunchBreak: !hasLunch,
@@ -4697,7 +4698,14 @@ function bindEvents() {
               fullAddress: row.fullAddress || row.address, notes: row.notes,
               openMorning: row.openMorning, closeMorning: row.closeMorning,
               openAfternoon: row.openAfternoon, closeAfternoon: row.closeAfternoon,
-              durationMinutes: (row.stopPart === "morning" ? (customerRows.filter(x => x.stopUid === row.stopUid).reduce((t, x) => t + x.durationMinutes, 0)) : row.durationMinutes),
+              durationMinutes: row.timeWindowMode === "fixed"
+                ? Math.max(0, (row.timeTo && row.timeFrom ? hhmmToMins(row.timeTo) - hhmmToMins(row.timeFrom) : 0))
+                : (row.stopPart === "morning" ? (customerRows.filter(x => x.stopUid === row.stopUid).reduce((t, x) => t + x.durationMinutes, 0)) : row.durationMinutes),
+              timeFrom: row.timeFrom || undefined,
+              timeTo: row.timeTo || undefined,
+              timeWindowMode: row.timeWindowMode || undefined,
+              fixedFirst: row.fixedFirst || undefined,
+              ignoreHours: row.ignoreHours || undefined,
               lat: row.lat, lng: row.lng
             }))
           })
