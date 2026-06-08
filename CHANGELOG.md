@@ -5,6 +5,9 @@
 
 ---
 
+## v4.015 — 2026-06-08
+- Rinominato "Entro le" → "Rientro max" nel form percorso
+
 ## v4.014 — 2026-06-08
 - Fix strutturale campi Data/Partenza/Entro le: sostituito flex con CSS Grid (repeat 3, 1fr) — i figli non possono più uscire dalla griglia indipendentemente dal contenuto
 
