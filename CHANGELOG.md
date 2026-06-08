@@ -5,6 +5,12 @@
 
 ---
 
+## v4.033 — 2026-06-08
+- Fix maggiorazione oraria: calcolo orario partenza ora usa driveMinutes con buffer (non base Maps) — gli arrivi alle tappe sono ora puntuali
+- Fix pranzo deselezionato: hidden input garantisce che il valore "off" arrivi sempre al server; server ora riconosce "off"/"false" esplicitamente
+- Planner ora restituisce lunchBreak, lunchBreakMinutes, maxReturnTime nel risultato
+- Fix pannello "Modifica impostazioni giro": campo Rientro max aggiunto e pre-popolato; startTime pre-popolato dall'impostazione originale (non dall'orario calcolato)
+
 ## v4.032 — 2026-06-08
 - UX: tutti i campi orario (`type="time"`) usano step 5 minuti (step="300") in tutta l'app
 

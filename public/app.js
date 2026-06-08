@@ -1006,7 +1006,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.032 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.033 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -1514,6 +1514,7 @@ function renderRoute() {
       <!-- Sezione 4: Pausa pranzo -->
       <div class="rp-section rp-lunch-row">
         <label class="rp-lunch-check">
+          <input type="hidden" name="lunchBreak" value="off" />
           <input name="lunchBreak" type="checkbox" ${r.lunchBreak ? "checked" : ""} id="lunch-break-check" />
           <span>${I.fork(14)} Pausa pranzo</span>
         </label>
@@ -2874,11 +2875,12 @@ async function replanFromResult() {
     scheduledDate: v.scheduledDate || result.scheduledDate || "",
     start: { label: result.start?.label || "", address: v.startAddress || result.start?.address || "" },
     end: { sameAsStart: v.endSameAsStart === "on", label: result.end?.label || "", address: v.endAddress || result.end?.address || "" },
-    startTime: v.startTime || result.summary?.dayStart || "07:00",
+    startTime: v.startTime || result.startTime || result.summary?.dayStart || "07:00",
     timingMode,
     arrivalLeadMinutes: Number(v.arrivalLeadMinutes ?? result.arrivalLeadMinutes ?? 10),
     firstArrivalTime: v.firstArrivalTime || result.firstArrivalTime || "08:30",
     firstArrivalRequired: v.firstArrivalRequired || result.firstArrivalRequired || "",
+    departureLatest: v.departureLatest || result.maxReturnTime || result.departureLatest || "",
     stops, rates: state.settings,
     lunchBreak,
     lunchBreakMinutes: Number(v.lunchBreakMinutes || result.lunchBreakMinutes || 45)
@@ -2924,7 +2926,8 @@ function renderResultEditPanels(result) {
       <form id="rv-settings-form" class="rv-settings-form" onsubmit="return false">
         <div class="rv-fields">
           <label class="rp-when-date"><span class="rp-label">Data</span><input name="scheduledDate" type="date" value="${escapeHtml(scheduledDate)}" /></label>
-          <label class="rp-when-time"><span class="rp-label">Orario partenza</span><input name="startTime" type="time" step="300" value="${escapeHtml(s.dayStart || "07:00")}" /></label>
+          <label class="rp-when-time"><span class="rp-label">Orario partenza</span><input name="startTime" type="time" step="300" value="${escapeHtml(result.startTime || s.dayStart || "07:00")}" /></label>
+          <label class="rp-when-time"><span class="rp-label">Rientro max</span><input name="departureLatest" type="time" step="300" value="${escapeHtml(result.maxReturnTime || result.departureLatest || state.settings.maxReturnTime || "")}" /></label>
         </div>
         <div class="rv-field-full">
           <label class="rp-label" style="display:block;margin-bottom:4px;">Modalità arrivo</label>
@@ -2951,6 +2954,7 @@ function renderResultEditPanels(result) {
         </div>
         <div class="rv-field-full" style="display:flex;align-items:center;gap:12px;padding-top:4px;">
           <label class="stop-opt-check">
+            <input type="hidden" name="lunchBreak" value="off" />
             <input type="checkbox" name="lunchBreak" ${hasLunch ? "checked" : ""} />
             <span>${I.fork(14)} Pausa pranzo</span>
           </label>

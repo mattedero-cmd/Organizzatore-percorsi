@@ -303,9 +303,9 @@ function evaluateOrder(order, context) {
   if (timingMode !== "depart_at" && targetArrival !== null && order.length > 0) {
     const firstNodeIndex = order[0].nodeIndex;
     const firstLeg = readLeg(matrix, 0, firstNodeIndex);
-    // Use baseDriveMinutes (no traffic buffer) so departure is calculated
-    // to arrive exactly at targetArrival, not N minutes early
-    currentTime = targetArrival - (firstLeg.baseDriveMinutes ?? firstLeg.driveMinutes);
+    // Use buffered driveMinutes so departure accounts for traffic markup
+    // and arrival lands exactly at targetArrival
+    currentTime = targetArrival - (firstLeg.driveMinutes ?? firstLeg.baseDriveMinutes);
     dayStart = currentTime;
   }
   if (currentTime === null) {
@@ -890,7 +890,10 @@ export async function planRoute(payload, settings, restStops = []) {
   const reorderable = lockedFirst ? stopsWithNodeIndex.slice(1) : stopsWithNodeIndex;
 
   const departureLatestMinutes = payload.departureLatest ? parseTime(payload.departureLatest) : null;
-  const lunchBreakEnabled = payload.lunchBreak !== false && (payload.lunchBreak === true || settings.lunchBreakEnabled !== false);
+  const _lb = payload.lunchBreak;
+  const lunchBreakEnabled = (_lb === false || _lb === "false" || _lb === "off") ? false
+    : (_lb === true || _lb === "true" || _lb === "on") ? true
+    : settings.lunchBreakEnabled !== false;
   const lunchBreakMinutes = Number(payload.lunchBreakMinutes ?? settings.lunchBreakMinutes ?? 45);
   const _parseLunchT = v => { if (v == null) return null; if (typeof v === "number") return v; const [h, m] = String(v).split(":"); return Number(h) * 60 + Number(m || 0); };
   const lunchOpenMin = _parseLunchT(settings?.lunchOpenTime) ?? (11 * 60 + 30);
@@ -983,6 +986,9 @@ export async function planRoute(payload, settings, restStops = []) {
     finalLeg: best.finalLeg,
     summary: best.summary,
     rates,
+    lunchBreak: lunchBreakEnabled,
+    lunchBreakMinutes,
+    maxReturnTime: payload.departureLatest || "",
     mapMode: [...new Set(best.rows.map((row) => row.legSource).concat(best.finalLeg.source))].join(", ")
   };
 }
