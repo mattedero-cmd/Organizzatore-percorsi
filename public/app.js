@@ -5161,9 +5161,9 @@ function bindEvents() {
 // ── auth screen ───────────────────────────────────────────────────────────────
 
 function renderLoginForm() {
-  return `<form class="auth-form">
-    <label class="field">Username<input name="username" autocomplete="username" required /></label>
-    <label class="field">Password<input name="password" type="password" autocomplete="current-password" required /></label>
+  return `<form class="auth-form" novalidate>
+    <label class="field">Username<input name="username" autocomplete="username" /></label>
+    <label class="field">Password<input name="password" type="password" autocomplete="current-password" /></label>
     <label class="auth-remember"><input type="checkbox" name="remember" checked /> Ricordami su questo dispositivo</label>
     <p class="auth-error"></p>
     <button class="btn primary" type="submit" style="width:100%">Accedi</button>
@@ -5171,9 +5171,9 @@ function renderLoginForm() {
 }
 
 function renderRegisterForm() {
-  return `<form class="auth-form">
-    <label class="field">Username<input name="username" autocomplete="username" required /></label>
-    <label class="field">Password<input name="password" type="password" autocomplete="new-password" minlength="6" required /></label>
+  return `<form class="auth-form" novalidate>
+    <label class="field">Username<input name="username" autocomplete="username" /></label>
+    <label class="field">Password<input name="password" type="password" autocomplete="new-password" /></label>
     <p class="auth-error"></p>
     <button class="btn primary" type="submit" style="width:100%">Crea account</button>
     <p class="auth-hint">Minimo 6 caratteri per la password</p>
@@ -5181,9 +5181,9 @@ function renderRegisterForm() {
 }
 
 function renderSetupForm() {
-  return `<form class="auth-form">
-    <label class="field">Username<input name="username" autocomplete="username" required /></label>
-    <label class="field">Password<input name="password" type="password" autocomplete="new-password" minlength="6" required /></label>
+  return `<form class="auth-form" novalidate>
+    <label class="field">Username<input name="username" autocomplete="username" /></label>
+    <label class="field">Password<input name="password" type="password" autocomplete="new-password" /></label>
     <p class="auth-error"></p>
     <button class="btn primary" type="submit" style="width:100%">Configura e accedi</button>
     <p class="auth-hint">I tuoi dati esistenti verranno associati a questo account.</p>
@@ -5222,14 +5222,24 @@ function renderAuthScreen(isSetup = false) {
         e.preventDefault();
         const errEl = form.querySelector(".auth-error");
         const btn = form.querySelector("[type=submit]");
-        const data = Object.fromEntries(new FormData(form));
+        const username = (form.querySelector("[name=username]")?.value || "").trim();
+        const password = form.querySelector("[name=password]")?.value || "";
+        const remember = form.querySelector("[name=remember]")?.checked ?? true;
+        if (!username || !password) {
+          if (errEl) errEl.textContent = "Inserisci username e password.";
+          return;
+        }
+        if ((activeTab === "register" || isSetup) && password.length < 6) {
+          if (errEl) errEl.textContent = "La password deve essere di almeno 6 caratteri.";
+          return;
+        }
         btn.disabled = true;
         try {
           const endpoint = isSetup ? "/api/auth/setup" : activeTab === "login" ? "/api/auth/login" : "/api/auth/register";
           const res = await fetch(endpoint, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ username: data.username, password: data.password, remember: data.remember === "on" })
+            body: JSON.stringify({ username, password, remember })
           });
           const result = await res.json();
           if (!res.ok) throw new Error(result.error || "Errore");
