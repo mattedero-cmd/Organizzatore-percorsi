@@ -13,6 +13,9 @@
 ## v4.002 — 2026-06-08
 - Fix: soste e ristoranti trovati via Places API non vengono più inseriti se tutti i candidati risultano chiusi all'orario previsto (restituisce `null` invece di inserire con warning)
 
+## v4.006 — 2026-06-08
+- Durata intervento ora in formato HH:MM (es. 00:45, 01:30) in tutti i form: contatti, tappa manuale, pannello risultato
+
 ## v4.005 — 2026-06-08
 - Fix layout: tre campi orario (Data / Partenza / Entro le) ora sulla stessa riga, gap ridotto a 12px, max-width 100%
 

@@ -13,6 +13,18 @@ function euro(value) {
   return new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR" }).format(Number(value || 0));
 }
 
+function minsToHHMM(minutes) {
+  const v = Number(minutes || 0);
+  return `${String(Math.floor(v / 60)).padStart(2, "0")}:${String(v % 60).padStart(2, "0")}`;
+}
+function hhmmToMins(str) {
+  if (!str) return 0;
+  // Accepts HH:MM, H:MM, or plain number (minutes)
+  const m = String(str).match(/^(\d{1,2}):(\d{2})$/);
+  if (m) return Number(m[1]) * 60 + Number(m[2]);
+  return Math.max(0, Number(str) || 0);
+}
+
 function minutesLabel(minutes) {
   const value = Number(minutes || 0);
   const h = Math.floor(value / 60), m = value % 60;
@@ -992,7 +1004,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.005 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.006 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -1374,7 +1386,7 @@ function renderStops() {
         <button class="btn danger icon-btn" data-remove-stop="${stop.uid}" title="Rimuovi">${I.close(13)}</button>
       </div>
       <div class="stop-fields">
-        <label class="field">Durata (min)<input type="number" min="5" step="5" value="${escapeHtml(stop.durationMinutes)}" data-stop="${stop.uid}:durationMinutes" /></label>
+        <label class="field">Durata<input type="time" value="${minsToHHMM(stop.durationMinutes)}" data-stop="${stop.uid}:durationMinutes" data-duration-hhmm /></label>
         <div class="field">${stopHoursHint(stop, state.route.scheduledDate)}</div>
       </div>
       <div class="stop-options">
@@ -1517,7 +1529,7 @@ function renderRoute() {
               ${state.googleMapsKey ? `<div class="field full" style="padding-top:0"><button type="button" class="btn" id="rp-custom-map-btn">${I.map(14)} Scegli sulla mappa</button></div>` : ""}
               <input type="hidden" id="rp-custom-lat" value="" />
               <input type="hidden" id="rp-custom-lng" value="" />
-              <label class="field">Durata (min)<input name="customDuration" type="number" min="5" step="5" value="${escapeHtml(r.customDuration)}" /></label>
+              <label class="field">Durata<input name="customDuration" type="time" value="${minsToHHMM(r.customDuration || 45)}" data-duration-hhmm /></label>
             </div>
             ${renderWeeklyHoursSection(r.customWeeklyHours || null)}
             <div class="actions" style="margin-top:8px;">
@@ -2008,7 +2020,7 @@ function renderArchive() {
           <label class="field">Email<input name="email" type="email" value="${escapeHtml(form.email)}" /></label>
           <label class="field full">Note<textarea name="notes" id="contact-notes">${escapeHtml(form.notes)}</textarea></label>
           ${renderWeeklyHoursSection(form.weeklyHours)}
-          <label class="field">Durata abituale (min)<input name="defaultDuration" type="number" min="5" step="5" value="${escapeHtml(form.defaultDuration)}" /></label>
+          <label class="field">Durata abituale<input name="defaultDuration" type="time" value="${minsToHHMM(form.defaultDuration || 45)}" data-duration-hhmm /></label>
           <div class="field full">
             <label>Coordinate GPS</label>
             <div class="coord-actions">
@@ -2684,7 +2696,7 @@ function updateRouteFromForm() {
     firstArrivalRequired: v.firstArrivalRequired || "",
     selectedAddressId: v.selectedAddressId || state.route.selectedAddressId,
     customCustomer: v.customCustomer, customLocation: v.customLocation,
-    customAddress: v.customAddress, customDuration: Number(v.customDuration || 45),
+    customAddress: v.customAddress, customDuration: hhmmToMins(v.customDuration) || 45,
     transcript: v.transcript || "",
     lunchBreak: Boolean(v.lunchBreak),
     lunchBreakMinutes: Number(v.lunchBreakMinutes || 45),
@@ -2906,7 +2918,7 @@ function renderResultEditPanels(result) {
             ${state.googleMapsKey ? `<div class="field full" style="padding-top:0"><button type="button" class="btn" id="rv-custom-map-btn">${I.map(14)} Scegli sulla mappa</button></div>` : ""}
             <input type="hidden" id="rv-custom-lat" value="" />
             <input type="hidden" id="rv-custom-lng" value="" />
-            <label class="field">Durata (min)<input id="rv-custom-duration" type="number" min="5" step="5" value="45" /></label>
+            <label class="field">Durata<input id="rv-custom-duration" type="time" value="00:45" data-duration-hhmm /></label>
           </div>
           <div class="actions" style="margin-top:8px;">
             <button type="button" class="btn ghost" id="rv-add-temp-stop">+ Usa senza salvare</button>
@@ -3619,7 +3631,7 @@ async function saveAddressForm(form) {
     weeklyHours: readWeeklyHours(),
     // Derive legacy fields from Mon or first working day for backward compat
     ...deriveHoursFromWeekly(readWeeklyHours()),
-    defaultDuration: Number(v.defaultDuration || 45),
+    defaultDuration: hhmmToMins(v.defaultDuration) || 45,
     lat: v.lat ? Number(v.lat) : null, lng: v.lng ? Number(v.lng) : null
   };
   if (state.addressForm.id) {
@@ -4332,7 +4344,7 @@ function bindEvents() {
       const stop = state.route.stops.find(s => s.uid === uid);
       if (stop) {
         if (sf.type === "checkbox") stop[key] = sf.checked;
-        else stop[key] = key === "durationMinutes" ? Number(sf.value || 0) : sf.value;
+        else stop[key] = key === "durationMinutes" ? hhmmToMins(sf.value) : sf.value;
       }
     }
     // google contacts search
@@ -4613,7 +4625,7 @@ function bindEvents() {
         customer: document.getElementById("rv-custom-customer")?.value?.trim() || addr.split(",")[0] || "Tappa provvisoria",
         location: document.getElementById("rv-custom-location")?.value?.trim() || "",
         fullAddress: addr,
-        durationMinutes: Number(document.getElementById("rv-custom-duration")?.value || 45),
+        durationMinutes: hhmmToMins(document.getElementById("rv-custom-duration")?.value) || 45,
         weeklyHours: null, lat, lng, recognized: !!lat, temporary: true
       });
       showToast("Tappa aggiunta — premi Ricalcola");
@@ -4628,7 +4640,7 @@ function bindEvents() {
       if (!customer || !addr) { showToast("Cliente e indirizzo obbligatori"); return; }
       const lat = parseFloat(document.getElementById("rv-custom-lat")?.value) || null;
       const lng = parseFloat(document.getElementById("rv-custom-lng")?.value) || null;
-      const duration = Number(document.getElementById("rv-custom-duration")?.value || 45);
+      const duration = hhmmToMins(document.getElementById("rv-custom-duration")?.value) || 45;
       try {
         const saved = await api("/api/addresses", { method: "POST", body: JSON.stringify({
           customer, location: document.getElementById("rv-custom-location")?.value?.trim() || "",
