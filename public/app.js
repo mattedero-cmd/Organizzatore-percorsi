@@ -229,15 +229,80 @@ function updateGreeting() {
   const eyebrow = document.querySelector(".topbar .eyebrow");
   const h1 = document.querySelector(".topbar h1");
   if (!eyebrow || !h1) return;
-  if (nick) {
-    const h = new Date().getHours();
-    const saluto = h < 5 ? "Buonanotte" : h < 12 ? "Buongiorno" : h < 18 ? "Buon pomeriggio" : "Buonasera";
-    eyebrow.textContent = saluto + ",";
-    h1.textContent = nick;
-  } else {
+
+  if (!nick) {
     eyebrow.textContent = "Pianificazione giornaliera";
     h1.textContent = "Percorsi lavoro";
+    return;
   }
+
+  const now = new Date();
+  const h = now.getHours();
+  const todayStr = now.toISOString().slice(0, 10);
+
+  // Cerca un giro programmato per oggi
+  const todayRoute = (state.savedRoutes || []).find(r => r.scheduledDate === todayStr);
+  const result = state.lastResult;
+  const hasActiveRoute = !!(todayRoute || result?.rows?.length);
+
+  let eyebrowText = "";
+  let h1Text = nick;
+
+  if (hasActiveRoute) {
+    // Messaggi contestuali al giro attivo
+    const route = result || (todayRoute ? { rows: todayRoute.plannedStops || [], summary: todayRoute } : null);
+    const stops = result?.rows?.filter(r => !r.type) || [];
+    const lunchRow = result?.rows?.find(r => r.type === "lunch");
+    const restRows = result?.rows?.filter(r => r.type === "rest") || [];
+
+    if (h < 7) {
+      eyebrowText = "Partenza presto oggi —";
+      h1Text = `${stops.length} tappe in programma`;
+    } else if (result?.summary?.dayStart && h < 10) {
+      eyebrowText = "Buona giornata,";
+      h1Text = `Partenza alle ${result.summary.dayStart}`;
+    } else if (lunchRow && h >= 11 && h < 13) {
+      eyebrowText = "Quasi ora di pranzo,";
+      h1Text = `${stops.length} tappe oggi`;
+    } else if (lunchRow && h >= 13 && h < 15) {
+      eyebrowText = "Buon pranzo,";
+      h1Text = nick;
+    } else if (result?.finalLeg?.arrivalTime && h >= 15) {
+      eyebrowText = "Rientro previsto alle";
+      h1Text = result.finalLeg.arrivalTime;
+    } else if (stops.length) {
+      const done = stops.filter(s => {
+        const t = s.serviceEndTime ? (parseInt(s.serviceEndTime.split(":")[0]) * 60 + parseInt(s.serviceEndTime.split(":")[1] || 0)) : null;
+        return t !== null && t < h * 60 + now.getMinutes();
+      }).length;
+      eyebrowText = done > 0 ? `${done} di ${stops.length} tappe completate —` : `${stops.length} tappe oggi —`;
+      h1Text = nick;
+    } else {
+      eyebrowText = "Giro in corso,";
+    }
+  } else {
+    // Nessun giro oggi — saluto orario
+    if (h >= 0 && h < 5) {
+      eyebrowText = "Meglio dormire..";
+      h1Text = nick;
+    } else if (h < 6) {
+      eyebrowText = "Di buon'ora oggi,";
+    } else if (h < 12) {
+      eyebrowText = "Buongiorno,";
+    } else if (h < 14) {
+      eyebrowText = "Buon pranzo,";
+    } else if (h < 18) {
+      eyebrowText = "Buon pomeriggio,";
+    } else if (h < 22) {
+      eyebrowText = "Buonasera,";
+    } else {
+      eyebrowText = "Lavori a quest'ora?";
+      h1Text = nick;
+    }
+  }
+
+  eyebrow.textContent = eyebrowText;
+  h1.textContent = h1Text;
 }
 
 const _splashShown = Date.now();
@@ -1361,6 +1426,7 @@ function renderRoute() {
             </div>
             ${renderWeeklyHoursSection(r.customWeeklyHours || null)}
             <div class="actions" style="margin-top:8px;">
+              <button type="button" class="btn ghost" id="add-temp-stop">+ Usa senza salvare</button>
               <button type="button" class="btn" id="add-custom-stop">+ Salva e aggiungi</button>
             </div>
           </div>
@@ -3775,7 +3841,7 @@ function openMapPicker() {
 
 // ── openMapPickerForField ─────────────────────────────────────────────────────
 
-function openMapPickerForField({ labelEl, addressEl, latEl, lngEl, onConfirm }) {
+function openMapPickerForField({ labelEl, addressEl, latEl, lngEl, onConfirm, onUseDirectly }) {
   const startLat = Number(latEl?.value) || 46.07;
   const startLng = Number(lngEl?.value) || 11.12;
   let pickedLat = startLat, pickedLng = startLng;
@@ -3887,7 +3953,21 @@ function openMapPickerForField({ labelEl, addressEl, latEl, lngEl, onConfirm }) 
       if (onConfirm) onConfirm(label, address, pickedLat, pickedLng);
       modal.remove();
     };
-    document.getElementById("map-picker-field-confirm").onclick = () => applyPick(false);
+
+    // When called from manual stop panel, "Usa" adds stop directly without saving
+    const confirmBtn = document.getElementById("map-picker-field-confirm");
+    if (onUseDirectly) {
+      confirmBtn.textContent = "✓ Usa come tappa";
+      confirmBtn.onclick = () => {
+        const label = pickedPlace?.name || "";
+        const address = pickedPlace?.formatted_address || pickedAddress || "";
+        if (!address) { showToast("Seleziona un luogo sulla mappa"); return; }
+        onUseDirectly(label, address, pickedLat, pickedLng);
+        modal.remove();
+      };
+    } else {
+      confirmBtn.onclick = () => applyPick(false);
+    }
     document.getElementById("map-picker-field-save").onclick = () => applyPick(true);
     document.getElementById("map-picker-field-cancel").onclick = () => modal.remove();
   });
@@ -4201,6 +4281,29 @@ function bindEvents() {
       return;
     }
 
+    if (e.target.closest("#add-temp-stop")) {
+      updateRouteFromForm();
+      if (!state.route.customAddress) { showToast("Indirizzo obbligatorio"); return; }
+      const lat = parseFloat(document.getElementById("rp-custom-lat")?.value) || null;
+      const lng = parseFloat(document.getElementById("rp-custom-lng")?.value) || null;
+      state.route.stops.push({
+        uid: crypto.randomUUID(),
+        addressId: null,
+        customer: state.route.customCustomer || state.route.customAddress.split(",")[0] || "Tappa provvisoria",
+        location: state.route.customLocation || "",
+        fullAddress: state.route.customAddress,
+        durationMinutes: state.route.customDuration || 45,
+        weeklyHours: null,
+        lat, lng,
+        recognized: true,
+        temporary: true
+      });
+      Object.assign(state.route, { customCustomer: "", customLocation: "", customAddress: "", customDuration: 45, customWeeklyHours: null });
+      render();
+      showToast("Tappa aggiunta (non salvata in archivio)");
+      return;
+    }
+
     if (e.target.closest("#add-custom-stop")) {
       updateRouteFromForm();
       if (!state.route.customAddress || !state.route.customCustomer) { showToast("Cliente e indirizzo obbligatori"); return; }
@@ -4316,7 +4419,24 @@ function bindEvents() {
         labelEl: document.querySelector("#rp-custom-customer"),
         addressEl: document.querySelector("#rp-custom-address"),
         latEl: document.querySelector("#rp-custom-lat"),
-        lngEl: document.querySelector("#rp-custom-lng")
+        lngEl: document.querySelector("#rp-custom-lng"),
+        onUseDirectly: (label, address, lat, lng) => {
+          state.route.stops.push({
+            uid: crypto.randomUUID(),
+            addressId: null,
+            customer: label || address.split(",")[0] || "Tappa provvisoria",
+            location: "",
+            fullAddress: address,
+            durationMinutes: state.route.customDuration || 45,
+            weeklyHours: null,
+            lat, lng,
+            recognized: true,
+            temporary: true
+          });
+          Object.assign(state.route, { customCustomer: "", customLocation: "", customAddress: "", customDuration: 45 });
+          render();
+          showToast("Tappa aggiunta (non salvata in archivio)");
+        }
       });
       return;
     }
