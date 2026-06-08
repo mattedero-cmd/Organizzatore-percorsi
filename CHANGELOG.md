@@ -5,6 +5,10 @@
 
 ---
 
+## v4.008 — 2026-06-08
+- Fix layout card tappa: campo Durata ora compatto (88px) su riga orizzontale con gli orari alla sua destra
+- Fix layout campi Data/Partenza/Entro le: ridotti ulteriormente (~10px) per evitare overflow su schermi piccoli
+
 ## v4.001 — 2026-06-08
 - Guida app riscritta con icone SVG al posto delle emoji
 - Tutte le nuove funzioni documentate nella guida

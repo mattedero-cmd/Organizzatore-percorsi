@@ -1203,8 +1203,23 @@ textarea:focus {
 
 .stop-fields {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+}
+.stop-fields .field {
+  display: flex;
+  align-items: center;
   gap: 6px;
+  font-size: 0.85rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.stop-fields .field input[type="time"] {
+  width: 88px;
+  padding: 4px 6px;
+  font-size: 0.85rem;
 }
 
 .stop-options {
@@ -2751,7 +2766,7 @@ tbody tr:last-child td {
 .rp-when-time {
   flex: 1;
   min-width: 0;
-  max-width: calc(33.33% - 8px);
+  max-width: calc(33.33% - 18px);
   display: flex;
   flex-direction: column;
   gap: 6px;
