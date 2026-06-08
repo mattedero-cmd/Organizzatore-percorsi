@@ -127,7 +127,8 @@ function openingLabel(stop) {
   return parts.join(" / ") || "Non indicato";
 }
 
-function scheduleStop(arrival, stop) {
+function scheduleStop(arrival, stop, opts = {}) {
+  const { lunchEnabled = false, lunchOpen = null, lunchDuration = 45 } = opts;
   // Fixed time window set by user (timeFrom/timeTo): overrides all opening hours
   if (stop.timeFrom && stop.timeTo) {
     const wStart = parseTime(stop.timeFrom);
@@ -138,7 +139,25 @@ function scheduleStop(arrival, stop) {
         // Lavoro DEVE iniziare a wStart e finire a wEnd — durata implicita
         const waitMinutes = Math.max(0, wStart - arrival);
         if (arrival > wEnd) warnings.push({ msg: "arrivo dopo la finestra fissa impostata", level: "error" });
-        return { split: false, serviceStart: wStart, serviceEnd: wEnd, waitMinutes, warnings };
+
+        // Lunch split: if the fixed window spans the lunch break
+        if (lunchEnabled && lunchOpen !== null && wStart < lunchOpen && wEnd > lunchOpen + lunchDuration) {
+          const morningWork = lunchOpen - wStart;
+          const afternoonWork = wEnd - (lunchOpen + lunchDuration);
+          return {
+            split: true,
+            morningStart: wStart, morningEnd: lunchOpen, morningWork,
+            afternoonStart: lunchOpen + lunchDuration, afternoonEnd: wEnd, afternoonWork,
+            waitMinutes, warnings,
+            effectiveDuration: morningWork + afternoonWork,
+            fixedWindow: true, lunchIncluded: true
+          };
+        }
+
+        return {
+          split: false, serviceStart: wStart, serviceEnd: wEnd, waitMinutes, warnings,
+          effectiveDuration: wEnd - wStart, fixedWindow: true
+        };
       } else {
         // Disponibilità: lavoro dura durationMinutes, può iniziare in qualsiasi momento in [wStart, wEnd]
         const serviceStart = Math.max(arrival, wStart);
@@ -258,7 +277,9 @@ function readLeg(matrix, from, to) {
 }
 
 function evaluateOrder(order, context) {
-  const { nodes, matrix, startMinutes, firstArrivalRequired, rates, timingMode, arrivalLeadMinutes, departureLatestMinutes } = context;
+  const { nodes, matrix, startMinutes, firstArrivalRequired, rates, timingMode, arrivalLeadMinutes, departureLatestMinutes,
+          lunchEnabled = false, lunchOpen = null, lunchDuration = 45 } = context;
+  const lunchOpts = { lunchEnabled, lunchOpen, lunchDuration };
   const rows = [];
   let currentNodeIndex = 0;
   let currentTime = startMinutes;
@@ -306,7 +327,8 @@ function evaluateOrder(order, context) {
 
     const scheduled = scheduleStop(
       index === 0 && targetArrival !== null ? Math.max(arrival, targetArrival) : arrival,
-      stop
+      stop,
+      lunchOpts
     );
     // Deduplicate by msg
     const seen = new Set();
@@ -348,19 +370,25 @@ function evaluateOrder(order, context) {
     };
 
     if (scheduled.split) {
-      rows.push({ ...baseRow, stopPart: "morning", serviceStartTime: formatTime(scheduled.morningStart), durationMinutes: scheduled.morningWork, serviceEndTime: formatTime(scheduled.morningEnd), warnings: rowWarnings });
-      rows.push({ ...baseRow, stopPart: "afternoon", departureTime: formatTime(scheduled.morningEnd), driveMinutes: 0, baseDriveMinutes: 0, driveBufferMinutes: 0, km: 0, arrivalTime: formatTime(scheduled.afternoonStart), serviceStartTime: formatTime(scheduled.afternoonStart), durationMinutes: scheduled.afternoonWork, serviceEndTime: formatTime(scheduled.afternoonEnd), warnings: [], targetArrivalTime: "" });
-      totalWaitMinutes += scheduled.waitMinutes + (scheduled.afternoonStart - scheduled.morningEnd);
+      const fwProps = scheduled.fixedWindow ? { fixedWindow: true, lunchIncluded: !!scheduled.lunchIncluded } : {};
+      rows.push({ ...baseRow, ...fwProps, stopPart: "morning", serviceStartTime: formatTime(scheduled.morningStart), durationMinutes: scheduled.morningWork, serviceEndTime: formatTime(scheduled.morningEnd), warnings: rowWarnings });
+      rows.push({ ...baseRow, ...fwProps, stopPart: "afternoon", departureTime: formatTime(scheduled.morningEnd), driveMinutes: 0, baseDriveMinutes: 0, driveBufferMinutes: 0, km: 0, arrivalTime: formatTime(scheduled.afternoonStart), serviceStartTime: formatTime(scheduled.afternoonStart), durationMinutes: scheduled.afternoonWork, serviceEndTime: formatTime(scheduled.afternoonEnd), warnings: [], targetArrivalTime: "" });
+      totalWaitMinutes += scheduled.waitMinutes;
+      if (!scheduled.lunchIncluded) {
+        totalWaitMinutes += (scheduled.afternoonStart - scheduled.morningEnd);
+      }
       currentTime = scheduled.afternoonEnd;
     } else {
-      rows.push({ ...baseRow, serviceStartTime: formatTime(scheduled.serviceStart), durationMinutes: stop.durationMinutes, serviceEndTime: formatTime(scheduled.serviceEnd), warnings: rowWarnings });
+      const effDur = scheduled.effectiveDuration ?? stop.durationMinutes;
+      const fwProps = scheduled.fixedWindow ? { fixedWindow: true } : {};
+      rows.push({ ...baseRow, ...fwProps, serviceStartTime: formatTime(scheduled.serviceStart), durationMinutes: effDur, serviceEndTime: formatTime(scheduled.serviceEnd), warnings: rowWarnings });
       totalWaitMinutes += scheduled.waitMinutes;
       currentTime = scheduled.serviceEnd;
     }
 
     totalKm += leg.km;
     totalDriveMinutes += leg.driveMinutes;
-    totalWorkMinutes += stop.durationMinutes;
+    totalWorkMinutes += scheduled.effectiveDuration ?? stop.durationMinutes;
     allWarnings.push(...rowWarnings);
     currentNodeIndex = stop.nodeIndex;
   }
@@ -515,6 +543,17 @@ function findNearestRestStop(restStops, fromLat, fromLng, toLat, toLng, maxPerpK
 
 function shiftRowTimes(row, minutes) {
   if (!minutes) return row;
+  if (row.fixedWindow) {
+    // Fixed-window stops have absolute service times.
+    // Afternoon part: all times anchored to fixed anchors — no shift.
+    if (row.stopPart === "afternoon") return row;
+    // First/only part: shift only the travel leg (dep + arr), keep service times fixed.
+    return {
+      ...row,
+      departureTime: formatTime(parseTime(row.departureTime) + minutes),
+      arrivalTime: formatTime(parseTime(row.arrivalTime) + minutes)
+    };
+  }
   return {
     ...row,
     departureTime: formatTime(parseTime(row.departureTime) + minutes),
@@ -572,18 +611,36 @@ async function insertBreaks(rows, options) {
 
   if (lunchBreakEnabled) {
     let placed = false;
+
+    // 1. Fixed-window stop spanning lunch: insert lunch at fixed time (no timeShift)
     for (let i = 0; i < rows.length; i++) {
-      const dep = parseTime(rows[i].departureTime);
-      if (dep >= LUNCH_OPEN && dep <= LUNCH_CLOSE) {
-        insertions.push(await makeLunchEntry(i, rows[i - 1] ?? null, rows[i], dep));
+      if (rows[i].lunchIncluded && rows[i].stopPart === "morning") {
+        const lunchAt = parseTime(rows[i].serviceEndTime);
+        const lunchEntry = await makeLunchEntry(i + 1, rows[i], rows[i + 1] ?? null, lunchAt);
+        lunchEntry.lunchForFixed = true;
+        lunchEntry.fixedLunchAt = lunchAt;
+        lunchEntry.noTimeShift = true;
+        insertions.push(lunchEntry);
         placed = true;
         break;
       }
     }
-    if (!placed && rows.length > 0) {
-      const lastEnd = parseTime(rows[rows.length - 1].serviceEndTime);
-      if (lastEnd >= LUNCH_OPEN && lastEnd <= LUNCH_CLOSE) {
-        insertions.push(await makeLunchEntry(rows.length, rows[rows.length - 1], null, lastEnd));
+
+    // 2. Normal scanning (only if not already placed by fixed-window logic)
+    if (!placed) {
+      for (let i = 0; i < rows.length; i++) {
+        const dep = parseTime(rows[i].departureTime);
+        if (dep >= LUNCH_OPEN && dep <= LUNCH_CLOSE) {
+          insertions.push(await makeLunchEntry(i, rows[i - 1] ?? null, rows[i], dep));
+          placed = true;
+          break;
+        }
+      }
+      if (!placed && rows.length > 0) {
+        const lastEnd = parseTime(rows[rows.length - 1].serviceEndTime);
+        if (lastEnd >= LUNCH_OPEN && lastEnd <= LUNCH_CLOSE) {
+          insertions.push(await makeLunchEntry(rows.length, rows[rows.length - 1], null, lastEnd));
+        }
       }
     }
   }
@@ -620,6 +677,10 @@ async function insertBreaks(rows, options) {
     if (insertions.some(ins => ins.beforeIndex === beforeIndex && Math.abs((ins.driveOffset||0) - driveOffset) < 5)) {
       cumulative = 0;
       return true;
+    }
+    // Don't insert rest stops before a fixed-window afternoon continuation
+    if (rows[beforeIndex]?.fixedWindow && rows[beforeIndex]?.stopPart === "afternoon") {
+      return false;
     }
     // Prefer saved stops near the route segment (perpendicular distance ≤ 2 km)
     let spot = findNearestRestStop(restStops, refLat, refLng, toLat, toLng, 2.0, breakTimeMin, scheduledDate);
@@ -702,11 +763,18 @@ async function insertBreaks(rows, options) {
   for (let i = 0; i <= rows.length; i++) {
     while (pending.length && pending[0].beforeIndex === i) {
       const brk = pending.shift();
-      const baseDep = i < rows.length
-        ? parseTime(rows[i].departureTime) + timeShift
-        : parseTime(rows[rows.length - 1].serviceEndTime) + timeShift;
-      const refDep = baseDep + (brk.driveOffset || 0);
-      const brkEnd = refDep + brk.duration;
+      let refDep, brkEnd;
+      if (brk.lunchForFixed) {
+        // Fixed-window lunch: use the exact baked-in time, no shift
+        refDep = brk.fixedLunchAt;
+        brkEnd = refDep + brk.duration;
+      } else {
+        const baseDep = i < rows.length
+          ? parseTime(rows[i].departureTime) + timeShift
+          : parseTime(rows[rows.length - 1].serviceEndTime) + timeShift;
+        refDep = baseDep + (brk.driveOffset || 0);
+        brkEnd = refDep + brk.duration;
+      }
       result.push({
         type: brk.type,
         stopNumber: null,
@@ -727,9 +795,17 @@ async function insertBreaks(rows, options) {
         km: 0,
         legSource: "break"
       });
-      timeShift += brk.duration;
+      if (!brk.noTimeShift) timeShift += brk.duration;
     }
-    if (i < rows.length) result.push(shiftRowTimes(rows[i], timeShift));
+    if (i < rows.length) {
+      result.push(shiftRowTimes(rows[i], timeShift));
+      // After the last part of a fixed-window stop, reset timeShift.
+      // Subsequent stops were planned from the fixed window's serviceEndTime (absolute),
+      // so they must not be shifted by breaks inserted before the fixed window.
+      if (rows[i].fixedWindow && (!rows[i].stopPart || rows[i].stopPart === "afternoon")) {
+        timeShift = 0;
+      }
+    }
   }
 
   return { rows: result, addedMinutes: timeShift };
@@ -809,7 +885,13 @@ export async function planRoute(payload, settings, restStops = []) {
   const reorderable = lockedFirst ? stopsWithNodeIndex.slice(1) : stopsWithNodeIndex;
 
   const departureLatestMinutes = payload.departureLatest ? parseTime(payload.departureLatest) : null;
-  const context = { nodes, matrix, startMinutes, firstArrivalRequired, rates, timingMode, arrivalLeadMinutes, departureLatestMinutes };
+  const lunchBreakEnabled = payload.lunchBreak !== false && (payload.lunchBreak === true || settings.lunchBreakEnabled !== false);
+  const lunchBreakMinutes = Number(payload.lunchBreakMinutes ?? settings.lunchBreakMinutes ?? 45);
+  const _parseLunchT = v => { if (v == null) return null; if (typeof v === "number") return v; const [h, m] = String(v).split(":"); return Number(h) * 60 + Number(m || 0); };
+  const lunchOpenMin = _parseLunchT(settings?.lunchOpenTime) ?? (11 * 60 + 30);
+  const lunchCloseMin = _parseLunchT(settings?.lunchCloseTime) ?? (14 * 60);
+  const context = { nodes, matrix, startMinutes, firstArrivalRequired, rates, timingMode, arrivalLeadMinutes, departureLatestMinutes,
+                    lunchEnabled: lunchBreakEnabled, lunchOpen: lunchOpenMin, lunchClose: lunchCloseMin, lunchDuration: lunchBreakMinutes };
   const manualOrder = Boolean(payload.manualOrder || payload.lockOrder);
   const candidateOrders = manualOrder
     ? [reorderable]
@@ -825,8 +907,6 @@ export async function planRoute(payload, settings, restStops = []) {
   }
 
   // Insert lunch break and rest stops into the timeline
-  const lunchBreakEnabled = payload.lunchBreak !== false && (payload.lunchBreak === true || settings.lunchBreakEnabled !== false);
-  const lunchBreakMinutes = Number(payload.lunchBreakMinutes ?? settings.lunchBreakMinutes ?? 45);
   const activeRestStops = restStops.filter(s => s.addressType === "rest");
   const activeRestaurantStops = restStops.filter(s => s.addressType === "restaurant");
   const maxReturnTime = settings?.maxReturnTime ? parseTime(settings.maxReturnTime) : null;
