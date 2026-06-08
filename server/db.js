@@ -714,6 +714,12 @@ export async function getSession(token) {
   return Number(rows[0].user_id);
 }
 
+export async function extendSession(token) {
+  if (!token) return;
+  const newExpiry = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+  await runSql(`UPDATE sessions SET expires_at = ${sqlValue(newExpiry)} WHERE token = ${sqlValue(token)};`);
+}
+
 export async function deleteSession(token) {
   if (!token) return;
   await runSql(`DELETE FROM sessions WHERE token = ${sqlValue(token)};`);

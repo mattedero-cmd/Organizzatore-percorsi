@@ -25,6 +25,7 @@ import {
   updateUserNickname,
   createSession,
   getSession,
+  extendSession,
   deleteSession,
   countRoutesByDate,
   hasAnyUser,
@@ -192,7 +193,7 @@ function parseCookies(header) {
 function sessionCookie(token, remember = true) {
   const secure = process.env.NODE_ENV === "production" ? "; Secure" : "";
   const maxAge = remember ? "; Max-Age=2592000" : ""; // 30 days or session cookie
-  return `session=${token}; HttpOnly; Path=/; SameSite=Strict${maxAge}${secure}`;
+  return `session=${token}; HttpOnly; Path=/; SameSite=Lax${maxAge}${secure}`;
 }
 
 async function authenticate(request) {
@@ -292,14 +293,24 @@ async function handleApi(request, response) {
     // ── Auth routes (no session required) ────────────────────────────────────
     if (url.pathname.startsWith("/api/auth/")) {
       if (method === "GET" && url.pathname === "/api/auth/me") {
-        const userId = await authenticate(request);
+        const cookies = parseCookies(request.headers.cookie);
+        const token = cookies.session || "";
+        const userId = await getSession(token);
         if (!userId) {
           const noUsers = !(await hasAnyUser());
           return sendJson(response, 401, { error: "Non autenticato", setup: noUsers });
         }
         const user = await getUserById(userId);
         if (!user) return sendJson(response, 401, { error: "Utente non trovato" });
-        return sendJson(response, 200, { id: user.id, username: user.username, nickname: user.nickname || null });
+        // Sliding session: rinnova i 30 giorni ad ogni accesso
+        extendSession(token).catch(() => {});
+        response.writeHead(200, {
+          "Content-Type": "application/json; charset=utf-8",
+          "Set-Cookie": sessionCookie(token),
+          ...SECURITY_HEADERS
+        });
+        response.end(JSON.stringify({ id: user.id, username: user.username, nickname: user.nickname || null }));
+        return;
       }
 
       if (method === "PUT" && url.pathname === "/api/auth/profile") {

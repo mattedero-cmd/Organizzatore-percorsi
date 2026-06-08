@@ -115,8 +115,12 @@ async function api(path, options = {}) {
   });
   const payload = await res.json().catch(() => ({}));
   if (res.status === 401) {
-    state.user = null;
-    renderAuthScreen(false);
+    // Don't force logout during initial load (when user was just verified by /api/auth/me)
+    if (state._authVerified) {
+      state.user = null;
+      state._authVerified = false;
+      renderAuthScreen(false);
+    }
     throw new Error("Sessione scaduta. Effettua di nuovo il login.");
   }
   if (!res.ok) throw new Error(payload.error || `Errore ${res.status}`);
@@ -5137,6 +5141,7 @@ async function init() {
       return;
     }
     state.user = me;
+    state._authVerified = true;
     await initApp();
     updateGreeting();
     hideSplash();
