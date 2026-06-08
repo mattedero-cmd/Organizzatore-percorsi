@@ -2725,10 +2725,10 @@ tbody tr:last-child td {
 .rp-when-date input,
 .rp-when-time input {
   width: 100%;
-  min-height: 42px;
+  min-height: unset;
   border: 1px solid var(--line-strong);
   border-radius: var(--radius);
-  padding: 9px 10px;
+  padding: 5px 8px;
   background: var(--bg2);
   color: var(--text);
   font-size: 16px;
