@@ -70,11 +70,21 @@ function normalizeStop(stop, index, dayOfWeek = null) {
     lat: stop.lat ?? null,
     lng: stop.lng ?? null,
     ignoreHours: stop.ignoreHours === true,
-    fixedFirst: stop.fixedFirst === true
+    fixedFirst: stop.fixedFirst === true,
+    timeFrom: stop.timeFrom || "",
+    timeTo: stop.timeTo || ""
   };
 }
 
 function getWindows(stop) {
+  // Fixed time window from user: overrides opening hours
+  if (stop.timeFrom && stop.timeTo) {
+    const start = parseTime(stop.timeFrom);
+    const end = parseTime(stop.timeTo);
+    if (start !== null && end !== null && end > start) {
+      return [{ label: "Finestra oraria", start, end }];
+    }
+  }
   if (stop.closedToday) return [];
   const windows = [];
 
@@ -115,6 +125,21 @@ function openingLabel(stop) {
 }
 
 function scheduleStop(arrival, stop) {
+  // Fixed time window set by user (timeFrom/timeTo): overrides all opening hours
+  if (stop.timeFrom && stop.timeTo) {
+    const wStart = parseTime(stop.timeFrom);
+    const wEnd = parseTime(stop.timeTo);
+    const warnings = [];
+    if (wStart !== null && wEnd !== null && wEnd > wStart) {
+      const serviceStart = Math.max(arrival, wStart);
+      const waitMinutes = Math.max(0, serviceStart - arrival);
+      if (arrival > wEnd) warnings.push({ msg: "arrivo dopo la finestra oraria impostata", level: "error" });
+      else if (arrival < wStart) warnings.push({ msg: "arrivo prima della finestra impostata", level: "info" });
+      const serviceEnd = Math.min(serviceStart + stop.durationMinutes, wEnd);
+      return { split: false, serviceStart, serviceEnd, waitMinutes, warnings };
+    }
+  }
+
   // ignoreHours: work starts at arrival regardless of opening hours
   if (stop.ignoreHours) {
     return { split: false, serviceStart: arrival, serviceEnd: arrival + stop.durationMinutes, waitMinutes: 0, warnings: [] };

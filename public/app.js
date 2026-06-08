@@ -1004,7 +1004,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.016 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.017 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -1383,7 +1383,14 @@ function renderStops() {
       </div>
       <div class="stop-fields">
         <label class="field">Durata<input type="time" value="${minsToHHMM(stop.durationMinutes)}" data-stop="${stop.uid}:durationMinutes" data-duration-hhmm /></label>
-        <div class="field">${stopHoursHint(stop, state.route.scheduledDate)}</div>
+        <div class="field">${stop.timeFrom && stop.timeTo ? `<span class="stop-window-badge">${_svg('<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',13)} ${escapeHtml(stop.timeFrom)}–${escapeHtml(stop.timeTo)}</span>` : stopHoursHint(stop, state.route.scheduledDate)}</div>
+      </div>
+      <div class="stop-window-row">
+        <span class="stop-opt-label">Vincola orario</span>
+        <div class="stop-window-inputs">
+          <label class="stop-window-field">Dalle<input type="time" value="${escapeHtml(stop.timeFrom || "")}" data-stop="${stop.uid}:timeFrom" /></label>
+          <label class="stop-window-field">Alle<input type="time" value="${escapeHtml(stop.timeTo || "")}" data-stop="${stop.uid}:timeTo" /></label>
+        </div>
       </div>
       <div class="stop-options">
         <label class="stop-opt-check" title="Lavora all'arrivo anche se il locale è chiuso">
@@ -2791,6 +2798,8 @@ async function replanFromResult() {
       weeklyHours: r.weeklyHours ?? null,
       ignoreHours: r.ignoreHours === true,
       fixedFirst: r.fixedFirst === true,
+      timeFrom: r.timeFrom || "",
+      timeTo: r.timeTo || "",
       recognized: true
     }));
 

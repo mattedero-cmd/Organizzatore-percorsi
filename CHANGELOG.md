@@ -5,6 +5,9 @@
 
 ---
 
+## v4.017 — 2026-06-08
+- Nuovo: vincolo orario "Dalle/Alle" per ogni tappa — fissa la tappa in una finestra oraria, il planner pianifica tutto il resto di conseguenza
+
 ## v4.016 — 2026-06-08
 - Campo "Rientro max" pre-compilato con l'orario default dalle impostazioni (maxReturnTime), modificabile per ogni giro
 

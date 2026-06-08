@@ -1222,6 +1222,50 @@ textarea:focus {
   font-size: 0.85rem;
 }
 
+.stop-window-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  flex-wrap: wrap;
+}
+.stop-opt-label {
+  font-size: 0.83rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.stop-window-inputs {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.stop-window-field {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.83rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.stop-window-field input[type="time"] {
+  width: 84px;
+  padding: 3px 5px;
+  font-size: 0.83rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--bg2);
+  color: var(--text);
+  box-sizing: border-box;
+}
+.stop-window-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.82rem;
+  color: var(--primary);
+  font-weight: 600;
+}
+
 .stop-options {
   display: flex;
   flex-direction: column;
