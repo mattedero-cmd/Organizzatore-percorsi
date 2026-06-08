@@ -2131,6 +2131,8 @@ function renderResult() {
         <a class="btn primary" href="${navUrl(result, pref)}" target="_blank" rel="noopener">${I.navigate(14)} Apri percorso completo</a>
       </div>
 
+      ${renderResultEditPanels(result)}
+
       ${renderManualOrder(result)}
 
       <div class="result-list">
@@ -2621,6 +2623,177 @@ function addressToStop(address, durationOverride = null) {
     durationMinutes: Number(durationOverride || address.defaultDuration || 45),
     lat: address.lat, lng: address.lng, recognized: true
   };
+}
+
+// ── replan from result view ───────────────────────────────────────────────────
+
+function _readResultEditForm() {
+  const f = document.querySelector("#rv-settings-form");
+  if (!f) return {};
+  const fd = new FormData(f);
+  return Object.fromEntries(fd.entries());
+}
+
+async function replanFromResult() {
+  const result = normalizeSavedRoute(state.result);
+  const v = _readResultEditForm();
+
+  // Reconstruct stops from current result rows (skip breaks)
+  const stops = (result.rows || [])
+    .filter(r => !r.type)
+    .filter((r, i, arr) => !r.stopPart || r.stopPart === "morning" || arr.findIndex(x => x.addressId === r.addressId && !x.stopPart) === i)
+    .map(r => ({
+      uid: crypto.randomUUID(),
+      addressId: r.addressId ?? null,
+      customer: r.customer, location: r.location,
+      fullAddress: r.address, notes: r.notes,
+      durationMinutes: Number(r.durationMinutes || 45),
+      lat: r.lat, lng: r.lng,
+      weeklyHours: r.weeklyHours ?? null,
+      ignoreHours: r.ignoreHours === true,
+      fixedFirst: r.fixedFirst === true,
+      recognized: true
+    }));
+
+  // Add any newly queued stops from the result-view add-stop panel
+  for (const s of (state.resultPendingStops || [])) stops.push(s);
+  state.resultPendingStops = [];
+
+  if (!stops.length) { showToast("Nessuna tappa nel giro"); return; }
+
+  const timingMode = v.timingMode || result.timingMode || "first_open_minus";
+  const lunchBreak = v.lunchBreak === "on" || v.lunchBreak === true;
+  const routePayload = {
+    name: result.name || "Percorso giornaliero",
+    id: result.id,
+    scheduledDate: v.scheduledDate || result.scheduledDate || "",
+    start: { label: result.start?.label || "", address: v.startAddress || result.start?.address || "" },
+    end: { sameAsStart: v.endSameAsStart === "on", label: result.end?.label || "", address: v.endAddress || result.end?.address || "" },
+    startTime: v.startTime || result.summary?.dayStart || "07:00",
+    timingMode,
+    arrivalLeadMinutes: Number(v.arrivalLeadMinutes ?? result.arrivalLeadMinutes ?? 10),
+    firstArrivalTime: v.firstArrivalTime || result.firstArrivalTime || "08:30",
+    firstArrivalRequired: v.firstArrivalRequired || result.firstArrivalRequired || "",
+    stops, rates: state.settings,
+    lunchBreak,
+    lunchBreakMinutes: Number(v.lunchBreakMinutes || result.lunchBreakMinutes || 45)
+  };
+
+  state.planning = true;
+  showSpinner("Ricalcolo percorso…");
+  render();
+  try {
+    state.result = await api("/api/plan", { method: "POST", body: JSON.stringify(routePayload) });
+    state.manualOrderRows = null;
+    await refreshSavedRoutes();
+    setActiveTab("result");
+    showToast("Percorso ricalcolato");
+  } catch (e) {
+    showToast(e.message);
+  } finally {
+    hideSpinner();
+    state.planning = false;
+    render();
+  }
+}
+
+function renderResultEditPanels(result) {
+  const s = result.summary || {};
+  const hasLunch = result.rows?.some(r => r.type === "lunch");
+  const timingMode = result.timingMode || "first_open_minus";
+  const startAddr = result.start?.address || "";
+  const endAddr = result.end?.address || "";
+  const endSame = startAddr && startAddr === endAddr;
+  const scheduledDate = result.scheduledDate || "";
+  const lunchBreakMinutes = result.lunchBreakMinutes || 45;
+  const arrivalLeadMinutes = result.arrivalLeadMinutes ?? 10;
+  const firstArrivalTime = result.firstArrivalTime || "08:30";
+
+  return `
+    <details class="rv-panel" id="rv-settings-panel">
+      <summary class="rv-panel-summary">
+        ${I.edit(14)} Modifica impostazioni giro
+      </summary>
+      <form id="rv-settings-form" class="rv-settings-form" onsubmit="return false">
+        <div class="rv-fields">
+          <label class="field">Data<input name="scheduledDate" type="date" value="${escapeHtml(scheduledDate)}" /></label>
+          <label class="field">Partenza<input name="startTime" type="time" value="${escapeHtml(s.dayStart || "07:00")}" /></label>
+        </div>
+        <div class="rv-field-full">
+          <label class="rp-label" style="display:block;margin-bottom:4px;">Modalità arrivo</label>
+          <select name="timingMode" id="rv-timing-mode" style="width:100%;font-size:0.85rem;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--text);">
+            <option value="first_open_minus" ${timingMode === "first_open_minus" ? "selected" : ""}>Prima dell'apertura</option>
+            <option value="arrive_at" ${timingMode === "arrive_at" ? "selected" : ""}>Arrivo a orario fisso</option>
+            <option value="depart_at" ${timingMode === "depart_at" ? "selected" : ""}>Partenza a orario fisso</option>
+          </select>
+        </div>
+        <div class="rv-fields" id="rv-timing-extra">
+          ${timingMode === "first_open_minus" ? `<label class="field">Anticipo (min)<input name="arrivalLeadMinutes" type="number" min="0" max="60" step="5" value="${arrivalLeadMinutes}" /></label>` : ""}
+          ${timingMode === "arrive_at" ? `<label class="field">Arrivo target<input name="firstArrivalTime" type="time" value="${escapeHtml(firstArrivalTime)}" /></label>` : ""}
+        </div>
+        <div class="rv-field-full">
+          <label class="rp-label" style="display:block;margin-bottom:4px;">Partenza da</label>
+          <input name="startAddress" type="text" value="${escapeHtml(startAddr)}" placeholder="Indirizzo di partenza" style="width:100%;box-sizing:border-box;" />
+        </div>
+        <div class="rv-field-full" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <label class="rp-label" style="flex:1;min-width:120px;">Arrivo a</label>
+          <label class="stop-opt-check"><input type="checkbox" name="endSameAsStart" id="rv-end-same" ${endSame ? "checked" : ""} /><span>= partenza</span></label>
+        </div>
+        <div class="rv-field-full" id="rv-end-addr-wrap" ${endSame ? 'style="display:none"' : ""}>
+          <input name="endAddress" type="text" value="${escapeHtml(endAddr)}" placeholder="Indirizzo di arrivo" style="width:100%;box-sizing:border-box;" />
+        </div>
+        <div class="rv-field-full" style="display:flex;align-items:center;gap:12px;padding-top:4px;">
+          <label class="stop-opt-check">
+            <input type="checkbox" name="lunchBreak" ${hasLunch ? "checked" : ""} />
+            <span>${I.fork(14)} Pausa pranzo</span>
+          </label>
+          <input name="lunchBreakMinutes" type="number" min="15" max="120" step="5" value="${lunchBreakMinutes}" style="width:64px;" /> <span class="stop-meta">min</span>
+        </div>
+        <button type="button" class="btn primary" id="rv-replan-btn" style="width:100%;margin-top:10px;">${I.navigate(14)} Ricalcola</button>
+      </form>
+    </details>
+
+    <details class="rv-panel" id="rv-add-stop-panel">
+      <summary class="rv-panel-summary">
+        ${I.plus(14)} Aggiungi tappa al giro
+      </summary>
+      <div class="rv-add-stop-body">
+        <div style="position:relative;">
+          <input id="rv-stop-search" placeholder="Cerca nell'archivio…" autocomplete="off" />
+          <input type="hidden" id="rv-selected-address-id" value="" />
+          <div id="rv-stop-suggestions" class="stop-suggestions"></div>
+        </div>
+        <div class="rp-add-stop-actions" style="margin-top:6px;">
+          <button type="button" class="btn" id="rv-add-saved-stop">${I.plus(14)} Aggiungi dall'archivio</button>
+          <button type="button" class="btn ghost" id="rv-manual-stop-toggle">+ Manuale</button>
+        </div>
+        <div id="rv-manual-stop-panel" style="display:none;margin-top:8px;">
+          <div class="form-grid route-fields">
+            <label class="field">Cliente<input id="rv-custom-customer" /></label>
+            <label class="field">Sede<input id="rv-custom-location" /></label>
+            <label class="field full">Indirizzo<input id="rv-custom-address" /></label>
+            ${state.googleMapsKey ? `<div class="field full" style="padding-top:0"><button type="button" class="btn" id="rv-custom-map-btn">${I.map(14)} Scegli sulla mappa</button></div>` : ""}
+            <input type="hidden" id="rv-custom-lat" value="" />
+            <input type="hidden" id="rv-custom-lng" value="" />
+            <label class="field">Durata (min)<input id="rv-custom-duration" type="number" min="5" step="5" value="45" /></label>
+          </div>
+          <div class="actions" style="margin-top:8px;">
+            <button type="button" class="btn ghost" id="rv-add-temp-stop">+ Usa senza salvare</button>
+            <button type="button" class="btn" id="rv-add-custom-stop">+ Salva e aggiungi</button>
+          </div>
+        </div>
+        ${(state.resultPendingStops || []).length ? `
+          <div style="margin-top:10px;">
+            <p class="rp-label" style="margin-bottom:4px;">In attesa di ricalcolo:</p>
+            ${(state.resultPendingStops || []).map((s, i) => `
+              <div class="rv-pending-stop">
+                <span>${escapeHtml(s.customer)}${s.location ? ` — ${escapeHtml(s.location)}` : ""}</span>
+                <button class="btn danger icon-btn" data-rv-remove-pending="${i}">${I.trash(13)}</button>
+              </div>`).join("")}
+          </div>` : ""}
+        ${(state.resultPendingStops || []).length ? `<button type="button" class="btn primary" id="rv-replan-from-add" style="width:100%;margin-top:8px;">${I.navigate(14)} Ricalcola con le nuove tappe</button>` : ""}
+      </div>
+    </details>`;
 }
 
 // ── plan route ────────────────────────────────────────────────────────────────
@@ -4059,6 +4232,17 @@ function bindEvents() {
       const sug = document.querySelector("#stop-suggestions");
       if (sug) sug.innerHTML = renderStopSuggestions();
     }
+    // rv result-view stop autocomplete
+    if (e.target.id === "rv-stop-search") {
+      const q = e.target.value.trim().toLowerCase();
+      const sug = document.getElementById("rv-stop-suggestions");
+      if (!sug) return;
+      if (!q) { sug.innerHTML = ""; return; }
+      const matches = state.allAddresses.filter(a =>
+        (a.customer || "").toLowerCase().includes(q) || (a.location || "").toLowerCase().includes(q)
+      ).slice(0, 8);
+      sug.innerHTML = matches.map(a => `<div class="suggestion" data-rv-suggest-id="${a.id}">${escapeHtml(a.customer)}${a.location ? ` — ${escapeHtml(a.location)}` : ""}</div>`).join("") || `<div class="suggestion no-result">Nessun risultato</div>`;
+    }
     // stop filter
     if (e.target.id === "stop-filter") {
       state.stopFilter = e.target.value;
@@ -4125,6 +4309,20 @@ function bindEvents() {
     if (tabJump) { setActiveTab(tabJump.dataset.tabJump); return; }
 
     // suggestion item selected
+    // rv result-view suggestion selected
+    const rvSugItem = e.target.closest("[data-rv-suggest-id]");
+    if (rvSugItem) {
+      const id = rvSugItem.dataset.rvSuggestId;
+      const addr = state.allAddresses.find(a => String(a.id) === id);
+      if (addr) {
+        document.getElementById("rv-selected-address-id").value = id;
+        const inp = document.getElementById("rv-stop-search");
+        if (inp) inp.value = addressName(addr);
+        document.getElementById("rv-stop-suggestions").innerHTML = "";
+      }
+      return;
+    }
+
     const sugItem = e.target.closest("[data-suggest-id]");
     if (sugItem) {
       const id = sugItem.dataset.suggestId;
@@ -4195,6 +4393,117 @@ function bindEvents() {
         state.planning = false;
         render();
       }
+      return;
+    }
+
+    // ── result-view: ricalcola ────────────────────────────────────────────────
+    if (e.target.closest("#rv-replan-btn") || e.target.closest("#rv-replan-from-add")) {
+      await replanFromResult();
+      return;
+    }
+
+    // timing mode change → refresh extra fields inline
+    if (e.target.closest("#rv-timing-mode")) {
+      const mode = document.getElementById("rv-timing-mode")?.value;
+      const extra = document.getElementById("rv-timing-extra");
+      if (extra) extra.innerHTML =
+        mode === "first_open_minus" ? `<label class="field">Anticipo (min)<input name="arrivalLeadMinutes" type="number" min="0" max="60" step="5" value="10" /></label>` :
+        mode === "arrive_at" ? `<label class="field">Arrivo target<input name="firstArrivalTime" type="time" value="08:30" /></label>` : "";
+      return;
+    }
+
+    // end-same-as-start toggle
+    if (e.target.id === "rv-end-same") {
+      const wrap = document.getElementById("rv-end-addr-wrap");
+      if (wrap) wrap.style.display = e.target.checked ? "none" : "";
+      return;
+    }
+
+    // rv-add-stop: show manual panel
+    if (e.target.closest("#rv-manual-stop-toggle")) {
+      const panel = document.getElementById("rv-manual-stop-panel");
+      if (panel) panel.style.display = panel.style.display === "none" ? "" : "none";
+      return;
+    }
+
+    // rv-add-stop: add from archive
+    if (e.target.closest("#rv-add-saved-stop")) {
+      const id = document.getElementById("rv-selected-address-id")?.value;
+      const addr = state.allAddresses.find(a => String(a.id) === String(id));
+      if (!addr) { showToast("Seleziona prima un contatto dalla lista"); return; }
+      if (!state.resultPendingStops) state.resultPendingStops = [];
+      state.resultPendingStops.push(addressToStop(addr));
+      document.getElementById("rv-stop-search").value = "";
+      document.getElementById("rv-selected-address-id").value = "";
+      document.getElementById("rv-stop-suggestions").innerHTML = "";
+      showToast(`${addr.customer} aggiunto — premi Ricalcola`);
+      renderResult();
+      return;
+    }
+
+    // rv-add-stop: add temp stop (manual, no archive save)
+    if (e.target.closest("#rv-add-temp-stop")) {
+      const addr = document.getElementById("rv-custom-address")?.value?.trim();
+      if (!addr) { showToast("Indirizzo obbligatorio"); return; }
+      const lat = parseFloat(document.getElementById("rv-custom-lat")?.value) || null;
+      const lng = parseFloat(document.getElementById("rv-custom-lng")?.value) || null;
+      if (!state.resultPendingStops) state.resultPendingStops = [];
+      state.resultPendingStops.push({
+        uid: crypto.randomUUID(), addressId: null,
+        customer: document.getElementById("rv-custom-customer")?.value?.trim() || addr.split(",")[0] || "Tappa provvisoria",
+        location: document.getElementById("rv-custom-location")?.value?.trim() || "",
+        fullAddress: addr,
+        durationMinutes: Number(document.getElementById("rv-custom-duration")?.value || 45),
+        weeklyHours: null, lat, lng, recognized: !!lat, temporary: true
+      });
+      showToast("Tappa aggiunta — premi Ricalcola");
+      renderResult();
+      return;
+    }
+
+    // rv-add-stop: save to archive and add
+    if (e.target.closest("#rv-add-custom-stop")) {
+      const customer = document.getElementById("rv-custom-customer")?.value?.trim();
+      const addr = document.getElementById("rv-custom-address")?.value?.trim();
+      if (!customer || !addr) { showToast("Cliente e indirizzo obbligatori"); return; }
+      const lat = parseFloat(document.getElementById("rv-custom-lat")?.value) || null;
+      const lng = parseFloat(document.getElementById("rv-custom-lng")?.value) || null;
+      const duration = Number(document.getElementById("rv-custom-duration")?.value || 45);
+      try {
+        const saved = await api("/api/addresses", { method: "POST", body: JSON.stringify({
+          customer, location: document.getElementById("rv-custom-location")?.value?.trim() || "",
+          fullAddress: addr, lat, lng, defaultDuration: duration
+        })});
+        state.allAddresses.unshift(saved);
+        if (!state.resultPendingStops) state.resultPendingStops = [];
+        state.resultPendingStops.push(addressToStop(saved));
+        showToast(`${customer} salvato — premi Ricalcola`);
+        renderResult();
+      } catch (err) { showToast(err.message); }
+      return;
+    }
+
+    // rv-add-stop: remove pending
+    const rvRemove = e.target.closest("[data-rv-remove-pending]");
+    if (rvRemove) {
+      const idx = Number(rvRemove.dataset.rvRemovePending);
+      if (state.resultPendingStops) state.resultPendingStops.splice(idx, 1);
+      renderResult();
+      return;
+    }
+
+    // rv-add-stop: map picker
+    if (e.target.closest("#rv-custom-map-btn")) {
+      openMapPickerForField({
+        onPick: ({ lat, lng, address }) => {
+          const el = document.getElementById("rv-custom-address");
+          const latEl = document.getElementById("rv-custom-lat");
+          const lngEl = document.getElementById("rv-custom-lng");
+          if (el) el.value = address;
+          if (latEl) latEl.value = lat;
+          if (lngEl) lngEl.value = lng;
+        }
+      });
       return;
     }
 

@@ -1978,6 +1978,61 @@ tbody tr:last-child td {
   -webkit-backdrop-filter: blur(16px);
 }
 
+/* ── Result-view edit panels ────────────────────────── */
+.rv-panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  margin-bottom: 8px;
+  overflow: hidden;
+}
+
+.rv-panel-summary {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 10px 14px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--accent);
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.rv-panel-summary::-webkit-details-marker { display: none; }
+
+.rv-panel[open] .rv-panel-summary {
+  border-bottom: 1px solid var(--line);
+}
+
+.rv-settings-form,
+.rv-add-stop-body {
+  padding: 12px 14px;
+  display: grid;
+  gap: 10px;
+}
+
+.rv-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.rv-field-full {
+  grid-column: 1 / -1;
+}
+
+.rv-pending-stop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.87rem;
+}
+
 .order-panel {
   margin-bottom: 10px;
   padding: 12px;
