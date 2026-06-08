@@ -31,6 +31,9 @@ import {
   hasAnyUser,
   assignOrphanedData,
   purgeExpiredSessions,
+  purgeExpiredSharedRoutes,
+  createSharedRoute,
+  getSharedRoute,
   adminListUsers,
   adminListSessions,
   adminDeleteUserSessions,
@@ -57,8 +60,11 @@ await initDb(rootDir);
 
 const PORT = Number(process.env.PORT || 5174);
 
-// Pulizia sessioni scadute ogni 6 ore
-setInterval(() => purgeExpiredSessions().catch(console.error), 6 * 60 * 60 * 1000).unref();
+// Pulizia sessioni e link condivisione scaduti ogni 6 ore
+setInterval(() => {
+  purgeExpiredSessions().catch(console.error);
+  purgeExpiredSharedRoutes().catch(console.error);
+}, 6 * 60 * 60 * 1000).unref();
 const HOST = process.env.HOST || (process.env.NODE_ENV === "production" ? "0.0.0.0" : "127.0.0.1");
 
 const mimeTypes = {
@@ -482,6 +488,14 @@ async function handleApi(request, response) {
       return sendJson(response, 404, { error: "Rotta non trovata" });
     }
 
+    // ── Share routes (GET public, no auth needed) ─────────────────────────────
+    const shareMatch = url.pathname.match(/^\/api\/share\/([a-zA-Z0-9_-]+)$/);
+    if (shareMatch && method === "GET") {
+      const route = await getSharedRoute(shareMatch[1]);
+      if (!route) return sendJson(response, 404, { error: "Link scaduto o non trovato" });
+      return sendJson(response, 200, route);
+    }
+
     // ── All routes below require authentication ───────────────────────────────
     const userId = await authenticate(request);
     if (!userId) {
@@ -640,6 +654,30 @@ async function handleApi(request, response) {
       return sendJson(response, 200, { ok: true });
     }
 
+    // POST /api/routes/:id/share → crea link di condivisione
+    const shareRouteMatch = url.pathname.match(/^\/api\/routes\/(\d+)\/share$/);
+    if (shareRouteMatch && method === "POST") {
+      const route = await getRoute(shareRouteMatch[1], userId);
+      if (!route) return sendJson(response, 404, { error: "Giro non trovato" });
+      const token = generateToken();
+      const routeData = { ...(route.payload || route), source: "imported" };
+      await createSharedRoute(token, userId, JSON.stringify(routeData));
+      const host = request.headers.host || "";
+      const proto = process.env.NODE_ENV === "production" ? "https" : "http";
+      const shareUrl = `${proto}://${host}/share/${token}`;
+      return sendJson(response, 200, { token, url: shareUrl, expiresInDays: 5 });
+    }
+
+    // POST /api/share/:token/import → importa giro (autenticato)
+    const importMatch = url.pathname.match(/^\/api\/share\/([a-zA-Z0-9_-]+)\/import$/);
+    if (importMatch && method === "POST") {
+      const route = await getSharedRoute(importMatch[1]);
+      if (!route) return sendJson(response, 404, { error: "Link scaduto o non trovato" });
+      const saved = await saveRoute({ ...route, source: "imported" }, userId, "imported");
+      const full = await getRoute(saved.id, userId);
+      return sendJson(response, 200, full);
+    }
+
     if (method === "POST" && url.pathname === "/api/voice/parse") {
       const body = await parseBody(request);
       const addresses = await listAddresses("", userId);
@@ -785,6 +823,12 @@ ${addressList}
 const server = http.createServer((request, response) => {
   if (request.url?.startsWith("/api/")) {
     handleApi(request, response);
+    return;
+  }
+  // /share/:token → serve index.html (la PWA gestisce il routing)
+  if (request.url?.match(/^\/share\/[a-zA-Z0-9_-]+/)) {
+    const filePath = path.join(rootDir, "public", "index.html");
+    serveIndex(request, response, filePath);
     return;
   }
   serveStatic(request, response);

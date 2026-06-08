@@ -119,7 +119,8 @@ function rowToRouteSummary(row) {
     totalCost: Number(row.total_cost || 0),
     weatherCapturedAt: row.weather_captured_at || "",
     createdAt: row.created_at,
-    plannedStops: (payload.plannedStops || payload.rows || []).filter(s => !s.type).map(s => ({ customer: s.customer || "", location: s.location || "", addressId: s.addressId, stopUid: s.uid || s.stopUid, stopPart: s.stopPart }))
+    plannedStops: (payload.plannedStops || payload.rows || []).filter(s => !s.type).map(s => ({ customer: s.customer || "", location: s.location || "", addressId: s.addressId, stopUid: s.uid || s.stopUid, stopPart: s.stopPart })),
+    source: row.source || null
   };
 }
 
@@ -473,6 +474,10 @@ async function migrateAuth() {
   if (!routeCols.includes("user_id")) {
     await runSql("ALTER TABLE planned_routes ADD COLUMN user_id INTEGER;");
   }
+  if (!routeCols.includes("source")) {
+    try { await runSql("ALTER TABLE planned_routes ADD COLUMN source TEXT DEFAULT NULL;"); } catch (e) { if (!isAlreadyExistsError(e)) console.warn(e.message); }
+  }
+  await initSharedRoutesTable();
 }
 
 async function migrateWeeklyHours() {
@@ -594,19 +599,20 @@ export async function updateSettings(userId, settings) {
   return getSettings(userId);
 }
 
-export async function saveRoute(route, userId = null) {
+export async function saveRoute(route, userId = null, source = null) {
   const userIdVal = userId != null ? sqlValue(Number(userId)) : "NULL";
+  const sourceVal = source ? sqlValue(source) : "NULL";
   if (dbMode === "postgres") {
     const rows = await runSql(`
-      INSERT INTO planned_routes (name, scheduled_date, start_label, start_address, end_label, end_address, start_time, first_arrival_required, total_km, total_drive_minutes, total_work_minutes, total_cost, weather_captured_at, payload_json, user_id)
-      VALUES (${sqlValue(route.name || "")}, ${sqlValue(route.scheduledDate || route.scheduled_date || "")}, ${sqlValue(route.startLabel || "")}, ${sqlValue(route.startAddress || "")}, ${sqlValue(route.endLabel || "")}, ${sqlValue(route.endAddress || "")}, ${sqlValue(route.startTime || "")}, ${sqlValue(route.firstArrivalRequired || "")}, ${sqlValue(Number(route.summary?.totalKm || 0))}, ${sqlValue(Number(route.summary?.totalDriveMinutes || 0))}, ${sqlValue(Number(route.summary?.totalWorkMinutes || 0))}, ${sqlValue(Number(route.summary?.totalCost || 0))}, ${sqlValue(route.weatherCapturedAt || "")}, ${sqlValue(JSON.stringify(route))}, ${userIdVal})
+      INSERT INTO planned_routes (name, scheduled_date, start_label, start_address, end_label, end_address, start_time, first_arrival_required, total_km, total_drive_minutes, total_work_minutes, total_cost, weather_captured_at, payload_json, user_id, source)
+      VALUES (${sqlValue(route.name || "")}, ${sqlValue(route.scheduledDate || route.scheduled_date || "")}, ${sqlValue(route.startLabel || "")}, ${sqlValue(route.startAddress || "")}, ${sqlValue(route.endLabel || "")}, ${sqlValue(route.endAddress || "")}, ${sqlValue(route.startTime || "")}, ${sqlValue(route.firstArrivalRequired || "")}, ${sqlValue(Number(route.summary?.totalKm || 0))}, ${sqlValue(Number(route.summary?.totalDriveMinutes || 0))}, ${sqlValue(Number(route.summary?.totalWorkMinutes || 0))}, ${sqlValue(Number(route.summary?.totalCost || 0))}, ${sqlValue(route.weatherCapturedAt || "")}, ${sqlValue(JSON.stringify(route))}, ${userIdVal}, ${sourceVal})
       RETURNING id;
     `, true);
     return { id: rows[0]?.id };
   }
   await runSql(`
-    INSERT INTO planned_routes (name, scheduled_date, start_label, start_address, end_label, end_address, start_time, first_arrival_required, total_km, total_drive_minutes, total_work_minutes, total_cost, weather_captured_at, payload_json, user_id)
-    VALUES (${sqlValue(route.name || "")}, ${sqlValue(route.scheduledDate || route.scheduled_date || "")}, ${sqlValue(route.startLabel || "")}, ${sqlValue(route.startAddress || "")}, ${sqlValue(route.endLabel || "")}, ${sqlValue(route.endAddress || "")}, ${sqlValue(route.startTime || "")}, ${sqlValue(route.firstArrivalRequired || "")}, ${sqlValue(Number(route.summary?.totalKm || 0))}, ${sqlValue(Number(route.summary?.totalDriveMinutes || 0))}, ${sqlValue(Number(route.summary?.totalWorkMinutes || 0))}, ${sqlValue(Number(route.summary?.totalCost || 0))}, ${sqlValue(route.weatherCapturedAt || "")}, ${sqlValue(JSON.stringify(route))}, ${userIdVal});
+    INSERT INTO planned_routes (name, scheduled_date, start_label, start_address, end_label, end_address, start_time, first_arrival_required, total_km, total_drive_minutes, total_work_minutes, total_cost, weather_captured_at, payload_json, user_id, source)
+    VALUES (${sqlValue(route.name || "")}, ${sqlValue(route.scheduledDate || route.scheduled_date || "")}, ${sqlValue(route.startLabel || "")}, ${sqlValue(route.startAddress || "")}, ${sqlValue(route.endLabel || "")}, ${sqlValue(route.endAddress || "")}, ${sqlValue(route.startTime || "")}, ${sqlValue(route.firstArrivalRequired || "")}, ${sqlValue(Number(route.summary?.totalKm || 0))}, ${sqlValue(Number(route.summary?.totalDriveMinutes || 0))}, ${sqlValue(Number(route.summary?.totalWorkMinutes || 0))}, ${sqlValue(Number(route.summary?.totalCost || 0))}, ${sqlValue(route.weatherCapturedAt || "")}, ${sqlValue(JSON.stringify(route))}, ${userIdVal}, ${sourceVal});
   `);
   const rows = await runSql("SELECT last_insert_rowid() AS id;", true);
   return { id: rows[0]?.id };
@@ -727,6 +733,56 @@ export async function deleteSession(token) {
 
 export async function purgeExpiredSessions() {
   await runSql(`DELETE FROM sessions WHERE expires_at < ${sqlValue(new Date().toISOString())};`);
+}
+
+// ── Shared routes ─────────────────────────────────────────────────────────────
+
+export async function initSharedRoutesTable() {
+  if (dbMode === "postgres") {
+    await runSql(`
+      CREATE TABLE IF NOT EXISTS shared_routes (
+        token TEXT PRIMARY KEY,
+        user_id INTEGER NOT NULL,
+        route_json TEXT NOT NULL,
+        expires_at TIMESTAMPTZ NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+  } else {
+    await runSql(`
+      CREATE TABLE IF NOT EXISTS shared_routes (
+        token TEXT PRIMARY KEY,
+        user_id INTEGER NOT NULL,
+        route_json TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+  }
+}
+
+export async function createSharedRoute(token, userId, routeJson) {
+  const expiresAt = new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString();
+  await runSql(`
+    INSERT INTO shared_routes (token, user_id, route_json, expires_at)
+    VALUES (${sqlValue(token)}, ${sqlValue(Number(userId))}, ${sqlValue(routeJson)}, ${sqlValue(expiresAt)});
+  `);
+  return { token, expiresAt };
+}
+
+export async function getSharedRoute(token) {
+  if (!token) return null;
+  const rows = await runSql(`SELECT * FROM shared_routes WHERE token = ${sqlValue(token)};`, true);
+  if (!rows[0]) return null;
+  if (new Date(rows[0].expires_at) < new Date()) {
+    await runSql(`DELETE FROM shared_routes WHERE token = ${sqlValue(token)};`);
+    return null;
+  }
+  try { return JSON.parse(rows[0].route_json); } catch { return null; }
+}
+
+export async function purgeExpiredSharedRoutes() {
+  await runSql(`DELETE FROM shared_routes WHERE expires_at < ${sqlValue(new Date().toISOString())};`);
 }
 
 export async function hasAnyUser() {

@@ -45,6 +45,7 @@ const I = {
   mic:      (s) => _svg('<path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>', s),
   micStop:  (s) => _svg('<rect x="8" y="8" width="8" height="8" rx="1"/>', s),
   print:    (s) => _svg('<polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/>', s),
+  share:    (s) => _svg('<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>', s),
   location: (s) => _svg('<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/>', s),
   contacts: (s) => _svg('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>', s),
   link:     (s) => _svg('<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>', s),
@@ -1738,8 +1739,8 @@ function renderSaved() {
       </div>
       <div class="saved-list">
         ${state.savedRoutes.map(route => `
-          <article class="card saved-card">
-            <p class="saved-card-name">${escapeHtml(route.name)}</p>
+          <article class="card saved-card${route.source === "imported" ? " saved-card--imported" : ""}">
+            <p class="saved-card-name">${escapeHtml(route.name)}${route.source === "imported" ? ` <span class="badge badge-imported">Importato</span>` : ""}</p>
             <div class="saved-card-info">
               <input type="date" class="saved-date-input" data-reschedule-route="${route.id}" value="${escapeHtml(route.scheduledDate || "")}" title="Cambia data e ricalcola" />
               <span>${escapeHtml(route.startTime || "--:--")}</span>
@@ -1750,6 +1751,7 @@ function renderSaved() {
             <div class="saved-card-btns">
               <button class="btn primary saved-card-btn" data-open-route="${route.id}">${I.play(13)} Apri</button>
               <div class="saved-card-btns-actions">
+                <button class="btn saved-card-btn" data-share-route="${route.id}" title="Condividi">${I.share(13)} Condividi</button>
                 <button class="btn saved-card-btn" data-rename-route="${route.id}" title="Rinomina">${I.edit(13)} Rinomina</button>
                 <button class="btn saved-card-btn" data-duplicate-route="${route.id}" title="Duplica">${I.copy(13)} Duplica</button>
                 <button class="btn danger saved-card-btn" data-delete-route="${route.id}" title="Elimina">${I.trash(13)} Elimina</button>
@@ -2125,6 +2127,7 @@ function renderResult() {
         <div class="row" style="gap:8px;flex-wrap:wrap;">
           <button class="btn" data-tab-jump="saved">${I.list(14)} Giri</button>
           <button class="btn${result.rows?.some(r => r.type === "lunch") ? " primary" : ""}" id="toggle-lunch-break" title="${result.rows?.some(r => r.type === "lunch") ? "Rimuovi pausa pranzo" : "Aggiungi pausa pranzo"}">${I.fork(14)} ${result.rows?.some(r => r.type === "lunch") ? "Togli pranzo" : "Aggiungi pranzo"}</button>
+          ${result.id ? `<button class="btn" id="share-route-btn" data-share-route="${result.id}" title="Condividi giro">${I.share(14)} Condividi</button>` : ""}
           <button class="btn" id="print-route-btn" title="Stampa o salva come PDF">${I.print(14)} PDF</button>
         </div>
       </div>
@@ -2627,6 +2630,56 @@ function addressToStop(address, durationOverride = null) {
     durationMinutes: Number(durationOverride || address.defaultDuration || 45),
     lat: address.lat, lng: address.lng, recognized: true
   };
+}
+
+// ── share route ───────────────────────────────────────────────────────────────
+
+async function shareRoute(routeId) {
+  try {
+    showSpinner("Generazione link…");
+    const data = await api(`/api/routes/${routeId}/share`, { method: "POST" });
+    hideSpinner();
+    const url = data.url;
+    if (navigator.share) {
+      const routeName = state.result?.name || state.savedRoutes.find(r => String(r.id) === String(routeId))?.name || "Giro";
+      await navigator.share({ title: routeName, text: `Giro di lavoro: ${routeName}`, url }).catch(() => {});
+    } else {
+      await navigator.clipboard.writeText(url).catch(() => {});
+      showToast("Link copiato — scade tra 5 giorni");
+    }
+  } catch (e) {
+    hideSpinner();
+    showToast(e.message);
+  }
+}
+
+async function handleShareImport(token) {
+  try {
+    showSpinner("Caricamento giro…");
+    const route = await fetch(`/api/share/${token}`).then(r => r.ok ? r.json() : Promise.reject(new Error("Link scaduto o non valido")));
+    hideSpinner();
+
+    // Mostra preview e chiede conferma
+    const name = route.name || "Giro condiviso";
+    const stops = (route.rows || route.plannedStops || []).filter(s => !s.type);
+    const stopNames = stops.slice(0, 5).map(s => `• ${s.customer || s.customer}`).join("\n");
+    const more = stops.length > 5 ? `\n… e altri ${stops.length - 5}` : "";
+    const confirm = window.confirm(`Importare il giro "${name}"?\n\n${stopNames}${more}\n\nVerrà aggiunto ai tuoi giri salvati.`);
+    if (!confirm) return;
+
+    showSpinner("Importazione…");
+    const saved = await api(`/api/share/${token}/import`, { method: "POST" });
+    state.result = saved;
+    await refreshSavedRoutes();
+    hideSpinner();
+    setActiveTab("result");
+    showToast(`Giro "${name}" importato`);
+    // Pulisci l'URL dal token
+    history.replaceState(null, "", "/");
+  } catch (e) {
+    hideSpinner();
+    showToast(e.message);
+  }
 }
 
 // ── replan from result view ───────────────────────────────────────────────────
@@ -4561,6 +4614,12 @@ function bindEvents() {
       return;
     }
 
+    const shareRouteBtn = e.target.closest("[data-share-route]");
+    if (shareRouteBtn) {
+      await shareRoute(shareRouteBtn.dataset.shareRoute);
+      return;
+    }
+
     const renameRoute = e.target.closest("[data-rename-route]");
     if (renameRoute) {
       const name = window.prompt("Nuovo nome giro:");
@@ -5146,6 +5205,9 @@ async function init() {
     updateGreeting();
     hideSplash();
     if (!me.nickname) showNicknameSetup();
+    // Controlla se l'URL contiene un token di condivisione
+    const shareTokenMatch = window.location.pathname.match(/^\/share\/([a-zA-Z0-9_-]+)/);
+    if (shareTokenMatch) handleShareImport(shareTokenMatch[1]);
   } catch {
     hideSplash();
     renderAuthScreen(false);

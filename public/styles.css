@@ -1267,6 +1267,17 @@ textarea:focus {
   border-color: rgba(52,211,153,0.25);
 }
 
+.badge-imported {
+  color: #a855f7;
+  background: rgba(168,85,247,0.10);
+  border-color: rgba(168,85,247,0.28);
+}
+
+.saved-card--imported {
+  border-color: rgba(168,85,247,0.35);
+  background: color-mix(in srgb, #a855f7 4%, var(--surface));
+}
+
 .empty {
   border: 1px dashed var(--line-strong);
   border-radius: var(--radius);
