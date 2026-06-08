@@ -1358,8 +1358,11 @@ textarea:focus {
 }
 .saved-card-btns-actions {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-columns: 1fr 1fr;
   gap: 5px;
+}
+.saved-card-name {
+  cursor: pointer;
 }
 .saved-card-btn {
   font-size: 0.8rem;

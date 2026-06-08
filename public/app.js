@@ -1740,7 +1740,7 @@ function renderSaved() {
       <div class="saved-list">
         ${state.savedRoutes.map(route => `
           <article class="card saved-card${route.source === "imported" ? " saved-card--imported" : ""}" data-open-route="${route.id}" style="cursor:pointer;">
-            <p class="saved-card-name">${escapeHtml(route.name)}${route.source === "imported" ? ` <span class="badge badge-imported">Importato</span>` : ""}</p>
+            <p class="saved-card-name" data-rename-route="${route.id}" title="Tocca per rinominare">${escapeHtml(route.name)}${route.source === "imported" ? ` <span class="badge badge-imported">Importato</span>` : ""}</p>
             <div class="saved-card-info">
               <input type="date" class="saved-date-input" data-reschedule-route="${route.id}" value="${escapeHtml(route.scheduledDate || "")}" title="Cambia data e ricalcola" onclick="event.stopPropagation()" />
               <span>${escapeHtml(route.startTime || "--:--")}</span>
@@ -1748,10 +1748,9 @@ function renderSaved() {
               <span>${euro(route.totalCost)}</span>
             </div>
             <div class="stop-meta saved-card-route">${escapeHtml(route.startLabel || "—")} → ${escapeHtml(route.endLabel || "—")}</div>
-            <div class="saved-card-btns" onclick="event.stopPropagation()">
+            <div class="saved-card-btns">
               <div class="saved-card-btns-actions">
                 <button class="btn saved-card-btn" data-share-route="${route.id}">${I.share(13)} Condividi</button>
-                <button class="btn saved-card-btn" data-rename-route="${route.id}">${I.edit(13)} Rinomina</button>
                 <button class="btn saved-card-btn" data-duplicate-route="${route.id}">${I.copy(13)} Duplica</button>
               </div>
               <button class="btn danger saved-card-btn saved-card-delete" data-delete-route="${route.id}">${I.trash(13)} Elimina</button>
@@ -4599,20 +4598,6 @@ function bindEvents() {
       return;
     }
 
-    const openRoute = e.target.closest("[data-open-route]");
-    if (openRoute) {
-      showToast("Carico giro…");
-      try {
-        const raw = await api(`/api/routes/${openRoute.dataset.openRoute}`);
-        state.result = normalizeSavedRoute({ ...raw.payload, id: raw.id, ...raw });
-        state.manualOrderRows = null;
-        setActiveTab("result");
-      } catch (err) {
-        showToast(err.message);
-      }
-      return;
-    }
-
     const shareRouteBtn = e.target.closest("[data-share-route]");
     if (shareRouteBtn) {
       await shareRoute(shareRouteBtn.dataset.shareRoute);
@@ -4621,7 +4606,7 @@ function bindEvents() {
 
     const renameRoute = e.target.closest("[data-rename-route]");
     if (renameRoute) {
-      const name = window.prompt("Nuovo nome giro:");
+      const name = window.prompt("Nuovo nome giro:", renameRoute.dataset.renameRouteName || "");
       if (!name) return;
       await api(`/api/routes/${renameRoute.dataset.renameRoute}`, { method: "PUT", body: JSON.stringify({ name }) });
       await refreshSavedRoutes();
@@ -4649,6 +4634,20 @@ function bindEvents() {
         await refreshSavedRoutes();
         renderSaved();
         showToast("Giro duplicato");
+      } catch (err) {
+        showToast(err.message);
+      }
+      return;
+    }
+
+    const openRoute = e.target.closest("[data-open-route]");
+    if (openRoute) {
+      showToast("Carico giro…");
+      try {
+        const raw = await api(`/api/routes/${openRoute.dataset.openRoute}`);
+        state.result = normalizeSavedRoute({ ...raw.payload, id: raw.id, ...raw });
+        state.manualOrderRows = null;
+        setActiveTab("result");
       } catch (err) {
         showToast(err.message);
       }
