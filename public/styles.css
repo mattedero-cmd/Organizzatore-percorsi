@@ -2708,6 +2708,7 @@ tbody tr:last-child td {
   display: flex;
   flex-direction: row;
   gap: 10px;
+  max-width: 75%;
 }
 .rp-when-date,
 .rp-when-time {
