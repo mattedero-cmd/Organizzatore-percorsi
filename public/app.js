@@ -1006,7 +1006,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.027 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.028 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -1841,7 +1841,7 @@ function renderSaved() {
       <div class="saved-list">
         ${state.savedRoutes.map(route => `
           <article class="card saved-card${route.source === "imported" ? " saved-card--imported" : ""}" data-open-route="${route.id}" style="cursor:pointer;">
-            <p class="saved-card-name" data-rename-route="${route.id}" title="Tocca per rinominare">${escapeHtml(route.name)}${route.source === "imported" ? ` <span class="badge badge-imported">Importato</span>` : ""}</p>
+            <p class="saved-card-name">${escapeHtml(route.name)}${route.source === "imported" ? ` <span class="badge badge-imported">Importato</span>` : ""}</p>
             <div class="saved-card-info">
               <input type="date" class="saved-date-input" data-reschedule-route="${route.id}" value="${escapeHtml(route.scheduledDate || "")}" title="Cambia data e ricalcola" onclick="event.stopPropagation()" />
               <span>${escapeHtml(route.startTime || "--:--")}</span>
@@ -1852,6 +1852,7 @@ function renderSaved() {
             ${route.notes ? `<div class="saved-card-notes">${escapeHtml(route.notes)}</div>` : ""}
             <div class="saved-card-btns">
               <div class="saved-card-btns-actions">
+                <button class="btn saved-card-btn" data-rename-route="${route.id}">${I.edit(13)} Rinomina</button>
                 <button class="btn saved-card-btn" data-share-route="${route.id}">${I.share(13)} Condividi</button>
                 <button class="btn saved-card-btn" data-duplicate-route="${route.id}">${I.copy(13)} Duplica</button>
               </div>
@@ -4890,9 +4891,11 @@ function bindEvents() {
 
     const renameRoute = e.target.closest("[data-rename-route]");
     if (renameRoute) {
-      const name = window.prompt("Nuovo nome giro:", renameRoute.dataset.renameRouteName || "");
+      const id = renameRoute.dataset.renameRoute;
+      const current = state.savedRoutes.find(r => String(r.id) === String(id))?.name || "";
+      const name = window.prompt("Nuovo nome giro:", current);
       if (!name) return;
-      await api(`/api/routes/${renameRoute.dataset.renameRoute}`, { method: "PUT", body: JSON.stringify({ name }) });
+      await api(`/api/routes/${id}`, { method: "PUT", body: JSON.stringify({ name }) });
       await refreshSavedRoutes();
       renderSaved();
       return;

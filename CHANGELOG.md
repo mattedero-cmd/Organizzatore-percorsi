@@ -5,6 +5,9 @@
 
 ---
 
+## v4.028 — 2026-06-08
+- UX: rimosso rinomina su tap del nome giro — aggiunto pulsante "Rinomina" esplicito nella riga azioni della card
+
 ## v4.027 — 2026-06-08
 - Fix: modifica impostazioni tappa non chiude più la card — stato expanded persistito in `state.expandedStops`
 - UX: pulsante Ricalcola tappa diventa accent (tema) non appena si modifica un'impostazione
