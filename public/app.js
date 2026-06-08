@@ -205,6 +205,8 @@ const state = {
     routeNotes: ""
   },
   result: null,
+  expandedStops: new Set(),
+  dirtyStops: new Set(),
   manualOrderRows: null,
   planning: false,
   stopFilter: "",
@@ -1004,7 +1006,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.026 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.027 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -2177,7 +2179,7 @@ function stopDetailExtra(result, row, addr, stopIdx) {
           <label class="stop-opt-check"><input type="checkbox" data-rv-stop="${stopIdx}:fixedFirst" ${row.fixedFirst ? "checked" : ""} /><span>Prima tappa</span></label>
           <label class="stop-opt-check"><input type="checkbox" data-rv-stop="${stopIdx}:ignoreHours" ${row.ignoreHours ? "checked" : ""} /><span>Ignora orari</span></label>
         </div>
-        <button type="button" class="btn rv-stop-replan-btn">${I.navigate(14)} Ricalcola</button>
+        <button type="button" class="btn${state.dirtyStops.has(String(stopIdx)) ? " primary" : ""} rv-stop-replan-btn">${I.navigate(14)} Ricalcola</button>
       </div>`);
   }
 
@@ -2368,7 +2370,7 @@ function renderResult() {
               ${phoneBtn}
               ${email && !row.stopPart ? `<a class="btn icon-btn" href="mailto:${escapeHtml(email)}?subject=${emailSubject}" title="${escapeHtml(email)}">${I.email(15)}</a>` : ""}
             </div>
-            <div class="rc-details" data-stop-details="${expandId}" hidden>
+            <div class="rc-details" data-stop-details="${expandId}"${state.expandedStops.has(expandId) ? "" : " hidden"}>
               <div class="rc-timing-strip">
                 ${!isAfternoon ? `<span>${I.car(13)} ${minutesLabel(row.driveMinutes)} · ${row.km.toFixed(1)} km</span>` : ""}
                 <span>${I.wrench(13)} ${minutesLabel(row.durationMinutes)}</span>
@@ -2889,6 +2891,8 @@ async function replanFromResult() {
   try {
     state.result = await api("/api/plan", { method: "POST", body: JSON.stringify(routePayload) });
     state.manualOrderRows = null;
+    state.expandedStops = new Set();
+    state.dirtyStops = new Set();
     await refreshSavedRoutes();
     setActiveTab("result");
     showToast("Percorso ricalcolato");
@@ -3039,6 +3043,8 @@ async function planCurrentRoute() {
       })
     });
     state.manualOrderRows = null;
+    state.expandedStops = new Set();
+    state.dirtyStops = new Set();
     state.route.stops = [];
     state.route.name = "";
     await refreshSavedRoutes();
@@ -3754,6 +3760,8 @@ async function replanWithOrder(manualOrder) {
       })
     });
     state.manualOrderRows = null;
+    state.expandedStops = new Set();
+    state.dirtyStops = new Set();
     await refreshSavedRoutes();
     showToast("Percorso ricalcolato");
   } catch (e) {
@@ -4420,7 +4428,12 @@ function bindEvents() {
       const [idx, key] = rvs.dataset.rvStop.split(":");
       if (key === "durationMinutes") {
         const row = getRvStopRow(idx);
-        if (row) row.durationMinutes = hhmmToMins(rvs.value) || row.durationMinutes;
+        if (row) {
+          row.durationMinutes = hhmmToMins(rvs.value) || row.durationMinutes;
+          state.dirtyStops.add(idx);
+          const btn = rvs.closest(".rv-stop-edit")?.querySelector(".rv-stop-replan-btn");
+          if (btn) btn.classList.add("primary");
+        }
       }
       return;
     }
@@ -4525,6 +4538,7 @@ function bindEvents() {
       const [idx, key] = rvs.dataset.rvStop.split(":");
       const row = getRvStopRow(idx);
       if (!row) return;
+      state.dirtyStops.add(idx);
       if (key === "timeFrom" || key === "timeTo") {
         row[key] = rvs.value;
         // no render here — iOS picker stays open; render on blur
@@ -4537,6 +4551,9 @@ function bindEvents() {
       }
       if (key === "fixedFirst" || key === "ignoreHours") {
         row[key] = rvs.checked;
+        // update button style in-place without full render
+        const btn = rvs.closest(".rv-stop-edit")?.querySelector(".rv-stop-replan-btn");
+        if (btn) btn.classList.add("primary");
         return;
       }
     }
@@ -4600,7 +4617,11 @@ function bindEvents() {
     if (expandHead && !e.target.closest("a, button")) {
       const id = expandHead.dataset.expandStop;
       const details = document.querySelector(`[data-stop-details="${id}"]`);
-      if (details) details.hidden = !details.hidden;
+      if (details) {
+        details.hidden = !details.hidden;
+        if (details.hidden) state.expandedStops.delete(id);
+        else state.expandedStops.add(id);
+      }
       return;
     }
 
@@ -4683,6 +4704,8 @@ function bindEvents() {
           })
         });
         state.manualOrderRows = null;
+    state.expandedStops = new Set();
+    state.dirtyStops = new Set();
         showToast(hasLunch ? "Pausa pranzo rimossa" : "Pausa pranzo aggiunta");
         setActiveTab("result");
       } catch (err) {
@@ -4908,6 +4931,8 @@ function bindEvents() {
         const raw = await api(`/api/routes/${openRoute.dataset.openRoute}`);
         state.result = normalizeSavedRoute({ ...raw.payload, id: raw.id, ...raw });
         state.manualOrderRows = null;
+    state.expandedStops = new Set();
+    state.dirtyStops = new Set();
         setActiveTab("result");
       } catch (err) {
         showToast(err.message);
@@ -5219,6 +5244,8 @@ function bindEvents() {
     if (e.target.closest("#replan-order")) { await replanWithOrder(true); return; }
     if (e.target.closest("#reset-order")) {
       state.manualOrderRows = null;
+    state.expandedStops = new Set();
+    state.dirtyStops = new Set();
       await replanWithOrder(false);
       return;
     }

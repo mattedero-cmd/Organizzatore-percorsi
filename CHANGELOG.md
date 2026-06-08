@@ -5,6 +5,10 @@
 
 ---
 
+## v4.027 — 2026-06-08
+- Fix: modifica impostazioni tappa non chiude più la card — stato expanded persistito in `state.expandedStops`
+- UX: pulsante Ricalcola tappa diventa accent (tema) non appena si modifica un'impostazione
+
 ## v4.026 — 2026-06-08
 - Nuovo: impostazioni tappa (durata, finestra oraria Dalle/Alle + modalità, prima tappa, ignora orari) ora modificabili direttamente dalla card tappa nel giro, con pulsante Ricalcola inline
 - Rimossa sezione "Finestre orarie tappe" dal pannello impostazioni giro (ora tutto è nelle card tappa)
