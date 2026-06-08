@@ -5,6 +5,9 @@
 
 ---
 
+## v4.011 — 2026-06-08
+- Fix layout campi Data/Partenza/Entro le: dimensione fissa flex: 0 0 calc(33.33% - 20px) per eliminare sovrapposizioni
+
 ## v4.010 — 2026-06-08
 - Fix layout campi Data/Partenza/Entro le: ogni card ridotta di ~10px con max-width: calc(33.33% - 10px)
 
