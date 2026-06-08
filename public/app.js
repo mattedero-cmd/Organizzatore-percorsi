@@ -1004,7 +1004,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.025 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.026 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -1016,16 +1016,16 @@ function renderMenuInfo() {
         <li>${state.whisperConfigured ? _svg('<polyline points="20 6 9 17 4 12"/>', 14) + " Comandi vocali attivi (Whisper)" : _svg('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>', 14) + " Comandi vocali non configurati"}</li>
       </ul>
 
-      <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v4.010</p>
+      <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v4.020</p>
       <ul class="info-list">
+        <li>Impostazioni tappa modificabili direttamente dalla card del giro (durata, finestra oraria, prima tappa, ignora orari)</li>
+        <li>Finestre orarie "Disponibilità" e "Fissa" per ogni tappa — il planner pianifica di conseguenza</li>
+        <li>UI selettore modalità finestra oraria compatto stile iOS</li>
+        <li>Campo "Rientro max" pre-compilato con il default dalle impostazioni</li>
         <li>Note libere per ogni giro — testo libero salvato separatamente</li>
         <li>Durata interventi in formato HH:MM in tutti i campi</li>
-        <li>Campo "Entro le" — vincolo orario massimo sulla partenza</li>
-        <li>Soste/ristoranti rispettano gli orari di apertura (API e contatti salvati)</li>
-        <li>Fix login admin: rate limit corretto dietro proxy/Vercel</li>
-        <li>Fix autofill Safari — pulsante Accedi sempre cliccabile</li>
-        <li>Layout card tappa: Durata compatta affiancata agli orari</li>
-        <li>Layout campi Data/Partenza/Entro le: spaziatura uniforme</li>
+        <li>Soste/ristoranti rispettano gli orari di apertura</li>
+        <li>Fix picker iOS — non si chiude più durante la selezione</li>
       </ul>
     </div>`;
 }
@@ -2068,7 +2068,12 @@ function weatherIcon(w) {
   return "☀";
 }
 
-function stopDetailExtra(result, row, addr) {
+function getRvStopRow(idx) {
+  if (!state.result?.rows) return null;
+  return state.result.rows.filter(r => !r.type && !r.stopPart)[Number(idx)] ?? null;
+}
+
+function stopDetailExtra(result, row, addr, stopIdx) {
   const parts = [];
 
   // Full weather
@@ -2137,6 +2142,42 @@ function stopDetailExtra(result, row, addr) {
           <div class="wh-rows">${fullRows}</div>
           <button class="wh-close-btn" data-toggle-hours="${uid}">${I.close(12)} Chiudi</button>
         </div>
+      </div>`);
+  }
+
+  // Per-stop settings edit block (always shown for non-split stops)
+  if (stopIdx !== undefined && stopIdx >= 0) {
+    const hasWindow = !!(row.timeFrom && row.timeTo);
+    const twMode = row.timeWindowMode || "available";
+    const isDurFixed = hasWindow && twMode === "fixed";
+    const twDisabled = hasWindow ? "" : " disabled";
+    parts.push(`
+      <div class="rv-stop-edit">
+        <span class="rc-section-label">Impostazioni tappa</span>
+        <div class="rv-stop-edit-row">
+          <span class="rv-stop-edit-label">Durata</span>
+          <input type="time" value="${minsToHHMM(row.durationMinutes)}" data-rv-stop="${stopIdx}:durationMinutes" data-duration-hhmm${isDurFixed ? " disabled" : ""} />
+        </div>
+        <div class="rv-stop-edit-row">
+          <span class="rv-stop-edit-label">Finestra oraria</span>
+          <div class="stop-window-mode${hasWindow ? "" : " disabled"}">
+            <label class="stop-window-mode-opt${twMode !== "fixed" ? " active" : ""}">
+              <input type="radio" name="rvswm-${stopIdx}" value="available" data-rv-stop="${stopIdx}:timeWindowMode" ${twMode !== "fixed" ? "checked" : ""}${twDisabled} /><span>Disponibilità</span>
+            </label>
+            <label class="stop-window-mode-opt${twMode === "fixed" ? " active" : ""}">
+              <input type="radio" name="rvswm-${stopIdx}" value="fixed" data-rv-stop="${stopIdx}:timeWindowMode" ${twMode === "fixed" ? "checked" : ""}${twDisabled} /><span>Fissa</span>
+            </label>
+          </div>
+        </div>
+        <div class="stop-window-inputs">
+          <label class="stop-window-field">Dalle<input type="time" value="${escapeHtml(row.timeFrom || "")}" data-rv-stop="${stopIdx}:timeFrom" /></label>
+          <label class="stop-window-field">Alle<input type="time" value="${escapeHtml(row.timeTo || "")}" data-rv-stop="${stopIdx}:timeTo" /></label>
+        </div>
+        <div class="rv-stop-edit-checks">
+          <label class="stop-opt-check"><input type="checkbox" data-rv-stop="${stopIdx}:fixedFirst" ${row.fixedFirst ? "checked" : ""} /><span>Prima tappa</span></label>
+          <label class="stop-opt-check"><input type="checkbox" data-rv-stop="${stopIdx}:ignoreHours" ${row.ignoreHours ? "checked" : ""} /><span>Ignora orari</span></label>
+        </div>
+        <button type="button" class="btn rv-stop-replan-btn">${I.navigate(14)} Ricalcola</button>
       </div>`);
   }
 
@@ -2243,7 +2284,7 @@ function renderResult() {
       ${renderManualOrder(result)}
 
       <div class="result-list">
-        ${rows.map(row => {
+        ${(()=>{let rvStopIdx=-1;return rows.map(row => {
           // Build Maps URL for a break row (rest or restaurant lunch)
           const breakMapsUrl = (r) => {
             if (!r.lat || !r.lng) return null;
@@ -2292,6 +2333,8 @@ function renderResult() {
           }
 
           const addr = state.allAddresses.find(a => String(a.id) === String(row.addressId));
+          if (!row.stopPart) rvStopIdx++;
+          const thisStopIdx = (!row.stopPart) ? rvStopIdx : -1;
           const prefPhone = preferredPhone(addr || {});
           const phone = addr?.phone || row.phone || "";
           const phone2 = addr?.phone2 || row.phone2 || "";
@@ -2337,10 +2380,10 @@ function renderResult() {
               ${email && !row.stopPart ? `<div class="rc-contact">${I.email(14)} <a href="mailto:${escapeHtml(email)}">${escapeHtml(email)}</a></div>` : ""}
               ${row.notes && !row.stopPart ? `<div class="rc-notes">${escapeHtml(row.notes)}</div>` : ""}
               ${warnLevel ? warningBadges(row.warnings) : ""}
-              ${!row.stopPart ? stopDetailExtra(result, row, addr) : ""}
+              ${!row.stopPart ? stopDetailExtra(result, row, addr, thisStopIdx) : ""}
             </div>
           </article>`;
-        }).join("")}
+        }).join("");})()}
 
         <article class="card rc">
           <div class="rc-head" style="cursor:default">
@@ -2909,33 +2952,6 @@ function renderResultEditPanels(result) {
             <span>${I.fork(14)} Pausa pranzo</span>
           </label>
           <input name="lunchBreakMinutes" type="number" min="15" max="120" step="5" value="${lunchBreakMinutes}" style="width:64px;" /> <span class="stop-meta">min</span>
-        </div>
-        <div style="margin-top:10px;border-top:1px solid var(--line);padding-top:10px;">
-          <p class="rp-label" style="margin-bottom:6px;">${_svg('<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',12)} Finestre orarie tappe</p>
-          ${(result.rows || []).filter(r => !r.type && (!r.stopPart || r.stopPart === "morning")).map((row, i) => {
-            const hasWindow = row.timeFrom && row.timeTo;
-            const mode = row.timeWindowMode || "available";
-            return `<div class="rv-stopwindow-row">
-              <span class="rv-stopwindow-name">${escapeHtml(row.customer)}${row.location ? ` <small>${escapeHtml(row.location)}</small>` : ""}</span>
-              <div class="stop-window-block">
-                <div class="stop-window-row">
-                  <span class="stop-opt-label">Finestra oraria</span>
-                  <div class="stop-window-mode${!hasWindow ? " disabled" : ""}">
-                    <label class="stop-window-mode-opt${mode !== "fixed" ? " active" : ""}">
-                      <input type="radio" name="rvtwm-${i}" value="available" data-rv-row="${i}:timeWindowMode" ${mode !== "fixed" ? "checked" : ""} ${!hasWindow ? "disabled" : ""} /><span>Disponibilità</span>
-                    </label>
-                    <label class="stop-window-mode-opt${mode === "fixed" ? " active" : ""}">
-                      <input type="radio" name="rvtwm-${i}" value="fixed" data-rv-row="${i}:timeWindowMode" ${mode === "fixed" ? "checked" : ""} ${!hasWindow ? "disabled" : ""} /><span>Fissa</span>
-                    </label>
-                  </div>
-                </div>
-                <div class="stop-window-inputs">
-                  <label class="stop-window-field">Dalle<input type="time" value="${escapeHtml(row.timeFrom || "")}" data-rv-row="${i}:timeFrom" /></label>
-                  <label class="stop-window-field">Alle<input type="time" value="${escapeHtml(row.timeTo || "")}" data-rv-row="${i}:timeTo" /></label>
-                </div>
-              </div>
-            </div>`;
-          }).join("")}
         </div>
         <button type="button" class="btn primary" id="rv-replan-btn" style="width:100%;margin-top:10px;">${I.navigate(14)} Ricalcola</button>
       </form>
@@ -4398,6 +4414,16 @@ function bindEvents() {
         }
       }
     }
+    // rv-stop — per-stop edit in result view
+    const rvs = e.target.closest("[data-rv-stop]");
+    if (rvs) {
+      const [idx, key] = rvs.dataset.rvStop.split(":");
+      if (key === "durationMinutes") {
+        const row = getRvStopRow(idx);
+        if (row) row.durationMinutes = hhmmToMins(rvs.value) || row.durationMinutes;
+      }
+      return;
+    }
     // google contacts search
     if (e.target.id === "gc-search" && state.googleContactsData) {
       state.googleContactsData.search = e.target.value;
@@ -4493,6 +4519,27 @@ function bindEvents() {
         return;
       }
     }
+    // rv-stop — per-stop settings in result view
+    const rvs = e.target.closest("[data-rv-stop]");
+    if (rvs && state.result?.rows) {
+      const [idx, key] = rvs.dataset.rvStop.split(":");
+      const row = getRvStopRow(idx);
+      if (!row) return;
+      if (key === "timeFrom" || key === "timeTo") {
+        row[key] = rvs.value;
+        // no render here — iOS picker stays open; render on blur
+        return;
+      }
+      if (key === "timeWindowMode") {
+        row.timeWindowMode = rvs.value;
+        render();
+        return;
+      }
+      if (key === "fixedFirst" || key === "ignoreHours") {
+        row[key] = rvs.checked;
+        return;
+      }
+    }
   });
 
   // render() solo su blur per timeFrom/timeTo — il picker è già chiuso a questo punto
@@ -4501,6 +4548,12 @@ function bindEvents() {
     const sf = e.target.closest("[data-stop]");
     if (sf) {
       const [, key] = sf.dataset.stop.split(":");
+      if (key === "timeFrom" || key === "timeTo") render();
+    }
+    // rv-stop time fields: render after picker closes to update mode selector state
+    const rvs = e.target.closest("[data-rv-stop]");
+    if (rvs) {
+      const [, key] = rvs.dataset.rvStop.split(":");
       if (key === "timeFrom" || key === "timeTo") render();
     }
   }, true);
@@ -4660,7 +4713,7 @@ function bindEvents() {
     }
 
     // ── result-view: ricalcola ────────────────────────────────────────────────
-    if (e.target.closest("#rv-replan-btn") || e.target.closest("#rv-replan-from-add") || e.target.closest("#rv-replan-stopwindow")) {
+    if (e.target.closest("#rv-replan-btn") || e.target.closest("#rv-replan-from-add") || e.target.closest("#rv-replan-stopwindow") || e.target.closest(".rv-stop-replan-btn")) {
       await replanFromResult();
       return;
     }

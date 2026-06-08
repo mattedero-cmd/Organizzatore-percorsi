@@ -1318,6 +1318,47 @@ textarea:focus {
 }
 .rv-stopwindow-name small { font-weight: 400; color: var(--muted); }
 
+/* Per-stop edit block inside result view stop cards */
+.rv-stop-edit {
+  background: var(--surface-2);
+  border-radius: 7px;
+  padding: 10px 11px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+}
+.rv-stop-edit-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.rv-stop-edit-label {
+  font-size: 0.82rem;
+  color: var(--muted);
+  min-width: 96px;
+  flex-shrink: 0;
+}
+.rv-stop-edit input[type="time"] {
+  width: 90px;
+  font-size: 0.82rem;
+  padding: 4px 6px;
+  flex-shrink: 0;
+}
+.rv-stop-edit-checks {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding-top: 2px;
+}
+.rv-stop-replan-btn {
+  width: 100%;
+  margin-top: 2px;
+  font-size: 0.82rem;
+}
+
 .stop-options {
   display: flex;
   flex-direction: column;
