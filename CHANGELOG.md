@@ -5,6 +5,9 @@
 
 ---
 
+## v4.023 — 2026-06-08
+- Layout finestra oraria riordinato: riga 1 "Finestra oraria" + selettore, riga 2 Dalle/Alle
+
 ## v4.022 — 2026-06-08
 - Nuovo: pannello "Finestre orarie tappe" nella vista risultato — modifica Dalle/Alle/Modalità di ogni tappa e ricalcola senza uscire dal giro
 

@@ -1004,7 +1004,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.022 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.023 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -1385,21 +1385,23 @@ function renderStops() {
         <label class="field">Durata<input type="time" value="${minsToHHMM(stop.durationMinutes)}" data-stop="${stop.uid}:durationMinutes" data-duration-hhmm ${stop.timeFrom && stop.timeTo && stop.timeWindowMode === "fixed" ? "disabled" : ""}/></label>
         <div class="field">${stop.timeFrom && stop.timeTo ? `<span class="stop-window-badge">${_svg('<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',13)} ${stop.timeWindowMode === "fixed" ? "Fissa" : "Disponibile"} ${escapeHtml(stop.timeFrom)}–${escapeHtml(stop.timeTo)}</span>` : stopHoursHint(stop, state.route.scheduledDate)}</div>
       </div>
-      <div class="stop-window-row">
-        <span class="stop-opt-label">Finestra oraria</span>
+      <div class="stop-window-block">
+        <div class="stop-window-row">
+          <span class="stop-opt-label">Finestra oraria</span>
+          <div class="stop-window-mode${!stop.timeFrom && !stop.timeTo ? " disabled" : ""}">
+            <label class="stop-window-mode-opt${(!stop.timeWindowMode || stop.timeWindowMode === "available") ? " active" : ""}">
+              <input type="radio" name="twm-${stop.uid}" value="available" data-stop="${stop.uid}:timeWindowMode" ${(!stop.timeWindowMode || stop.timeWindowMode === "available") ? "checked" : ""} ${!stop.timeFrom && !stop.timeTo ? "disabled" : ""} />
+              <span>Disponibilità</span>
+            </label>
+            <label class="stop-window-mode-opt${stop.timeWindowMode === "fixed" ? " active" : ""}">
+              <input type="radio" name="twm-${stop.uid}" value="fixed" data-stop="${stop.uid}:timeWindowMode" ${stop.timeWindowMode === "fixed" ? "checked" : ""} ${!stop.timeFrom && !stop.timeTo ? "disabled" : ""} />
+              <span>Fissa</span>
+            </label>
+          </div>
+        </div>
         <div class="stop-window-inputs">
           <label class="stop-window-field">Dalle<input type="time" value="${escapeHtml(stop.timeFrom || "")}" data-stop="${stop.uid}:timeFrom" /></label>
           <label class="stop-window-field">Alle<input type="time" value="${escapeHtml(stop.timeTo || "")}" data-stop="${stop.uid}:timeTo" /></label>
-        </div>
-        <div class="stop-window-mode${!stop.timeFrom && !stop.timeTo ? " disabled" : ""}">
-          <label class="stop-window-mode-opt${(!stop.timeWindowMode || stop.timeWindowMode === "available") ? " active" : ""}">
-            <input type="radio" name="twm-${stop.uid}" value="available" data-stop="${stop.uid}:timeWindowMode" ${(!stop.timeWindowMode || stop.timeWindowMode === "available") ? "checked" : ""} ${!stop.timeFrom && !stop.timeTo ? "disabled" : ""} />
-            <span>Disponibilità</span>
-          </label>
-          <label class="stop-window-mode-opt${stop.timeWindowMode === "fixed" ? " active" : ""}">
-            <input type="radio" name="twm-${stop.uid}" value="fixed" data-stop="${stop.uid}:timeWindowMode" ${stop.timeWindowMode === "fixed" ? "checked" : ""} ${!stop.timeFrom && !stop.timeTo ? "disabled" : ""} />
-            <span>Fissa</span>
-          </label>
         </div>
       </div>
       <div class="stop-options">
@@ -2922,17 +2924,22 @@ function renderResultEditPanels(result) {
           const mode = row.timeWindowMode || "available";
           return `<div class="rv-stopwindow-row">
             <span class="rv-stopwindow-name">${escapeHtml(row.customer)}${row.location ? ` <small>${escapeHtml(row.location)}</small>` : ""}</span>
-            <div class="stop-window-inputs">
-              <label class="stop-window-field">Dalle<input type="time" value="${escapeHtml(row.timeFrom || "")}" data-rv-row="${i}:timeFrom" /></label>
-              <label class="stop-window-field">Alle<input type="time" value="${escapeHtml(row.timeTo || "")}" data-rv-row="${i}:timeTo" /></label>
-            </div>
-            <div class="stop-window-mode${!hasWindow ? " disabled" : ""}">
-              <label class="stop-window-mode-opt${mode !== "fixed" ? " active" : ""}">
-                <input type="radio" name="rvtwm-${i}" value="available" data-rv-row="${i}:timeWindowMode" ${mode !== "fixed" ? "checked" : ""} ${!hasWindow ? "disabled" : ""} /><span>Disponibilità</span>
-              </label>
-              <label class="stop-window-mode-opt${mode === "fixed" ? " active" : ""}">
-                <input type="radio" name="rvtwm-${i}" value="fixed" data-rv-row="${i}:timeWindowMode" ${mode === "fixed" ? "checked" : ""} ${!hasWindow ? "disabled" : ""} /><span>Fissa</span>
-              </label>
+            <div class="stop-window-block">
+              <div class="stop-window-row">
+                <span class="stop-opt-label">Finestra oraria</span>
+                <div class="stop-window-mode${!hasWindow ? " disabled" : ""}">
+                  <label class="stop-window-mode-opt${mode !== "fixed" ? " active" : ""}">
+                    <input type="radio" name="rvtwm-${i}" value="available" data-rv-row="${i}:timeWindowMode" ${mode !== "fixed" ? "checked" : ""} ${!hasWindow ? "disabled" : ""} /><span>Disponibilità</span>
+                  </label>
+                  <label class="stop-window-mode-opt${mode === "fixed" ? " active" : ""}">
+                    <input type="radio" name="rvtwm-${i}" value="fixed" data-rv-row="${i}:timeWindowMode" ${mode === "fixed" ? "checked" : ""} ${!hasWindow ? "disabled" : ""} /><span>Fissa</span>
+                  </label>
+                </div>
+              </div>
+              <div class="stop-window-inputs">
+                <label class="stop-window-field">Dalle<input type="time" value="${escapeHtml(row.timeFrom || "")}" data-rv-row="${i}:timeFrom" /></label>
+                <label class="stop-window-field">Alle<input type="time" value="${escapeHtml(row.timeTo || "")}" data-rv-row="${i}:timeTo" /></label>
+              </div>
             </div>
           </div>`;
         }).join("")}

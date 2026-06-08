@@ -1222,12 +1222,16 @@ textarea:focus {
   font-size: 0.85rem;
 }
 
+.stop-window-block {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 4px;
+}
 .stop-window-row {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-top: 4px;
-  flex-wrap: wrap;
 }
 .stop-window-mode.disabled {
   opacity: 0.35;
