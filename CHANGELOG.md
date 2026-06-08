@@ -5,6 +5,9 @@
 
 ---
 
+## v4.014 — 2026-06-08
+- Fix strutturale campi Data/Partenza/Entro le: sostituito flex con CSS Grid (repeat 3, 1fr) — i figli non possono più uscire dalla griglia indipendentemente dal contenuto
+
 ## v4.013 — 2026-06-08
 - Fix definitivo layout campi Data/Partenza/Entro le: min-width:0 su input e overflow:hidden forza il ridimensionamento su Safari iOS
 

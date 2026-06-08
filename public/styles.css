@@ -2757,15 +2757,12 @@ tbody tr:last-child td {
 
 /* Sezione Quando */
 .rp-when-row {
-  display: flex;
-  flex-direction: row;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
   gap: 8px;
-  width: 100%;
-  box-sizing: border-box;
 }
 .rp-when-date,
 .rp-when-time {
-  flex: 1 1 0;
   min-width: 0;
   overflow: hidden;
   display: flex;
