@@ -2721,7 +2721,7 @@ function renderResultEditPanels(result) {
       <form id="rv-settings-form" class="rv-settings-form" onsubmit="return false">
         <div class="rv-fields">
           <label class="rp-when-date"><span class="rp-label">Data</span><input name="scheduledDate" type="date" value="${escapeHtml(scheduledDate)}" /></label>
-          <label class="rp-when-time"><span class="rp-label">Partenza</span><input name="startTime" type="time" value="${escapeHtml(s.dayStart || "07:00")}" /></label>
+          <label class="rp-when-time"><span class="rp-label">Orario partenza</span><input name="startTime" type="time" value="${escapeHtml(s.dayStart || "07:00")}" /></label>
         </div>
         <div class="rv-field-full">
           <label class="rp-label" style="display:block;margin-bottom:4px;">Modalità arrivo</label>

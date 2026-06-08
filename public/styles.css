@@ -2715,32 +2715,24 @@ tbody tr:last-child td {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 5px;
-  background: var(--surface-2, var(--bg2));
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  padding: 10px 12px;
+  gap: 6px;
 }
 .rp-label {
-  font-size: 0.72rem;
-  color: var(--accent);
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  opacity: 0.8;
+  font-size: 0.83rem;
+  color: var(--muted);
+  font-weight: 750;
 }
 .rp-when-date input,
 .rp-when-time input {
   width: 100%;
-  font-size: 1rem;
-  font-weight: 600;
-  padding: 0;
-  border: none;
-  background: transparent;
+  min-height: 42px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  padding: 9px 10px;
+  background: var(--bg2);
   color: var(--text);
+  font-size: 16px;
   box-sizing: border-box;
-  outline: none;
-  box-shadow: none;
 }
 
 /* Endpoint cards (Da / A) */
