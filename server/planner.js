@@ -72,17 +72,20 @@ function normalizeStop(stop, index, dayOfWeek = null) {
     ignoreHours: stop.ignoreHours === true,
     fixedFirst: stop.fixedFirst === true,
     timeFrom: stop.timeFrom || "",
-    timeTo: stop.timeTo || ""
+    timeTo: stop.timeTo || "",
+    timeWindowMode: stop.timeWindowMode || "available"
   };
 }
 
 function getWindows(stop) {
-  // Fixed time window from user: overrides opening hours
+  // User-defined time window: overrides opening hours for scheduling
   if (stop.timeFrom && stop.timeTo) {
     const start = parseTime(stop.timeFrom);
     const end = parseTime(stop.timeTo);
     if (start !== null && end !== null && end > start) {
-      return [{ label: "Finestra oraria", start, end }];
+      // For "fixed" mode the window is a single mandatory slot;
+      // for "available" mode the window is the availability range.
+      return [{ label: stop.timeWindowMode === "fixed" ? "Orario fisso" : "Disponibilità", start, end }];
     }
   }
   if (stop.closedToday) return [];
@@ -131,12 +134,21 @@ function scheduleStop(arrival, stop) {
     const wEnd = parseTime(stop.timeTo);
     const warnings = [];
     if (wStart !== null && wEnd !== null && wEnd > wStart) {
-      const serviceStart = Math.max(arrival, wStart);
-      const waitMinutes = Math.max(0, serviceStart - arrival);
-      if (arrival > wEnd) warnings.push({ msg: "arrivo dopo la finestra oraria impostata", level: "error" });
-      else if (arrival < wStart) warnings.push({ msg: "arrivo prima della finestra impostata", level: "info" });
-      const serviceEnd = Math.min(serviceStart + stop.durationMinutes, wEnd);
-      return { split: false, serviceStart, serviceEnd, waitMinutes, warnings };
+      if (stop.timeWindowMode === "fixed") {
+        // Lavoro DEVE iniziare a wStart e finire a wEnd — durata implicita
+        const waitMinutes = Math.max(0, wStart - arrival);
+        if (arrival > wEnd) warnings.push({ msg: "arrivo dopo la finestra fissa impostata", level: "error" });
+        return { split: false, serviceStart: wStart, serviceEnd: wEnd, waitMinutes, warnings };
+      } else {
+        // Disponibilità: lavoro dura durationMinutes, può iniziare in qualsiasi momento in [wStart, wEnd]
+        const serviceStart = Math.max(arrival, wStart);
+        const waitMinutes = Math.max(0, serviceStart - arrival);
+        if (arrival > wEnd) warnings.push({ msg: "arrivo dopo la finestra di disponibilità", level: "error" });
+        else if (arrival < wStart) warnings.push({ msg: "arrivo prima della finestra disponibile", level: "info" });
+        const serviceEnd = serviceStart + stop.durationMinutes;
+        if (serviceEnd > wEnd) warnings.push({ msg: "intervento supera la finestra di disponibilità", level: "warn" });
+        return { split: false, serviceStart, serviceEnd, waitMinutes, warnings };
+      }
     }
   }
 

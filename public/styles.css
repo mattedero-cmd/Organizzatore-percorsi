@@ -1266,6 +1266,44 @@ textarea:focus {
   font-weight: 600;
 }
 
+.stop-window-mode {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 6px;
+}
+.stop-window-mode-opt {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+.stop-window-mode-opt.active {
+  border-color: var(--accent-border);
+  background: var(--accent-bg);
+}
+.stop-window-mode-opt input[type="radio"] {
+  margin-top: 2px;
+  flex-shrink: 0;
+  accent-color: var(--primary);
+}
+.stop-window-mode-opt span {
+  font-size: 0.87rem;
+  font-weight: 600;
+  color: var(--text);
+  display: block;
+}
+.stop-window-mode-opt small {
+  font-size: 0.78rem;
+  color: var(--muted);
+  display: block;
+  margin-top: 1px;
+}
+
 .stop-options {
   display: flex;
   flex-direction: column;

@@ -5,6 +5,9 @@
 
 ---
 
+## v4.018 — 2026-06-08
+- Miglioramento finestra oraria tappa: due modalità — "Disponibilità" (lavoro dura X min, può iniziare in qualsiasi momento nella fascia) e "Fissa" (lavoro inizia e finisce esattamente agli orari indicati)
+
 ## v4.017 — 2026-06-08
 - Nuovo: vincolo orario "Dalle/Alle" per ogni tappa — fissa la tappa in una finestra oraria, il planner pianifica tutto il resto di conseguenza
 

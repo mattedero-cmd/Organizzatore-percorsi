@@ -1004,7 +1004,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.017 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.018 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -1382,16 +1382,29 @@ function renderStops() {
         <button class="btn danger icon-btn" data-remove-stop="${stop.uid}" title="Rimuovi">${I.close(13)}</button>
       </div>
       <div class="stop-fields">
-        <label class="field">Durata<input type="time" value="${minsToHHMM(stop.durationMinutes)}" data-stop="${stop.uid}:durationMinutes" data-duration-hhmm /></label>
-        <div class="field">${stop.timeFrom && stop.timeTo ? `<span class="stop-window-badge">${_svg('<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',13)} ${escapeHtml(stop.timeFrom)}–${escapeHtml(stop.timeTo)}</span>` : stopHoursHint(stop, state.route.scheduledDate)}</div>
+        <label class="field">Durata<input type="time" value="${minsToHHMM(stop.durationMinutes)}" data-stop="${stop.uid}:durationMinutes" data-duration-hhmm ${stop.timeFrom && stop.timeTo && stop.timeWindowMode === "fixed" ? "disabled" : ""}/></label>
+        <div class="field">${stop.timeFrom && stop.timeTo ? `<span class="stop-window-badge">${_svg('<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',13)} ${stop.timeWindowMode === "fixed" ? "Fissa" : "Disponibile"} ${escapeHtml(stop.timeFrom)}–${escapeHtml(stop.timeTo)}</span>` : stopHoursHint(stop, state.route.scheduledDate)}</div>
       </div>
       <div class="stop-window-row">
-        <span class="stop-opt-label">Vincola orario</span>
+        <span class="stop-opt-label">Finestra oraria</span>
         <div class="stop-window-inputs">
           <label class="stop-window-field">Dalle<input type="time" value="${escapeHtml(stop.timeFrom || "")}" data-stop="${stop.uid}:timeFrom" /></label>
           <label class="stop-window-field">Alle<input type="time" value="${escapeHtml(stop.timeTo || "")}" data-stop="${stop.uid}:timeTo" /></label>
         </div>
       </div>
+      ${stop.timeFrom && stop.timeTo ? `
+      <div class="stop-window-mode">
+        <label class="stop-window-mode-opt${(!stop.timeWindowMode || stop.timeWindowMode === "available") ? " active" : ""}">
+          <input type="radio" name="twm-${stop.uid}" value="available" data-stop="${stop.uid}:timeWindowMode" ${(!stop.timeWindowMode || stop.timeWindowMode === "available") ? "checked" : ""} />
+          <span>Disponibilità</span>
+          <small>Il lavoro dura ${minsToHHMM(stop.durationMinutes)} e può iniziare in qualsiasi momento in questa fascia</small>
+        </label>
+        <label class="stop-window-mode-opt${stop.timeWindowMode === "fixed" ? " active" : ""}">
+          <input type="radio" name="twm-${stop.uid}" value="fixed" data-stop="${stop.uid}:timeWindowMode" ${stop.timeWindowMode === "fixed" ? "checked" : ""} />
+          <span>Fissa</span>
+          <small>Il lavoro inizia esattamente alle ${escapeHtml(stop.timeFrom)} e finisce alle ${escapeHtml(stop.timeTo)}</small>
+        </label>
+      </div>` : ""}
       <div class="stop-options">
         <label class="stop-opt-check" title="Lavora all'arrivo anche se il locale è chiuso">
           <input type="checkbox" data-stop="${stop.uid}:ignoreHours" ${stop.ignoreHours ? "checked" : ""} />
@@ -2800,6 +2813,7 @@ async function replanFromResult() {
       fixedFirst: r.fixedFirst === true,
       timeFrom: r.timeFrom || "",
       timeTo: r.timeTo || "",
+      timeWindowMode: r.timeWindowMode || "available",
       recognized: true
     }));
 
@@ -4349,7 +4363,12 @@ function bindEvents() {
       const stop = state.route.stops.find(s => s.uid === uid);
       if (stop) {
         if (sf.type === "checkbox") stop[key] = sf.checked;
-        else stop[key] = key === "durationMinutes" ? hhmmToMins(sf.value) : sf.value;
+        else if (sf.type === "radio") { stop[key] = sf.value; render(); }
+        else {
+          stop[key] = key === "durationMinutes" ? hhmmToMins(sf.value) : sf.value;
+          // re-render to show/hide mode selector and update badge
+          if (key === "timeFrom" || key === "timeTo") render();
+        }
       }
     }
     // google contacts search
