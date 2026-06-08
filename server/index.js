@@ -417,7 +417,10 @@ async function handleApi(request, response) {
     if (url.pathname.startsWith("/api/admin")) {
       // Login admin — non richiede token
       if (method === "POST" && url.pathname === "/api/admin/login") {
-        const ip = request.socket.remoteAddress || "unknown";
+        const ip = request.headers["x-forwarded-for"]?.split(",")[0].trim()
+          || request.headers["x-real-ip"]
+          || request.socket.remoteAddress
+          || "unknown";
         if (!checkAdminRateLimit(ip)) {
           return sendJson(response, 429, { error: "Troppi tentativi. Riprova tra 30 minuti." });
         }

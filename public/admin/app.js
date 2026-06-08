@@ -86,6 +86,7 @@ async function doLogin() {
     secretInput.value = "";
     showDashboard();
     await refreshAll();
+    startAutoRefresh();
   } catch (err) {
     loginError.textContent = err.message || "Errore di accesso.";
   } finally {
