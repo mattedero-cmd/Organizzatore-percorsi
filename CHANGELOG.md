@@ -5,6 +5,9 @@
 
 ---
 
+## v4.009 — 2026-06-08
+- Fix layout campi Data/Partenza/Entro le: rimosso max-width fisso, ora `flex: 1 1 0` divide lo spazio equamente senza sovrapposizioni
+
 ## v4.008 — 2026-06-08
 - Fix layout card tappa: campo Durata ora compatto (88px) su riga orizzontale con gli orari alla sua destra
 - Fix layout campi Data/Partenza/Entro le: ridotti ulteriormente (~10px) per evitare overflow su schermi piccoli

@@ -2764,9 +2764,8 @@ tbody tr:last-child td {
 }
 .rp-when-date,
 .rp-when-time {
-  flex: 1;
+  flex: 1 1 0;
   min-width: 0;
-  max-width: calc(33.33% - 18px);
   display: flex;
   flex-direction: column;
   gap: 6px;
