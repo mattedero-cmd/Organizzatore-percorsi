@@ -18,9 +18,11 @@
 - Aggiorna anche la data se il mese è cambiato (es. `giugno 2026`).
 - Aggiorna anche l'etichetta "Novità vX.XXX" nella stessa funzione se hai aggiunto funzionalità.
 
-### 1b. Changelog nelle Info app
-- **Ogni 10 fix** (v4.010, v4.020, v4.030, …): aggiorna la sezione "Novità" in `renderMenuInfo()` con un riassunto dei fix degli ultimi 10 (es. "Novità v4.001–v4.010").
-- **Ogni 100 fix** (v4.100, v4.200, …): scrivi un riassunto totale dei 100 fix precedenti nella stessa sezione, sostituendo i riepiloghi parziali.
+### 1b. Changelog — regola OBBLIGATORIA
+- **Ad ogni fix**, aggiungi una riga in `CHANGELOG.md` con versione, data e descrizione breve.
+- **Ogni 10 fix** (v4.010, v4.020, …): aggiorna la sezione "Novità" in `renderMenuInfo()` con un riassunto dei fix degli ultimi 10.
+- **Ogni 100 fix** (v4.100, v4.200, …): scrivi un riassunto totale nella stessa sezione, sostituendo i riepiloghi parziali.
+- Il `CHANGELOG.md` è la fonte di verità — non affidarti al contesto della sessione.
 
 ### 2. Service Worker e asset versioning
 Ad ogni modifica a `public/app.js` o `public/styles.css`, aggiorna **sempre**:
