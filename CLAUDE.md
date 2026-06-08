@@ -37,12 +37,10 @@ Se dimentichi questo passaggio, gli utenti continuano a vedere la versione vecch
 - `ADMIN_SECRET` — solo Vercel env vars
 - Indirizzi personali, coordinate di casa o dati identificativi dell'utente
 
-### 4. Branch e deploy — WORKFLOW STAGING/PRODUZIONE
-- **Tutto il lavoro va su branch `dev`** — Vercel crea un URL di anteprima separato
-- **`main` è la produzione** — quello che vedono tutti gli utenti, non si tocca finché non si vuole rilasciare
-- **Per rilasciare**: merge `dev` → `main` con `git checkout main && git merge dev && git push origin main`, poi torna su `dev`
-- **Mai pushare direttamente su `main`** durante lo sviluppo normale
-- Non creare PR a meno che l'utente non lo chieda esplicitamente
+### 4. Branch e deploy
+- **Push direttamente su `main`** — deploy automatico su Vercel, visibile a tutti gli utenti.
+- Esiste anche il branch `dev` (anteprima Vercel separata), ma si usa **solo quando l'utente chiede esplicitamente** di lavorare in staging prima di rilasciare.
+- Non creare PR a meno che l'utente non lo chieda esplicitamente.
 
 ### 5. Stile UI — preferenze dell'utente
 - L'app ha uno stile coerente e minimalista. **Non introdurre** card con titolo in grande, sfondi pesanti o badge decorativi non presenti altrove nell'app.
