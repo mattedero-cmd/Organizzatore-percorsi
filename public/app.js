@@ -1004,7 +1004,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.009 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.010 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -1016,20 +1016,16 @@ function renderMenuInfo() {
         <li>${state.whisperConfigured ? _svg('<polyline points="20 6 9 17 4 12"/>', 14) + " Comandi vocali attivi (Whisper)" : _svg('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>', 14) + " Comandi vocali non configurati"}</li>
       </ul>
 
-      <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v4.001</p>
+      <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v4.010</p>
       <ul class="info-list">
-        <li>Condivisione giri via link (AirDrop, WhatsApp, email)</li>
-        <li>Modifica impostazioni e aggiunta tappe direttamente dal risultato</li>
-        <li>Blocco prima tappa — mantieni fisso il primo appuntamento</li>
-        <li>Modalità senza salvare — calcola e usa il giro senza archiviarlo</li>
-        <li>Duplicazione giri salvati</li>
-        <li>Storico visite per ogni contatto</li>
-        <li>Selezione punto direttamente sulla mappa</li>
-        <li>Importazione contatti da file CSV/Excel</li>
-        <li>Stampa PDF del percorso</li>
-        <li>Statistiche giri nel tempo</li>
-        <li>Comandi vocali per aggiungere tappe</li>
-        <li>Temi visivi personalizzabili (6 palette)</li>
+        <li>Note libere per ogni giro — testo libero salvato separatamente</li>
+        <li>Durata interventi in formato HH:MM in tutti i campi</li>
+        <li>Campo "Entro le" — vincolo orario massimo sulla partenza</li>
+        <li>Soste/ristoranti rispettano gli orari di apertura (API e contatti salvati)</li>
+        <li>Fix login admin: rate limit corretto dietro proxy/Vercel</li>
+        <li>Fix autofill Safari — pulsante Accedi sempre cliccabile</li>
+        <li>Layout card tappa: Durata compatta affiancata agli orari</li>
+        <li>Layout campi Data/Partenza/Entro le: spaziatura uniforme</li>
       </ul>
     </div>`;
 }
