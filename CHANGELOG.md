@@ -5,6 +5,9 @@
 
 ---
 
+## v4.012 — 2026-06-08
+- Fix layout campi Data/Partenza/Entro le: justify-content space-evenly per spaziatura uniforme e centratura
+
 ## v4.011 — 2026-06-08
 - Fix layout campi Data/Partenza/Entro le: dimensione fissa flex: 0 0 calc(33.33% - 20px) per eliminare sovrapposizioni
 
