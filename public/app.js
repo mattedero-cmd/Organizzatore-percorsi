@@ -249,33 +249,36 @@ function updateGreeting() {
   let h1Text = nick;
 
   if (hasActiveRoute) {
-    // Messaggi contestuali al giro attivo
-    const route = result || (todayRoute ? { rows: todayRoute.plannedStops || [], summary: todayRoute } : null);
-    const stops = result?.rows?.filter(r => !r.type) || [];
+    const result = state.lastResult;
+    // Conta tappe da result se caricato, altrimenti da plannedStops del giro salvato
+    const stops = result?.rows?.filter(r => !r.type)
+      || (todayRoute?.plannedStops || []);
+    const stopCount = stops.length;
     const lunchRow = result?.rows?.find(r => r.type === "lunch");
-    const restRows = result?.rows?.filter(r => r.type === "rest") || [];
+    const dayStart = result?.summary?.dayStart || todayRoute?.startTime || "";
+    const finalTime = result?.finalLeg?.arrivalTime || "";
 
     if (h < 7) {
       eyebrowText = "Partenza presto oggi —";
-      h1Text = `${stops.length} tappe in programma`;
-    } else if (result?.summary?.dayStart && h < 10) {
+      h1Text = stopCount ? `${stopCount} tappe in programma` : nick;
+    } else if (dayStart && h < 10) {
       eyebrowText = "Buona giornata,";
-      h1Text = `Partenza alle ${result.summary.dayStart}`;
+      h1Text = `Partenza alle ${dayStart}`;
     } else if (lunchRow && h >= 11 && h < 13) {
-      eyebrowText = "Quasi ora di pranzo,";
-      h1Text = `${stops.length} tappe oggi`;
+      eyebrowText = "Quasi ora di pranzo —";
+      h1Text = `${stopCount} tappe oggi`;
     } else if (lunchRow && h >= 13 && h < 15) {
       eyebrowText = "Buon pranzo,";
       h1Text = nick;
-    } else if (result?.finalLeg?.arrivalTime && h >= 15) {
+    } else if (finalTime && h >= 15) {
       eyebrowText = "Rientro previsto alle";
-      h1Text = result.finalLeg.arrivalTime;
-    } else if (stops.length) {
-      const done = stops.filter(s => {
+      h1Text = finalTime;
+    } else if (stopCount) {
+      const done = (result?.rows?.filter(r => !r.type) || []).filter(s => {
         const t = s.serviceEndTime ? (parseInt(s.serviceEndTime.split(":")[0]) * 60 + parseInt(s.serviceEndTime.split(":")[1] || 0)) : null;
         return t !== null && t < h * 60 + now.getMinutes();
       }).length;
-      eyebrowText = done > 0 ? `${done} di ${stops.length} tappe completate —` : `${stops.length} tappe oggi —`;
+      eyebrowText = done > 0 ? `${done} di ${stopCount} tappe completate —` : `${stopCount} tappe oggi —`;
       h1Text = nick;
     } else {
       eyebrowText = "Giro in corso,";

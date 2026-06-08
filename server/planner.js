@@ -238,7 +238,9 @@ function evaluateOrder(order, context) {
   if (timingMode !== "depart_at" && targetArrival !== null && order.length > 0) {
     const firstNodeIndex = order[0].nodeIndex;
     const firstLeg = readLeg(matrix, 0, firstNodeIndex);
-    currentTime = targetArrival - firstLeg.driveMinutes;
+    // Use baseDriveMinutes (no traffic buffer) so departure is calculated
+    // to arrive exactly at targetArrival, not N minutes early
+    currentTime = targetArrival - (firstLeg.baseDriveMinutes ?? firstLeg.driveMinutes);
     dayStart = currentTime;
   }
   if (currentTime === null) {
