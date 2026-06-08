@@ -141,3 +141,4 @@ Non usare `stopPropagation()` sui container dei pulsanti — rompe tutto. È pre
 | Admin auto-refresh non partiva | `startAutoRefresh()` aggiunto dopo `doLogin()` |
 | Autofill Safari blocca pulsante Accedi | `novalidate` sui form, lettura valori diretta dagli input |
 | Data/ora sovrapposti su iOS | `min-height: unset`, `gap: 23px`, `max-width: 75%` su `.rp-when-row` |
+| Sosta/ristorante chiuso inserito comunque | `googleMapsService.js`: quando tutti i candidati sono chiusi all'orario previsto, restituisce `null` invece di inserire con warning |

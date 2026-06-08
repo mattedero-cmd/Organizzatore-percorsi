@@ -234,9 +234,9 @@ export async function findNearbyRestStop(lat, lng, segFromLat, segFromLng, segTo
         chosen = unknown[0].p;
         chosenOpenAtBreak = null;
       } else {
-        // All marked closed — still return best, flag it
-        chosen = withHours[0].p;
-        chosenOpenAtBreak = false;
+        // All candidates definitively closed at break time — skip this location
+        placesCache.set(cacheKey, null);
+        return null;
       }
     }
 
@@ -318,7 +318,7 @@ export async function findNearbyRestaurant(lat, lng, segFromLat, segFromLng, seg
       const unknown = withHours.filter(x => x.openAtBreak === null);
       if (open.length) { chosen = open[0].p; chosenOpenAtBreak = true; }
       else if (unknown.length) { chosen = unknown[0].p; chosenOpenAtBreak = null; }
-      else { chosen = withHours[0].p; chosenOpenAtBreak = false; }
+      else { placesCache.set(cacheKey, null); return null; }
     }
 
     const result = {
