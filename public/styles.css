@@ -2014,9 +2014,9 @@ tbody tr:last-child td {
 }
 
 .rv-fields {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 8px;
+  display: flex;
+  flex-direction: row;
+  gap: 10px;
 }
 
 .rv-field-full {
@@ -2706,15 +2706,20 @@ tbody tr:last-child td {
 /* Sezione Quando */
 .rp-when-row {
   display: flex;
-  flex-direction: column;
-  gap: 8px;
+  flex-direction: row;
+  gap: 10px;
 }
 .rp-when-date,
 .rp-when-time {
+  flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  min-width: 0;
+  gap: 5px;
+  background: var(--surface-2, var(--bg2));
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 10px 12px;
 }
 .rp-label {
   font-size: 0.72rem;
@@ -2727,9 +2732,15 @@ tbody tr:last-child td {
 .rp-when-date input,
 .rp-when-time input {
   width: 100%;
-  font-size: 0.95rem;
-  padding: 8px 6px;
+  font-size: 1rem;
+  font-weight: 600;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text);
   box-sizing: border-box;
+  outline: none;
+  box-shadow: none;
 }
 
 /* Endpoint cards (Da / A) */

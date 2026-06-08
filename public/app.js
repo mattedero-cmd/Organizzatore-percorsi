@@ -2720,8 +2720,8 @@ function renderResultEditPanels(result) {
       </summary>
       <form id="rv-settings-form" class="rv-settings-form" onsubmit="return false">
         <div class="rv-fields">
-          <label class="field">Data<input name="scheduledDate" type="date" value="${escapeHtml(scheduledDate)}" /></label>
-          <label class="field">Partenza<input name="startTime" type="time" value="${escapeHtml(s.dayStart || "07:00")}" /></label>
+          <label class="rp-when-date"><span class="rp-label">Data</span><input name="scheduledDate" type="date" value="${escapeHtml(scheduledDate)}" /></label>
+          <label class="rp-when-time"><span class="rp-label">Partenza</span><input name="startTime" type="time" value="${escapeHtml(s.dayStart || "07:00")}" /></label>
         </div>
         <div class="rv-field-full">
           <label class="rp-label" style="display:block;margin-bottom:4px;">Modalità arrivo</label>
@@ -2731,9 +2731,9 @@ function renderResultEditPanels(result) {
             <option value="depart_at" ${timingMode === "depart_at" ? "selected" : ""}>Partenza a orario fisso</option>
           </select>
         </div>
-        <div class="rv-fields" id="rv-timing-extra">
-          ${timingMode === "first_open_minus" ? `<label class="field">Anticipo (min)<input name="arrivalLeadMinutes" type="number" min="0" max="60" step="5" value="${arrivalLeadMinutes}" /></label>` : ""}
-          ${timingMode === "arrive_at" ? `<label class="field">Arrivo target<input name="firstArrivalTime" type="time" value="${escapeHtml(firstArrivalTime)}" /></label>` : ""}
+        <div id="rv-timing-extra">
+          ${timingMode === "first_open_minus" ? `<label class="rp-when-date" style="max-width:160px;"><span class="rp-label">Anticipo</span><input name="arrivalLeadMinutes" type="number" min="0" max="60" step="5" value="${arrivalLeadMinutes}" /></label>` : ""}
+          ${timingMode === "arrive_at" ? `<label class="rp-when-time" style="max-width:160px;"><span class="rp-label">Arrivo target</span><input name="firstArrivalTime" type="time" value="${escapeHtml(firstArrivalTime)}" /></label>` : ""}
         </div>
         <div class="rv-field-full">
           <label class="rp-label" style="display:block;margin-bottom:4px;">Partenza da</label>
@@ -4411,8 +4411,8 @@ function bindEvents() {
       const mode = document.getElementById("rv-timing-mode")?.value;
       const extra = document.getElementById("rv-timing-extra");
       if (extra) extra.innerHTML =
-        mode === "first_open_minus" ? `<label class="field">Anticipo (min)<input name="arrivalLeadMinutes" type="number" min="0" max="60" step="5" value="10" /></label>` :
-        mode === "arrive_at" ? `<label class="field">Arrivo target<input name="firstArrivalTime" type="time" value="08:30" /></label>` : "";
+        mode === "first_open_minus" ? `<label class="rp-when-date" style="max-width:160px;"><span class="rp-label">Anticipo</span><input name="arrivalLeadMinutes" type="number" min="0" max="60" step="5" value="10" /></label>` :
+        mode === "arrive_at" ? `<label class="rp-when-time" style="max-width:160px;"><span class="rp-label">Arrivo target</span><input name="firstArrivalTime" type="time" value="08:30" /></label>` : "";
       return;
     }
 
