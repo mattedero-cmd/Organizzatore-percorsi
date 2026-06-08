@@ -3073,6 +3073,9 @@ tbody tr:last-child td {
   align-items: center;
 }
 .bsheet-guide-summary::-webkit-details-marker { display: none; }
+.bsheet-guide-arrow { margin-left: auto; opacity: 0.6; transition: transform 0.2s; }
+details[open] .bsheet-guide-arrow { transform: rotate(180deg); }
+.guide-note { font-size: 0.78rem; color: var(--muted); margin-top: 4px; }
 .bsheet-guide-body {
   padding: 0 14px 12px;
   font-size: 0.85rem;
