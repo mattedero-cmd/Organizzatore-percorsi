@@ -2759,14 +2759,15 @@ tbody tr:last-child td {
 .rp-when-row {
   display: flex;
   flex-direction: row;
-  justify-content: space-evenly;
-  align-items: flex-start;
-  max-width: 100%;
+  gap: 8px;
+  width: 100%;
+  box-sizing: border-box;
 }
 .rp-when-date,
 .rp-when-time {
-  flex: 0 0 calc(33.33% - 20px);
+  flex: 1 1 0;
   min-width: 0;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -2779,14 +2780,17 @@ tbody tr:last-child td {
 .rp-when-date input,
 .rp-when-time input {
   width: 100%;
+  min-width: 0;
   min-height: unset;
   border: 1px solid var(--line-strong);
   border-radius: var(--radius);
-  padding: 5px 8px;
+  padding: 5px 4px;
   background: var(--bg2);
   color: var(--text);
-  font-size: 16px;
+  font-size: 14px;
   box-sizing: border-box;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* Endpoint cards (Da / A) */

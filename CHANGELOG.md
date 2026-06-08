@@ -5,6 +5,9 @@
 
 ---
 
+## v4.013 — 2026-06-08
+- Fix definitivo layout campi Data/Partenza/Entro le: min-width:0 su input e overflow:hidden forza il ridimensionamento su Safari iOS
+
 ## v4.012 — 2026-06-08
 - Fix layout campi Data/Partenza/Entro le: justify-content space-evenly per spaziatura uniforme e centratura
 
