@@ -3076,6 +3076,9 @@ tbody tr:last-child td {
 .bsheet-guide-arrow { margin-left: auto; opacity: 0.6; transition: transform 0.2s; }
 details[open] .bsheet-guide-arrow { transform: rotate(180deg); }
 .guide-note { font-size: 0.78rem; color: var(--muted); margin-top: 4px; }
+.info-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; }
+.info-list li { display: flex; align-items: flex-start; gap: 7px; font-size: 0.85rem; color: var(--text); line-height: 1.4; }
+.info-list li svg { flex-shrink: 0; margin-top: 2px; color: var(--accent); }
 .bsheet-guide-body {
   padding: 0 14px 12px;
   font-size: 0.85rem;

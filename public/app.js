@@ -986,9 +986,37 @@ function renderMenuInfo() {
   return `
     ${menuHeader("Info app", true)}
     <div class="bsheet-section-body">
-      <p class="stop-meta" style="margin-bottom:8px;">Percorsi lavoro — Versione 1.0</p>
-      <p class="stop-meta">Pianificazione giornaliera giri commerciali con ottimizzazione automatica del percorso, gestione orari di apertura, soste automatiche e stima costi.</p>
-      <p class="stop-meta" style="margin-top:12px;">Google Maps${state.mapApiConfigured ? " ✓ attivo" : " — non configurato (usa stime locali)"}. Whisper${state.whisperConfigured ? " ✓ attivo" : " — non configurato"}.</p>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+        <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
+        <div>
+          <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 2.0 &mdash; giugno 2026</p>
+        </div>
+      </div>
+
+      <p class="stop-meta" style="margin-bottom:14px;">Pianificazione giornaliera giri commerciali con ottimizzazione automatica del percorso, gestione orari di apertura, soste automatiche e stima costi chilometrici.</p>
+
+      <p style="font-weight:600;font-size:0.85rem;margin-bottom:6px;">Integrazioni</p>
+      <ul class="info-list">
+        <li>${state.mapApiConfigured ? _svg('<polyline points="20 6 9 17 4 12"/>', 14) + " Google Maps attivo — percorsi reali e ottimizzazione avanzata" : _svg('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>', 14) + " Google Maps non configurato — stime distanze locali"}</li>
+        <li>${state.whisperConfigured ? _svg('<polyline points="20 6 9 17 4 12"/>', 14) + " Comandi vocali attivi (Whisper)" : _svg('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>', 14) + " Comandi vocali non configurati"}</li>
+      </ul>
+
+      <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v2.0</p>
+      <ul class="info-list">
+        <li>Condivisione giri via link (AirDrop, WhatsApp, email)</li>
+        <li>Modifica impostazioni e aggiunta tappe direttamente dal risultato</li>
+        <li>Blocco prima tappa — mantieni fisso il primo appuntamento</li>
+        <li>Modalità senza salvare — calcola e usa il giro senza archiviarlo</li>
+        <li>Duplicazione giri salvati</li>
+        <li>Storico visite per ogni contatto</li>
+        <li>Selezione punto direttamente sulla mappa</li>
+        <li>Importazione contatti da file CSV/Excel</li>
+        <li>Stampa PDF del percorso</li>
+        <li>Statistiche giri nel tempo</li>
+        <li>Comandi vocali per aggiungere tappe</li>
+        <li>Temi visivi personalizzabili (6 palette)</li>
+      </ul>
     </div>`;
 }
 
