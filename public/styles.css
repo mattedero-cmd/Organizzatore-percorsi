@@ -2016,7 +2016,8 @@ tbody tr:last-child td {
 .rv-fields {
   display: flex;
   flex-direction: row;
-  gap: 10px;
+  gap: 23px;
+  max-width: 75%;
 }
 
 .rv-field-full {
