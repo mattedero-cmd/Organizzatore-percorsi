@@ -5,6 +5,9 @@
 
 ---
 
+## v4.016 — 2026-06-08
+- Campo "Rientro max" pre-compilato con l'orario default dalle impostazioni (maxReturnTime), modificabile per ogni giro
+
 ## v4.015 — 2026-06-08
 - Rinominato "Entro le" → "Rientro max" nel form percorso
 
