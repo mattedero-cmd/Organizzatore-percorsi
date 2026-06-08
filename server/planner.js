@@ -1,4 +1,4 @@
-import { routeBetween, findNearbyRestStop, findNearbyRestaurant, resolvePlace } from "./googleMapsService.js";
+import { routeBetween, findNearbyRestStop, findNearbyRestaurant, resolvePlace, isOpenAtTime } from "./googleMapsService.js";
 
 const MAX_EXACT_STOPS = 7;
 
@@ -415,11 +415,16 @@ function perpDistToSegment(pLat, pLng, aLat, aLng, bLat, bLng) {
 // Find the nearest saved rest stop along the segment [from → to].
 // maxPerpKm = max perpendicular distance from the route line (handles parallel valleys).
 // Falls back to 15 km haversine if no destination is known.
-function findNearestRestStop(restStops, fromLat, fromLng, toLat, toLng, maxPerpKm = 2.0) {
+function findNearestRestStop(restStops, fromLat, fromLng, toLat, toLng, maxPerpKm = 2.0, breakTimeMin = null, scheduledDate = null) {
   if (!restStops.length) return null;
   if (!fromLat || !fromLng) return restStops[0];
   const hasSegment = toLat != null && toLng != null;
-  let best = null, bestDist = Infinity;
+
+  const targetDay = (breakTimeMin != null && scheduledDate)
+    ? (() => { const [y, m, d] = scheduledDate.split("-").map(Number); return new Date(y, m - 1, d).getDay(); })()
+    : null;
+
+  const candidates = [];
   for (const s of restStops) {
     if (!s.lat || !s.lng) continue;
     let distKm;
@@ -433,9 +438,39 @@ function findNearestRestStop(restStops, fromLat, fromLng, toLat, toLng, maxPerpK
       distKm = R * 2 * Math.asin(Math.sqrt(Math.sin(dlat/2)**2 + Math.cos(toRad(fromLat)) * Math.cos(toRad(s.lat)) * Math.sin(dlng/2)**2));
       if (distKm > 15) continue;
     }
-    if (distKm < bestDist) { bestDist = distKm; best = s; }
+
+    // Check opening hours if we have time info and the stop has weeklyHours or periods
+    let openAtBreak = null;
+    if (targetDay !== null && breakTimeMin != null) {
+      if (s.weeklyHours) {
+        // Use weeklyHours stored in DB (same format as normalizeStop)
+        const day = s.weeklyHours[String(targetDay)] || s.weeklyHours[targetDay];
+        if (day?.closed) openAtBreak = false;
+        else if (day) {
+          const normalized = normalizeStop(s, 0, targetDay);
+          const windows = getWindows(normalized);
+          openAtBreak = windows.length === 0 ? null
+            : windows.some(w => breakTimeMin >= w.start && breakTimeMin < w.end) ? true : false;
+        }
+      } else if (s.periods) {
+        openAtBreak = isOpenAtTime(s.periods, targetDay, breakTimeMin);
+      }
+    }
+
+    candidates.push({ s, distKm, openAtBreak });
   }
-  return best;
+
+  if (!candidates.length) return null;
+
+  // Prefer open stops; fall back to unknown; skip definitively closed ones
+  const open = candidates.filter(c => c.openAtBreak === true).sort((a, b) => a.distKm - b.distKm);
+  if (open.length) return open[0].s;
+
+  const unknown = candidates.filter(c => c.openAtBreak === null).sort((a, b) => a.distKm - b.distKm);
+  if (unknown.length) return unknown[0].s;
+
+  // All saved stops in range are closed at this time — return null, let caller try Places API
+  return null;
 }
 
 function shiftRowTimes(row, minutes) {
@@ -483,7 +518,7 @@ async function insertBreaks(rows, options) {
     const fromRow = refRow || (beforeIndex > 0 ? rows[beforeIndex - 1] : null);
     const toRow = nextRow || (beforeIndex < rows.length ? rows[beforeIndex] : null);
     // Try saved restaurants first, then Places search
-    const saved = findNearestRestStop(restaurantStops, fromRow?.lat, fromRow?.lng, toRow?.lat, toRow?.lng, 3.0);
+    const saved = findNearestRestStop(restaurantStops, fromRow?.lat, fromRow?.lng, toRow?.lat, toRow?.lng, 3.0, lunchTimeMin, scheduledDate);
     const spot = saved || (fromRow?.lat
       ? await findNearbyRestaurant(fromRow.lat, fromRow.lng, fromRow.lat, fromRow.lng, toRow?.lat, toRow?.lng, 8000, lunchTimeMin, scheduledDate).catch(() => null)
       : null);
@@ -547,7 +582,7 @@ async function insertBreaks(rows, options) {
       return true;
     }
     // Prefer saved stops near the route segment (perpendicular distance ≤ 2 km)
-    let spot = findNearestRestStop(restStops, refLat, refLng, toLat, toLng, 2.0);
+    let spot = findNearestRestStop(restStops, refLat, refLng, toLat, toLng, 2.0, breakTimeMin, scheduledDate);
     if (!spot && refLat && refLng) {
       spot = await findNearbyRestStop(refLat, refLng, fromLat, fromLng, toLat, toLng, 15000, breakTimeMin, scheduledDate, maxDetourKm).catch(() => null);
     }
