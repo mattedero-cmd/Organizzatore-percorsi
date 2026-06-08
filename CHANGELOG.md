@@ -5,6 +5,9 @@
 
 ---
 
+## v4.022 — 2026-06-08
+- Nuovo: pannello "Finestre orarie tappe" nella vista risultato — modifica Dalle/Alle/Modalità di ogni tappa e ricalcola senza uscire dal giro
+
 ## v4.021 — 2026-06-08
 - Fix picker iOS: rimosso autofill su focus che causava chiusura immediata
 - UI selettore modalità sempre visibile accanto a "Finestra oraria", grigio/non-cliccabile se nessun orario inserito

@@ -1004,7 +1004,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.021 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.022 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -2912,6 +2912,34 @@ function renderResultEditPanels(result) {
       </form>
     </details>
 
+    <details class="rv-panel" id="rv-stopwindow-panel">
+      <summary class="rv-panel-summary">
+        ${_svg('<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',14)} Finestre orarie tappe
+      </summary>
+      <div class="rv-add-stop-body">
+        ${(result.rows || []).filter(r => !r.type && (!r.stopPart || r.stopPart === "morning")).map((row, i) => {
+          const hasWindow = row.timeFrom && row.timeTo;
+          const mode = row.timeWindowMode || "available";
+          return `<div class="rv-stopwindow-row">
+            <span class="rv-stopwindow-name">${escapeHtml(row.customer)}${row.location ? ` <small>${escapeHtml(row.location)}</small>` : ""}</span>
+            <div class="stop-window-inputs">
+              <label class="stop-window-field">Dalle<input type="time" value="${escapeHtml(row.timeFrom || "")}" data-rv-row="${i}:timeFrom" /></label>
+              <label class="stop-window-field">Alle<input type="time" value="${escapeHtml(row.timeTo || "")}" data-rv-row="${i}:timeTo" /></label>
+            </div>
+            <div class="stop-window-mode${!hasWindow ? " disabled" : ""}">
+              <label class="stop-window-mode-opt${mode !== "fixed" ? " active" : ""}">
+                <input type="radio" name="rvtwm-${i}" value="available" data-rv-row="${i}:timeWindowMode" ${mode !== "fixed" ? "checked" : ""} ${!hasWindow ? "disabled" : ""} /><span>Disponibilità</span>
+              </label>
+              <label class="stop-window-mode-opt${mode === "fixed" ? " active" : ""}">
+                <input type="radio" name="rvtwm-${i}" value="fixed" data-rv-row="${i}:timeWindowMode" ${mode === "fixed" ? "checked" : ""} ${!hasWindow ? "disabled" : ""} /><span>Fissa</span>
+              </label>
+            </div>
+          </div>`;
+        }).join("")}
+        <button type="button" class="btn primary" id="rv-replan-stopwindow" style="width:100%;margin-top:10px;">${_svg('<polygon points="3 11 22 2 13 21 11 13 3 11"/>',14)} Ricalcola con queste finestre</button>
+      </div>
+    </details>
+
     <details class="rv-panel" id="rv-add-stop-panel">
       <summary class="rv-panel-summary">
         ${I.plus(14)} Aggiungi tappa al giro
@@ -4437,14 +4465,30 @@ function bindEvents() {
     }
   });
 
-  // timeFrom/timeTo: render solo su "change" (iOS picker si chiude, non ad ogni scroll)
+  // timeFrom/timeTo stop-form + rv-row: render su "change" (picker iOS chiuso)
   app.addEventListener("change", e => {
+    // stop form (nuovo percorso)
     const sf = e.target.closest("[data-stop]");
-    if (!sf) return;
-    const [uid, key] = sf.dataset.stop.split(":");
-    if (key === "timeFrom" || key === "timeTo") {
-      const stop = state.route.stops.find(s => s.uid === uid);
-      if (stop) { stop[key] = sf.value; render(); }
+    if (sf) {
+      const [uid, key] = sf.dataset.stop.split(":");
+      if (key === "timeFrom" || key === "timeTo") {
+        const stop = state.route.stops.find(s => s.uid === uid);
+        if (stop) { stop[key] = sf.value; render(); }
+        return;
+      }
+    }
+    // rv-row: finestre orarie nel pannello risultato
+    const rv = e.target.closest("[data-rv-row]");
+    if (rv && state.result?.rows) {
+      const [idx, key] = rv.dataset.rvRow.split(":");
+      const customerRows = state.result.rows.filter(r => !r.type && (!r.stopPart || r.stopPart === "morning"));
+      const targetRow = customerRows[Number(idx)];
+      if (targetRow) {
+        state.result.rows = state.result.rows.map(r =>
+          r === targetRow ? { ...r, [key]: rv.value } : r
+        );
+        render();
+      }
     }
   });
 
@@ -4603,7 +4647,7 @@ function bindEvents() {
     }
 
     // ── result-view: ricalcola ────────────────────────────────────────────────
-    if (e.target.closest("#rv-replan-btn") || e.target.closest("#rv-replan-from-add")) {
+    if (e.target.closest("#rv-replan-btn") || e.target.closest("#rv-replan-from-add") || e.target.closest("#rv-replan-stopwindow")) {
       await replanFromResult();
       return;
     }

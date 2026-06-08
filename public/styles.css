@@ -1299,6 +1299,21 @@ textarea:focus {
 .stop-window-mode-opt.active span { color: var(--primary); }
 .stop-window-mode-opt small { display: none; }
 
+.rv-stopwindow-row {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+}
+.rv-stopwindow-row:last-of-type { border-bottom: none; }
+.rv-stopwindow-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text);
+}
+.rv-stopwindow-name small { font-weight: 400; color: var(--muted); }
+
 .stop-options {
   display: flex;
   flex-direction: column;
