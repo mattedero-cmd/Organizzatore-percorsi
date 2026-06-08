@@ -718,7 +718,7 @@ function renderMenuSettings() {
     `<h3 class="settings-section-title">${_svg(icon, 15)} ${label}</h3>`;
 
   const timeInput = (name, val) =>
-    `<input name="${name}" type="time" value="${escapeHtml(val || "")}" class="sg-time" />`;
+    `<input name="${name}" type="time" step="300" value="${escapeHtml(val || "")}" class="sg-time" />`;
 
   return `
     ${menuHeader("Impostazioni", true)}
@@ -1006,7 +1006,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.031 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.032 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -1384,7 +1384,7 @@ function renderStops() {
         <button class="btn danger icon-btn" data-remove-stop="${stop.uid}" title="Rimuovi">${I.close(13)}</button>
       </div>
       <div class="stop-fields">
-        <label class="field">Durata<input type="time" value="${stop.timeFrom && stop.timeTo && stop.timeWindowMode === "fixed" ? minsToHHMM(Math.max(0, hhmmToMins(stop.timeTo) - hhmmToMins(stop.timeFrom))) : minsToHHMM(stop.durationMinutes)}" data-stop="${stop.uid}:durationMinutes" data-duration-hhmm ${stop.timeFrom && stop.timeTo && stop.timeWindowMode === "fixed" ? "disabled" : ""}/></label>
+        <label class="field">Durata<input type="time" step="300" value="${stop.timeFrom && stop.timeTo && stop.timeWindowMode === "fixed" ? minsToHHMM(Math.max(0, hhmmToMins(stop.timeTo) - hhmmToMins(stop.timeFrom))) : minsToHHMM(stop.durationMinutes)}" data-stop="${stop.uid}:durationMinutes" data-duration-hhmm ${stop.timeFrom && stop.timeTo && stop.timeWindowMode === "fixed" ? "disabled" : ""}/></label>
         <div class="field">${stop.timeFrom && stop.timeTo ? `<span class="stop-window-badge">${_svg('<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',13)} ${stop.timeWindowMode === "fixed" ? "Fissa" : "Disponibile"} ${escapeHtml(stop.timeFrom)}–${escapeHtml(stop.timeTo)}</span>` : stopHoursHint(stop, state.route.scheduledDate)}</div>
       </div>
       <div class="stop-window-block">
@@ -1402,8 +1402,8 @@ function renderStops() {
           </div>
         </div>
         <div class="stop-window-inputs">
-          <label class="stop-window-field">Dalle<input type="time" value="${escapeHtml(stop.timeFrom || "")}" data-stop="${stop.uid}:timeFrom" /></label>
-          <label class="stop-window-field">Alle<input type="time" value="${escapeHtml(stop.timeTo || "")}" data-stop="${stop.uid}:timeTo" /></label>
+          <label class="stop-window-field">Dalle<input type="time" step="300" value="${escapeHtml(stop.timeFrom || "")}" data-stop="${stop.uid}:timeFrom" /></label>
+          <label class="stop-window-field">Alle<input type="time" step="300" value="${escapeHtml(stop.timeTo || "")}" data-stop="${stop.uid}:timeTo" /></label>
         </div>
       </div>
       <div class="stop-options">
@@ -1450,11 +1450,11 @@ function renderRoute() {
           </label>
           <label class="rp-when-time">
             <span class="rp-label">Partenza</span>
-            <input name="startTime" type="time" value="${escapeHtml(r.startTime)}" />
+            <input name="startTime" type="time" step="300" value="${escapeHtml(r.startTime)}" />
           </label>
           <label class="rp-when-time">
             <span class="rp-label">Rientro max</span>
-            <input name="departureLatest" type="time" value="${escapeHtml(r.departureLatest || state.settings.maxReturnTime || "")}" />
+            <input name="departureLatest" type="time" step="300" value="${escapeHtml(r.departureLatest || state.settings.maxReturnTime || "")}" />
           </label>
         </div>
         <div style="margin-top:8px;">
@@ -1466,7 +1466,7 @@ function renderRoute() {
           </select>
         </div>
         ${dm === "first_open_minus" ? `<div style="margin-top:6px;"><label class="field">Anticipo (min)<input name="arrivalLeadMinutes" type="number" min="0" max="60" step="5" value="${escapeHtml(r.arrivalLeadMinutes)}" /></label></div>` : ""}
-        ${dm === "arrive_at" ? `<div style="margin-top:6px;"><label class="field">Arrivo target<input name="firstArrivalTime" type="time" value="${escapeHtml(r.firstArrivalTime)}" /></label></div>` : ""}
+        ${dm === "arrive_at" ? `<div style="margin-top:6px;"><label class="field">Arrivo target<input name="firstArrivalTime" type="time" step="300" value="${escapeHtml(r.firstArrivalTime)}" /></label></div>` : ""}
       </div>
 
       <!-- Sezione 2: Da / A -->
@@ -1546,7 +1546,7 @@ function renderRoute() {
               ${state.googleMapsKey ? `<div class="field full" style="padding-top:0"><button type="button" class="btn" id="rp-custom-map-btn">${I.map(14)} Scegli sulla mappa</button></div>` : ""}
               <input type="hidden" id="rp-custom-lat" value="" />
               <input type="hidden" id="rp-custom-lng" value="" />
-              <label class="field">Durata<input name="customDuration" type="time" value="${minsToHHMM(r.customDuration || 45)}" data-duration-hhmm /></label>
+              <label class="field">Durata<input name="customDuration" type="time" step="300" value="${minsToHHMM(r.customDuration || 45)}" data-duration-hhmm /></label>
             </div>
             ${renderWeeklyHoursSection(r.customWeeklyHours || null)}
             <div class="actions" style="margin-top:8px;">
@@ -1740,14 +1740,14 @@ function renderWeeklyHoursSection(weeklyHours) {
       </div>
       <div class="wh-row-times"${h.closed ? ' style="display:none"' : ''}>
         <div class="wh-range">
-          <input type="time" class="wh-om" value="${h.openMorning || ""}" ${dis}>
+          <input type="time" step="300" class="wh-om" value="${h.openMorning || ""}" ${dis}>
           <span>–</span>
-          <input type="time" class="wh-cm" value="${h.closeMorning || ""}" ${disC}>
+          <input type="time" step="300" class="wh-cm" value="${h.closeMorning || ""}" ${disC}>
         </div>
         <div class="wh-range">
-          <input type="time" class="wh-oa" value="${h.openAfternoon || ""}" ${disC}>
+          <input type="time" step="300" class="wh-oa" value="${h.openAfternoon || ""}" ${disC}>
           <span>–</span>
-          <input type="time" class="wh-ca" value="${h.closeAfternoon || ""}" ${dis}>
+          <input type="time" step="300" class="wh-ca" value="${h.closeAfternoon || ""}" ${dis}>
         </div>
       </div>
     </div>`;
@@ -2036,7 +2036,7 @@ function renderArchive() {
           <label class="field">Email<input name="email" type="email" value="${escapeHtml(form.email)}" /></label>
           <label class="field full">Note<textarea name="notes" id="contact-notes">${escapeHtml(form.notes)}</textarea></label>
           ${renderWeeklyHoursSection(form.weeklyHours)}
-          <label class="field">Durata abituale<input name="defaultDuration" type="time" value="${minsToHHMM(form.defaultDuration || 45)}" data-duration-hhmm /></label>
+          <label class="field">Durata abituale<input name="defaultDuration" type="time" step="300" value="${minsToHHMM(form.defaultDuration || 45)}" data-duration-hhmm /></label>
           <div class="field full">
             <label>Coordinate GPS</label>
             <div class="coord-actions">
@@ -2157,7 +2157,7 @@ function stopDetailExtra(result, row, addr, stopIdx) {
         <span class="rc-section-label">Impostazioni tappa</span>
         <div class="rv-stop-edit-row">
           <span class="rv-stop-edit-label">Durata</span>
-          <input type="time" value="${isDurFixed ? minsToHHMM(Math.max(0, hhmmToMins(row.timeTo) - hhmmToMins(row.timeFrom))) : minsToHHMM(row.durationMinutes)}" data-rv-stop="${stopIdx}:durationMinutes" data-duration-hhmm${isDurFixed ? " disabled" : ""} />
+          <input type="time" step="300" value="${isDurFixed ? minsToHHMM(Math.max(0, hhmmToMins(row.timeTo) - hhmmToMins(row.timeFrom))) : minsToHHMM(row.durationMinutes)}" data-rv-stop="${stopIdx}:durationMinutes" data-duration-hhmm${isDurFixed ? " disabled" : ""} />
         </div>
         <div class="rv-stop-edit-row">
           <span class="rv-stop-edit-label">Finestra oraria</span>
@@ -2171,8 +2171,8 @@ function stopDetailExtra(result, row, addr, stopIdx) {
           </div>
         </div>
         <div class="stop-window-inputs">
-          <label class="stop-window-field">Dalle<input type="time" value="${escapeHtml(row.timeFrom || "")}" data-rv-stop="${stopIdx}:timeFrom" /></label>
-          <label class="stop-window-field">Alle<input type="time" value="${escapeHtml(row.timeTo || "")}" data-rv-stop="${stopIdx}:timeTo" /></label>
+          <label class="stop-window-field">Dalle<input type="time" step="300" value="${escapeHtml(row.timeFrom || "")}" data-rv-stop="${stopIdx}:timeFrom" /></label>
+          <label class="stop-window-field">Alle<input type="time" step="300" value="${escapeHtml(row.timeTo || "")}" data-rv-stop="${stopIdx}:timeTo" /></label>
         </div>
         <div class="rv-stop-edit-checks">
           <label class="stop-opt-check"><input type="checkbox" data-rv-stop="${stopIdx}:fixedFirst" ${row.fixedFirst ? "checked" : ""} /><span>Prima tappa</span></label>
@@ -2924,7 +2924,7 @@ function renderResultEditPanels(result) {
       <form id="rv-settings-form" class="rv-settings-form" onsubmit="return false">
         <div class="rv-fields">
           <label class="rp-when-date"><span class="rp-label">Data</span><input name="scheduledDate" type="date" value="${escapeHtml(scheduledDate)}" /></label>
-          <label class="rp-when-time"><span class="rp-label">Orario partenza</span><input name="startTime" type="time" value="${escapeHtml(s.dayStart || "07:00")}" /></label>
+          <label class="rp-when-time"><span class="rp-label">Orario partenza</span><input name="startTime" type="time" step="300" value="${escapeHtml(s.dayStart || "07:00")}" /></label>
         </div>
         <div class="rv-field-full">
           <label class="rp-label" style="display:block;margin-bottom:4px;">Modalità arrivo</label>
@@ -2936,7 +2936,7 @@ function renderResultEditPanels(result) {
         </div>
         <div id="rv-timing-extra">
           ${timingMode === "first_open_minus" ? `<label class="rp-when-date" style="max-width:160px;"><span class="rp-label">Anticipo</span><input name="arrivalLeadMinutes" type="number" min="0" max="60" step="5" value="${arrivalLeadMinutes}" /></label>` : ""}
-          ${timingMode === "arrive_at" ? `<label class="rp-when-time" style="max-width:160px;"><span class="rp-label">Arrivo target</span><input name="firstArrivalTime" type="time" value="${escapeHtml(firstArrivalTime)}" /></label>` : ""}
+          ${timingMode === "arrive_at" ? `<label class="rp-when-time" style="max-width:160px;"><span class="rp-label">Arrivo target</span><input name="firstArrivalTime" type="time" step="300" value="${escapeHtml(firstArrivalTime)}" /></label>` : ""}
         </div>
         <div class="rv-field-full">
           <label class="rp-label" style="display:block;margin-bottom:4px;">Partenza da</label>
@@ -2982,7 +2982,7 @@ function renderResultEditPanels(result) {
             ${state.googleMapsKey ? `<div class="field full" style="padding-top:0"><button type="button" class="btn" id="rv-custom-map-btn">${I.map(14)} Scegli sulla mappa</button></div>` : ""}
             <input type="hidden" id="rv-custom-lat" value="" />
             <input type="hidden" id="rv-custom-lng" value="" />
-            <label class="field">Durata<input id="rv-custom-duration" type="time" value="00:45" data-duration-hhmm /></label>
+            <label class="field">Durata<input id="rv-custom-duration" type="time" step="300" value="00:45" data-duration-hhmm /></label>
           </div>
           <div class="actions" style="margin-top:8px;">
             <button type="button" class="btn ghost" id="rv-add-temp-stop">+ Usa senza salvare</button>
@@ -4754,7 +4754,7 @@ function bindEvents() {
       const extra = document.getElementById("rv-timing-extra");
       if (extra) extra.innerHTML =
         mode === "first_open_minus" ? `<label class="rp-when-date" style="max-width:160px;"><span class="rp-label">Anticipo</span><input name="arrivalLeadMinutes" type="number" min="0" max="60" step="5" value="10" /></label>` :
-        mode === "arrive_at" ? `<label class="rp-when-time" style="max-width:160px;"><span class="rp-label">Arrivo target</span><input name="firstArrivalTime" type="time" value="08:30" /></label>` : "";
+        mode === "arrive_at" ? `<label class="rp-when-time" style="max-width:160px;"><span class="rp-label">Arrivo target</span><input name="firstArrivalTime" type="time" step="300" value="08:30" /></label>` : "";
       return;
     }
 

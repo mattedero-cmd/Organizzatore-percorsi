@@ -5,6 +5,9 @@
 
 ---
 
+## v4.032 — 2026-06-08
+- UX: tutti i campi orario (`type="time"`) usano step 5 minuti (step="300") in tutta l'app
+
 ## v4.031 — 2026-06-08
 - Fix toggle pranzo: passaggio di timeFrom/timeTo/timeWindowMode/fixedFirst/ignoreHours/maxReturnTime nel re-plan — aggiunta e rimozione pranzo ora entrambe funzionanti
 - Fix toggle pranzo: durata tappa fissa calcolata da timeFrom/timeTo (non dalla somma delle parti split)
