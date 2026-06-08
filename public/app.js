@@ -188,7 +188,9 @@ const state = {
     stops: [],
     transcript: "",
     lunchBreak: true,
-    lunchBreakMinutes: 45
+    lunchBreakMinutes: 45,
+    departureLatest: "",
+    routeNotes: ""
   },
   result: null,
   manualOrderRows: null,
@@ -990,7 +992,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.003 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.004 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -1421,6 +1423,10 @@ function renderRoute() {
             <span class="rp-label">Partenza</span>
             <input name="startTime" type="time" value="${escapeHtml(r.startTime)}" />
           </label>
+          <label class="rp-when-time">
+            <span class="rp-label">Non oltre le</span>
+            <input name="departureLatest" type="time" value="${escapeHtml(r.departureLatest || "")}" placeholder="--:--" />
+          </label>
         </div>
         <div style="margin-top:8px;">
           <label class="rp-label" style="display:block;margin-bottom:4px;">Modalità arrivo</label>
@@ -1814,6 +1820,7 @@ function renderSaved() {
               <span>${euro(route.totalCost)}</span>
             </div>
             <div class="stop-meta saved-card-route">${escapeHtml(route.startLabel || "—")} → ${escapeHtml(route.endLabel || "—")}</div>
+            ${route.notes ? `<div class="saved-card-notes">${escapeHtml(route.notes)}</div>` : ""}
             <div class="saved-card-btns">
               <div class="saved-card-btns-actions">
                 <button class="btn saved-card-btn" data-share-route="${route.id}">${I.share(13)} Condividi</button>
@@ -2195,6 +2202,8 @@ function renderResult() {
           <button class="btn" id="print-route-btn" title="Stampa o salva come PDF">${I.print(14)} PDF</button>
         </div>
       </div>
+
+      ${result.notes ? `<div class="result-notes">${escapeHtml(result.notes)}</div>` : ""}
 
       ${state.googleMapsKey ? `<div id="route-map" style="height:280px;border-radius:8px;border:1px solid var(--line);margin-bottom:14px;"></div>` : ""}
 
@@ -2678,7 +2687,8 @@ function updateRouteFromForm() {
     customAddress: v.customAddress, customDuration: Number(v.customDuration || 45),
     transcript: v.transcript || "",
     lunchBreak: Boolean(v.lunchBreak),
-    lunchBreakMinutes: Number(v.lunchBreakMinutes || 45)
+    lunchBreakMinutes: Number(v.lunchBreakMinutes || 45),
+    departureLatest: v.departureLatest || ""
   });
 }
 
@@ -2914,6 +2924,17 @@ function renderResultEditPanels(result) {
           </div>` : ""}
         ${(state.resultPendingStops || []).length ? `<button type="button" class="btn primary" id="rv-replan-from-add" style="width:100%;margin-top:8px;">${I.navigate(14)} Ricalcola con le nuove tappe</button>` : ""}
       </div>
+    </details>
+
+    <details class="rv-panel" id="rv-notes-panel">
+      <summary class="rv-panel-summary">
+        ${I.edit(14)} Note giro
+      </summary>
+      <div class="rv-add-stop-body">
+        <textarea id="rv-notes-input" placeholder="Note libere relative a questo giro…" rows="4" style="width:100%;resize:vertical;font-size:0.88rem;padding:8px;border:1px solid var(--line);border-radius:var(--radius);background:var(--bg2);color:var(--text);box-sizing:border-box;">${escapeHtml(result.notes || "")}</textarea>
+        <button type="button" class="btn primary" id="rv-notes-save" style="margin-top:6px;">${I.check(14)} Salva note</button>
+        <span id="rv-notes-saved" style="font-size:0.8rem;color:var(--muted);margin-left:8px;display:none;">Salvato</span>
+      </div>
     </details>`;
 }
 
@@ -2940,7 +2961,8 @@ async function planCurrentRoute() {
         firstArrivalTime: r.firstArrivalTime,
         firstArrivalRequired: r.firstArrivalRequired,
         stops: r.stops, rates: state.settings,
-        lunchBreak: r.lunchBreak, lunchBreakMinutes: r.lunchBreakMinutes
+        lunchBreak: r.lunchBreak, lunchBreakMinutes: r.lunchBreakMinutes,
+        departureLatest: r.departureLatest || ""
       })
     });
     state.manualOrderRows = null;
@@ -4513,6 +4535,23 @@ function bindEvents() {
         hideSpinner();
         state.planning = false;
         render();
+      }
+      return;
+    }
+
+    // ── result-view: salva note ───────────────────────────────────────────────
+    if (e.target.closest("#rv-notes-save")) {
+      const routeId = state.result?.id;
+      const notes = document.getElementById("rv-notes-input")?.value ?? "";
+      if (routeId) {
+        try {
+          await api(`/api/routes/${routeId}`, { method: "PATCH", body: JSON.stringify({ notes }) });
+          state.result.notes = notes;
+          const saved = document.getElementById("rv-notes-saved");
+          if (saved) { saved.style.display = "inline"; setTimeout(() => { saved.style.display = "none"; }, 2000); }
+        } catch { showToast("Errore salvataggio note"); }
+      } else {
+        showToast("Salva prima il giro per poter aggiungere note");
       }
       return;
     }

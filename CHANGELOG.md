@@ -13,6 +13,12 @@
 ## v4.002 — 2026-06-08
 - Fix: soste e ristoranti trovati via Places API non vengono più inseriti se tutti i candidati risultano chiusi all'orario previsto (restituisce `null` invece di inserire con warning)
 
+## v4.004 — 2026-06-08
+- Nuovo: note libere per ogni giro — textarea nel pannello "Note giro" dentro la vista risultato, con salvataggio separato dal ricalcolo
+- Nuovo: le note vengono mostrate nella card del giro salvato e nell'header della vista risultato
+- Nuovo: campo "Non oltre le" nella sezione orari del form — finestra di partenza; se il calcolo porta a partire dopo quell'ora viene segnalato come warning
+- Fix: durata interventi già mostrata in formato h+min in tutta l'app tramite `minutesLabel`
+
 ## v4.003 — 2026-06-08
 - Fix: anche i contatti salvati come "sosta" o "ristorante" ora rispettano gli orari di apertura — se chiusi all'orario della sosta vengono saltati e si passa al fallback Places API
 - Fix login admin: rate limit usa `X-Forwarded-For` per IP reale dietro proxy/Vercel

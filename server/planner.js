@@ -221,7 +221,7 @@ function readLeg(matrix, from, to) {
 }
 
 function evaluateOrder(order, context) {
-  const { nodes, matrix, startMinutes, firstArrivalRequired, rates, timingMode, arrivalLeadMinutes } = context;
+  const { nodes, matrix, startMinutes, firstArrivalRequired, rates, timingMode, arrivalLeadMinutes, departureLatestMinutes } = context;
   const rows = [];
   let currentNodeIndex = 0;
   let currentTime = startMinutes;
@@ -339,6 +339,9 @@ function evaluateOrder(order, context) {
   const costDrive = (totalDriveMinutes / 60) * rates.driveHourRate;
   const costWork = (totalWorkMinutes / 60) * rates.workHourRate;
   const totalCost = costKm + costDrive + costWork;
+  if (departureLatestMinutes != null && dayStart > departureLatestMinutes) {
+    allWarnings.push({ msg: `partenza oltre la finestra (${formatTime(dayStart)} > ${formatTime(departureLatestMinutes)})`, level: "warn" });
+  }
   const warningPenalty = allWarnings.filter((w) => (w.level || w) === "error" || /chiusa|dopo|oltre/.test(w.msg || w)).length * 500;
   const waitPenalty = totalWaitMinutes * 0.4;
   const score = totalDriveMinutes + totalKm * 1.2 + warningPenalty + waitPenalty;
@@ -768,7 +771,8 @@ export async function planRoute(payload, settings, restStops = []) {
   const lockedFirst = firstStopFixed ? stopsWithNodeIndex[0] : null;
   const reorderable = lockedFirst ? stopsWithNodeIndex.slice(1) : stopsWithNodeIndex;
 
-  const context = { nodes, matrix, startMinutes, firstArrivalRequired, rates, timingMode, arrivalLeadMinutes };
+  const departureLatestMinutes = payload.departureLatest ? parseTime(payload.departureLatest) : null;
+  const context = { nodes, matrix, startMinutes, firstArrivalRequired, rates, timingMode, arrivalLeadMinutes, departureLatestMinutes };
   const manualOrder = Boolean(payload.manualOrder || payload.lockOrder);
   const candidateOrders = manualOrder
     ? [reorderable]

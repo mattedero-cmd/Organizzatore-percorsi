@@ -1402,6 +1402,24 @@ textarea:focus {
   min-width: 0;
   max-width: 100%;
 }
+.saved-card-notes {
+  font-size: 0.78rem;
+  color: var(--muted);
+  margin-top: 4px;
+  white-space: pre-wrap;
+  line-height: 1.4;
+}
+.result-notes {
+  font-size: 0.85rem;
+  color: var(--muted);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  white-space: pre-wrap;
+  line-height: 1.5;
+}
 
 .section-head {
   display: flex;

@@ -120,7 +120,8 @@ function rowToRouteSummary(row) {
     weatherCapturedAt: row.weather_captured_at || "",
     createdAt: row.created_at,
     plannedStops: (payload.plannedStops || payload.rows || []).filter(s => !s.type).map(s => ({ customer: s.customer || "", location: s.location || "", addressId: s.addressId, stopUid: s.uid || s.stopUid, stopPart: s.stopPart })),
-    source: row.source || null
+    source: row.source || null,
+    notes: row.notes || ""
   };
 }
 
@@ -477,6 +478,9 @@ async function migrateAuth() {
   if (!routeCols.includes("source")) {
     try { await runSql("ALTER TABLE planned_routes ADD COLUMN source TEXT DEFAULT NULL;"); } catch (e) { if (!isAlreadyExistsError(e)) console.warn(e.message); }
   }
+  if (!routeCols.includes("notes")) {
+    try { await runSql("ALTER TABLE planned_routes ADD COLUMN notes TEXT DEFAULT NULL;"); } catch (e) { if (!isAlreadyExistsError(e)) console.warn(e.message); }
+  }
   await initSharedRoutesTable();
 }
 
@@ -602,20 +606,26 @@ export async function updateSettings(userId, settings) {
 export async function saveRoute(route, userId = null, source = null) {
   const userIdVal = userId != null ? sqlValue(Number(userId)) : "NULL";
   const sourceVal = source ? sqlValue(source) : "NULL";
+  const notesVal = route.notes ? sqlValue(route.notes) : "NULL";
   if (dbMode === "postgres") {
     const rows = await runSql(`
-      INSERT INTO planned_routes (name, scheduled_date, start_label, start_address, end_label, end_address, start_time, first_arrival_required, total_km, total_drive_minutes, total_work_minutes, total_cost, weather_captured_at, payload_json, user_id, source)
-      VALUES (${sqlValue(route.name || "")}, ${sqlValue(route.scheduledDate || route.scheduled_date || "")}, ${sqlValue(route.startLabel || "")}, ${sqlValue(route.startAddress || "")}, ${sqlValue(route.endLabel || "")}, ${sqlValue(route.endAddress || "")}, ${sqlValue(route.startTime || "")}, ${sqlValue(route.firstArrivalRequired || "")}, ${sqlValue(Number(route.summary?.totalKm || 0))}, ${sqlValue(Number(route.summary?.totalDriveMinutes || 0))}, ${sqlValue(Number(route.summary?.totalWorkMinutes || 0))}, ${sqlValue(Number(route.summary?.totalCost || 0))}, ${sqlValue(route.weatherCapturedAt || "")}, ${sqlValue(JSON.stringify(route))}, ${userIdVal}, ${sourceVal})
+      INSERT INTO planned_routes (name, scheduled_date, start_label, start_address, end_label, end_address, start_time, first_arrival_required, total_km, total_drive_minutes, total_work_minutes, total_cost, weather_captured_at, payload_json, user_id, source, notes)
+      VALUES (${sqlValue(route.name || "")}, ${sqlValue(route.scheduledDate || route.scheduled_date || "")}, ${sqlValue(route.startLabel || "")}, ${sqlValue(route.startAddress || "")}, ${sqlValue(route.endLabel || "")}, ${sqlValue(route.endAddress || "")}, ${sqlValue(route.startTime || "")}, ${sqlValue(route.firstArrivalRequired || "")}, ${sqlValue(Number(route.summary?.totalKm || 0))}, ${sqlValue(Number(route.summary?.totalDriveMinutes || 0))}, ${sqlValue(Number(route.summary?.totalWorkMinutes || 0))}, ${sqlValue(Number(route.summary?.totalCost || 0))}, ${sqlValue(route.weatherCapturedAt || "")}, ${sqlValue(JSON.stringify(route))}, ${userIdVal}, ${sourceVal}, ${notesVal})
       RETURNING id;
     `, true);
     return { id: rows[0]?.id };
   }
   await runSql(`
-    INSERT INTO planned_routes (name, scheduled_date, start_label, start_address, end_label, end_address, start_time, first_arrival_required, total_km, total_drive_minutes, total_work_minutes, total_cost, weather_captured_at, payload_json, user_id, source)
-    VALUES (${sqlValue(route.name || "")}, ${sqlValue(route.scheduledDate || route.scheduled_date || "")}, ${sqlValue(route.startLabel || "")}, ${sqlValue(route.startAddress || "")}, ${sqlValue(route.endLabel || "")}, ${sqlValue(route.endAddress || "")}, ${sqlValue(route.startTime || "")}, ${sqlValue(route.firstArrivalRequired || "")}, ${sqlValue(Number(route.summary?.totalKm || 0))}, ${sqlValue(Number(route.summary?.totalDriveMinutes || 0))}, ${sqlValue(Number(route.summary?.totalWorkMinutes || 0))}, ${sqlValue(Number(route.summary?.totalCost || 0))}, ${sqlValue(route.weatherCapturedAt || "")}, ${sqlValue(JSON.stringify(route))}, ${userIdVal}, ${sourceVal});
+    INSERT INTO planned_routes (name, scheduled_date, start_label, start_address, end_label, end_address, start_time, first_arrival_required, total_km, total_drive_minutes, total_work_minutes, total_cost, weather_captured_at, payload_json, user_id, source, notes)
+    VALUES (${sqlValue(route.name || "")}, ${sqlValue(route.scheduledDate || route.scheduled_date || "")}, ${sqlValue(route.startLabel || "")}, ${sqlValue(route.startAddress || "")}, ${sqlValue(route.endLabel || "")}, ${sqlValue(route.endAddress || "")}, ${sqlValue(route.startTime || "")}, ${sqlValue(route.firstArrivalRequired || "")}, ${sqlValue(Number(route.summary?.totalKm || 0))}, ${sqlValue(Number(route.summary?.totalDriveMinutes || 0))}, ${sqlValue(Number(route.summary?.totalWorkMinutes || 0))}, ${sqlValue(Number(route.summary?.totalCost || 0))}, ${sqlValue(route.weatherCapturedAt || "")}, ${sqlValue(JSON.stringify(route))}, ${userIdVal}, ${sourceVal}, ${notesVal});
   `);
   const rows = await runSql("SELECT last_insert_rowid() AS id;", true);
   return { id: rows[0]?.id };
+}
+
+export async function updateRouteNotes(id, notes, userId = null) {
+  const userFilter = userId != null ? ` AND user_id = ${sqlValue(Number(userId))}` : "";
+  await runSql(`UPDATE planned_routes SET notes = ${sqlValue(notes || "")} WHERE id = ${sqlValue(Number(id))}${userFilter};`);
 }
 
 export async function countRoutesByDate(date, userId = null) {

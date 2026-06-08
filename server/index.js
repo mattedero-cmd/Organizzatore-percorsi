@@ -15,6 +15,7 @@ import {
   listRoutes,
   getRoute,
   updateRoutePayload,
+  updateRouteNotes,
   renameRoute,
   deleteRoute,
   createUser,
@@ -654,6 +655,12 @@ async function handleApi(request, response) {
 
     if (routeMatch && method === "DELETE") {
       await deleteRoute(routeMatch[1], userId);
+      return sendJson(response, 200, { ok: true });
+    }
+
+    if (routeMatch && method === "PATCH") {
+      const body = await parseBody(request);
+      await updateRouteNotes(routeMatch[1], body.notes ?? "", userId);
       return sendJson(response, 200, { ok: true });
     }
 
