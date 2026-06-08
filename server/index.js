@@ -424,10 +424,10 @@ async function handleApi(request, response) {
         if (!checkAdminRateLimit(ip)) {
           return sendJson(response, 429, { error: "Troppi tentativi. Riprova tra 30 minuti." });
         }
-        const secret = process.env.ADMIN_SECRET;
+        const secret = (process.env.ADMIN_SECRET || "").trim();
         if (!secret) return sendJson(response, 503, { error: "Admin non configurato" });
         const body = await parseBody(request);
-        if (body.secret !== secret) {
+        if (body.secret.trim() !== secret) {
           return sendJson(response, 401, { error: "Credenziali non valide" });
         }
         const token = generateAdminToken();
