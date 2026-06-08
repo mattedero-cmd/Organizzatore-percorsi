@@ -5,6 +5,9 @@
 
 ---
 
+## v4.024 — 2026-06-08
+- Fix definitivo picker iOS Dalle/Alle: render() spostato su blur invece di change — il picker non viene più distrutto mentre è aperto
+
 ## v4.023 — 2026-06-08
 - Layout finestra oraria riordinato: riga 1 "Finestra oraria" + selettore, riga 2 Dalle/Alle
 

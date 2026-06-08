@@ -1004,7 +1004,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.023 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.024 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -4474,30 +4474,46 @@ function bindEvents() {
 
   // timeFrom/timeTo stop-form + rv-row: render su "change" (picker iOS chiuso)
   app.addEventListener("change", e => {
-    // stop form (nuovo percorso)
+    // stop form (nuovo percorso) — solo aggiorna stato, NO render (iOS chiuderebbe il picker)
     const sf = e.target.closest("[data-stop]");
     if (sf) {
       const [uid, key] = sf.dataset.stop.split(":");
       if (key === "timeFrom" || key === "timeTo") {
         const stop = state.route.stops.find(s => s.uid === uid);
-        if (stop) { stop[key] = sf.value; render(); }
+        if (stop) stop[key] = sf.value;
         return;
       }
     }
-    // rv-row: finestre orarie nel pannello risultato
+    // rv-row — solo aggiorna stato
     const rv = e.target.closest("[data-rv-row]");
     if (rv && state.result?.rows) {
       const [idx, key] = rv.dataset.rvRow.split(":");
-      const customerRows = state.result.rows.filter(r => !r.type && (!r.stopPart || r.stopPart === "morning"));
-      const targetRow = customerRows[Number(idx)];
-      if (targetRow) {
-        state.result.rows = state.result.rows.map(r =>
-          r === targetRow ? { ...r, [key]: rv.value } : r
-        );
-        render();
+      if (key === "timeFrom" || key === "timeTo") {
+        const customerRows = state.result.rows.filter(r => !r.type && (!r.stopPart || r.stopPart === "morning"));
+        const targetRow = customerRows[Number(idx)];
+        if (targetRow) {
+          state.result.rows = state.result.rows.map(r =>
+            r === targetRow ? { ...r, [key]: rv.value } : r
+          );
+        }
+        return;
       }
     }
   });
+
+  // render() solo su blur per timeFrom/timeTo — il picker è già chiuso a questo punto
+  app.addEventListener("blur", e => {
+    const sf = e.target.closest("[data-stop]");
+    if (sf) {
+      const [, key] = sf.dataset.stop.split(":");
+      if (key === "timeFrom" || key === "timeTo") { render(); return; }
+    }
+    const rv = e.target.closest("[data-rv-row]");
+    if (rv) {
+      const [, key] = rv.dataset.rvRow.split(":");
+      if (key === "timeFrom" || key === "timeTo") { render(); return; }
+    }
+  }, true);
 
 
   app.addEventListener("change", e => {
