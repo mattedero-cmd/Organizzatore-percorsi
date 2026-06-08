@@ -5159,6 +5159,34 @@ window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () 
 });
 bindEvents();
 
+// bfcache restore (iOS Safari ripristina la pagina con il vecchio stato JS)
+// → ricontrolla sempre la sessione quando la pagina torna visibile dalla cache
+window.addEventListener("pageshow", (e) => {
+  if (e.persisted) {
+    fetch("/api/auth/me").then(r => {
+      if (!r.ok) {
+        state.user = null;
+        state._authVerified = false;
+        renderAuthScreen(false);
+      }
+    }).catch(() => {});
+  }
+});
+
+// Visibilitychange: ricontrolla la sessione quando l'app torna in primo piano
+// dopo un lungo periodo in background (es. iOS uccide il tab e lo ripristina)
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && state.user) {
+    fetch("/api/auth/me").then(r => {
+      if (!r.ok) {
+        state.user = null;
+        state._authVerified = false;
+        renderAuthScreen(false);
+      }
+    }).catch(() => {});
+  }
+});
+
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
     navigator.serviceWorker.register("/service-worker.js").catch(() => {});
