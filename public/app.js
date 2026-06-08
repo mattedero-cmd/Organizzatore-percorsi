@@ -1004,7 +1004,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.020 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.021 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -1391,20 +1391,17 @@ function renderStops() {
           <label class="stop-window-field">Dalle<input type="time" value="${escapeHtml(stop.timeFrom || "")}" data-stop="${stop.uid}:timeFrom" /></label>
           <label class="stop-window-field">Alle<input type="time" value="${escapeHtml(stop.timeTo || "")}" data-stop="${stop.uid}:timeTo" /></label>
         </div>
+        <div class="stop-window-mode${!stop.timeFrom && !stop.timeTo ? " disabled" : ""}">
+          <label class="stop-window-mode-opt${(!stop.timeWindowMode || stop.timeWindowMode === "available") ? " active" : ""}">
+            <input type="radio" name="twm-${stop.uid}" value="available" data-stop="${stop.uid}:timeWindowMode" ${(!stop.timeWindowMode || stop.timeWindowMode === "available") ? "checked" : ""} ${!stop.timeFrom && !stop.timeTo ? "disabled" : ""} />
+            <span>Disponibilità</span>
+          </label>
+          <label class="stop-window-mode-opt${stop.timeWindowMode === "fixed" ? " active" : ""}">
+            <input type="radio" name="twm-${stop.uid}" value="fixed" data-stop="${stop.uid}:timeWindowMode" ${stop.timeWindowMode === "fixed" ? "checked" : ""} ${!stop.timeFrom && !stop.timeTo ? "disabled" : ""} />
+            <span>Fissa</span>
+          </label>
+        </div>
       </div>
-      ${stop.timeFrom && stop.timeTo ? `
-      <div class="stop-window-mode">
-        <label class="stop-window-mode-opt${(!stop.timeWindowMode || stop.timeWindowMode === "available") ? " active" : ""}">
-          <input type="radio" name="twm-${stop.uid}" value="available" data-stop="${stop.uid}:timeWindowMode" ${(!stop.timeWindowMode || stop.timeWindowMode === "available") ? "checked" : ""} />
-          <span>Disponibilità</span>
-          <small>Il lavoro dura ${minsToHHMM(stop.durationMinutes)} e può iniziare in qualsiasi momento in questa fascia</small>
-        </label>
-        <label class="stop-window-mode-opt${stop.timeWindowMode === "fixed" ? " active" : ""}">
-          <input type="radio" name="twm-${stop.uid}" value="fixed" data-stop="${stop.uid}:timeWindowMode" ${stop.timeWindowMode === "fixed" ? "checked" : ""} />
-          <span>Fissa</span>
-          <small>Il lavoro inizia esattamente alle ${escapeHtml(stop.timeFrom)} e finisce alle ${escapeHtml(stop.timeTo)}</small>
-        </label>
-      </div>` : ""}
       <div class="stop-options">
         <label class="stop-opt-check" title="Lavora all'arrivo anche se il locale è chiuso">
           <input type="checkbox" data-stop="${stop.uid}:ignoreHours" ${stop.ignoreHours ? "checked" : ""} />
@@ -4450,6 +4447,7 @@ function bindEvents() {
       if (stop) { stop[key] = sf.value; render(); }
     }
   });
+
 
   app.addEventListener("change", e => {
     if (e.target.name === "endSameAsStart" || e.target.name === "timingMode") {

@@ -5,6 +5,10 @@
 
 ---
 
+## v4.021 — 2026-06-08
+- Fix picker iOS: rimosso autofill su focus che causava chiusura immediata
+- UI selettore modalità sempre visibile accanto a "Finestra oraria", grigio/non-cliccabile se nessun orario inserito
+
 ## v4.020 — 2026-06-08
 - Fix UI selettore modalità finestra oraria: segmented control compatto stile iOS, radio nascosti, testo 0.78rem
 

@@ -1229,6 +1229,10 @@ textarea:focus {
   margin-top: 4px;
   flex-wrap: wrap;
 }
+.stop-window-mode.disabled {
+  opacity: 0.35;
+  pointer-events: none;
+}
 .stop-opt-label {
   font-size: 0.83rem;
   color: var(--muted);
