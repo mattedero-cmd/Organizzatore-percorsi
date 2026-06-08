@@ -5,6 +5,9 @@
 
 ---
 
+## v4.029 — 2026-06-08
+- Fix layout pulsanti card giro: Rinomina / Condividi / Duplica / Elimina ora su una sola riga (grid 4 colonne)
+
 ## v4.028 — 2026-06-08
 - UX: rimosso rinomina su tap del nome giro — aggiunto pulsante "Rinomina" esplicito nella riga azioni della card
 

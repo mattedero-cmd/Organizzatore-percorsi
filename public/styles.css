@@ -1504,29 +1504,17 @@ textarea:focus {
   color: var(--muted);
 }
 .saved-card-btns {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
-.saved-card-btns-actions {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(4, 1fr);
   gap: 5px;
-}
-.saved-card-name {
-  cursor: pointer;
 }
 .saved-card-btn {
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   padding: 6px 4px;
   min-height: 32px;
   text-align: center;
   justify-content: center;
   width: 100%;
-}
-.saved-card-delete {
-  width: 100%;
-  min-height: 38px;
 }
 .saved-card-meta {
   display: flex;

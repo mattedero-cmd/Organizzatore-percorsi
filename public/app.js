@@ -1006,7 +1006,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.028 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.029 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -1851,12 +1851,10 @@ function renderSaved() {
             <div class="stop-meta saved-card-route">${escapeHtml(route.startLabel || "—")} → ${escapeHtml(route.endLabel || "—")}</div>
             ${route.notes ? `<div class="saved-card-notes">${escapeHtml(route.notes)}</div>` : ""}
             <div class="saved-card-btns">
-              <div class="saved-card-btns-actions">
-                <button class="btn saved-card-btn" data-rename-route="${route.id}">${I.edit(13)} Rinomina</button>
-                <button class="btn saved-card-btn" data-share-route="${route.id}">${I.share(13)} Condividi</button>
-                <button class="btn saved-card-btn" data-duplicate-route="${route.id}">${I.copy(13)} Duplica</button>
-              </div>
-              <button class="btn danger saved-card-btn saved-card-delete" data-delete-route="${route.id}">${I.trash(13)} Elimina</button>
+              <button class="btn saved-card-btn" data-rename-route="${route.id}">${I.edit(13)} Rinomina</button>
+              <button class="btn saved-card-btn" data-share-route="${route.id}">${I.share(13)} Condividi</button>
+              <button class="btn saved-card-btn" data-duplicate-route="${route.id}">${I.copy(13)} Duplica</button>
+              <button class="btn danger saved-card-btn" data-delete-route="${route.id}">${I.trash(13)} Elimina</button>
             </div>
             ${route.plannedStops?.length ? `<div class="saved-stops-list">${route.plannedStops.filter((s, i, arr) => !s.stopPart || s.stopPart === "morning" || arr.findIndex(x => x.addressId === s.addressId) === i).map((s, i) => { const isRest = s.addressType === "rest" || s.customer?.includes("⭐") || s.customer?.includes("★"); return `<span class="saved-stop-chip">${i + 1}. ${escapeHtml(s.customer)}${!isRest && s.location ? ` — ${escapeHtml(s.location)}` : ""}</span>`; }).join("")}</div>` : ""}
           </article>`).join("") || `<div class="empty">Nessun giro salvato.</div>`}
