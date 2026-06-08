@@ -68,7 +68,9 @@ function normalizeStop(stop, index, dayOfWeek = null) {
     closedToday,
     weeklyHours: wh || null,
     lat: stop.lat ?? null,
-    lng: stop.lng ?? null
+    lng: stop.lng ?? null,
+    ignoreHours: stop.ignoreHours === true,
+    fixedFirst: stop.fixedFirst === true
   };
 }
 
@@ -113,6 +115,11 @@ function openingLabel(stop) {
 }
 
 function scheduleStop(arrival, stop) {
+  // ignoreHours: work starts at arrival regardless of opening hours
+  if (stop.ignoreHours) {
+    return { split: false, serviceStart: arrival, serviceEnd: arrival + stop.durationMinutes, waitMinutes: 0, warnings: [] };
+  }
+
   const windows = getWindows(stop);
   const warnings = [];
 
@@ -719,9 +726,11 @@ export async function planRoute(payload, settings, restStops = []) {
     workHourRate: Number(payload.rates?.workHourRate ?? settings.workHourRate)
   };
 
-  const lockedFirst = firstArrivalRequired !== null && stopsWithNodeIndex.length > 1
-    ? stopsWithNodeIndex[0]
-    : null;
+  // Lock first stop when: firstArrivalRequired is set, OR stop has fixedFirst flag
+  const firstStopFixed = stopsWithNodeIndex.length > 1 && (
+    firstArrivalRequired !== null || stopsWithNodeIndex[0]?.fixedFirst === true
+  );
+  const lockedFirst = firstStopFixed ? stopsWithNodeIndex[0] : null;
   const reorderable = lockedFirst ? stopsWithNodeIndex.slice(1) : stopsWithNodeIndex;
 
   const context = { nodes, matrix, startMinutes, firstArrivalRequired, rates, timingMode, arrivalLeadMinutes };

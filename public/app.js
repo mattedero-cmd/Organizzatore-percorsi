@@ -1286,19 +1286,34 @@ function renderStops() {
   if (!visible.length) return `<div class="empty">Nessuna tappa corrisponde alla ricerca.</div>`;
   return `<div class="stop-list">${visible.map((stop, i) => {
     const globalIdx = state.route.stops.indexOf(stop);
+    const isFirst = globalIdx === 0;
+    const isPinned = stop.fixedFirst === true;
     return `
-    <article class="card stop-card">
+    <article class="card stop-card${isPinned ? " stop-card--pinned" : ""}">
       <div class="stop-head">
-        <div>
-          <p class="stop-title">${globalIdx + 1}. ${escapeHtml(stop.customer)} ${escapeHtml(stop.location || "")}</p>
+        <div class="stop-head-info">
+          <p class="stop-title">
+            ${isPinned ? `<span class="stop-pin-badge" title="Prima tappa fissa">${_svg('<path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>',11)}</span>` : ""}
+            ${globalIdx + 1}. ${escapeHtml(stop.customer)} <span class="stop-loc">${escapeHtml(stop.location || "")}</span>
+          </p>
           <div class="stop-meta">${escapeHtml(stop.fullAddress)}</div>
         </div>
         <button class="btn danger icon-btn" data-remove-stop="${stop.uid}" title="Rimuovi">${I.close(13)}</button>
       </div>
-      <div class="form-grid three">
+      <div class="stop-fields">
         <label class="field">Durata (min)<input type="number" min="5" step="5" value="${escapeHtml(stop.durationMinutes)}" data-stop="${stop.uid}:durationMinutes" /></label>
         <div class="field">${stopHoursHint(stop, state.route.scheduledDate)}</div>
-        <div class="field"><span class="badge ${stop.recognized ? "ok" : "warning"}">${stop.recognized ? "Archivio" : "Da confermare"}</span></div>
+      </div>
+      <div class="stop-options">
+        <label class="stop-opt-check" title="Lavora all'arrivo anche se il locale è chiuso">
+          <input type="checkbox" data-stop="${stop.uid}:ignoreHours" ${stop.ignoreHours ? "checked" : ""} />
+          <span>Ignora orari di apertura</span>
+        </label>
+        ${isFirst ? `
+        <label class="stop-opt-check" title="Mantieni questa tappa per prima anche dopo l'ottimizzazione">
+          <input type="checkbox" data-stop="${stop.uid}:fixedFirst" ${isPinned ? "checked" : ""} />
+          <span>Prima tappa fissa</span>
+        </label>` : ""}
       </div>
     </article>`;
   }).join("")}</div>`;
@@ -3999,7 +4014,10 @@ function bindEvents() {
     if (sf) {
       const [uid, key] = sf.dataset.stop.split(":");
       const stop = state.route.stops.find(s => s.uid === uid);
-      if (stop) stop[key] = key === "durationMinutes" ? Number(sf.value || 0) : sf.value;
+      if (stop) {
+        if (sf.type === "checkbox") stop[key] = sf.checked;
+        else stop[key] = key === "durationMinutes" ? Number(sf.value || 0) : sf.value;
+      }
     }
     // google contacts search
     if (e.target.id === "gc-search" && state.googleContactsData) {

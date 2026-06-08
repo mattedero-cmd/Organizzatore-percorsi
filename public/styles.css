@@ -1169,9 +1169,72 @@ textarea:focus {
   align-items: flex-start;
 }
 
+.stop-head-info {
+  flex: 1;
+  min-width: 0;
+}
+
 .stop-title {
   margin: 0;
   font-weight: 850;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
+.stop-pin-badge {
+  display: inline-flex;
+  align-items: center;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.stop-loc {
+  font-weight: 400;
+  font-size: 0.82rem;
+  color: var(--muted);
+  display: block;
+  margin-top: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.stop-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.stop-options {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.stop-opt-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.87rem;
+  color: var(--muted);
+  cursor: pointer;
+  user-select: none;
+}
+
+.stop-opt-check input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.stop-card--pinned {
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+  background: color-mix(in srgb, var(--accent) 4%, var(--surface));
 }
 
 .stop-meta {
