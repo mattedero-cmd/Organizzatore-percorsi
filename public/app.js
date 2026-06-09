@@ -1008,7 +1008,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.040 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.041 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -2375,6 +2375,7 @@ function renderResult() {
               ${!isAfternoon ? `<a class="btn primary rc-nav-btn" href="${stopNavUrl(row, state.navigatorPref)}" target="_blank" rel="noopener">${I.navigate(14)} Naviga</a>` : ""}
               ${phoneBtn}
               ${email && !row.stopPart ? `<a class="btn icon-btn" href="mailto:${escapeHtml(email)}?subject=${emailSubject}" title="${escapeHtml(email)}">${I.email(15)}</a>` : ""}
+              ${!isAfternoon ? `<button class="btn icon-btn rc-remove-stop-btn" data-remove-stop="${row.stopUid || row.uid || row.stopNumber}" title="Rimuovi tappa">${I.trash(14)}</button>` : ""}
             </div>
             <div class="rc-details" data-stop-details="${expandId}"${state.expandedStops.has(expandId) ? "" : " hidden"}>
               <div class="rc-timing-strip">
@@ -4921,6 +4922,25 @@ function bindEvents() {
         showToast(`${customer} salvato — premi Ricalcola`);
         renderResult();
       } catch (err) { showToast(err.message); }
+      return;
+    }
+
+    // result view: remove stop from current route and replan
+    if (e.target.closest(".rc-remove-stop-btn") && state.result?.rows) {
+      const uid = e.target.closest(".rc-remove-stop-btn").dataset.removeStop;
+      const result = normalizeSavedRoute(state.result);
+      // Find the stop to remove (match by uid, stopUid, or stopNumber as fallback)
+      const removedRow = result.rows.find(r => !r.type && (!r.stopPart || r.stopPart === "morning") &&
+        (r.stopUid === uid || r.uid === uid || String(r.stopNumber) === String(uid)));
+      if (!removedRow) return;
+      // Remove all parts of this stop (morning + afternoon) by stopUid or stopNumber
+      state.result.rows = state.result.rows.filter(r => {
+        if (r.type) return true; // keep breaks
+        if (removedRow.stopUid) return r.stopUid !== removedRow.stopUid;
+        return r.stopNumber !== removedRow.stopNumber;
+      });
+      showToast(`${removedRow.customer} rimosso — premi Ricalcola`);
+      renderResult();
       return;
     }
 

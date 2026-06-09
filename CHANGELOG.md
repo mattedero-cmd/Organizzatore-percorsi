@@ -1,3 +1,6 @@
+## v4.041 — 2026-06-09
+- Nuovo: pulsante cestino discreto su ogni card tappa nella vista risultato — rimuove la tappa dal giro; un toast invita a premere Ricalcola per aggiornare il percorso
+
 ## v4.040 — 2026-06-09
 - Fix priorità pranzo su soste: il contatore cumulativo guida+lavoro viene azzerato quando si supera il punto di inserimento del pranzo — le soste non scattano più per minuti accumulati prima del pranzo
 - prevServiceEnd avanzato della durata pranzo per rendere accurate le finestre temporali delle soste successive
