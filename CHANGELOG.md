@@ -1,3 +1,8 @@
+## v4.058 — 2026-06-09
+- Fix logica messaggi: data passata → nessun messaggio; data odierna + orario passato → vuoto; data odierna + orario futuro → ETA; data futura → richiesta disponibilità
+- Fix campo lunchFixedTime nel pannello risultato: default "12:30" invece di vuoto per giri pre-v4.051
+- Nuovo: campo "Pranzo alle" visibile nella card di ogni tappa (solo per contatti senza orari di apertura/chiusura salvati) — aggiorna l'orario fisso pranzo del giro e attiva il pulsante Ricalcola
+
 ## v4.057 — 2026-06-09
 - Template messaggio data futura: "...per l'intervento di (specificare) il [data] alle ore [ora]. Grazie, attendo conferma." — placeholder modificabile prima dell'invio
 

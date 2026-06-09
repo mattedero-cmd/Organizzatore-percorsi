@@ -107,19 +107,20 @@ function parseTimeToMinutes(t) {
 
 function buildWhatsAppMessage(result, row) {
   const senderName = state.user?.nickname || state.user?.username || "";
-  const customer = row.customer || row.location || "";
   const scheduledDate = result.scheduledDate || "";
-  const isToday = scheduledDate === new Date().toISOString().slice(0, 10);
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const isPast   = scheduledDate && scheduledDate < todayStr;
+  const isToday  = scheduledDate === todayStr;
+  // Past date or no date → no message
+  if (isPast) return null;
 
   if (isToday) {
-    // Use the planned arrival as ETA — computed at the moment the button is pressed.
-    // Without GPS we cannot measure actual delay reliably; a wrong delta is worse than
-    // the planned time. If the planned arrival is already in the past → empty message.
+    // Use planned arrival as ETA. If already past → empty message.
     const planned = parseTimeToMinutes(row.arrivalTime);
     if (planned === null) return null;
     const now = new Date();
     const nowMin = now.getHours() * 60 + now.getMinutes();
-    if (planned <= nowMin) return null; // arrivo già nel passato — messaggio vuoto
+    if (planned <= nowMin) return null;
     const eta = planned;
     const etaH = Math.floor(eta / 60).toString().padStart(2, "0");
     const etaM = (eta % 60).toString().padStart(2, "0");
@@ -1066,7 +1067,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.057 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.058 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -2281,6 +2282,11 @@ function stopDetailExtra(result, row, addr, stopIdx) {
           <label class="stop-opt-check"><input type="checkbox" data-rv-stop="${stopIdx}:fixedFirst" ${row.fixedFirst ? "checked" : ""} /><span>Prima tappa</span></label>
           <label class="stop-opt-check"><input type="checkbox" data-rv-stop="${stopIdx}:ignoreHours" ${row.ignoreHours ? "checked" : ""} /><span>Ignora orari</span></label>
         </div>
+        ${!(addr?.closeMorning && addr?.openAfternoon) ? `
+        <div class="rv-stop-edit-row" style="margin-top:6px;">
+          <span class="rv-stop-edit-label">${I.fork(12)} Pranzo alle</span>
+          <input type="time" step="300" value="${escapeHtml(result.lunchFixedTime || "12:30")}" data-rv-lunch-time style="width:88px;" />
+        </div>` : ""}
         <button type="button" class="btn${state.dirtyStops.has(String(stopIdx)) ? " primary" : ""} rv-stop-replan-btn">${I.navigate(14)} Ricalcola</button>
       </div>`);
   }
@@ -3079,7 +3085,7 @@ function renderResultEditPanels(result) {
           </label>
           <input name="lunchBreakMinutes" type="number" min="15" max="120" step="5" value="${lunchBreakMinutes}" style="width:64px;" /> <span class="stop-meta">min</span>
           <span class="stop-meta" style="margin-left:6px;">alle</span>
-          <input name="lunchFixedTime" type="time" step="300" value="${escapeHtml(result.lunchFixedTime || "")}" style="width:88px;" title="Orario fisso pranzo (opzionale)" />
+          <input name="lunchFixedTime" type="time" step="300" value="${escapeHtml(result.lunchFixedTime || "12:30")}" style="width:88px;" title="Orario fisso pranzo (opzionale)" />
         </div>
         <button type="button" class="btn primary" id="rv-replan-btn" style="width:100%;margin-top:10px;">${I.navigate(14)} Ricalcola</button>
       </form>
@@ -4554,6 +4560,15 @@ function bindEvents() {
           stop[key] = key === "durationMinutes" ? hhmmToMins(sf.value) : sf.value;
         }
       }
+    }
+    // rv-lunch-time — orario fisso pranzo impostato dalla card tappa
+    if (e.target.closest("[data-rv-lunch-time]")) {
+      if (state.result) {
+        state.result.lunchFixedTime = e.target.value || "";
+        const btn = e.target.closest(".rv-stop-edit")?.querySelector(".rv-stop-replan-btn");
+        if (btn) btn.classList.add("primary");
+      }
+      return;
     }
     // rv-stop — per-stop edit in result view
     const rvs = e.target.closest("[data-rv-stop]");
