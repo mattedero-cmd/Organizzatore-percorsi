@@ -1008,7 +1008,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.037 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.038 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -2078,7 +2078,7 @@ function weatherIcon(w) {
 
 function getRvStopRow(idx) {
   if (!state.result?.rows) return null;
-  return state.result.rows.filter(r => !r.type && !r.stopPart)[Number(idx)] ?? null;
+  return state.result.rows.filter(r => !r.type && (!r.stopPart || r.stopPart === "morning"))[Number(idx)] ?? null;
 }
 
 function stopDetailExtra(result, row, addr, stopIdx) {
@@ -2341,8 +2341,8 @@ function renderResult() {
           }
 
           const addr = state.allAddresses.find(a => String(a.id) === String(row.addressId));
-          if (!row.stopPart) rvStopIdx++;
-          const thisStopIdx = (!row.stopPart) ? rvStopIdx : -1;
+          if (!row.stopPart || row.stopPart === "morning") rvStopIdx++;
+          const thisStopIdx = (!row.stopPart || row.stopPart === "morning") ? rvStopIdx : -1;
           const prefPhone = preferredPhone(addr || {});
           const phone = addr?.phone || row.phone || "";
           const phone2 = addr?.phone2 || row.phone2 || "";
@@ -2388,7 +2388,7 @@ function renderResult() {
               ${email && !row.stopPart ? `<div class="rc-contact">${I.email(14)} <a href="mailto:${escapeHtml(email)}">${escapeHtml(email)}</a></div>` : ""}
               ${row.notes && !row.stopPart ? `<div class="rc-notes">${escapeHtml(row.notes)}</div>` : ""}
               ${warnLevel ? warningBadges(row.warnings) : ""}
-              ${!row.stopPart ? stopDetailExtra(result, row, addr, thisStopIdx) : ""}
+              ${(!row.stopPart || row.stopPart === "morning") ? stopDetailExtra(result, row, addr, thisStopIdx) : ""}
             </div>
           </article>`;
         }).join("");})()}
