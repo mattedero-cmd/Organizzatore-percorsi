@@ -1,3 +1,6 @@
+## v4.053 — 2026-06-09
+- Fix crash "Cannot access 'isAfternoon' before initialization": spostata dichiarazione const isAfternoon prima di phoneBtn
+
 ## v4.052 — 2026-06-09
 - Fix: pulsanti telefono, email e WhatsApp sempre visibili su ogni tappa (non pomeriggio), anche senza contatto salvato — aprono l'app rispettiva senza destinatario pre-compilato per ricerca manuale
 

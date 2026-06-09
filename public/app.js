@@ -1079,7 +1079,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.052 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.053 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -2452,6 +2452,7 @@ function renderResult() {
           const addr = state.allAddresses.find(a => String(a.id) === String(row.addressId));
           if (!row.stopPart || row.stopPart === "morning") rvStopIdx++;
           const thisStopIdx = (!row.stopPart || row.stopPart === "morning") ? rvStopIdx : -1;
+          const isAfternoon = row.stopPart === "afternoon";
           const prefPhone = preferredPhone(addr || {});
           const phone = addr?.phone || row.phone || "";
           const phone2 = addr?.phone2 || row.phone2 || "";
@@ -2473,7 +2474,6 @@ function renderResult() {
           const cardClass = warnLevel === "error" ? " card-error" : warnLevel === "warn" ? " card-warn" : "";
           const warnMsg = warnLevel ? (row.warnings.find(w => w.level === warnLevel || (warnLevel==="error" && /(chiusa|dopo|oltre)/.test(w.msg||w)))?.msg || "") : "";
           const expandId = `${row.stopNumber}${row.stopPart ? "-" + row.stopPart : ""}`;
-          const isAfternoon = row.stopPart === "afternoon";
           const arrivalDisplay = isAfternoon ? row.serviceStartTime : row.arrivalTime;
           return `
           <article class="card rc${cardClass}">
