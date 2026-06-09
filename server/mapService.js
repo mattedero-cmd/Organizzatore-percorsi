@@ -1,3 +1,5 @@
+import { trackCall } from "./apiStats.js";
+
 const CITY_COORDS = [
   ["riva del garda", 45.889, 10.843],
   ["arco", 45.918, 10.886],
@@ -86,6 +88,7 @@ async function orsGeocode(query) {
   url.searchParams.set("boundary.country", "IT");
   url.searchParams.set("size", "1");
 
+  trackCall("openroute", "geocode");
   const response = await fetch(url, { signal: AbortSignal.timeout(GEOCODE_TIMEOUT_MS) });
   if (!response.ok) throw new Error(`Geocoding non riuscito (${response.status})`);
   const payload = await response.json();
@@ -106,6 +109,7 @@ async function mapQuestGeocode(query) {
   url.searchParams.set("thumbMaps", "false");
   url.searchParams.set("outFormat", "json");
 
+  trackCall("openroute", "geocode");
   const response = await fetch(url, { signal: AbortSignal.timeout(GEOCODE_TIMEOUT_MS) });
   if (!response.ok) throw new Error(`MapQuest geocoding non riuscito (${response.status})`);
   const payload = await response.json();
@@ -136,6 +140,7 @@ async function orsRoute(a, b) {
   const key = process.env.OPENROUTESERVICE_API_KEY;
   if (!key) return null;
 
+  trackCall("openroute", "directions");
   const response = await fetch("https://api.openrouteservice.org/v2/directions/driving-car/json", {
     method: "POST",
     signal: AbortSignal.timeout(ROUTE_TIMEOUT_MS),
@@ -171,6 +176,7 @@ async function mapQuestRoute(a, b) {
   url.searchParams.set("unit", "k");
   url.searchParams.set("outFormat", "json");
 
+  trackCall("openroute", "directions");
   const response = await fetch(url, {
     method: "POST",
     signal: AbortSignal.timeout(ROUTE_TIMEOUT_MS),

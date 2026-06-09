@@ -162,9 +162,80 @@ async function loadSessions() {
   `).join("");
 }
 
+// ── API call stats ────────────────────────────────────────────────────────────
+const SERVICE_LABELS = {
+  google_maps: "Google Maps",
+  openai: "OpenAI",
+  openroute: "OpenRoute / MapQuest",
+  open_meteo: "Open-Meteo (meteo)",
+  internal: "Interno"
+};
+const SERVICE_PAID = new Set(["google_maps", "openai"]);
+
+async function loadApiStats() {
+  const days = Number(document.getElementById("api-stats-days")?.value || 30);
+  const tbody = document.getElementById("api-stats-tbody");
+  const summary = document.getElementById("api-stats-summary");
+  if (!tbody) return;
+
+  try {
+    const rows = await adminApi(`/api/admin/api-stats?days=${days}`);
+    if (!rows.length) {
+      tbody.innerHTML = '<tr class="empty-row"><td colspan="4">Nessuna chiamata registrata.</td></tr>';
+      if (summary) summary.innerHTML = "";
+      return;
+    }
+
+    // Aggregate by service for the summary pills
+    const totals = {};
+    for (const r of rows) {
+      totals[r.service] = (totals[r.service] ?? 0) + Number(r.total);
+    }
+
+    if (summary) {
+      summary.innerHTML = Object.entries(totals)
+        .sort((a, b) => b[1] - a[1])
+        .map(([svc, tot]) => {
+          const label = SERVICE_LABELS[svc] || svc;
+          const paid = SERVICE_PAID.has(svc);
+          return `<span class="api-stat-pill${paid ? " api-stat-pill-paid" : " api-stat-pill-free"}">${esc(label)}: <strong>${tot}</strong></span>`;
+        }).join("");
+    }
+
+    // Group rows by day for display
+    const byDay = {};
+    for (const r of rows) {
+      if (!byDay[r.day]) byDay[r.day] = {};
+      byDay[r.day][r.service] = Number(r.total);
+    }
+
+    const services = Object.keys(totals).sort();
+    tbody.innerHTML = Object.entries(byDay).map(([day, svcMap]) => {
+      const cells = services.map(svc => {
+        const n = svcMap[svc] ?? 0;
+        const paid = SERVICE_PAID.has(svc);
+        return `<td class="${paid && n > 0 ? "api-cell-paid" : ""}">${n > 0 ? n : ""}</td>`;
+      }).join("");
+      return `<tr><td class="mono">${esc(day)}</td>${cells}</tr>`;
+    }).join("");
+
+    // Rebuild header with dynamic service columns
+    const thead = tbody.closest("table")?.querySelector("thead tr");
+    if (thead) {
+      thead.innerHTML = `<th>Giorno</th>` + services.map(svc => {
+        const label = SERVICE_LABELS[svc] || svc;
+        const paid = SERVICE_PAID.has(svc);
+        return `<th${paid ? ' class="api-header-paid"' : ""}>${esc(label)}</th>`;
+      }).join("");
+    }
+  } catch (err) {
+    tbody.innerHTML = `<tr class="empty-row"><td colspan="5">${esc(err.message)}</td></tr>`;
+  }
+}
+
 async function refreshAll() {
   try {
-    await Promise.all([loadStats(), loadUsers(), loadSessions()]);
+    await Promise.all([loadStats(), loadUsers(), loadSessions(), loadApiStats()]);
   } catch (err) {
     if (err.message.includes("Non autenticato") || err.message.includes("401")) {
       stopAutoRefresh();
@@ -220,6 +291,9 @@ function startAutoRefresh() {
 function stopAutoRefresh() {
   if (refreshInterval) { clearInterval(refreshInterval); refreshInterval = null; }
 }
+
+document.getElementById("api-stats-days")?.addEventListener("change", loadApiStats);
+window.loadApiStats = loadApiStats;
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 if (adminToken) {

@@ -1,3 +1,5 @@
+import { trackCall } from "./apiStats.js";
+
 const API_KEY = () => process.env.GOOGLE_MAPS_API_KEY || "";
 const BASE = "https://maps.googleapis.com/maps/api";
 
@@ -49,6 +51,7 @@ export async function resolvePlace(place) {
     try {
       const query = addressQuery(place);
       const url = `${BASE}/geocode/json?address=${encodeURIComponent(query)}&region=it&key=${key}`;
+      trackCall("google_maps", "geocode");
       const res = await fetch(url, { signal: AbortSignal.timeout(7000) });
       const data = await res.json();
       if (data.status === "OK" && data.results?.[0]) {
@@ -73,6 +76,7 @@ export async function routeBetween(a, b) {
       const origin = `${coordA.lat},${coordA.lng}`;
       const dest = `${coordB.lat},${coordB.lng}`;
       const url = `${BASE}/directions/json?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(dest)}&region=it&language=it&key=${key}`;
+      trackCall("google_maps", "directions");
       const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
       const data = await res.json();
       if (data.status === "OK" && data.routes?.[0]) {
@@ -158,6 +162,7 @@ function perpKmToSegment(pLat, pLng, aLat, aLng, bLat, bLng) {
 async function fetchPlaceDetails(placeId, key) {
   try {
     const url = `${BASE}/place/details/json?place_id=${encodeURIComponent(placeId)}&fields=opening_hours&key=${key}`;
+    trackCall("google_maps", "place_details");
     const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
     const data = await res.json();
     if (data.status === "OK") return data.result?.opening_hours || null;
@@ -190,6 +195,7 @@ export async function findNearbyRestStop(lat, lng, segFromLat, segFromLng, segTo
 
   try {
     const url = `${BASE}/place/nearbysearch/json?location=${lat},${lng}&radius=${radiusM}&type=bar&language=it&key=${key}`;
+    trackCall("google_maps", "nearby_search");
     const res = await fetch(url, { signal: AbortSignal.timeout(6000) });
     const data = await res.json();
     console.log("[Places]", lat.toFixed(4), lng.toFixed(4), "→ status:", data.status, "results:", data.results?.length ?? 0);
@@ -281,6 +287,7 @@ export async function findNearbyRestaurant(lat, lng, segFromLat, segFromLng, seg
 
   try {
     const url = `${BASE}/place/nearbysearch/json?location=${lat},${lng}&radius=${radiusM}&type=restaurant&language=it&keyword=mensa+trattoria+osteria+ristorante&key=${key}`;
+    trackCall("google_maps", "nearby_search");
     const res = await fetch(url, { signal: AbortSignal.timeout(6000) });
     const data = await res.json();
     console.log("[Places/restaurant]", lat.toFixed(4), lng.toFixed(4), "→ status:", data.status, "results:", data.results?.length ?? 0);
@@ -353,6 +360,7 @@ export async function routeShape(points) {
       const waypoints = resolved.slice(1, -1).map(p => `${p.lat},${p.lng}`).join("|");
       let url = `${BASE}/directions/json?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(dest)}&region=it&language=it&key=${key}`;
       if (waypoints) url += `&waypoints=${encodeURIComponent(waypoints)}`;
+      trackCall("google_maps", "directions");
       const res = await fetch(url, { signal: AbortSignal.timeout(12000) });
       const data = await res.json();
       if (data.status === "OK" && data.routes?.[0]) {

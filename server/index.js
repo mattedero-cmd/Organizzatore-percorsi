@@ -50,6 +50,7 @@ import { planRoute } from "./planner.js";
 import { routeShape } from "./googleMapsService.js";
 import { parseVoiceCommand } from "./voiceParser.js";
 import { attachWeather, shouldRefreshWeather } from "./weatherService.js";
+import { trackCall, initApiStatsTable, getApiStats, getApiStatsDetail } from "./apiStats.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -58,6 +59,7 @@ const publicDir = path.join(rootDir, "public");
 
 loadEnv(rootDir);
 await initDb(rootDir);
+await initApiStatsTable();
 
 const PORT = Number(process.env.PORT || 5174);
 
@@ -489,6 +491,17 @@ async function handleApi(request, response) {
         return sendJson(response, 200, { ok: true });
       }
 
+      if (method === "GET" && url.pathname === "/api/admin/api-stats") {
+        const days = Number(url.searchParams.get("days") || 30);
+        return sendJson(response, 200, await getApiStats(days));
+      }
+
+      if (method === "GET" && url.pathname === "/api/admin/api-stats/detail") {
+        const service = url.searchParams.get("service") || "google_maps";
+        const days = Number(url.searchParams.get("days") || 30);
+        return sendJson(response, 200, await getApiStatsDetail(service, days));
+      }
+
       return sendJson(response, 404, { error: "Rotta non trovata" });
     }
 
@@ -549,11 +562,13 @@ async function handleApi(request, response) {
       try {
         if (!placeId) {
           const q = encodeURIComponent([addr.customer, addr.fullAddress].filter(Boolean).join(" "));
+          trackCall("google_maps", "text_search");
           const tsRes = await fetch(`${BASE_MAPS}/place/textsearch/json?query=${q}&region=it&key=${apiKey}`, { signal: AbortSignal.timeout(6000) });
           const tsData = await tsRes.json();
           placeId = tsData.results?.[0]?.place_id || null;
         }
         if (!placeId) return sendJson(response, 503, { error: "Luogo non trovato su Google Maps" });
+        trackCall("google_maps", "place_details");
         const detRes = await fetch(`${BASE_MAPS}/place/details/json?place_id=${encodeURIComponent(placeId)}&fields=opening_hours,name&language=it&key=${apiKey}`, { signal: AbortSignal.timeout(6000) });
         const detData = await detRes.json();
         const oh = detData.result?.opening_hours || null;
@@ -751,6 +766,7 @@ ${addressList}
 - Se dici "domani" calcola la data corretta rispetto a oggi (${today})
 - Restituisci SOLO il JSON, nessun testo aggiuntivo.`;
 
+      trackCall("openai", "chat_completions");
       const oaiRes = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
         headers: {
@@ -810,6 +826,7 @@ ${addressList}
       form.append("file", new Blob([audioBuffer], { type: contentType }), "audio.webm");
       form.append("model", "whisper-1");
       form.append("language", "it");
+      trackCall("openai", "whisper");
       const oaiRes = await fetch("https://api.openai.com/v1/audio/transcriptions", {
         method: "POST",
         headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },

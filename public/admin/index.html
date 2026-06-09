@@ -164,6 +164,13 @@
 
     .empty-row td { text-align: center; color: #64748b; padding: 2rem; }
 
+    /* API stats */
+    .api-stat-pill { display:inline-block; padding:0.2rem 0.7rem; border-radius:999px; font-size:0.8rem; }
+    .api-stat-pill-paid { background:#7f1d1d; color:#fca5a5; }
+    .api-stat-pill-free { background:#14532d; color:#86efac; }
+    .api-cell-paid { color:#fca5a5; font-weight:600; }
+    .api-header-paid { color:#fca5a5; }
+
     @media (max-width: 600px) {
       main { padding: 1rem; }
       header.admin-header { padding: 0.75rem 1rem; }
@@ -256,6 +263,30 @@
           </thead>
           <tbody id="sessions-tbody">
             <tr class="empty-row"><td colspan="4">Caricamento…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- API call stats -->
+    <div class="section">
+      <div class="section-header">
+        <h2>Chiamate API esterne</h2>
+        <div style="display:flex;align-items:center;gap:0.5rem;">
+          <select id="api-stats-days" style="background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:6px;padding:0.3rem 0.6rem;font-size:0.82rem;">
+            <option value="7">7 giorni</option>
+            <option value="30" selected>30 giorni</option>
+            <option value="90">90 giorni</option>
+          </select>
+          <button class="btn btn-outline" onclick="loadApiStats()" style="font-size:0.82rem;padding:0.3rem 0.7rem;">Aggiorna</button>
+        </div>
+      </div>
+      <div id="api-stats-summary" style="display:flex;flex-wrap:wrap;gap:0.5rem;margin-bottom:0.75rem;"></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr id="api-stats-thead-row"><th>Giorno</th></tr></thead>
+          <tbody id="api-stats-tbody">
+            <tr class="empty-row"><td colspan="5">Caricamento…</td></tr>
           </tbody>
         </table>
       </div>

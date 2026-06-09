@@ -1,3 +1,7 @@
+## v4.043 — 2026-06-09
+- Nuovo: tracciamento chiamate API esterne — Google Maps (geocode/directions/places), OpenAI (chat/whisper), OpenRoute, Open-Meteo conteggiate in DB con flush ogni minuto
+- Admin panel: nuova sezione "Chiamate API esterne" con totali giornalieri per servizio, pill riassuntive pagate/gratuite, filtro 7/30/90 giorni
+
 ## v4.042 — 2026-06-09
 - Fix finestra oraria fissa su prima tappa: il planner ora retrocede l'orario di partenza per arrivare esattamente a timeFrom — prima ignorava il vincolo e partiva all'orario impostato nel form
 

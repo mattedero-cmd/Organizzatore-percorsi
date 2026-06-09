@@ -1,4 +1,5 @@
 import { resolvePlace } from "./mapService.js";
+import { trackCall } from "./apiStats.js";
 
 const WEATHER_CODES = new Map([
   [0, "Sereno"], [1, "Prevalentemente sereno"], [2, "Parzialmente nuvoloso"], [3, "Nuvoloso"],
@@ -118,6 +119,7 @@ async function openMeteoWeather(coords, row, scheduledDate, mode) {
   } else {
     url.searchParams.set("forecast_days", "16");
   }
+  trackCall("open_meteo", "forecast");
   const response = await fetch(url, { signal: AbortSignal.timeout(WEATHER_FETCH_TIMEOUT_MS) });
   if (!response.ok) throw new Error(`Meteo Open-Meteo non riuscito (${response.status})`);
   return fromOpenMeteo(await response.json(), row, scheduledDate, mode, "open-meteo");
@@ -132,6 +134,7 @@ async function openWeatherForecast(coords, row, scheduledDate) {
   url.searchParams.set("appid", key);
   url.searchParams.set("units", "metric");
   url.searchParams.set("lang", "it");
+  trackCall("open_meteo", "forecast");
   const response = await fetch(url, { signal: AbortSignal.timeout(WEATHER_FETCH_TIMEOUT_MS) });
   if (!response.ok) throw new Error(`Meteo OpenWeather non riuscito (${response.status})`);
   const payload = await response.json();
@@ -164,6 +167,7 @@ async function weatherbitForecast(coords, row, scheduledDate) {
   url.searchParams.set("key", key);
   url.searchParams.set("hours", "240");
   url.searchParams.set("lang", "it");
+  trackCall("open_meteo", "forecast");
   const response = await fetch(url, { signal: AbortSignal.timeout(WEATHER_FETCH_TIMEOUT_MS) });
   if (!response.ok) throw new Error(`Meteo Weatherbit non riuscito (${response.status})`);
   const payload = await response.json();
