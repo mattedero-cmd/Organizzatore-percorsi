@@ -716,6 +716,13 @@ async function insertBreaks(rows, options) {
   };
 
   for (let i = 0; i < rows.length; i++) {
+    // If lunch is inserted before this row, reset cumulative — lunch resets the rest-stop clock
+    if (lunchIns && lunchIns.beforeIndex === i) {
+      cumulative = 0;
+      // Advance prevServiceEnd past the lunch duration so subsequent break-time checks are accurate
+      prevServiceEnd = prevServiceEnd + lunchBreakMinutes;
+    }
+
     const row = rows[i];
     let remainingDrive = row.driveMinutes || 0;
     const workMin = row.durationMinutes || 0;

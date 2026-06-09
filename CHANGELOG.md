@@ -1,3 +1,7 @@
+## v4.040 — 2026-06-09
+- Fix priorità pranzo su soste: il contatore cumulativo guida+lavoro viene azzerato quando si supera il punto di inserimento del pranzo — le soste non scattano più per minuti accumulati prima del pranzo
+- prevServiceEnd avanzato della durata pranzo per rendere accurate le finestre temporali delle soste successive
+
 ## v4.039 — 2026-06-09
 - Fix prima tappa: il planner ora sposta in testa qualsiasi tappa con fixedFirst=true, non solo la prima dell'array — il flag funziona indipendentemente dall'ordine corrente del giro
 
