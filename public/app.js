@@ -124,7 +124,7 @@ function buildWhatsAppMessage(result, row) {
     const etaH = Math.floor(eta / 60).toString().padStart(2, "0");
     const etaM = (eta % 60).toString().padStart(2, "0");
     const parts = [
-      `Buongiorno${customer ? " " + customer : ""},`,
+      `Buongiorno,`,
       `sono ${senderName || "in arrivo"}`.trim() + ` e il mio arrivo è previsto intorno alle ore ${etaH}:${etaM}.`,
       "A presto."
     ];
@@ -138,7 +138,7 @@ function buildWhatsAppMessage(result, row) {
     })() : "";
     const timeStr = row.arrivalTime ? row.arrivalTime.slice(0, 5) : "";
     const parts = [
-      `Buongiorno${customer ? " " + customer : ""},`,
+      `Buongiorno,`,
       `la contatto per confermare l'appuntamento${dateStr ? " del " + dateStr : ""}${timeStr ? " alle ore " + timeStr : ""}.`,
       "Può confermarlo? Grazie."
     ];
@@ -1066,7 +1066,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.054 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.055 &mdash; giugno 2026</p>
         </div>
       </div>
 

@@ -1,3 +1,6 @@
+## v4.055 — 2026-06-09
+- Fix messaggi WhatsApp/mail: rimosso nome cliente dal saluto — entrambi i template usano solo "Buongiorno," senza nome
+
 ## v4.054 — 2026-06-09
 - Fix ETA WhatsApp/mail per giri odierni: rimosso calcolo ritardo basato su serviceEndTime (produceva delta errati fino a ore). L'orario pianificato è l'ETA; se è già nel passato il messaggio rimane vuoto
 
