@@ -1008,7 +1008,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.036 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.037 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -4766,7 +4766,7 @@ function bindEvents() {
       const result = normalizeSavedRoute(state.result);
       const customerRows = result.rows.filter(r => !r.type);
       state.planning = true;
-      showSpinner(hasLunch ? "Rimozione pranzo…" : "Aggiunta pranzo…");
+      showSpinner(hasLunch ? "Rimozione pranzo…" : "Ricalcolo con pausa pranzo…");
       render();
       try {
         state.result = await api("/api/plan", {
@@ -4785,7 +4785,7 @@ function bindEvents() {
             rates: state.settings,
             manualOrder: true,
             lunchBreak: !hasLunch,
-            lunchBreakMinutes: state.settings.lunchBreakMinutes || 45,
+            lunchBreakMinutes: result.lunchBreakMinutes || state.settings.lunchBreakMinutes || 45,
             stops: customerRows.filter((r, i, arr) => !r.stopPart || arr.findIndex(x => x.stopUid === r.stopUid) === i).map(row => ({
               uid: row.stopUid || crypto.randomUUID(),
               addressId: row.addressId,
@@ -4810,7 +4810,13 @@ function bindEvents() {
     state.expandedPanels = new Set();
     state.resultLunchEnabled = null;
     state.dirtyStops = new Set();
-        showToast(hasLunch ? "Pausa pranzo rimossa" : "Pausa pranzo aggiunta");
+        if (!hasLunch) {
+          const lunchRow = state.result?.rows?.find(r => r.type === "lunch");
+          const where = lunchRow?.customer && lunchRow.customer !== "Pausa pranzo" ? ` — ${lunchRow.customer}` : "";
+          showToast(`Pausa pranzo aggiunta${where}`);
+        } else {
+          showToast("Pausa pranzo rimossa");
+        }
         setActiveTab("result");
       } catch (err) {
         showToast(err.message);
