@@ -882,7 +882,12 @@ export async function planRoute(payload, settings, restStops = []) {
     workHourRate: Number(payload.rates?.workHourRate ?? settings.workHourRate)
   };
 
-  // Lock first stop when: firstArrivalRequired is set, OR stop has fixedFirst flag
+  // Lock first stop: if any stop has fixedFirst=true, move it to front and lock it
+  const fixedFirstIdx = stopsWithNodeIndex.findIndex(s => s.fixedFirst === true);
+  if (fixedFirstIdx > 0) {
+    const [removed] = stopsWithNodeIndex.splice(fixedFirstIdx, 1);
+    stopsWithNodeIndex.unshift(removed);
+  }
   const firstStopFixed = stopsWithNodeIndex.length > 1 && (
     firstArrivalRequired !== null || stopsWithNodeIndex[0]?.fixedFirst === true
   );

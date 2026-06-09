@@ -1,3 +1,6 @@
+## v4.039 — 2026-06-09
+- Fix prima tappa: il planner ora sposta in testa qualsiasi tappa con fixedFirst=true, non solo la prima dell'array — il flag funziona indipendentemente dall'ordine corrente del giro
+
 # Changelog — Organizzatore Percorsi
 
 > Ogni fix viene annotato qui. Ogni 10 fix aggiornare le Info app (`renderMenuInfo()` in `public/app.js`).
