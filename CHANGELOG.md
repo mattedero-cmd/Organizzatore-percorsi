@@ -1,3 +1,6 @@
+## v4.046 — 2026-06-09
+- Fix login Safari PWA: tutti i fetch() ora usano URL assoluto (window.location.origin + path) — elimina l'errore "The string did not match the expected pattern." che si verificava con Face ID su iOS installato da home screen
+
 ## v4.045 — 2026-06-09
 - Smart naming nuovi giri: se tutte le tappe hanno la stessa sede → nome sede; se stesso cliente → nome cliente; altrimenti prima tappa. Sempre con data in italiano (es. "Mediolanum — 9 giu"). Suffisso (2)(3)… se il nome esiste già
 

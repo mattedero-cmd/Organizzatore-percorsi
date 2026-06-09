@@ -122,7 +122,7 @@ function readForm(form) {
 }
 
 async function api(path, options = {}) {
-  const res = await fetch(path, {
+  const res = await fetch(window.location.origin + path, {
     headers: { "Content-Type": "application/json", ...(options.headers || {}) },
     ...options
   });
@@ -1008,7 +1008,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.045 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.046 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -5585,7 +5585,9 @@ function renderAuthScreen(isSetup = false) {
         }
         btn.disabled = true;
         try {
-          const endpoint = isSetup ? "/api/auth/setup" : activeTab === "login" ? "/api/auth/login" : "/api/auth/register";
+          const path = isSetup ? "/api/auth/setup" : activeTab === "login" ? "/api/auth/login" : "/api/auth/register";
+          // Use absolute URL to avoid Safari PWA relative-URL bug ("The string did not match the expected pattern.")
+          const endpoint = window.location.origin + path;
           const res = await fetch(endpoint, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -5616,7 +5618,7 @@ async function initApp() {
 
 async function init() {
   try {
-    const meRes = await fetch('/api/auth/me');
+    const meRes = await fetch(window.location.origin + '/api/auth/me');
     const me = await meRes.json().catch(() => ({}));
     if (!meRes.ok) {
       hideSplash();
@@ -5649,7 +5651,7 @@ bindEvents();
 // → ricontrolla sempre la sessione quando la pagina torna visibile dalla cache
 window.addEventListener("pageshow", (e) => {
   if (e.persisted) {
-    fetch("/api/auth/me").then(r => {
+    fetch(window.location.origin + "/api/auth/me").then(r => {
       if (!r.ok) {
         state.user = null;
         state._authVerified = false;
@@ -5663,7 +5665,7 @@ window.addEventListener("pageshow", (e) => {
 // dopo un lungo periodo in background (es. iOS uccide il tab e lo ripristina)
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible" && state.user) {
-    fetch("/api/auth/me").then(r => {
+    fetch(window.location.origin + "/api/auth/me").then(r => {
       if (!r.ok) {
         state.user = null;
         state._authVerified = false;
