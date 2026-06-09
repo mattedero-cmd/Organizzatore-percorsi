@@ -1,3 +1,6 @@
+## v4.056 — 2026-06-09
+- Nuovo template messaggio data futura: "Buongiorno, la contatto per chiedere disponibilità per un intervento del [data] alle ore [ora]. L'orario attualmente previsto è le [ora]."
+
 ## v4.055 — 2026-06-09
 - Fix messaggi WhatsApp/mail: rimosso nome cliente dal saluto — entrambi i template usano solo "Buongiorno," senza nome
 

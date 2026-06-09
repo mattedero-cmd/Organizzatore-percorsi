@@ -139,8 +139,8 @@ function buildWhatsAppMessage(result, row) {
     const timeStr = row.arrivalTime ? row.arrivalTime.slice(0, 5) : "";
     const parts = [
       `Buongiorno,`,
-      `la contatto per confermare l'appuntamento${dateStr ? " del " + dateStr : ""}${timeStr ? " alle ore " + timeStr : ""}.`,
-      "Può confermarlo? Grazie."
+      `la contatto per chiedere disponibilità per un intervento${dateStr ? " del " + dateStr : ""}${timeStr ? " alle ore " + timeStr : ""}.`,
+      `L'orario attualmente previsto è${timeStr ? " le " + timeStr : " da definire"}.`
     ];
     return parts.join(" ");
   }
@@ -1066,7 +1066,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.055 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.056 &mdash; giugno 2026</p>
         </div>
       </div>
 
