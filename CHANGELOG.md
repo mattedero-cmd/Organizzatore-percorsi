@@ -1,3 +1,6 @@
+## v4.052 — 2026-06-09
+- Fix: pulsanti telefono, email e WhatsApp sempre visibili su ogni tappa (non pomeriggio), anche senza contatto salvato — aprono l'app rispettiva senza destinatario pre-compilato per ricerca manuale
+
 ## v4.051 — 2026-06-09
 - Nuovo: orario fisso pausa pranzo — campo "alle HH:MM" nel form percorso e nel pannello modifica giro; default 12:30, modificabile; se vuoto usa la finestra dalle impostazioni; il planner inserisce il pranzo esattamente all'orario indicato
 

@@ -1079,7 +1079,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.051 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.052 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -2458,12 +2458,17 @@ function renderResult() {
           const email = addr?.email || row.email || "";
           const emailSubject = encodeURIComponent(`Appuntamento ${row.customer} - ${result.scheduledDate || ""} ore ${row.arrivalTime}`);
           const emailBody = buildWhatsAppMessage(result, row);
-          const emailHref = `mailto:${escapeHtml(email)}?subject=${emailSubject}${emailBody ? "&body=" + encodeURIComponent(emailBody) : ""}`;
+          const emailHref = email
+            ? `mailto:${escapeHtml(email)}?subject=${emailSubject}${emailBody ? "&body=" + encodeURIComponent(emailBody) : ""}`
+            : `mailto:?subject=${emailSubject}${emailBody ? "&body=" + encodeURIComponent(emailBody) : ""}`;
           const waPhone = formatPhoneForWhatsApp(prefPhone?.number || phone);
-          const waBtn = (waPhone && !row.stopPart) ? `<button class="btn icon-btn rc-wa-btn" data-wa-stop="${row.stopUid || row.uid || row.stopNumber}" title="WhatsApp" style="color:#25d366">${I.whatsapp(15)}</button>` : "";
           const partBadge = row.stopPart === "morning" ? `<span class="badge" style="background:color-mix(in srgb,#3b82f6 15%,var(--surface));color:#1d4ed8">mattina</span> ` : row.stopPart === "afternoon" ? `<span class="badge" style="background:color-mix(in srgb,#f97316 15%,var(--surface));color:#c2410c">pomeriggio</span> ` : "";
           const stopTitle = `${row.stopNumber}. ${escapeHtml(row.customer)}${row.location ? ` — ${escapeHtml(row.location)}` : ""}`;
-          const phoneBtn = prefPhone ? `<a class="btn icon-btn" href="tel:${escapeHtml(prefPhone.number)}" title="${escapeHtml(prefPhone.number)}">${phoneIcon(prefPhone.type)}</a>` : "";
+          const phoneBtn = !isAfternoon
+            ? (prefPhone
+                ? `<a class="btn icon-btn" href="tel:${escapeHtml(prefPhone.number)}" title="${escapeHtml(prefPhone.number)}">${phoneIcon(prefPhone.type)}</a>`
+                : `<a class="btn icon-btn" href="tel:" title="Chiama">${I.phone(15)}</a>`)
+            : "";
           const warnLevel = worstWarningLevel(row.warnings);
           const cardClass = warnLevel === "error" ? " card-error" : warnLevel === "warn" ? " card-warn" : "";
           const warnMsg = warnLevel ? (row.warnings.find(w => w.level === warnLevel || (warnLevel==="error" && /(chiusa|dopo|oltre)/.test(w.msg||w)))?.msg || "") : "";
@@ -2487,8 +2492,8 @@ function renderResult() {
             <div class="rc-actions">
               ${!isAfternoon ? `<a class="btn primary rc-nav-btn" href="${stopNavUrl(row, state.navigatorPref)}" target="_blank" rel="noopener">${I.navigate(14)} Naviga</a>` : ""}
               ${phoneBtn}
-              ${email && !row.stopPart ? `<a class="btn icon-btn" href="${emailHref}" title="${escapeHtml(email)}">${I.email(15)}</a>` : ""}
-              ${waBtn}
+              ${!isAfternoon ? `<a class="btn icon-btn" href="${emailHref}" title="${escapeHtml(email) || "Email"}">${I.email(15)}</a>` : ""}
+              ${!isAfternoon ? `<button class="btn icon-btn rc-wa-btn" data-wa-stop="${row.stopUid || row.uid || row.stopNumber}" title="WhatsApp" style="color:#25d366">${I.whatsapp(15)}</button>` : ""}
               ${!isAfternoon ? `<button class="btn icon-btn rc-remove-stop-btn" data-remove-stop="${row.stopUid || row.uid || row.stopNumber}" title="Rimuovi tappa">${I.trash(14)}</button>` : ""}
             </div>
             <div class="rc-details" data-stop-details="${expandId}"${state.expandedStops.has(expandId) ? "" : " hidden"}>
@@ -5054,9 +5059,11 @@ function bindEvents() {
       const prefPhone = preferredPhone(addr || {});
       const phone = prefPhone?.number || addr?.phone || row.phone || "";
       const waPhone = formatPhoneForWhatsApp(phone);
-      if (!waPhone) { showToast("Nessun numero disponibile"); return; }
       const msg = buildWhatsAppMessage(result, row);
-      const url = `https://wa.me/${waPhone}${msg ? "?text=" + encodeURIComponent(msg) : ""}`;
+      // If no number: open WhatsApp without a recipient so the user can search manually
+      const url = waPhone
+        ? `https://wa.me/${waPhone}${msg ? "?text=" + encodeURIComponent(msg) : ""}`
+        : `https://wa.me/${msg ? "?text=" + encodeURIComponent(msg) : ""}`;
       window.open(url, "_blank", "noopener");
       return;
     }
