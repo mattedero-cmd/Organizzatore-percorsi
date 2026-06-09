@@ -25,7 +25,7 @@ function postgresUrl() {
   }) || "";
 }
 
-function sqlValue(value) {
+export function sqlValue(value) {
   if (value === null || value === undefined || value === "") return "NULL";
   if (typeof value === "number") return Number.isFinite(value) ? String(value) : "NULL";
   if (typeof value === "boolean") return value ? "1" : "0";
@@ -132,7 +132,7 @@ function rowToRoute(row) {
   };
 }
 
-async function runSql(sql, json = false) {
+export async function runSql(sql, json = false) {
   if (dbMode === "postgres") {
     const result = await pgPool.query(sql);
     return json ? result.rows : [];

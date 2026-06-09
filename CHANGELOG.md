@@ -1,3 +1,6 @@
+## v4.047 — 2026-06-09
+- Fix critico: runSql e sqlValue non erano esportate da db.js — apiStats.js causava errore di import che mandava in crash il server ad ogni avvio, rendendo impossibile qualsiasi login
+
 ## v4.046 — 2026-06-09
 - Fix login Safari PWA: tutti i fetch() ora usano URL assoluto (window.location.origin + path) — elimina l'errore "The string did not match the expected pattern." che si verificava con Face ID su iOS installato da home screen
 
