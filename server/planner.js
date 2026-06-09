@@ -299,6 +299,14 @@ function evaluateOrder(order, context) {
         : firstWindowStart;
     }
   }
+  // If the first stop has a user-defined fixed time window, back-calculate departure to arrive at wStart
+  if (targetArrival === null && timingMode !== "depart_at" && order.length > 0) {
+    const firstStop = order[0];
+    if (firstStop.timeFrom && firstStop.timeWindowMode === "fixed") {
+      const wStart = parseTime(firstStop.timeFrom);
+      if (wStart !== null) targetArrival = wStart;
+    }
+  }
 
   if (timingMode !== "depart_at" && targetArrival !== null && order.length > 0) {
     const firstNodeIndex = order[0].nodeIndex;
