@@ -582,7 +582,8 @@ async function insertBreaks(rows, options) {
     restStops = [], restaurantStops = [],
     dayStart = 7 * 60,
     finalArrival = 20 * 60,
-    scheduledDate = null
+    scheduledDate = null,
+    lunchFixedTime = null
   } = options;
 
   // ── constants ────────────────────────────────────────────────────────────────
@@ -639,7 +640,21 @@ async function insertBreaks(rows, options) {
       }
     }
 
-    // 2. Normal scanning (only if not already placed by fixed-window logic)
+    // 2. User-specified fixed lunch time: find the gap that contains lunchFixedTime
+    if (!placed && lunchFixedTime != null) {
+      const fixedMin = typeof lunchFixedTime === "number" ? lunchFixedTime
+        : (() => { const [h, m] = String(lunchFixedTime).split(":"); return Number(h) * 60 + Number(m || 0); })();
+      // Find last stop whose serviceEndTime <= fixedMin (insert after it)
+      let insertIdx = 0;
+      for (let i = 0; i < rows.length; i++) {
+        const end = parseTime(rows[i].serviceEndTime);
+        if (end != null && end <= fixedMin) insertIdx = i + 1;
+      }
+      insertions.push(await makeLunchEntry(insertIdx, rows[insertIdx - 1] ?? null, rows[insertIdx] ?? null, fixedMin));
+      placed = true;
+    }
+
+    // 3. Normal window-based scanning (only if not already placed)
     if (!placed) {
       for (let i = 0; i < rows.length; i++) {
         const dep = parseTime(rows[i].departureTime);
@@ -918,6 +933,7 @@ export async function planRoute(payload, settings, restStops = []) {
   const _parseLunchT = v => { if (v == null) return null; if (typeof v === "number") return v; const [h, m] = String(v).split(":"); return Number(h) * 60 + Number(m || 0); };
   const lunchOpenMin = _parseLunchT(settings?.lunchOpenTime) ?? (11 * 60 + 30);
   const lunchCloseMin = _parseLunchT(settings?.lunchCloseTime) ?? (14 * 60);
+  const lunchFixedTime = payload.lunchFixedTime && String(payload.lunchFixedTime).trim() ? payload.lunchFixedTime : null;
   const context = { nodes, matrix, startMinutes, firstArrivalRequired, rates, timingMode, arrivalLeadMinutes, departureLatestMinutes,
                     lunchEnabled: lunchBreakEnabled, lunchOpen: lunchOpenMin, lunchClose: lunchCloseMin, lunchDuration: lunchBreakMinutes };
   const manualOrder = Boolean(payload.manualOrder || payload.lockOrder);
@@ -940,7 +956,7 @@ export async function planRoute(payload, settings, restStops = []) {
   const maxReturnTime = settings?.maxReturnTime ? parseTime(settings.maxReturnTime) : null;
   const actualFinalArrival = parseTime(best.finalLeg.arrivalTime);
   const { rows: enrichedRows, addedMinutes } = await insertBreaks(best.rows, {
-    lunchBreakEnabled, lunchBreakMinutes,
+    lunchBreakEnabled, lunchBreakMinutes, lunchFixedTime,
     restStops: activeRestStops,
     restaurantStops: activeRestaurantStops,
     dayStart: parseTime(best.summary.dayStart),
@@ -1008,6 +1024,7 @@ export async function planRoute(payload, settings, restStops = []) {
     rates,
     lunchBreak: lunchBreakEnabled,
     lunchBreakMinutes,
+    lunchFixedTime: lunchFixedTime || "",
     maxReturnTime: payload.departureLatest || "",
     mapMode: [...new Set(best.rows.map((row) => row.legSource).concat(best.finalLeg.source))].join(", ")
   };

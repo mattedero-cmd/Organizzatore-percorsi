@@ -1,3 +1,6 @@
+## v4.051 — 2026-06-09
+- Nuovo: orario fisso pausa pranzo — campo "alle HH:MM" nel form percorso e nel pannello modifica giro; default 12:30, modificabile; se vuoto usa la finestra dalle impostazioni; il planner inserisce il pranzo esattamente all'orario indicato
+
 ## v4.050 — 2026-06-09
 - Fix WhatsApp/mail: se l'ETA calcolata è già nel passato viene restituito null → messaggio vuoto (WhatsApp apre senza testo, mail senza body)
 - Mail precompilata: il body del mailto segue la stessa logica del messaggio WhatsApp (conferma appuntamento o ETA)

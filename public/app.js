@@ -271,6 +271,7 @@ const state = {
     transcript: "",
     lunchBreak: true,
     lunchBreakMinutes: 45,
+    lunchFixedTime: "12:30",
     departureLatest: "",
     routeNotes: ""
   },
@@ -1078,7 +1079,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.050 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.051 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -1631,6 +1632,11 @@ function renderRoute() {
           value="${escapeHtml(r.lunchBreakMinutes)}" id="lunch-break-minutes"
           class="rp-lunch-min" ${!r.lunchBreak ? "style=\"display:none\"" : ""} />
         <span class="rp-lunch-unit" ${!r.lunchBreak ? 'style="display:none"' : ""}>min</span>
+        <span class="rp-lunch-unit" ${!r.lunchBreak ? 'style="display:none"' : ""} style="margin-left:6px;">alle</span>
+        <input name="lunchFixedTime" type="time" step="300"
+          value="${escapeHtml(r.lunchFixedTime || "")}" id="lunch-fixed-time"
+          class="rp-lunch-min" style="width:88px;${!r.lunchBreak ? "display:none;" : ""}"
+          placeholder="–:––" title="Orario fisso pranzo (opzionale)" />
       </div>
 
       <!-- Sezione 5: Tappe -->
@@ -1719,11 +1725,11 @@ function renderRoute() {
   // Lunch break inline toggle
   const lunchCheck = document.getElementById("lunch-break-check");
   const lunchMin = document.getElementById("lunch-break-minutes");
-  const lunchUnit = document.querySelector(".rp-lunch-unit");
+  const lunchFixed = document.getElementById("lunch-fixed-time");
   if (lunchCheck) {
     lunchCheck.addEventListener("change", () => {
-      if (lunchMin) lunchMin.style.display = lunchCheck.checked ? "" : "none";
-      if (lunchUnit) lunchUnit.style.display = lunchCheck.checked ? "" : "none";
+      const show = lunchCheck.checked;
+      document.querySelectorAll(".rp-lunch-min, .rp-lunch-unit").forEach(el => el.style.display = show ? "" : "none");
     });
   }
 
@@ -2875,6 +2881,7 @@ function updateRouteFromForm() {
     transcript: v.transcript || "",
     lunchBreak: Boolean(v.lunchBreak),
     lunchBreakMinutes: Number(v.lunchBreakMinutes || 45),
+    lunchFixedTime: v.lunchFixedTime || "",
     departureLatest: v.departureLatest || ""
   });
 }
@@ -3000,7 +3007,8 @@ async function replanFromResult() {
     departureLatest: v.departureLatest || result.maxReturnTime || result.departureLatest || "",
     stops, rates: state.settings,
     lunchBreak,
-    lunchBreakMinutes: Number(v.lunchBreakMinutes || result.lunchBreakMinutes || 45)
+    lunchBreakMinutes: Number(v.lunchBreakMinutes || result.lunchBreakMinutes || 45),
+    lunchFixedTime: v.lunchFixedTime || result.lunchFixedTime || ""
   };
 
   state.planning = true;
@@ -3078,6 +3086,8 @@ function renderResultEditPanels(result) {
             <span>${I.fork(14)} Pausa pranzo</span>
           </label>
           <input name="lunchBreakMinutes" type="number" min="15" max="120" step="5" value="${lunchBreakMinutes}" style="width:64px;" /> <span class="stop-meta">min</span>
+          <span class="stop-meta" style="margin-left:6px;">alle</span>
+          <input name="lunchFixedTime" type="time" step="300" value="${escapeHtml(result.lunchFixedTime || "")}" style="width:88px;" title="Orario fisso pranzo (opzionale)" />
         </div>
         <button type="button" class="btn primary" id="rv-replan-btn" style="width:100%;margin-top:10px;">${I.navigate(14)} Ricalcola</button>
       </form>
