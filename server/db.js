@@ -659,6 +659,13 @@ export async function updateRoutePayload(id, route, userId = null) {
   return getRoute(id, userId);
 }
 
+export async function routeNameExists(name, userId, excludeId = null) {
+  const userFilter = userId != null ? ` AND user_id = ${sqlValue(Number(userId))}` : "";
+  const excludeFilter = excludeId != null ? ` AND id != ${sqlValue(Number(excludeId))}` : "";
+  const rows = await runSql(`SELECT COUNT(*) as n FROM planned_routes WHERE name = ${sqlValue(String(name).trim())}${userFilter}${excludeFilter};`, true);
+  return Number(rows[0]?.n ?? rows[0]?.count ?? 0) > 0;
+}
+
 export async function renameRoute(id, name, userId = null) {
   const nextName = String(name || "").trim() || "Giro salvato";
   const stored = await getRoute(id, userId);

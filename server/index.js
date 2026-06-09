@@ -17,6 +17,7 @@ import {
   updateRoutePayload,
   updateRouteNotes,
   renameRoute,
+  routeNameExists,
   deleteRoute,
   createUser,
   findUserByUsername,
@@ -603,6 +604,19 @@ async function handleApi(request, response) {
       const allAddresses = await listAddresses("", userId);
       let route = await planRoute(body, settings, allAddresses);
       route = await attachWeather(route, { rowTimeoutMs: 3000 });
+
+      // If replanning an existing route, update it in place instead of creating a new one
+      if (body.id) {
+        const existing = await getRoute(body.id, userId);
+        if (existing) {
+          route.id = existing.id;
+          route.name = existing.name; // preserve the original name
+          route.notes = existing.notes ?? route.notes;
+          await updateRoutePayload(existing.id, route, userId);
+          return sendJson(response, 200, route);
+        }
+      }
+
       const saved = await saveRoute({
         ...route,
         name: body.name || await (async () => {
@@ -663,7 +677,11 @@ async function handleApi(request, response) {
 
     if (routeMatch && method === "PUT") {
       const body = await parseBody(request);
-      const route = await renameRoute(routeMatch[1], body.name || "", userId);
+      const newName = (body.name || "").trim();
+      if (newName && await routeNameExists(newName, userId, routeMatch[1])) {
+        return sendJson(response, 409, { error: `Esiste già un giro con il nome "${newName}"` });
+      }
+      const route = await renameRoute(routeMatch[1], newName, userId);
       if (!route) return sendJson(response, 404, { error: "Giro non trovato" });
       return sendJson(response, 200, route);
     }

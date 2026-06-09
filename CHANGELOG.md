@@ -1,3 +1,7 @@
+## v4.044 — 2026-06-09
+- Fix: ricalcolo giro esistente aggiorna il record invece di crearne uno nuovo — nome e note vengono preservati
+- Fix: due giri non possono avere lo stesso nome — rinomina restituisce errore 409 se il nome è già in uso
+
 ## v4.043 — 2026-06-09
 - Nuovo: tracciamento chiamate API esterne — Google Maps (geocode/directions/places), OpenAI (chat/whisper), OpenRoute, Open-Meteo conteggiate in DB con flush ogni minuto
 - Admin panel: nuova sezione "Chiamate API esterne" con totali giornalieri per servizio, pill riassuntive pagate/gratuite, filtro 7/30/90 giorni
