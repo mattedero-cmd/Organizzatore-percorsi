@@ -1,3 +1,6 @@
+## v4.057 — 2026-06-09
+- Template messaggio data futura: "...per l'intervento di (specificare) il [data] alle ore [ora]. Grazie, attendo conferma." — placeholder modificabile prima dell'invio
+
 ## v4.056 — 2026-06-09
 - Nuovo template messaggio data futura: "Buongiorno, la contatto per chiedere disponibilità per un intervento del [data] alle ore [ora]. L'orario attualmente previsto è le [ora]."
 
