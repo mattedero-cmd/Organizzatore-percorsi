@@ -1,3 +1,6 @@
+## v4.054 — 2026-06-09
+- Fix ETA WhatsApp/mail per giri odierni: rimosso calcolo ritardo basato su serviceEndTime (produceva delta errati fino a ore). L'orario pianificato è l'ETA; se è già nel passato il messaggio rimane vuoto
+
 ## v4.053 — 2026-06-09
 - Fix crash "Cannot access 'isAfternoon' before initialization": spostata dichiarazione const isAfternoon prima di phoneBtn
 

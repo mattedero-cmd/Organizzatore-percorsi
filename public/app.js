@@ -112,28 +112,15 @@ function buildWhatsAppMessage(result, row) {
   const isToday = scheduledDate === new Date().toISOString().slice(0, 10);
 
   if (isToday) {
-    // Real-time arrival estimate: planned arrival + delay since last checkpoint
+    // Use the planned arrival as ETA — computed at the moment the button is pressed.
+    // Without GPS we cannot measure actual delay reliably; a wrong delta is worse than
+    // the planned time. If the planned arrival is already in the past → empty message.
     const planned = parseTimeToMinutes(row.arrivalTime);
     if (planned === null) return null;
-    let eta = planned;
     const now = new Date();
     const nowMin = now.getHours() * 60 + now.getMinutes();
-    // Find last completed stop (row index before this row where serviceEndTime is in the past)
-    const rows = result.rows || [];
-    const thisIdx = rows.indexOf(row);
-    let lastDoneMin = null, lastDonePlannedMin = null;
-    for (let i = 0; i < thisIdx; i++) {
-      const r = rows[i];
-      if (!r.type && r.serviceEndTime) {
-        const t = parseTimeToMinutes(r.serviceEndTime);
-        if (t !== null && t <= nowMin) { lastDoneMin = nowMin; lastDonePlannedMin = t; }
-      }
-    }
-    if (lastDoneMin !== null && lastDonePlannedMin !== null) {
-      const delay = lastDoneMin - lastDonePlannedMin;
-      eta = planned + delay;
-    }
-    if (eta <= nowMin) return null; // arrivo già nel passato — messaggio vuoto
+    if (planned <= nowMin) return null; // arrivo già nel passato — messaggio vuoto
+    const eta = planned;
     const etaH = Math.floor(eta / 60).toString().padStart(2, "0");
     const etaM = (eta % 60).toString().padStart(2, "0");
     const parts = [
@@ -1079,7 +1066,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.053 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.054 &mdash; giugno 2026</p>
         </div>
       </div>
 
