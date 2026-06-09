@@ -1067,7 +1067,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.058 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.059 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -1620,11 +1620,14 @@ function renderRoute() {
           value="${escapeHtml(r.lunchBreakMinutes)}" id="lunch-break-minutes"
           class="rp-lunch-min" ${!r.lunchBreak ? "style=\"display:none\"" : ""} />
         <span class="rp-lunch-unit" ${!r.lunchBreak ? 'style="display:none"' : ""}>min</span>
-        <span class="rp-lunch-unit" ${!r.lunchBreak ? 'style="display:none"' : ""} style="margin-left:6px;">alle</span>
+        <label class="rp-lunch-unit" id="lunch-fixed-label" ${!r.lunchBreak ? 'style="display:none"' : ""} style="margin-left:6px;cursor:pointer;display:${!r.lunchBreak ? "none" : "flex"};align-items:center;gap:4px;">
+          <input type="checkbox" id="lunch-fixed-enabled" ${r.lunchFixedTime ? "checked" : ""} style="width:14px;height:14px;margin:0;" />
+          <span>alle</span>
+        </label>
         <input name="lunchFixedTime" type="time" step="300"
-          value="${escapeHtml(r.lunchFixedTime || "")}" id="lunch-fixed-time"
-          class="rp-lunch-min" style="width:88px;${!r.lunchBreak ? "display:none;" : ""}"
-          placeholder="–:––" title="Orario fisso pranzo (opzionale)" />
+          value="${escapeHtml(r.lunchFixedTime || "12:30")}" id="lunch-fixed-time"
+          class="rp-lunch-min" style="width:88px;${!r.lunchBreak || !r.lunchFixedTime ? "display:none;" : ""}"
+          ${!r.lunchFixedTime ? "disabled" : ""} />
       </div>
 
       <!-- Sezione 5: Tappe -->
@@ -1718,6 +1721,25 @@ function renderRoute() {
     lunchCheck.addEventListener("change", () => {
       const show = lunchCheck.checked;
       document.querySelectorAll(".rp-lunch-min, .rp-lunch-unit").forEach(el => el.style.display = show ? "" : "none");
+      if (show) {
+        const fixedEnabled = document.getElementById("lunch-fixed-enabled");
+        const fixedTime = document.getElementById("lunch-fixed-time");
+        if (fixedEnabled && fixedTime) {
+          fixedTime.style.display = fixedEnabled.checked ? "" : "none";
+          fixedTime.disabled = !fixedEnabled.checked;
+        }
+      }
+    });
+  }
+  const lunchFixedEnabled = document.getElementById("lunch-fixed-enabled");
+  if (lunchFixedEnabled) {
+    lunchFixedEnabled.addEventListener("change", () => {
+      const fixedTime = document.getElementById("lunch-fixed-time");
+      if (fixedTime) {
+        fixedTime.style.display = lunchFixedEnabled.checked ? "" : "none";
+        fixedTime.disabled = !lunchFixedEnabled.checked;
+        if (lunchFixedEnabled.checked && !fixedTime.value) fixedTime.value = "12:30";
+      }
     });
   }
 
@@ -2283,9 +2305,9 @@ function stopDetailExtra(result, row, addr, stopIdx) {
           <label class="stop-opt-check"><input type="checkbox" data-rv-stop="${stopIdx}:ignoreHours" ${row.ignoreHours ? "checked" : ""} /><span>Ignora orari</span></label>
         </div>
         ${!(addr?.closeMorning && addr?.openAfternoon) ? `
-        <div class="rv-stop-edit-row" style="margin-top:6px;">
-          <span class="rv-stop-edit-label">${I.fork(12)} Pranzo alle</span>
-          <input type="time" step="300" value="${escapeHtml(result.lunchFixedTime || "12:30")}" data-rv-lunch-time style="width:88px;" />
+        <div class="rv-stop-edit-row" style="margin-top:6px;gap:6px;">
+          <label class="stop-opt-check" style="gap:4px;"><input type="checkbox" data-rv-lunch-toggle ${result.lunchFixedTime ? "checked" : ""} /><span>${I.fork(12)} Pranzo alle</span></label>
+          <input type="time" step="300" value="${escapeHtml(result.lunchFixedTime || "12:30")}" data-rv-lunch-time style="width:88px;${!result.lunchFixedTime ? "display:none;" : ""}" ${!result.lunchFixedTime ? "disabled" : ""} />
         </div>` : ""}
         <button type="button" class="btn${state.dirtyStops.has(String(stopIdx)) ? " primary" : ""} rv-stop-replan-btn">${I.navigate(14)} Ricalcola</button>
       </div>`);
@@ -3084,8 +3106,11 @@ function renderResultEditPanels(result) {
             <span>${I.fork(14)} Pausa pranzo</span>
           </label>
           <input name="lunchBreakMinutes" type="number" min="15" max="120" step="5" value="${lunchBreakMinutes}" style="width:64px;" /> <span class="stop-meta">min</span>
-          <span class="stop-meta" style="margin-left:6px;">alle</span>
-          <input name="lunchFixedTime" type="time" step="300" value="${escapeHtml(result.lunchFixedTime || "12:30")}" style="width:88px;" title="Orario fisso pranzo (opzionale)" />
+          <label class="stop-opt-check" style="gap:4px;margin-left:6px;" id="rv-lunch-fixed-label">
+            <input type="checkbox" id="rv-lunch-fixed-enabled" ${result.lunchFixedTime ? "checked" : ""} />
+            <span>alle</span>
+          </label>
+          <input name="lunchFixedTime" type="time" step="300" value="${escapeHtml(result.lunchFixedTime || "12:30")}" id="rv-lunch-fixed-time" style="width:88px;${!result.lunchFixedTime ? "display:none;" : ""}" ${!result.lunchFixedTime ? "disabled" : ""} />
         </div>
         <button type="button" class="btn primary" id="rv-replan-btn" style="width:100%;margin-top:10px;">${I.navigate(14)} Ricalcola</button>
       </form>
@@ -4561,6 +4586,21 @@ function bindEvents() {
         }
       }
     }
+    // rv-lunch-toggle — abilita/disabilita orario fisso pranzo dalla card tappa
+    if (e.target.matches("[data-rv-lunch-toggle]")) {
+      const enabled = e.target.checked;
+      const timeInput = e.target.closest(".rv-stop-edit-row")?.querySelector("[data-rv-lunch-time]");
+      if (timeInput) {
+        timeInput.style.display = enabled ? "" : "none";
+        timeInput.disabled = !enabled;
+      }
+      if (state.result) {
+        state.result.lunchFixedTime = enabled ? (timeInput?.value || "12:30") : "";
+        const btn = e.target.closest(".rv-stop-edit")?.querySelector(".rv-stop-replan-btn");
+        if (btn) btn.classList.add("primary");
+      }
+      return;
+    }
     // rv-lunch-time — orario fisso pranzo impostato dalla card tappa
     if (e.target.closest("[data-rv-lunch-time]")) {
       if (state.result) {
@@ -4983,6 +5023,18 @@ function bindEvents() {
     if (e.target.id === "rv-end-same") {
       const wrap = document.getElementById("rv-end-addr-wrap");
       if (wrap) wrap.style.display = e.target.checked ? "none" : "";
+      return;
+    }
+
+    // rv-lunch-fixed-enabled toggle nel pannello impostazioni giro
+    if (e.target.id === "rv-lunch-fixed-enabled") {
+      const timeInput = document.getElementById("rv-lunch-fixed-time");
+      if (timeInput) {
+        timeInput.style.display = e.target.checked ? "" : "none";
+        timeInput.disabled = !e.target.checked;
+        if (e.target.checked && !timeInput.value) timeInput.value = "12:30";
+      }
+      if (state.result) state.result.lunchFixedTime = e.target.checked ? (timeInput?.value || "12:30") : "";
       return;
     }
 

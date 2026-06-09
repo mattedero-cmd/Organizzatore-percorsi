@@ -556,7 +556,8 @@ function findNearestRestStop(restStops, fromLat, fromLng, toLat, toLng, maxPerpK
 
 function shiftRowTimes(row, minutes) {
   if (!minutes) return row;
-  if (row.fixedWindow) {
+  // dynamicSplit rows are created inside insertBreaks and need full shifting like normal rows.
+  if (row.fixedWindow && !row.dynamicSplit) {
     // Fixed-window stops have absolute service times.
     // Afternoon part: all times anchored to fixed anchors — no shift.
     if (row.stopPart === "afternoon") return row;
@@ -640,17 +641,69 @@ async function insertBreaks(rows, options) {
       }
     }
 
-    // 2. User-specified fixed lunch time: find the gap that contains lunchFixedTime
+    // 2. User-specified fixed lunch time
     if (!placed && lunchFixedTime != null) {
       const fixedMin = typeof lunchFixedTime === "number" ? lunchFixedTime
         : (() => { const [h, m] = String(lunchFixedTime).split(":"); return Number(h) * 60 + Number(m || 0); })();
-      // Find last stop whose serviceEndTime <= fixedMin (insert after it)
-      let insertIdx = 0;
+
+      // Check if fixedMin falls within a stop's service time — split it
+      let splitIdx = -1;
       for (let i = 0; i < rows.length; i++) {
-        const end = parseTime(rows[i].serviceEndTime);
-        if (end != null && end <= fixedMin) insertIdx = i + 1;
+        if (rows[i].stopPart === "afternoon") continue;
+        const svcStart = parseTime(rows[i].serviceStartTime ?? rows[i].arrivalTime);
+        const svcEnd = parseTime(rows[i].serviceEndTime);
+        if (svcStart != null && svcEnd != null && fixedMin > svcStart && fixedMin < svcEnd) {
+          splitIdx = i;
+          break;
+        }
       }
-      insertions.push(await makeLunchEntry(insertIdx, rows[insertIdx - 1] ?? null, rows[insertIdx] ?? null, fixedMin));
+
+      if (splitIdx >= 0) {
+        const row = rows[splitIdx];
+        const svcStart = parseTime(row.serviceStartTime ?? row.arrivalTime);
+        const svcEnd = parseTime(row.serviceEndTime);
+        const morningWork = fixedMin - svcStart;
+        const afternoonWork = svcEnd - fixedMin;
+
+        // Morning part: arrival → fixedMin (times are absolute; will be shifted by prior breaks via shiftRowTimes)
+        const morningRow = {
+          ...row,
+          stopPart: "morning",
+          dynamicSplit: true,
+          lunchIncluded: true,
+          durationMinutes: morningWork,
+          serviceEndTime: formatTime(fixedMin),
+          departureTime: formatTime(fixedMin),
+        };
+        // Afternoon part: base times start at fixedMin (will be shifted by timeShift = prior breaks + lunchBreakMinutes)
+        const afternoonRow = {
+          ...row,
+          stopPart: "afternoon",
+          dynamicSplit: true,
+          lunchIncluded: true,
+          durationMinutes: afternoonWork,
+          arrivalTime: formatTime(fixedMin),
+          serviceStartTime: formatTime(fixedMin),
+          serviceEndTime: formatTime(svcEnd),
+          departureTime: row.departureTime,
+          driveMinutes: 0,
+          baseDriveMinutes: 0,
+          driveBufferMinutes: 0,
+          km: 0,
+        };
+
+        rows.splice(splitIdx, 1, morningRow, afternoonRow);
+        const lunchEntry = await makeLunchEntry(splitIdx + 1, morningRow, afternoonRow, fixedMin);
+        insertions.push(lunchEntry);
+      } else {
+        // fixedMin falls in a gap between stops
+        let insertIdx = 0;
+        for (let i = 0; i < rows.length; i++) {
+          const end = parseTime(rows[i].serviceEndTime);
+          if (end != null && end <= fixedMin) insertIdx = i + 1;
+        }
+        insertions.push(await makeLunchEntry(insertIdx, rows[insertIdx - 1] ?? null, rows[insertIdx] ?? null, fixedMin));
+      }
       placed = true;
     }
 
@@ -834,10 +887,11 @@ async function insertBreaks(rows, options) {
     }
     if (i < rows.length) {
       result.push(shiftRowTimes(rows[i], timeShift));
-      // After the last part of a fixed-window stop, reset timeShift.
+      // After the last part of a static fixed-window stop, reset timeShift.
       // Subsequent stops were planned from the fixed window's serviceEndTime (absolute),
       // so they must not be shifted by breaks inserted before the fixed window.
-      if (rows[i].fixedWindow && (!rows[i].stopPart || rows[i].stopPart === "afternoon")) {
+      // dynamicSplit rows are NOT static — their times are relative and should keep the shift.
+      if (rows[i].fixedWindow && !rows[i].dynamicSplit && (!rows[i].stopPart || rows[i].stopPart === "afternoon")) {
         timeShift = 0;
       }
     }

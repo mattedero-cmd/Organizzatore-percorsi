@@ -1,3 +1,7 @@
+## v4.059 — 2026-06-09
+- Pranzo alle: toggle attiva/disattiva in form percorso, pannello impostazioni giro e card per-tappa
+- Planner: se lunchFixedTime è attivo e una tappa attraversa quell'orario, viene spezzata esattamente all'orario del pranzo (stopPart morning/afternoon dinamico)
+
 ## v4.058 — 2026-06-09
 - Fix logica messaggi: data passata → nessun messaggio; data odierna + orario passato → vuoto; data odierna + orario futuro → ETA; data futura → richiesta disponibilità
 - Fix campo lunchFixedTime nel pannello risultato: default "12:30" invece di vuoto per giri pre-v4.051
