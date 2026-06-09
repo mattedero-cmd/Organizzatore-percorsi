@@ -133,6 +133,7 @@ function buildWhatsAppMessage(result, row) {
       const delay = lastDoneMin - lastDonePlannedMin;
       eta = planned + delay;
     }
+    if (eta <= nowMin) return null; // arrivo già nel passato — messaggio vuoto
     const etaH = Math.floor(eta / 60).toString().padStart(2, "0");
     const etaM = (eta % 60).toString().padStart(2, "0");
     const parts = [
@@ -1077,7 +1078,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.049 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.050 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -1087,6 +1088,13 @@ function renderMenuInfo() {
       <ul class="info-list">
         <li>${state.mapApiConfigured ? _svg('<polyline points="20 6 9 17 4 12"/>', 14) + " Google Maps attivo — percorsi reali e ottimizzazione avanzata" : _svg('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>', 14) + " Google Maps non configurato — stime distanze locali"}</li>
         <li>${state.whisperConfigured ? _svg('<polyline points="20 6 9 17 4 12"/>', 14) + " Comandi vocali attivi (Whisper)" : _svg('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>', 14) + " Comandi vocali non configurati"}</li>
+      </ul>
+
+      <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v4.050</p>
+      <ul class="info-list">
+        <li>Hook pre-commit: blocca il commit se versione, CHANGELOG, service-worker o sezione Novità non sono aggiornati</li>
+        <li>WhatsApp e mail: se l'arrivo stimato è già nel passato viene inviato un messaggio vuoto</li>
+        <li>Mail precompilata: il corpo del messaggio segue la stessa logica del testo WhatsApp</li>
       </ul>
 
       <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v4.040–v4.048</p>
@@ -2443,6 +2451,8 @@ function renderResult() {
           const phone2 = addr?.phone2 || row.phone2 || "";
           const email = addr?.email || row.email || "";
           const emailSubject = encodeURIComponent(`Appuntamento ${row.customer} - ${result.scheduledDate || ""} ore ${row.arrivalTime}`);
+          const emailBody = buildWhatsAppMessage(result, row);
+          const emailHref = `mailto:${escapeHtml(email)}?subject=${emailSubject}${emailBody ? "&body=" + encodeURIComponent(emailBody) : ""}`;
           const waPhone = formatPhoneForWhatsApp(prefPhone?.number || phone);
           const waBtn = (waPhone && !row.stopPart) ? `<button class="btn icon-btn rc-wa-btn" data-wa-stop="${row.stopUid || row.uid || row.stopNumber}" title="WhatsApp" style="color:#25d366">${I.whatsapp(15)}</button>` : "";
           const partBadge = row.stopPart === "morning" ? `<span class="badge" style="background:color-mix(in srgb,#3b82f6 15%,var(--surface));color:#1d4ed8">mattina</span> ` : row.stopPart === "afternoon" ? `<span class="badge" style="background:color-mix(in srgb,#f97316 15%,var(--surface));color:#c2410c">pomeriggio</span> ` : "";
@@ -2471,7 +2481,7 @@ function renderResult() {
             <div class="rc-actions">
               ${!isAfternoon ? `<a class="btn primary rc-nav-btn" href="${stopNavUrl(row, state.navigatorPref)}" target="_blank" rel="noopener">${I.navigate(14)} Naviga</a>` : ""}
               ${phoneBtn}
-              ${email && !row.stopPart ? `<a class="btn icon-btn" href="mailto:${escapeHtml(email)}?subject=${emailSubject}" title="${escapeHtml(email)}">${I.email(15)}</a>` : ""}
+              ${email && !row.stopPart ? `<a class="btn icon-btn" href="${emailHref}" title="${escapeHtml(email)}">${I.email(15)}</a>` : ""}
               ${waBtn}
               ${!isAfternoon ? `<button class="btn icon-btn rc-remove-stop-btn" data-remove-stop="${row.stopUid || row.uid || row.stopNumber}" title="Rimuovi tappa">${I.trash(14)}</button>` : ""}
             </div>

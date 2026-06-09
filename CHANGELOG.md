@@ -1,3 +1,8 @@
+## v4.050 — 2026-06-09
+- Fix WhatsApp/mail: se l'ETA calcolata è già nel passato viene restituito null → messaggio vuoto (WhatsApp apre senza testo, mail senza body)
+- Mail precompilata: il body del mailto segue la stessa logica del messaggio WhatsApp (conferma appuntamento o ETA)
+- Novità v4.050 aggiunta in renderMenuInfo()
+
 ## v4.049 — 2026-06-09
 - Sezione "Novità" in Info app aggiornata con riepiloghi v4.030 e v4.040–v4.048 (erano mancanti); CLAUDE.md aggiornato con architettura apiStats, pattern WhatsApp e tutti i bug fix della sessione
 
