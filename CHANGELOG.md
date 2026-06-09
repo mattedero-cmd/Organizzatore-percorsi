@@ -1,3 +1,6 @@
+## v4.049 — 2026-06-09
+- Sezione "Novità" in Info app aggiornata con riepiloghi v4.030 e v4.040–v4.048 (erano mancanti); CLAUDE.md aggiornato con architettura apiStats, pattern WhatsApp e tutti i bug fix della sessione
+
 ## v4.048 — 2026-06-09
 - Nuovo: pulsante WhatsApp nelle card tappa del giro — se data futura invia messaggio precompilato di conferma appuntamento; se data odierna invia ETA calcolata in tempo reale tenendo conto del ritardo accumulato
 

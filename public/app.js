@@ -1077,7 +1077,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.048 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.049 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -1087,6 +1087,32 @@ function renderMenuInfo() {
       <ul class="info-list">
         <li>${state.mapApiConfigured ? _svg('<polyline points="20 6 9 17 4 12"/>', 14) + " Google Maps attivo — percorsi reali e ottimizzazione avanzata" : _svg('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>', 14) + " Google Maps non configurato — stime distanze locali"}</li>
         <li>${state.whisperConfigured ? _svg('<polyline points="20 6 9 17 4 12"/>', 14) + " Comandi vocali attivi (Whisper)" : _svg('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>', 14) + " Comandi vocali non configurati"}</li>
+      </ul>
+
+      <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v4.040–v4.048</p>
+      <ul class="info-list">
+        <li>Pulsante WhatsApp nelle card tappa — messaggi precompilati: conferma appuntamento (data futura) o ETA in tempo reale (oggi)</li>
+        <li>Tracciamento chiamate API esterne nel pannello admin (Google Maps, OpenAI, OpenRoute, Open-Meteo) con grafico giornaliero</li>
+        <li>Pulsante cestino discreto per rimuovere una tappa direttamente dalla vista giro</li>
+        <li>Ricalcolo giro aggiorna il record esistente — nome e note vengono preservati</li>
+        <li>Nomi giro unici garantiti — rinomina segnala errore se il nome è già in uso</li>
+        <li>Smart naming automatico per nuovi giri: sede/cliente unico o prima tappa + data italiana</li>
+        <li>Fix login Safari PWA con Face ID: URL assoluti in tutti i fetch</li>
+        <li>Fix priorità pranzo su soste: contatore cumulativo azzerato al pranzo</li>
+        <li>Fix flag "Prima tappa": il planner sposta correttamente la tappa marcata in testa</li>
+        <li>Fix finestra oraria fissa su prima tappa: l'orario di partenza viene retroceduto di conseguenza</li>
+      </ul>
+
+      <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v4.030</p>
+      <ul class="info-list">
+        <li>Finestra oraria "Fissa": durata tappa = timeTo − timeFrom, visualizzata e non modificabile manualmente</li>
+        <li>Fix planner: effectiveDuration corretta per finestre fisse e tappe spezzate dal pranzo</li>
+        <li>Toggle pranzo dal giro: aggiunta e rimozione entrambe funzionanti, tutti i parametri passati correttamente</li>
+        <li>Fix pannello "Modifica impostazioni giro": campo Rientro max aggiunto, startTime pre-popolato dall'originale</li>
+        <li>Fix maggiorazione oraria: driveMinutes con buffer usato per calcolo partenza — arrivi puntuali</li>
+        <li>Pannello finestre orarie tappe nella vista risultato — modifica Dalle/Alle senza uscire dal giro</li>
+        <li>Fix picker iOS Dalle/Alle: render() su blur — il picker non viene più distrutto mentre è aperto</li>
+        <li>Mappe in stile scuro quando il tema app è notte</li>
       </ul>
 
       <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v4.020</p>

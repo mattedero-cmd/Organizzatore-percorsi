@@ -148,3 +148,41 @@ Non usare `stopPropagation()` sui container dei pulsanti — rompe tutto. È pre
 | Autofill Safari blocca pulsante Accedi | `novalidate` sui form, lettura valori diretta dagli input |
 | Data/ora sovrapposti su iOS | `min-height: unset`, `gap: 23px`, `max-width: 75%` su `.rp-when-row` |
 | Sosta/ristorante chiuso inserito comunque | `googleMapsService.js`: quando tutti i candidati sono chiusi all'orario previsto, restituisce `null` invece di inserire con warning |
+| Login impossibile su Safari PWA con Face ID | `fetch()` con URL relativo lancia `TypeError: "The string did not match the expected pattern."` in Safari PWA — fix: `window.location.origin + path` in **tutti** i fetch, inclusi `api()`, `fetch('/api/auth/me')` e il form di login |
+| Server crash ad avvio su Vercel (forced login) | `runSql` e `sqlValue` non erano `export` in `db.js` — import da `apiStats.js` crashava il server; **esportare sempre** le funzioni DB usate da moduli esterni |
+| Impostazioni tappa mancanti per tappe spezzate | `getRvStopRow` escludeva `stopPart === "morning"` — fix: includere morning nel filtro, calcolare `rvStopIdx` solo per morning/undefined |
+| Flag "Prima tappa" ignorato dal planner | Planner cercava `fixedFirst` solo in pos. 0 — fix: `findIndex` su tutta la lista + `splice`/`unshift` |
+| Pranzo non prioritario sulle soste | `cumulative` non si azzerava al punto pranzo — fix: reset a 0 e avanzamento `prevServiceEnd` quando `lunchIns.beforeIndex === i` |
+| Finestra fissa prima tappa non ritarda partenza | Planner non back-calcolava da `timeFrom` — fix: se prima tappa ha `timeWindowMode="fixed"`, impostare `targetArrival = parseTime(timeFrom)` |
+| Ricalcolo crea nuovo giro invece di aggiornare | `/api/plan` con `body.id` ora chiama `updateRoutePayload` se il giro esiste già |
+
+---
+
+## Architettura aggiuntiva (moduli server)
+
+```
+server/
+  apiStats.js         # Tracciamento chiamate API esterne — buffer in memoria, flush ogni 60s
+                      # initApiStatsTable() chiamato in index.js dopo initDb()
+                      # trackCall(service, endpoint) importato da googleMapsService, mapService, weatherService, index.js
+  googleMapsService.js  # Places API, Geocoding, Directions — usa trackCall("google_maps", ...)
+  mapService.js         # OpenRoute / MapQuest fallback — usa trackCall("openroute", ...)
+  weatherService.js     # Open-Meteo — usa trackCall("open_meteo", ...)
+```
+
+### Tabella `api_calls`
+```sql
+(day TEXT, service TEXT, endpoint TEXT, count INTEGER, PRIMARY KEY (day, service, endpoint))
+```
+Upsert atomico: `INSERT ... ON CONFLICT DO UPDATE SET count = count + excluded.count`
+
+---
+
+## WhatsApp — pattern messaggi (v4.048)
+
+- Funzione `buildWhatsAppMessage(result, row)` in `app.js`
+- Data futura → conferma appuntamento con data italiana e ora arrivo
+- Data odierna → ETA = orario pianificato + ritardo accumulato rispetto all'ultima tappa con `serviceEndTime` ≤ ora attuale
+- Numero formattato da `formatPhoneForWhatsApp(phone)`: strip spazi/trattini, prefisso 39 se assente
+- URL: `https://wa.me/{phone}?text={encoded}`
+- Click handler: `.rc-wa-btn[data-wa-stop]` nel listener globale click in `app.js`
