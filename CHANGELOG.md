@@ -1,3 +1,9 @@
+## v4.060 — 2026-06-09
+- Fix bug v4.059: pranzo dynamic-split posizionato all'orario sbagliato (es. 09:00 invece di 12:30) — aggiunto lunchForFixed+fixedLunchAt sull'entry del pranzo
+- Fix: indirizzo di casa dalle impostazioni non compariva nel form percorso — render() chiamato dopo salvataggio impostazioni
+- Fix: lunchFixedTime non inviato al server dalla creazione nuovo giro (mancava nel payload /api/plan)
+- Nuovo: pulsante matita su partenza/arrivo nel form percorso per modificare l'indirizzo con testo libero
+
 ## v4.059 — 2026-06-09
 - Pranzo alle: toggle attiva/disattiva in form percorso, pannello impostazioni giro e card per-tappa
 - Planner: se lunchFixedTime è attivo e una tappa attraversa quell'orario, viene spezzata esattamente all'orario del pranzo (stopPart morning/afternoon dinamico)

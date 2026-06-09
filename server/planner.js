@@ -694,6 +694,9 @@ async function insertBreaks(rows, options) {
 
         rows.splice(splitIdx, 1, morningRow, afternoonRow);
         const lunchEntry = await makeLunchEntry(splitIdx + 1, morningRow, afternoonRow, fixedMin);
+        // Use fixed-time placement so the lunch appears at exactly fixedMin, not at rows[i].departureTime
+        lunchEntry.lunchForFixed = true;
+        lunchEntry.fixedLunchAt = fixedMin;
         insertions.push(lunchEntry);
       } else {
         // fixedMin falls in a gap between stops

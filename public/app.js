@@ -508,8 +508,13 @@ function renderMenu() {
       if (state.settings.defaultStartLabel || state.settings.defaultStartAddress) {
         state.route.startLabel = state.settings.defaultStartLabel || state.route.startLabel;
         state.route.startAddress = state.settings.defaultStartAddress || state.route.startAddress;
+        if (state.route.endSameAsStart) {
+          state.route.endLabel = state.route.startLabel;
+          state.route.endAddress = state.route.startAddress;
+        }
       }
       applyTheme();
+      render(); // aggiorna il form percorso con i nuovi default
       showToast("Impostazioni salvate");
       closeMenu();
     });
@@ -1067,7 +1072,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.059 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.060 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -1077,6 +1082,16 @@ function renderMenuInfo() {
       <ul class="info-list">
         <li>${state.mapApiConfigured ? _svg('<polyline points="20 6 9 17 4 12"/>', 14) + " Google Maps attivo — percorsi reali e ottimizzazione avanzata" : _svg('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>', 14) + " Google Maps non configurato — stime distanze locali"}</li>
         <li>${state.whisperConfigured ? _svg('<polyline points="20 6 9 17 4 12"/>', 14) + " Comandi vocali attivi (Whisper)" : _svg('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>', 14) + " Comandi vocali non configurati"}</li>
+      </ul>
+
+      <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v4.060</p>
+      <ul class="info-list">
+        <li>Indirizzo di casa dalle impostazioni auto-compilato come partenza/arrivo; pulsante matita per modifica testuale diretta</li>
+        <li>Orario fisso pranzo (Pranzo alle): toggle attiva/disattiva in form percorso, pannello giro e card per-tappa</li>
+        <li>Split vincolante: tappa che inizia prima e finisce dopo l'orario pranzo viene spezzata esattamente a quell'ora</li>
+        <li>Messaggi WhatsApp/mail: logica data/ora corretta — passato → silenzio, oggi+passato → silenzio, oggi+futuro → ETA, futuro → disponibilità</li>
+        <li>Nuovo template messaggio data futura con placeholder "(specificare)" per tipo intervento</li>
+        <li>Pulsanti telefono/WhatsApp/mail sempre visibili anche senza contatto salvato</li>
       </ul>
 
       <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v4.050</p>
@@ -1577,6 +1592,7 @@ function renderRoute() {
             <div class="rp-ep-actions">
               <button type="button" class="btn icon-btn rp-ep-nav" id="rp-start-map-btn" title="Scegli sulla mappa">${I.map(15)}</button>
               <button type="button" class="btn icon-btn" id="rp-start-archive-btn" title="Scegli dall'archivio">${I.contacts(15)}</button>
+              <button type="button" class="btn icon-btn" id="rp-start-edit-btn" title="Modifica indirizzo">${I.edit(15)}</button>
             </div>
           </div>
           <input type="hidden" name="startLabel" id="rp-start-label-h" value="${escapeHtml(r.startLabel)}" />
@@ -1584,6 +1600,9 @@ function renderRoute() {
           <div class="rp-archive-inline" id="rp-start-archive" style="display:none">
             <input id="rp-start-archive-search" placeholder="Cerca nell'archivio…" autocomplete="off" />
             <div class="stop-suggestions" id="rp-start-archive-suggestions"></div>
+          </div>
+          <div class="rp-archive-inline" id="rp-start-edit-panel" style="display:none">
+            <input id="rp-start-edit-input" type="text" placeholder="Indirizzo (es. Via Roma 1, Milano)…" value="${escapeHtml(r.startAddress)}" autocomplete="off" />
           </div>
         </div>
         <!-- Arrivo -->
@@ -1598,6 +1617,7 @@ function renderRoute() {
             <div class="rp-ep-actions" id="rp-end-ep-actions"${r.endSameAsStart ? ' style="display:none"' : ""}>
               <button type="button" class="btn icon-btn rp-ep-nav" id="rp-end-map-btn" title="Scegli sulla mappa">${I.map(15)}</button>
               <button type="button" class="btn icon-btn" id="rp-end-archive-btn" title="Scegli dall'archivio">${I.contacts(15)}</button>
+              <button type="button" class="btn icon-btn" id="rp-end-edit-btn" title="Modifica indirizzo">${I.edit(15)}</button>
             </div>
           </div>
           <input type="hidden" name="endLabel" id="rp-end-label-h" value="${escapeHtml(r.endLabel)}" />
@@ -1605,6 +1625,9 @@ function renderRoute() {
           <div class="rp-archive-inline" id="rp-end-archive" style="display:none">
             <input id="rp-end-archive-search" placeholder="Cerca nell'archivio…" autocomplete="off" />
             <div class="stop-suggestions" id="rp-end-archive-suggestions"></div>
+          </div>
+          <div class="rp-archive-inline" id="rp-end-edit-panel" style="display:none">
+            <input id="rp-end-edit-input" type="text" placeholder="Indirizzo (es. Via Roma 1, Milano)…" value="${escapeHtml(r.endAddress)}" autocomplete="off" />
           </div>
         </div>
       </div>
@@ -1844,6 +1867,33 @@ function renderRoute() {
   };
   bindMapBtn("rp-start-map-btn", "rp-start-label-h", "rp-start-addr-h", "rp-start-name", "start");
   bindMapBtn("rp-end-map-btn", "rp-end-label-h", "rp-end-addr-h", "rp-end-name", "end");
+
+  // Edit buttons — testo libero per indirizzo partenza/arrivo
+  const bindEditBtn = (btnId, panelId, inputId, labelHiddenId, addrHiddenId, nameDisplayId, stateKey) => {
+    const btn = document.getElementById(btnId);
+    const panel = document.getElementById(panelId);
+    const input = document.getElementById(inputId);
+    if (!btn || !panel || !input) return;
+    btn.addEventListener("click", () => {
+      const isOpen = panel.style.display !== "none";
+      panel.style.display = isOpen ? "none" : "";
+      if (!isOpen) { input.focus(); input.select(); }
+    });
+    input.addEventListener("input", () => {
+      const val = input.value.trim();
+      const labelEl = document.getElementById(labelHiddenId);
+      const addrEl = document.getElementById(addrHiddenId);
+      const nameEl = document.getElementById(nameDisplayId);
+      if (labelEl) labelEl.value = val;
+      if (addrEl) addrEl.value = val;
+      if (nameEl) nameEl.textContent = val || (stateKey === "start" ? "Imposta partenza" : "Imposta arrivo");
+      state.route[stateKey + "Label"] = val;
+      state.route[stateKey + "Address"] = val;
+      if (stateKey === "start") syncEndIfSameAsStart();
+    });
+  };
+  bindEditBtn("rp-start-edit-btn", "rp-start-edit-panel", "rp-start-edit-input", "rp-start-label-h", "rp-start-addr-h", "rp-start-name", "start");
+  bindEditBtn("rp-end-edit-btn", "rp-end-edit-panel", "rp-end-edit-input", "rp-end-label-h", "rp-end-addr-h", "rp-end-name", "end");
 }
 
 // ── weekly hours helper ───────────────────────────────────────────────────────
@@ -3197,6 +3247,7 @@ async function planCurrentRoute() {
         firstArrivalRequired: r.firstArrivalRequired,
         stops: r.stops, rates: state.settings,
         lunchBreak: r.lunchBreak, lunchBreakMinutes: r.lunchBreakMinutes,
+        lunchFixedTime: r.lunchFixedTime || "",
         departureLatest: r.departureLatest || ""
       })
     });
