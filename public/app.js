@@ -75,6 +75,7 @@ const I = {
   clock:    (s) => _svg('<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>', s),
   lock:     (s) => _svg('<rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>', s),
   key:      (s) => _svg('<path d="m21 2-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0 3 3L22 7l-3-3m-3.5 3.5L19 4"/>', s),
+  whatsapp: (s) => _svg('<path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.127.558 4.122 1.532 5.851L0 24l6.318-1.508A11.955 11.955 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.816 9.816 0 0 1-5.034-1.387l-.36-.214-3.742.893.925-3.65-.235-.374A9.773 9.773 0 0 1 2.182 12C2.182 6.57 6.57 2.182 12 2.182c5.43 0 9.818 4.388 9.818 9.818 0 5.43-4.388 9.818-9.818 9.818z"/>', s),
 };
 
 function phoneIcon(type) {
@@ -87,6 +88,74 @@ function preferredPhone(a) {
   if (a.phone) return { number: a.phone, type: a.phoneType, name: a.phoneName };
   if (a.phone2) return { number: a.phone2, type: a.phone2Type, name: a.phone2Name };
   return null;
+}
+
+function formatPhoneForWhatsApp(phone) {
+  let n = String(phone || "").replace(/[\s\-().+]/g, "");
+  if (!n) return null;
+  if (n.startsWith("00")) n = n.slice(2);
+  if (!n.startsWith("39") && !n.startsWith("+")) n = "39" + n;
+  return n.replace(/^\+/, "");
+}
+
+function parseTimeToMinutes(t) {
+  if (!t) return null;
+  const [h, m] = t.split(":").map(Number);
+  if (isNaN(h)) return null;
+  return h * 60 + (m || 0);
+}
+
+function buildWhatsAppMessage(result, row) {
+  const senderName = state.user?.nickname || state.user?.username || "";
+  const customer = row.customer || row.location || "";
+  const scheduledDate = result.scheduledDate || "";
+  const isToday = scheduledDate === new Date().toISOString().slice(0, 10);
+
+  if (isToday) {
+    // Real-time arrival estimate: planned arrival + delay since last checkpoint
+    const planned = parseTimeToMinutes(row.arrivalTime);
+    if (planned === null) return null;
+    let eta = planned;
+    const now = new Date();
+    const nowMin = now.getHours() * 60 + now.getMinutes();
+    // Find last completed stop (row index before this row where serviceEndTime is in the past)
+    const rows = result.rows || [];
+    const thisIdx = rows.indexOf(row);
+    let lastDoneMin = null, lastDonePlannedMin = null;
+    for (let i = 0; i < thisIdx; i++) {
+      const r = rows[i];
+      if (!r.type && r.serviceEndTime) {
+        const t = parseTimeToMinutes(r.serviceEndTime);
+        if (t !== null && t <= nowMin) { lastDoneMin = nowMin; lastDonePlannedMin = t; }
+      }
+    }
+    if (lastDoneMin !== null && lastDonePlannedMin !== null) {
+      const delay = lastDoneMin - lastDonePlannedMin;
+      eta = planned + delay;
+    }
+    const etaH = Math.floor(eta / 60).toString().padStart(2, "0");
+    const etaM = (eta % 60).toString().padStart(2, "0");
+    const parts = [
+      `Buongiorno${customer ? " " + customer : ""},`,
+      `sono ${senderName || "in arrivo"}`.trim() + ` e il mio arrivo è previsto intorno alle ore ${etaH}:${etaM}.`,
+      "A presto."
+    ];
+    return parts.join(" ");
+  } else {
+    // Future date: appointment confirmation request
+    const dateStr = scheduledDate ? (() => {
+      const [, m, d] = scheduledDate.split("-");
+      const MONTHS = ["gennaio","febbraio","marzo","aprile","maggio","giugno","luglio","agosto","settembre","ottobre","novembre","dicembre"];
+      return `${Number(d)} ${MONTHS[Number(m) - 1]}`;
+    })() : "";
+    const timeStr = row.arrivalTime ? row.arrivalTime.slice(0, 5) : "";
+    const parts = [
+      `Buongiorno${customer ? " " + customer : ""},`,
+      `la contatto per confermare l'appuntamento${dateStr ? " del " + dateStr : ""}${timeStr ? " alle ore " + timeStr : ""}.`,
+      "Può confermarlo? Grazie."
+    ];
+    return parts.join(" ");
+  }
 }
 
 function addressName(a) {
@@ -1008,7 +1077,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.047 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.048 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -2348,6 +2417,8 @@ function renderResult() {
           const phone2 = addr?.phone2 || row.phone2 || "";
           const email = addr?.email || row.email || "";
           const emailSubject = encodeURIComponent(`Appuntamento ${row.customer} - ${result.scheduledDate || ""} ore ${row.arrivalTime}`);
+          const waPhone = formatPhoneForWhatsApp(prefPhone?.number || phone);
+          const waBtn = (waPhone && !row.stopPart) ? `<button class="btn icon-btn rc-wa-btn" data-wa-stop="${row.stopUid || row.uid || row.stopNumber}" title="WhatsApp" style="color:#25d366">${I.whatsapp(15)}</button>` : "";
           const partBadge = row.stopPart === "morning" ? `<span class="badge" style="background:color-mix(in srgb,#3b82f6 15%,var(--surface));color:#1d4ed8">mattina</span> ` : row.stopPart === "afternoon" ? `<span class="badge" style="background:color-mix(in srgb,#f97316 15%,var(--surface));color:#c2410c">pomeriggio</span> ` : "";
           const stopTitle = `${row.stopNumber}. ${escapeHtml(row.customer)}${row.location ? ` — ${escapeHtml(row.location)}` : ""}`;
           const phoneBtn = prefPhone ? `<a class="btn icon-btn" href="tel:${escapeHtml(prefPhone.number)}" title="${escapeHtml(prefPhone.number)}">${phoneIcon(prefPhone.type)}</a>` : "";
@@ -2375,6 +2446,7 @@ function renderResult() {
               ${!isAfternoon ? `<a class="btn primary rc-nav-btn" href="${stopNavUrl(row, state.navigatorPref)}" target="_blank" rel="noopener">${I.navigate(14)} Naviga</a>` : ""}
               ${phoneBtn}
               ${email && !row.stopPart ? `<a class="btn icon-btn" href="mailto:${escapeHtml(email)}?subject=${emailSubject}" title="${escapeHtml(email)}">${I.email(15)}</a>` : ""}
+              ${waBtn}
               ${!isAfternoon ? `<button class="btn icon-btn rc-remove-stop-btn" data-remove-stop="${row.stopUid || row.uid || row.stopNumber}" title="Rimuovi tappa">${I.trash(14)}</button>` : ""}
             </div>
             <div class="rc-details" data-stop-details="${expandId}"${state.expandedStops.has(expandId) ? "" : " hidden"}>
@@ -4922,6 +4994,24 @@ function bindEvents() {
         showToast(`${customer} salvato — premi Ricalcola`);
         renderResult();
       } catch (err) { showToast(err.message); }
+      return;
+    }
+
+    // WhatsApp button on result stop cards
+    if (e.target.closest(".rc-wa-btn") && state.result?.rows) {
+      const uid = e.target.closest(".rc-wa-btn").dataset.waStop;
+      const result = normalizeSavedRoute(state.result);
+      const row = result.rows.find(r => !r.type && (!r.stopPart || r.stopPart === "morning") &&
+        (r.stopUid === uid || r.uid === uid || String(r.stopNumber) === String(uid)));
+      if (!row) return;
+      const addr = state.allAddresses.find(a => String(a.id) === String(row.addressId));
+      const prefPhone = preferredPhone(addr || {});
+      const phone = prefPhone?.number || addr?.phone || row.phone || "";
+      const waPhone = formatPhoneForWhatsApp(phone);
+      if (!waPhone) { showToast("Nessun numero disponibile"); return; }
+      const msg = buildWhatsAppMessage(result, row);
+      const url = `https://wa.me/${waPhone}${msg ? "?text=" + encodeURIComponent(msg) : ""}`;
+      window.open(url, "_blank", "noopener");
       return;
     }
 
