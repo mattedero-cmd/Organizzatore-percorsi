@@ -1,3 +1,6 @@
+## v4.045 — 2026-06-09
+- Smart naming nuovi giri: se tutte le tappe hanno la stessa sede → nome sede; se stesso cliente → nome cliente; altrimenti prima tappa. Sempre con data in italiano (es. "Mediolanum — 9 giu"). Suffisso (2)(3)… se il nome esiste già
+
 ## v4.044 — 2026-06-09
 - Fix: ricalcolo giro esistente aggiorna il record invece di crearne uno nuovo — nome e note vengono preservati
 - Fix: due giri non possono avere lo stesso nome — rinomina restituisce errore 409 se il nome è già in uso

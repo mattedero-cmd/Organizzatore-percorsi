@@ -620,12 +620,41 @@ async function handleApi(request, response) {
       const saved = await saveRoute({
         ...route,
         name: body.name || await (async () => {
+          const MONTHS_IT = ["gen","feb","mar","apr","mag","giu","lug","ago","set","ott","nov","dic"];
           const d = route.scheduledDate;
-          if (!d) return "Percorso giornaliero";
-          const [y, m, day] = d.split("-");
-          const label = `${day}/${m}/${y}`;
-          const existing = await countRoutesByDate(d, userId);
-          return existing > 0 ? `${label} (${existing + 1})` : label;
+          const dateSuffix = d
+            ? (() => { const [, m, day] = d.split("-"); return `${Number(day)} ${MONTHS_IT[Number(m) - 1]}`; })()
+            : null;
+
+          // Customer stops only (no breaks, no split afternoon duplicates)
+          const stops = (route.rows || []).filter(r => !r.type && r.stopPart !== "afternoon");
+
+          let base = "Percorso";
+          if (stops.length > 0) {
+            // All stops share the same location (city/office) → use location
+            const locations = [...new Set(stops.map(s => (s.location || "").trim()).filter(Boolean))];
+            // All stops share the same customer → use customer
+            const customers = [...new Set(stops.map(s => (s.customer || "").trim()).filter(Boolean))];
+
+            if (locations.length === 1) {
+              base = locations[0];
+            } else if (customers.length === 1) {
+              base = customers[0];
+            } else {
+              // Mixed: use first stop's customer
+              base = stops[0].customer || stops[0].location || "Percorso";
+            }
+          }
+
+          const candidate = dateSuffix ? `${base} — ${dateSuffix}` : base;
+
+          // Ensure uniqueness: append (2), (3) … if name already exists
+          let name = candidate;
+          let n = 2;
+          while (await routeNameExists(name, userId)) {
+            name = `${candidate} (${n++})`;
+          }
+          return name;
         })(),
         scheduledDate: route.scheduledDate,
         startLabel: body.start?.label || "",
