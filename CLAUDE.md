@@ -8,6 +8,20 @@
 
 ---
 
+## Setup obbligatorio — eseguire subito in ogni nuovo container/sessione
+
+```bash
+bash scripts/install-hooks.sh
+```
+
+Questo installa il hook `pre-commit` che blocca il commit se le regole non sono rispettate:
+- versione app non aggiornata in app.js
+- CHANGELOG.md non aggiornato
+- service-worker.js e index.html non allineati
+- multiplo di 10: sezione "Novità" mancante in renderMenuInfo()
+
+---
+
 ## Regole operative — da seguire SEMPRE
 
 ### 1. Versione app
