@@ -2200,6 +2200,15 @@ tbody tr:last-child td {
   grid-column: 1 / -1;
 }
 
+.rv-selected-stop-preview {
+  font-size: 0.82rem;
+  color: var(--muted);
+  padding: 4px 0 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .rv-pending-stop {
   display: flex;
   align-items: center;

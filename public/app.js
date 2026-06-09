@@ -1008,7 +1008,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.035 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.036 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -2980,12 +2980,15 @@ function renderResultEditPanels(result) {
       </summary>
       <div class="rv-add-stop-body">
         <div style="position:relative;">
-          <input id="rv-stop-search" placeholder="Cerca nell'archivio…" autocomplete="off" />
+          <input id="rv-stop-search" placeholder="Cerca per cliente, sede, attività, indirizzo…" autocomplete="off" />
           <input type="hidden" id="rv-selected-address-id" value="" />
           <div id="rv-stop-suggestions" class="stop-suggestions"></div>
         </div>
+        <div id="rv-add-saved-row" style="display:none;margin-top:6px;">
+          <div class="rv-selected-stop-preview" id="rv-selected-stop-preview"></div>
+          <button type="button" class="btn primary" id="rv-add-saved-stop" style="width:100%;margin-top:6px;">${I.plus(14)} Aggiungi tappa selezionata</button>
+        </div>
         <div class="rp-add-stop-actions" style="margin-top:6px;">
-          <button type="button" class="btn" id="rv-add-saved-stop">${I.plus(14)} Aggiungi dall'archivio</button>
           <button type="button" class="btn ghost" id="rv-manual-stop-toggle">+ Manuale</button>
         </div>
         <div id="rv-manual-stop-panel" style="display:none;margin-top:8px;">
@@ -4505,11 +4508,21 @@ function bindEvents() {
       const q = e.target.value.trim().toLowerCase();
       const sug = document.getElementById("rv-stop-suggestions");
       if (!sug) return;
+      // reset selection when user types again
+      document.getElementById("rv-selected-address-id").value = "";
+      const addRow = document.getElementById("rv-add-saved-row");
+      if (addRow) addRow.style.display = "none";
       if (!q) { sug.innerHTML = ""; return; }
       const matches = state.allAddresses.filter(a =>
-        (a.customer || "").toLowerCase().includes(q) || (a.location || "").toLowerCase().includes(q)
+        [a.customer, a.activity, a.location, a.fullAddress].some(v => (v || "").toLowerCase().includes(q))
       ).slice(0, 8);
-      sug.innerHTML = matches.map(a => `<div class="suggestion" data-rv-suggest-id="${a.id}">${escapeHtml(a.customer)}${a.location ? ` — ${escapeHtml(a.location)}` : ""}</div>`).join("") || `<div class="suggestion no-result">Nessun risultato</div>`;
+      sug.innerHTML = matches.length
+        ? matches.map(a => `
+          <div class="stop-suggestion-item" data-rv-suggest-id="${a.id}">
+            <span class="stop-suggestion-name">${escapeHtml(addressName(a))}</span>
+            <span class="stop-suggestion-addr">${escapeHtml(a.fullAddress || "")}</span>
+          </div>`).join("")
+        : `<div class="stop-suggestion-empty">Nessun risultato</div>`;
     }
     // stop filter
     if (e.target.id === "stop-filter") {
@@ -4643,6 +4656,17 @@ function bindEvents() {
         render();
       }
     }
+    // rv-timing-mode select: update extra fields inline with values from current result
+    if (e.target.id === "rv-timing-mode") {
+      const mode = e.target.value;
+      const extra = document.getElementById("rv-timing-extra");
+      if (extra) {
+        const res = state.result ? normalizeSavedRoute(state.result) : {};
+        extra.innerHTML =
+          mode === "first_open_minus" ? `<label class="rp-when-date" style="max-width:160px;"><span class="rp-label">Anticipo</span><input name="arrivalLeadMinutes" type="number" min="0" max="60" step="5" value="${res.arrivalLeadMinutes ?? 10}" /></label>` :
+          mode === "arrive_at" ? `<label class="rp-when-time" style="max-width:160px;"><span class="rp-label">Arrivo target</span><input name="firstArrivalTime" type="time" step="300" value="${res.firstArrivalTime || '08:30'}" /></label>` : "";
+      }
+    }
     if (e.target.name === "lunchBreak") {
       if (e.target.closest("#route-form")) {
         const minutesInput = document.getElementById("lunch-break-minutes");
@@ -4705,6 +4729,10 @@ function bindEvents() {
         const inp = document.getElementById("rv-stop-search");
         if (inp) inp.value = addressName(addr);
         document.getElementById("rv-stop-suggestions").innerHTML = "";
+        const preview = document.getElementById("rv-selected-stop-preview");
+        if (preview) preview.textContent = addr.fullAddress || addr.location || "";
+        const addRow = document.getElementById("rv-add-saved-row");
+        if (addRow) addRow.style.display = "";
       }
       return;
     }
@@ -4818,14 +4846,6 @@ function bindEvents() {
     }
 
     // timing mode change → refresh extra fields inline
-    if (e.target.closest("#rv-timing-mode")) {
-      const mode = document.getElementById("rv-timing-mode")?.value;
-      const extra = document.getElementById("rv-timing-extra");
-      if (extra) extra.innerHTML =
-        mode === "first_open_minus" ? `<label class="rp-when-date" style="max-width:160px;"><span class="rp-label">Anticipo</span><input name="arrivalLeadMinutes" type="number" min="0" max="60" step="5" value="10" /></label>` :
-        mode === "arrive_at" ? `<label class="rp-when-time" style="max-width:160px;"><span class="rp-label">Arrivo target</span><input name="firstArrivalTime" type="time" step="300" value="08:30" /></label>` : "";
-      return;
-    }
 
     // end-same-as-start toggle
     if (e.target.id === "rv-end-same") {
