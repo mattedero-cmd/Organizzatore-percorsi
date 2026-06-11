@@ -88,7 +88,9 @@ function rowToSettings(row) {
     noBreakEarlyMin: Number(row.no_break_early_min ?? 120),
     noBreakBeforeHomeMin: Number(row.no_break_before_home_min ?? 60),
     noBreakBeforeLunchMin: Number(row.no_break_before_lunch_min ?? 60),
-    noBreakAfterLunchMin: Number(row.no_break_after_lunch_min ?? 120)
+    noBreakAfterLunchMin: Number(row.no_break_after_lunch_min ?? 120),
+    brandColor: row.brand_color ?? "",
+    brandColor2: row.brand_color2 ?? ""
   };
 }
 
@@ -443,6 +445,8 @@ async function migrateUserSettingsCols() {
     ["no_break_before_home_min", "INTEGER DEFAULT 60"],
     ["no_break_before_lunch_min", "INTEGER DEFAULT 60"],
     ["no_break_after_lunch_min", "INTEGER DEFAULT 120"],
+    ["brand_color", "TEXT DEFAULT ''"],
+    ["brand_color2", "TEXT DEFAULT ''"],
   ];
   for (const [col, def] of toAdd) {
     if (!cols.includes(col)) {
@@ -571,7 +575,9 @@ export async function updateSettings(userId, settings) {
     no_break_early_min: Number(settings.noBreakEarlyMin ?? 120),
     no_break_before_home_min: Number(settings.noBreakBeforeHomeMin ?? 60),
     no_break_before_lunch_min: Number(settings.noBreakBeforeLunchMin ?? 60),
-    no_break_after_lunch_min: Number(settings.noBreakAfterLunchMin ?? 120)
+    no_break_after_lunch_min: Number(settings.noBreakAfterLunchMin ?? 120),
+    brand_color: /^#[0-9a-fA-F]{6}$/.test(settings.brandColor || "") ? settings.brandColor : "",
+    brand_color2: /^#[0-9a-fA-F]{6}$/.test(settings.brandColor2 || "") ? settings.brandColor2 : ""
   };
   const cols = Object.keys(vals).join(", ");
   const sqlVals = Object.values(vals).map(v => typeof v === "string" ? sqlValue(v) : String(v)).join(", ");

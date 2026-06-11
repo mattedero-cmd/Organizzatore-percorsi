@@ -180,6 +180,7 @@ const state = {
     stops: [],
     transcript: "",
     lunchBreak: true,
+    costsEnabled: false,
     lunchBreakMinutes: 45
   },
   result: null,
@@ -194,6 +195,89 @@ const state = {
 };
 
 // ── theme ────────────────────────────────────────────────────────────────────
+
+function _hexToRgb(hex) {
+  const h = String(hex || "").replace("#", "");
+  return { r: parseInt(h.slice(0, 2), 16) || 0, g: parseInt(h.slice(2, 4), 16) || 0, b: parseInt(h.slice(4, 6), 16) || 0 };
+}
+function _rgba(c, a) { return `rgba(${Math.round(c.r)},${Math.round(c.g)},${Math.round(c.b)},${a})`; }
+function _mix(c, t, f) { return { r: c.r * f + t.r * (1 - f), g: c.g * f + t.g * (1 - f), b: c.b * f + t.b * (1 - f) }; }
+function _toHex(c) { return "#" + [c.r, c.g, c.b].map(v => Math.min(255, Math.max(0, Math.round(v))).toString(16).padStart(2, "0")).join(""); }
+
+const BRAND_VARS = ["--primary","--primary-dark","--accent","--accent-bg","--accent-border","--accent-glow","--accent2","--blob1","--blob2","--blob4","--top-line-a","--top-line-b","--card-top-a","--card-top-b","--card-corner","--tab-active-bg","--tab-active-border","--tab-active-text","--btn-primary-bg","--btn-primary-border","--btn-primary-text","--btn-primary-glow","--btn-primary-shine","--grid-line","--line","--line-strong"];
+
+// Due colori aziendali: c1 = accento primario, c2 = accento secondario
+function applyBrandColors(hex1, hex2, isDark) {
+  const ok = (h) => /^#[0-9a-fA-F]{6}$/.test(h || "");
+  if (!ok(hex1)) { clearBrandColors(); return; }
+  const c1 = _hexToRgb(hex1);
+  const c2 = ok(hex2) ? _hexToRgb(hex2) : c1;
+  const white = { r: 255, g: 255, b: 255 }, black = { r: 0, g: 0, b: 0 };
+  const s = document.documentElement.style;
+  const set = (k, v) => s.setProperty(k, v);
+  if (isDark) {
+    const bright1 = _mix(c1, white, 0.72);
+    set("--primary", _toHex(bright1));
+    set("--primary-dark", _toHex(_mix(bright1, black, 0.8)));
+    set("--accent", _toHex(bright1));
+    set("--accent-bg", _rgba(c1, 0.10));
+    set("--accent-border", _rgba(c1, 0.30));
+    set("--accent-glow", _rgba(c1, 0.20));
+    set("--accent2", _rgba(c2, 0.18));
+    set("--blob1", _rgba(c1, 0.22));
+    set("--blob2", _rgba(c2, 0.17));
+    set("--blob4", _rgba(c1, 0.11));
+    set("--top-line-a", _rgba(c1, 0.7));
+    set("--top-line-b", _rgba(c2, 0.7));
+    set("--card-top-a", _rgba(c1, 0.55));
+    set("--card-top-b", _rgba(c2, 0.45));
+    set("--card-corner", _rgba(c1, 0.07));
+    set("--tab-active-bg", _rgba(c1, 0.10));
+    set("--tab-active-border", _rgba(c1, 0.25));
+    set("--tab-active-text", _rgba(_mix(c1, white, 0.6), 0.95));
+    set("--btn-primary-bg", `linear-gradient(135deg, ${_rgba(c1, 0.20)} 0%, ${_rgba(c1, 0.13)} 50%, ${_rgba(c2, 0.12)} 100%)`);
+    set("--btn-primary-border", _rgba(c1, 0.35));
+    set("--btn-primary-text", _toHex(_mix(c1, white, 0.15)));
+    set("--btn-primary-glow", _rgba(c1, 0.22));
+    set("--btn-primary-shine", _rgba(c1, 0.10));
+    set("--grid-line", _rgba(c1, 0.03));
+    set("--line", "rgba(255,255,255,0.07)");
+    set("--line-strong", "rgba(255,255,255,0.14)");
+  } else {
+    const deep1 = _mix(c1, black, 0.78);
+    set("--primary", _toHex(deep1));
+    set("--primary-dark", _toHex(_mix(deep1, black, 0.75)));
+    set("--accent", _toHex(deep1));
+    set("--accent-bg", _rgba(c1, 0.12));
+    set("--accent-border", _rgba(c1, 0.32));
+    set("--accent-glow", _rgba(c1, 0.18));
+    set("--accent2", _rgba(c2, 0.12));
+    set("--blob1", _rgba(c1, 0.26));
+    set("--blob2", _rgba(c2, 0.22));
+    set("--blob4", _rgba(c2, 0.16));
+    set("--top-line-a", _rgba(c1, 0.9));
+    set("--top-line-b", _rgba(c2, 0.7));
+    set("--card-top-a", _rgba(c1, 0.5));
+    set("--card-top-b", _rgba(c2, 0.4));
+    set("--card-corner", _rgba(c1, 0.1));
+    set("--tab-active-bg", _rgba(c1, 0.14));
+    set("--tab-active-border", _rgba(c1, 0.32));
+    set("--tab-active-text", _toHex(_mix(deep1, black, 0.8)));
+    set("--btn-primary-bg", `linear-gradient(135deg, ${_toHex(_mix(c1, white, 0.85))} 0%, ${_toHex(deep1)} 55%, ${_toHex(_mix(c2, black, 0.8))} 100%)`);
+    set("--btn-primary-border", _rgba(c1, 0.45));
+    set("--btn-primary-text", "#ffffff");
+    set("--btn-primary-glow", _rgba(c1, 0.28));
+    set("--btn-primary-shine", "rgba(255,255,255,0.28)");
+    set("--grid-line", _rgba(c1, 0.06));
+    set("--line", _rgba(c1, 0.14));
+    set("--line-strong", _rgba(c1, 0.30));
+  }
+}
+
+function clearBrandColors() {
+  const s = document.documentElement.style;
+  BRAND_VARS.forEach(v => s.removeProperty(v));
+}
 
 function applyTheme() {
   const mode = state.themeMode || "auto";
@@ -210,9 +294,15 @@ function applyTheme() {
     pietra:  isDark ? "pietra"         : "pietra-giorno",
     foresta: isDark ? "foresta-notte"  : "foresta-giorno",
     legno:   isDark ? "legno"          : "legno-giorno",
+    azienda: isDark ? "night"          : "day",
   };
   state.theme = map[palette] || (isDark ? "night" : "day");
   document.documentElement.dataset.theme = state.theme;
+  if (palette === "azienda" && state.settings?.brandColor) {
+    applyBrandColors(state.settings.brandColor, state.settings.brandColor2, isDark);
+  } else {
+    clearBrandColors();
+  }
   try {
     localStorage.setItem("pl_theme", JSON.stringify({ mode, palette }));
     // cookie per il server-side theme injection (no-JS path e primo caricamento)
@@ -327,7 +417,9 @@ function renderMenu() {
         noBreakEarlyMin: Number(v.noBreakEarlyMin ?? 120),
         noBreakBeforeHomeMin: Number(v.noBreakBeforeHomeMin ?? 60),
         noBreakBeforeLunchMin: Number(v.noBreakBeforeLunchMin ?? 60),
-        noBreakAfterLunchMin: Number(v.noBreakAfterLunchMin ?? 120)
+        noBreakAfterLunchMin: Number(v.noBreakAfterLunchMin ?? 120),
+        brandColor: v.brandColor || state.settings.brandColor || "",
+        brandColor2: v.brandColor2 || state.settings.brandColor2 || ""
       };
       state.settings = await api("/api/settings", { method: "PUT", body: JSON.stringify(newSettings) });
       state.navigatorPref = state.settings.navigatorPref;
@@ -374,8 +466,16 @@ function renderMenu() {
         document.querySelectorAll(".palette-chip").forEach(c => c.classList.remove("active"));
         paletteChip.classList.add("active");
         document.getElementById("themePaletteInput").value = paletteChip.dataset.palette;
+        const bcRow = document.getElementById("brand-color-row");
+        if (bcRow) bcRow.style.display = paletteChip.dataset.palette === "azienda" ? "" : "none";
         // live preview
         state.themePalette = paletteChip.dataset.palette;
+        if (paletteChip.dataset.palette === "azienda") {
+          const c1 = document.getElementById("brand-color-input")?.value;
+          const c2 = document.getElementById("brand-color2-input")?.value;
+          state.settings.brandColor = c1 || state.settings.brandColor;
+          state.settings.brandColor2 = c2 || state.settings.brandColor2;
+        }
         applyTheme();
         return;
       }
@@ -383,6 +483,13 @@ function renderMenu() {
     ov.addEventListener("change", e => {
       if (e.target.name === "themeMode") {
         state.themeMode = e.target.value;
+        applyTheme();
+      }
+      if (e.target.name === "brandColor" || e.target.name === "brandColor2") {
+        state.settings.brandColor = document.getElementById("brand-color-input")?.value || "";
+        state.settings.brandColor2 = document.getElementById("brand-color2-input")?.value || "";
+        const sw = document.querySelector("#palette-chip-azienda .palette-swatch");
+        if (sw) sw.style.background = `linear-gradient(135deg,${state.settings.brandColor} 50%,${state.settings.brandColor2 || state.settings.brandColor} 50%)`;
         applyTheme();
       }
     });
@@ -626,6 +733,17 @@ function renderMenuSettings() {
               <button type="button" class="palette-chip${(s.themePalette||"default")==="pietra"?" active":""}" data-palette="pietra"><span class="palette-swatch" style="background:linear-gradient(135deg,#0e0d0c 50%,#ede0d0 50%)"></span>Pietra</button>
               <button type="button" class="palette-chip${(s.themePalette||"default")==="foresta"?" active":""}" data-palette="foresta"><span class="palette-swatch" style="background:linear-gradient(135deg,#060d06 50%,#c8e8b0 50%)"></span>Foresta</button>
               <button type="button" class="palette-chip${(s.themePalette||"default")==="legno"?" active":""}" data-palette="legno"><span class="palette-swatch" style="background:linear-gradient(135deg,#0c0800 50%,#f0dcc0 50%)"></span>Legno</button>
+              <button type="button" class="palette-chip${(s.themePalette||"default")==="azienda"?" active":""}" data-palette="azienda" id="palette-chip-azienda"><span class="palette-swatch" style="background:${s.brandColor ? `linear-gradient(135deg,${s.brandColor} 50%,${s.brandColor2 || s.brandColor} 50%)` : "linear-gradient(135deg,#888 50%,#ccc 50%)"}"></span>Aziendali</button>
+            </div>
+          </div>
+          <div class="sg-field" id="brand-color-row" ${(s.themePalette||"default")==="azienda" ? "" : 'style="display:none"'}><span class="sg-label">Colori aziendali</span>
+            <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;">
+              <label style="display:flex;align-items:center;gap:6px;font-size:0.85rem;">Primario
+                <input type="color" name="brandColor" id="brand-color-input" value="${s.brandColor || "#00a896"}" style="width:44px;height:32px;border:none;background:none;cursor:pointer;" />
+              </label>
+              <label style="display:flex;align-items:center;gap:6px;font-size:0.85rem;">Secondario
+                <input type="color" name="brandColor2" id="brand-color2-input" value="${s.brandColor2 || s.brandColor || "#a855f7"}" style="width:44px;height:32px;border:none;background:none;cursor:pointer;" />
+              </label>
             </div>
           </div>
           <input type="hidden" name="themePalette" id="themePaletteInput" value="${s.themePalette||"default"}" />
@@ -770,6 +888,23 @@ function renderMenuGuide() {
         </ul>
       `)}
 
+      ${section("💶 Calcolo costi per giro", `
+        <ul>
+          <li>Il calcolo costi è <b>disattivato di default</b> su ogni nuovo giro.</li>
+          <li>Per attivarlo, spunta <b>€ Calcolo costi</b> nel form del percorso (accanto alla pausa pranzo) prima di ottimizzare.</li>
+          <li>Le tariffe (€/km, €/ora guida, €/ora lavoro) si impostano nel menu <b>Impostazioni</b>.</li>
+        </ul>
+      `)}
+
+      ${section("🎨 Colori aziendali", `
+        <ul>
+          <li>Nel menu <b>Impostazioni → Palette</b> scegli <b>Aziendali</b>.</li>
+          <li>Puoi selezionare <b>due colori</b>: primario (accento principale) e secondario (dettagli e sfumature).</li>
+          <li>L'anteprima è immediata; premi <b>Salva impostazioni</b> per renderli permanenti su tutti i tuoi dispositivi.</li>
+          <li>Funziona sia in modalità giorno che notte: i colori vengono adattati automaticamente.</li>
+        </ul>
+      `)}
+
 
     </div>`;
 }
@@ -778,7 +913,7 @@ function renderMenuInfo() {
   return `
     ${menuHeader("Info app", true)}
     <div class="bsheet-section-body">
-      <p class="stop-meta" style="margin-bottom:8px;">Percorsi lavoro — Versione 1.1</p>
+      <p class="stop-meta" style="margin-bottom:8px;">Percorsi lavoro — Versione 1.2</p>
       <p class="stop-meta">Pianificazione giornaliera giri commerciali con ottimizzazione automatica del percorso, gestione orari di apertura, soste automatiche e stima costi.</p>
       <p class="stop-meta" style="margin-top:12px;">Google Maps${state.mapApiConfigured ? " ✓ attivo" : " — non configurato (usa stime locali)"}. Whisper${state.whisperConfigured ? " ✓ attivo" : " — non configurato"}.</p>
     </div>`;
@@ -786,21 +921,45 @@ function renderMenuInfo() {
 
 // ── data loading ──────────────────────────────────────────────────────────────
 
-async function refreshAddresses() {
+// Una sola fetch della lista completa, condivisa tra chiamate concorrenti;
+// il filtro di ricerca avviene client-side sugli stessi campi del server
+let _addrFetchPromise = null;
+async function fetchAllAddresses() {
+  if (!_addrFetchPromise) {
+    _addrFetchPromise = api("/api/addresses?search=")
+      .catch(() => [])
+      .then(list => {
+        state.allAddresses = list;
+        _addrFetchPromise = null;
+        return list;
+      });
+  }
+  return _addrFetchPromise;
+}
+
+function applyAddressFilter() {
   if (!state.addressSearch && !state.archiveShowAll) {
     state.addresses = [];
     return;
   }
-  const q = encodeURIComponent(state.addressSearch);
-  state.addresses = await api(`/api/addresses?search=${q}`).catch(() => []);
+  const ql = (state.addressSearch || "").toLowerCase();
+  state.addresses = !ql ? [...state.allAddresses] : state.allAddresses.filter(a =>
+    [a.customer, a.activity, a.location, a.fullAddress, a.notes].some(v => (v || "").toLowerCase().includes(ql))
+  );
+}
+
+async function refreshAddresses() {
+  await fetchAllAddresses();
+  applyAddressFilter();
 }
 
 async function refreshAddressesForRoute() {
-  state.allAddresses = await api("/api/addresses?search=").catch(() => []);
+  await fetchAllAddresses();
 }
 
 async function refreshAllData() {
-  await Promise.all([refreshAddresses(), refreshAddressesForRoute()]);
+  await fetchAllAddresses();
+  applyAddressFilter();
 }
 
 async function refreshSavedRoutes() {
@@ -1217,6 +1376,10 @@ function renderRoute() {
           value="${escapeHtml(r.lunchBreakMinutes)}" id="lunch-break-minutes"
           class="rp-lunch-min" ${!r.lunchBreak ? "style=\"display:none\"" : ""} />
         <span class="rp-lunch-unit" ${!r.lunchBreak ? 'style="display:none"' : ""}>min</span>
+        <label class="rp-lunch-check" style="margin-left:auto;">
+          <input name="costsEnabled" type="checkbox" ${r.costsEnabled ? "checked" : ""} id="costs-enabled-check" />
+          <span>€ Calcolo costi</span>
+        </label>
       </div>
 
       <!-- Sezione 5: Tappe -->
@@ -2052,10 +2215,11 @@ function renderResult() {
         <div class="metric"><div class="metric-label">Ore guida</div><div class="metric-value">${minutesLabel(summary.totalDriveMinutes)}</div></div>
         <div class="metric"><div class="metric-label">Ore lavoro</div><div class="metric-value">${minutesLabel(summary.totalWorkMinutes)}</div></div>
         <div class="metric"><div class="metric-label">Giornata</div><div class="metric-value">${escapeHtml(summary.dayStart)}–${escapeHtml(summary.dayEnd)}</div></div>
+        ${result.costsEnabled !== false ? `
         <div class="metric"><div class="metric-label">Costo km</div><div class="metric-value">${euro(summary.costKm)}</div></div>
         <div class="metric"><div class="metric-label">Costo guida</div><div class="metric-value">${euro(summary.costDrive)}</div></div>
         <div class="metric"><div class="metric-label">Costo lavoro</div><div class="metric-value">${euro(summary.costWork)}</div></div>
-        <div class="metric"><div class="metric-label">Totale</div><div class="metric-value">${euro(summary.totalCost)}</div></div>
+        <div class="metric"><div class="metric-label">Totale</div><div class="metric-value">${euro(summary.totalCost)}</div></div>` : ""}
       </div>
       ${(summary.warnings || []).map(w => {
         const msg = w.msg || w;
@@ -2315,7 +2479,8 @@ function updateRouteFromForm() {
     customAddress: v.customAddress, customDuration: Number(v.customDuration || 45),
     transcript: v.transcript || "",
     lunchBreak: Boolean(v.lunchBreak),
-    lunchBreakMinutes: Number(v.lunchBreakMinutes || 45)
+    lunchBreakMinutes: Number(v.lunchBreakMinutes || 45),
+    costsEnabled: Boolean(v.costsEnabled)
   });
 }
 
@@ -2365,7 +2530,8 @@ async function planCurrentRoute() {
         firstArrivalTime: r.firstArrivalTime,
         firstArrivalRequired: r.firstArrivalRequired,
         stops: r.stops, rates: state.settings,
-        lunchBreak: r.lunchBreak, lunchBreakMinutes: r.lunchBreakMinutes
+        lunchBreak: r.lunchBreak, lunchBreakMinutes: r.lunchBreakMinutes,
+        costsEnabled: r.costsEnabled === true
       })
     });
     state.manualOrderRows = null;

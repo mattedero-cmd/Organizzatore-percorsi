@@ -790,6 +790,7 @@ export async function planRoute(payload, settings, restStops = []) {
     firstArrivalTime: payload.firstArrivalTime || payload.firstArrivalRequired || "",
     firstArrivalRequired: payload.firstArrivalRequired || "",
     manualOrder,
+    costsEnabled: payload.costsEnabled === true,
     rows: best.rows,
     plannedStops: best.rows.map((row) => ({
       uid: row.stopUid,
