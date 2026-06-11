@@ -1,3 +1,6 @@
+## v4.064 — 2026-06-11
+- Nuovo: integrazione Meteo Trentino — per le tappe in Trentino il meteo usa il bollettino ufficiale della Provincia (località più vicina tra 22 principali); temperatura all'orario di arrivo interpolata tra min/max del giorno; warning automatici per temporali/pioggia/neve/vento; fallback automatico a Open-Meteo fuori Trentino o in caso di errore
+
 ## v4.063 — 2026-06-11
 - Nuovo: palette Aziendali con DUE colori — primario (tab, titoli, bottoni principali) e secondario (sottotitolo header, pill di stato, bottoni ghost, etichette metriche, linee decorative); anteprima live e swatch bicolore
 - Fix: brandColor non veniva persistito dal server (updateSettings lo scartava) — il colore aziendale si perdeva al ricaricamento; aggiunte colonne brand_color/brand_color2 con validazione hex

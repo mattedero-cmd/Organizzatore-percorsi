@@ -191,6 +191,115 @@ async function weatherbitForecast(coords, row, scheduledDate) {
   return weather;
 }
 
+// ── Meteo Trentino (bollettino open data Provincia Autonoma di Trento) ────────
+// Per le tappe in Trentino usa il bollettino ufficiale; il bollettino è
+// giornaliero per località, quindi la temperatura all'ora di arrivo viene
+// interpolata tra minima e massima del giorno.
+
+const MT_BBOX = { latMin: 45.65, latMax: 46.55, lngMin: 10.40, lngMax: 12.00 };
+
+const MT_LOCALITIES = [
+  { code: "TRENTO", lat: 46.0667, lng: 11.1167 },
+  { code: "ROVERETO", lat: 45.8903, lng: 11.0397 },
+  { code: "PERGINE VALSUGANA", lat: 46.0622, lng: 11.2364 },
+  { code: "BORGO VALSUGANA", lat: 46.0514, lng: 11.4558 },
+  { code: "LEVICO TERME", lat: 46.0119, lng: 11.3008 },
+  { code: "CLES", lat: 46.3625, lng: 11.0339 },
+  { code: "MALE", lat: 46.3531, lng: 10.9117 },
+  { code: "CAVALESE", lat: 46.2911, lng: 11.4608 },
+  { code: "PREDAZZO", lat: 46.3119, lng: 11.6019 },
+  { code: "MOENA", lat: 46.3764, lng: 11.6597 },
+  { code: "POZZA DI FASSA", lat: 46.4275, lng: 11.6869 },
+  { code: "TIONE DI TRENTO", lat: 46.0353, lng: 10.7269 },
+  { code: "PINZOLO", lat: 46.1592, lng: 10.7653 },
+  { code: "MADONNA DI CAMPIGLIO", lat: 46.2308, lng: 10.8264 },
+  { code: "RIVA DEL GARDA", lat: 45.8867, lng: 10.8408 },
+  { code: "ARCO", lat: 45.9183, lng: 10.8867 },
+  { code: "MEZZOLOMBARDO", lat: 46.2147, lng: 11.0931 },
+  { code: "ALA", lat: 45.7572, lng: 11.0058 },
+  { code: "FOLGARIA", lat: 45.9164, lng: 11.1697 },
+  { code: "PRIMIERO", lat: 46.1769, lng: 11.8281 },
+  { code: "CANAZEI", lat: 46.4769, lng: 11.7714 },
+  { code: "ANDALO", lat: 46.1664, lng: 11.0053 }
+];
+
+function mtInTrentino(coords) {
+  const lat = Number(coords?.lat), lng = Number(coords?.lng);
+  return Number.isFinite(lat) && Number.isFinite(lng)
+    && lat >= MT_BBOX.latMin && lat <= MT_BBOX.latMax
+    && lng >= MT_BBOX.lngMin && lng <= MT_BBOX.lngMax;
+}
+
+function mtNearestLocality(coords) {
+  const toRad = (d) => d * Math.PI / 180;
+  let best = null, bestKm = Infinity;
+  for (const loc of MT_LOCALITIES) {
+    const dLat = toRad(loc.lat - coords.lat);
+    const dLng = toRad(loc.lng - coords.lng);
+    const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(coords.lat)) * Math.cos(toRad(loc.lat)) * Math.sin(dLng / 2) ** 2;
+    const km = 6371 * 2 * Math.asin(Math.sqrt(a));
+    if (km < bestKm) { bestKm = km; best = loc; }
+  }
+  return best;
+}
+
+// Stima della temperatura all'ora richiesta: minima alle 06, massima alle 15
+function mtTempAtHour(tMin, tMax, hour) {
+  if (!Number.isFinite(tMin) || !Number.isFinite(tMax)) return tMax ?? tMin ?? null;
+  const h = Math.max(0, Math.min(23, hour));
+  const factor = h <= 6 ? 0.15
+    : h <= 15 ? 0.15 + 0.85 * ((h - 6) / 9)
+    : 1 - 0.6 * ((h - 15) / 9);
+  return Math.round((tMin + (tMax - tMin) * factor) * 10) / 10;
+}
+
+function mtWarningsFromDescription(desc) {
+  const d = String(desc || "").toLowerCase();
+  const warnings = [];
+  if (/temporal/.test(d)) warnings.push("possibili temporali");
+  else if (/pioggia|rovesci|precipitaz/.test(d)) warnings.push("pioggia prevista");
+  if (/neve|nevicat|nevos/.test(d)) warnings.push("neve prevista");
+  if (/vento|raffiche/.test(d)) warnings.push("vento forte");
+  return warnings;
+}
+
+async function meteoTrentinoForecast(coords, row, scheduledDate) {
+  if (!mtInTrentino(coords)) return null;
+  const loc = mtNearestLocality(coords);
+  if (!loc) return null;
+  const url = new URL("https://www.meteotrentino.it/protcivtn-meteo/api/fronte/previsioneOpenDataLocalita");
+  url.searchParams.set("localita", loc.code);
+  const response = await fetch(url, {
+    signal: AbortSignal.timeout(WEATHER_FETCH_TIMEOUT_MS),
+    headers: { "Accept": "application/json" }
+  });
+  if (!response.ok) throw new Error(`Meteo Trentino non riuscito (${response.status})`);
+  const payload = await response.json();
+  // Schema tollerante: previsione[].giorni[] con giorno/data, tMinGiorno/tmin,
+  // tMaxGiorno/tmax, descIcona/descrizione/testo
+  const giorni = (payload?.previsione || []).flatMap((p) => p?.giorni || []);
+  const day = giorni.find((g) => String(g?.giorno || g?.data || "").slice(0, 10) === scheduledDate);
+  if (!day) return null;
+  const tMin = Number(day.tMinGiorno ?? day.tmin ?? day.temperaturaMin ?? NaN);
+  const tMax = Number(day.tMaxGiorno ?? day.tmax ?? day.temperaturaMax ?? NaN);
+  const description = String(day.descIcona || day.descrizione || day.testo || "Bollettino Meteo Trentino").trim();
+  const weather = {
+    stopNumber: row.stopNumber,
+    customer: row.customer,
+    location: row.location,
+    scheduledDate,
+    time: row.arrivalTime,
+    temperatureC: mtTempAtHour(tMin, tMax, normalizeHour(row.arrivalTime)),
+    precipitationMm: null,
+    windKmh: null,
+    description: `${description} (${loc.code.charAt(0)}${loc.code.slice(1).toLowerCase()})`,
+    source: "meteotrentino",
+    mode: "forecast"
+  };
+  weather.warnings = mtWarningsFromDescription(description);
+  return weather;
+}
+
 async function weatherForRow(row, scheduledDate, forceHistorical) {
   const coords = await resolvePlace({
     label: `${row.customer} ${row.location}`,
@@ -200,6 +309,12 @@ async function weatherForRow(row, scheduledDate, forceHistorical) {
   });
   const mode = forceHistorical || isPastDate(scheduledDate) ? "historical" : "forecast";
   if (mode === "forecast") {
+    try {
+      const trentino = await meteoTrentinoForecast(coords, row, scheduledDate);
+      if (trentino) return trentino;
+    } catch (error) {
+      console.warn(error.message);
+    }
     try {
       const openWeather = await openWeatherForecast(coords, row, scheduledDate);
       if (openWeather) return openWeather;
