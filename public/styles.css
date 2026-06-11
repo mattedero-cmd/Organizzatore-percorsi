@@ -1629,6 +1629,64 @@ tbody tr:last-child td {
   margin-top: 14px;
 }
 
+.rv-costs-section {
+  margin-top: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg2);
+  overflow: hidden;
+}
+.rv-costs-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  cursor: pointer;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text);
+  user-select: none;
+}
+.rv-costs-toggle-row input[type="checkbox"] { cursor: pointer; accent-color: var(--accent); }
+.rv-costs-badge {
+  margin-left: auto;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border-radius: 20px;
+  padding: 2px 10px;
+}
+.rv-costs-body { padding: 0 14px 14px; }
+.rv-cost-rates {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 2px;
+}
+.rv-cost-rate-lbl {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+.rv-cost-rate-lbl input[type="number"] {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: calc(var(--radius) - 2px);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+.metric-total .metric-label { color: var(--accent); }
+.metric-total .metric-value { color: var(--accent); }
+
 .metric {
   background: var(--bg2);
   border: 1px solid var(--line);

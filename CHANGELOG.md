@@ -1,3 +1,8 @@
+## v4.073 — 2026-06-11
+- Feature: costi nascosti di default — toggle "Calcola costi" in fondo al giro attiva la sezione con tariffe modificabili per-giro (non impatta le impostazioni globali)
+- Fix: costi rimossi dalle card giri salvati e dall'intestazione risultato (appaiono solo quando il toggle è attivo)
+- Fix: PDF — sezione costi inclusa solo se il toggle "Calcola costi" era attivo; nel dialogo stampa l'opzione viene disabilitata se i costi non sono stati calcolati
+
 ## v4.072 — 2026-06-11
 - Fix: giri salvati con nomi duplicati — il controllo unicità ora si applica anche quando il client invia un nome esplicito
 - Fix: nuovo giro sempre nominato "Percorso giornaliero" — rimosso il fallback fisso; il server genera sempre il nome smart (sede/cliente + data)

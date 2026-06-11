@@ -268,6 +268,8 @@ const state = {
   expandedPanels: new Set(),
   dirtyStops: new Set(),
   resultLunchEnabled: null,
+  showCosts: false,
+  resultCostRates: null,
   manualOrderRows: null,
   planning: false,
   stopFilter: "",
@@ -1255,7 +1257,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.072 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.073 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -2251,7 +2253,6 @@ function renderSaved() {
               <input type="date" class="saved-date-input" data-reschedule-route="${route.id}" value="${escapeHtml(route.scheduledDate || "")}" title="Cambia data e ricalcola" onclick="event.stopPropagation()" />
               <span>${escapeHtml(route.startTime || "--:--")}</span>
               <span>${Number(route.totalKm).toFixed(1)} km</span>
-              <span>${euro(route.totalCost)}</span>
             </div>
             <div class="stop-meta saved-card-route">${escapeHtml(route.startLabel || "—")} → ${escapeHtml(route.endLabel || "—")}</div>
             ${route.notes ? `<div class="saved-card-notes">${escapeHtml(route.notes)}</div>` : ""}
@@ -2666,7 +2667,7 @@ function renderResult() {
           </div>
           <div class="row" style="align-items:center;gap:8px;margin-top:4px;">
             <input type="date" class="result-date-input" id="result-date-input" value="${escapeHtml(result.scheduledDate || "")}" title="Cambia data e ricalcola" />
-            <span class="stop-meta">${escapeHtml(summary.dayStart)} → ${escapeHtml(summary.dayEnd)} · ${summary.totalKm.toFixed(1)} km · ${euro(summary.totalCost)}</span>
+            <span class="stop-meta">${escapeHtml(summary.dayStart)} → ${escapeHtml(summary.dayEnd)} · ${summary.totalKm.toFixed(1)} km${state.showCosts ? " · " + euro(calcResultCosts(summary).totalCost) : ""}</span>
           </div>
         </div>
         <div class="row" style="gap:8px;flex-wrap:wrap;">
@@ -2825,11 +2826,31 @@ function renderResult() {
         <div class="metric"><div class="metric-label">Ore guida</div><div class="metric-value">${minutesLabel(summary.totalDriveMinutes)}</div></div>
         <div class="metric"><div class="metric-label">Ore lavoro</div><div class="metric-value">${minutesLabel(summary.totalWorkMinutes)}</div></div>
         <div class="metric"><div class="metric-label">Giornata</div><div class="metric-value">${escapeHtml(summary.dayStart)}–${escapeHtml(summary.dayEnd)}</div></div>
-        <div class="metric"><div class="metric-label">Costo km</div><div class="metric-value">${euro(summary.costKm)}</div></div>
-        <div class="metric"><div class="metric-label">Costo guida</div><div class="metric-value">${euro(summary.costDrive)}</div></div>
-        <div class="metric"><div class="metric-label">Costo lavoro</div><div class="metric-value">${euro(summary.costWork)}</div></div>
-        <div class="metric"><div class="metric-label">Totale</div><div class="metric-value">${euro(summary.totalCost)}</div></div>
       </div>
+      ${(() => {
+        const rates = state.resultCostRates || { kmRate: state.settings.kmRate ?? 0.65, driveHourRate: state.settings.driveHourRate ?? 22, workHourRate: state.settings.workHourRate ?? 22 };
+        const costs = state.showCosts ? calcResultCosts(summary) : null;
+        return `<div class="rv-costs-section">
+          <label class="rv-costs-toggle-row">
+            <input type="checkbox" id="rv-costs-check" ${state.showCosts ? "checked" : ""} />
+            <span>Calcola costi</span>
+            ${costs ? `<span class="rv-costs-badge">${euro(costs.totalCost)}</span>` : ""}
+          </label>
+          ${state.showCosts ? `<div class="rv-costs-body">
+            <div class="rv-cost-rates">
+              <label class="rv-cost-rate-lbl">€/km<input type="number" data-rv-rate="kmRate" value="${rates.kmRate}" min="0" step="0.01" /></label>
+              <label class="rv-cost-rate-lbl">€/h guida<input type="number" data-rv-rate="driveHourRate" value="${rates.driveHourRate}" min="0" step="1" /></label>
+              <label class="rv-cost-rate-lbl">€/h lavoro<input type="number" data-rv-rate="workHourRate" value="${rates.workHourRate}" min="0" step="1" /></label>
+            </div>
+            <div class="summary-grid" style="margin-top:10px;">
+              <div class="metric"><div class="metric-label">Costo km</div><div class="metric-value">${euro(costs.costKm)}</div></div>
+              <div class="metric"><div class="metric-label">Costo guida</div><div class="metric-value">${euro(costs.costDrive)}</div></div>
+              <div class="metric"><div class="metric-label">Costo lavoro</div><div class="metric-value">${euro(costs.costWork)}</div></div>
+              <div class="metric metric-total"><div class="metric-label">Totale</div><div class="metric-value">${euro(costs.totalCost)}</div></div>
+            </div>
+          </div>` : ""}
+        </div>`;
+      })()}
       ${(summary.warnings || []).map(w => {
         const msg = w.msg || w;
         const level = w.level || (/(chiusa|dopo|oltre)/.test(msg) ? "error" : "warn");
@@ -2842,9 +2863,20 @@ function renderResult() {
   }
 }
 
+// ── cost calculation (client-side, uses per-route rates) ─────────────────────
+
+function calcResultCosts(summary) {
+  const rates = state.resultCostRates || { kmRate: state.settings.kmRate ?? 0.65, driveHourRate: state.settings.driveHourRate ?? 22, workHourRate: state.settings.workHourRate ?? 22 };
+  const costKm = summary.totalKm * (rates.kmRate ?? 0.65);
+  const costDrive = (summary.totalDriveMinutes / 60) * (rates.driveHourRate ?? 22);
+  const costWork = (summary.totalWorkMinutes / 60) * (rates.workHourRate ?? 22);
+  const totalCost = costKm + costDrive + costWork;
+  return { costKm, costDrive, costWork, totalCost };
+}
+
 // ── print / PDF export ────────────────────────────────────────────────────────
 
-function _buildPrintDoc(withPhones, withCosts, result, routeName, date) {
+function _buildPrintDoc(withPhones, withCosts, result, routeName, date, costOverride = null) {
   const { rows, finalLeg, summary } = result;
 
   const _esc = s => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
@@ -2879,11 +2911,12 @@ function _buildPrintDoc(withPhones, withCosts, result, routeName, date) {
     `<div class="sc"><div class="sl">Km totali</div><div class="sv num">${summary.totalKm.toFixed(1)} km</div></div>` +
     `<div class="sc"><div class="sl">Ore guida</div><div class="sv num">${_mins(summary.totalDriveMinutes)}</div></div>` +
     `<div class="sc"><div class="sl">Ore lavoro</div><div class="sv num">${_mins(summary.totalWorkMinutes)}</div></div>`;
-  const sumCost = withCosts
-    ? `<div class="sc"><div class="sl">Costo km</div><div class="sv num">${_eur(summary.costKm)}</div></div>` +
-      `<div class="sc"><div class="sl">Costo guida</div><div class="sv num">${_eur(summary.costDrive)}</div></div>` +
-      `<div class="sc"><div class="sl">Costo lavoro</div><div class="sv num">${_eur(summary.costWork)}</div></div>` +
-      `<div class="sc"><div class="sl">Totale giornata</div><div class="sv sv-total num">${_eur(summary.totalCost)}</div></div>`
+  const _costs = withCosts ? (costOverride || { costKm: summary.costKm, costDrive: summary.costDrive, costWork: summary.costWork, totalCost: summary.totalCost }) : null;
+  const sumCost = _costs
+    ? `<div class="sc"><div class="sl">Costo km</div><div class="sv num">${_eur(_costs.costKm)}</div></div>` +
+      `<div class="sc"><div class="sl">Costo guida</div><div class="sv num">${_eur(_costs.costDrive)}</div></div>` +
+      `<div class="sc"><div class="sl">Costo lavoro</div><div class="sv num">${_eur(_costs.costWork)}</div></div>` +
+      `<div class="sc"><div class="sl">Totale giornata</div><div class="sv sv-total num">${_eur(_costs.totalCost)}</div></div>`
     : "";
   const summaryHtml =
     `<div class="summary"><div class="ss"><div class="stitle">Giornata</div><div class="sg">${sumDay}</div></div>` +
@@ -2971,12 +3004,14 @@ function printRoute() {
   });
 
   const _r = { ...result, rows: enrichedRows };
+  const _costData = state.showCosts ? calcResultCosts(result.summary) : null;
   const variants = {
     "":   _buildPrintDoc(false, false, _r, routeName, date),
     "p":  _buildPrintDoc(true,  false, _r, routeName, date),
-    "c":  _buildPrintDoc(false, true,  _r, routeName, date),
-    "pc": _buildPrintDoc(true,  true,  _r, routeName, date),
+    "c":  _buildPrintDoc(false, !!_costData, _r, routeName, date, _costData),
+    "pc": _buildPrintDoc(true,  !!_costData, _r, routeName, date, _costData),
   };
+  const costsAvailable = !!_costData;
   const payload = JSON.stringify({ variants, routeName, date });
 
   const _dt = document.documentElement.dataset.theme || "night";
@@ -3033,11 +3068,11 @@ function printRoute() {
         <span class="opt-desc">Aggiunge una colonna con i contatti di ogni tappa</span>
       </div>
     </label>
-    <label>
-      <div class="check-wrap"><input type="checkbox" id="opt-costs"></div>
+    <label style="${costsAvailable ? "" : "opacity:.45;pointer-events:none"}">
+      <div class="check-wrap"><input type="checkbox" id="opt-costs" ${costsAvailable ? "" : "disabled"}></div>
       <div class="opt-text">
         <span class="opt-label">Riepilogo costi</span>
-        <span class="opt-desc">Costo km, guida, lavoro e totale giornata</span>
+        <span class="opt-desc">${costsAvailable ? "Costo km, guida, lavoro e totale giornata" : "Attiva \\\"Calcola costi\\\" nel giro per includere i costi"}</span>
       </div>
     </label>
   </div>
@@ -3314,6 +3349,8 @@ async function replanFromResult() {
     state.expandedStops = new Set();
     state.expandedPanels = new Set();
     state.resultLunchEnabled = null;
+    state.showCosts = false;
+    state.resultCostRates = null;
     state.dirtyStops = new Set();
     await refreshSavedRoutes();
     setActiveTab("result");
@@ -3497,6 +3534,8 @@ async function planCurrentRoute() {
     state.expandedStops = new Set();
     state.expandedPanels = new Set();
     state.resultLunchEnabled = null;
+    state.showCosts = false;
+    state.resultCostRates = null;
     state.dirtyStops = new Set();
     state.route.stops = [];
     state.route.name = "";
@@ -5166,6 +5205,21 @@ function bindEvents() {
         state.route.lunchBreak = e.target.checked;
       } else if (e.target.closest("#rv-settings-form")) {
         state.resultLunchEnabled = e.target.checked;
+      }
+    }
+    if (e.target.id === "rv-costs-check") {
+      state.showCosts = e.target.checked;
+      if (state.showCosts && !state.resultCostRates) {
+        state.resultCostRates = { kmRate: state.settings.kmRate ?? 0.65, driveHourRate: state.settings.driveHourRate ?? 22, workHourRate: state.settings.workHourRate ?? 22 };
+      }
+      renderResult();
+    }
+    if (e.target.dataset.rvRate) {
+      const key = e.target.dataset.rvRate;
+      const val = Number(e.target.value);
+      if (!isNaN(val) && val >= 0) {
+        state.resultCostRates = { ...(state.resultCostRates || {}), [key]: val };
+        renderResult();
       }
     }
   });
