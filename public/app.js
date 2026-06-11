@@ -215,6 +215,13 @@ function applyBrandColors(hex1, hex2, isDark) {
   const white = { r: 255, g: 255, b: 255 }, black = { r: 0, g: 0, b: 0 };
   const s = document.documentElement.style;
   const set = (k, v) => s.setProperty(k, v);
+  // Secondo colore: variabili dedicate + attributo per le regole CSS bicolore
+  const brand2vis = isDark ? _mix(c2, white, 0.72) : _mix(c2, black, 0.75);
+  set("--brand2", _toHex(brand2vis));
+  set("--brand2-bg", _rgba(c2, isDark ? 0.10 : 0.12));
+  set("--brand2-border", _rgba(c2, isDark ? 0.30 : 0.34));
+  set("--brand2-glow", _rgba(c2, isDark ? 0.22 : 0.18));
+  document.documentElement.dataset.brand2 = "1";
   if (isDark) {
     const bright1 = _mix(c1, white, 0.72);
     set("--primary", _toHex(bright1));
@@ -235,7 +242,7 @@ function applyBrandColors(hex1, hex2, isDark) {
     set("--tab-active-bg", _rgba(c1, 0.10));
     set("--tab-active-border", _rgba(c1, 0.25));
     set("--tab-active-text", _rgba(_mix(c1, white, 0.6), 0.95));
-    set("--btn-primary-bg", `linear-gradient(135deg, ${_rgba(c1, 0.20)} 0%, ${_rgba(c1, 0.13)} 50%, ${_rgba(c2, 0.12)} 100%)`);
+    set("--btn-primary-bg", `linear-gradient(135deg, ${_rgba(c1, 0.22)} 0%, ${_rgba(c1, 0.14)} 45%, ${_rgba(c2, 0.24)} 100%)`);
     set("--btn-primary-border", _rgba(c1, 0.35));
     set("--btn-primary-text", _toHex(_mix(c1, white, 0.15)));
     set("--btn-primary-glow", _rgba(c1, 0.22));
@@ -263,7 +270,7 @@ function applyBrandColors(hex1, hex2, isDark) {
     set("--tab-active-bg", _rgba(c1, 0.14));
     set("--tab-active-border", _rgba(c1, 0.32));
     set("--tab-active-text", _toHex(_mix(deep1, black, 0.8)));
-    set("--btn-primary-bg", `linear-gradient(135deg, ${_toHex(_mix(c1, white, 0.85))} 0%, ${_toHex(deep1)} 55%, ${_toHex(_mix(c2, black, 0.8))} 100%)`);
+    set("--btn-primary-bg", `linear-gradient(135deg, ${_toHex(_mix(c1, white, 0.85))} 0%, ${_toHex(deep1)} 45%, ${_toHex(_mix(c2, black, 0.62))} 100%)`);
     set("--btn-primary-border", _rgba(c1, 0.45));
     set("--btn-primary-text", "#ffffff");
     set("--btn-primary-glow", _rgba(c1, 0.28));
@@ -277,6 +284,8 @@ function applyBrandColors(hex1, hex2, isDark) {
 function clearBrandColors() {
   const s = document.documentElement.style;
   BRAND_VARS.forEach(v => s.removeProperty(v));
+  ["--brand2","--brand2-bg","--brand2-border","--brand2-glow"].forEach(v => s.removeProperty(v));
+  delete document.documentElement.dataset.brand2;
 }
 
 function applyTheme() {
@@ -943,9 +952,26 @@ function applyAddressFilter() {
     return;
   }
   const ql = (state.addressSearch || "").toLowerCase();
-  state.addresses = !ql ? [...state.allAddresses] : state.allAddresses.filter(a =>
-    [a.customer, a.activity, a.location, a.fullAddress, a.notes].some(v => (v || "").toLowerCase().includes(ql))
-  );
+  if (!ql) { state.addresses = [...state.allAddresses]; return; }
+  // Ranking per pertinenza: anche con 1-2 lettere i risultati "giusti"
+  // emergono in cima invece di restare sepolti tra i match casuali
+  const score = (a) => {
+    const name = ((a.activity || "") + " " + (a.customer || "")).toLowerCase();
+    const cust = (a.customer || "").toLowerCase();
+    const act = (a.activity || "").toLowerCase();
+    if (cust.startsWith(ql) || act.startsWith(ql)) return 0;          // inizia col nome
+    if (name.split(/\s+/).some(w => w.startsWith(ql))) return 1;     // inizia una parola del nome
+    if (name.includes(ql)) return 2;                                  // contenuto nel nome
+    if ((a.location || "").toLowerCase().includes(ql)) return 3;      // città
+    if ((a.fullAddress || "").toLowerCase().includes(ql)) return 4;   // indirizzo
+    if ((a.notes || "").toLowerCase().includes(ql)) return 5;         // note
+    return -1;                                                        // nessun match
+  };
+  state.addresses = state.allAddresses
+    .map(a => ({ a, s: score(a) }))
+    .filter(x => x.s >= 0)
+    .sort((x, y) => x.s - y.s)
+    .map(x => x.a);
 }
 
 async function refreshAddresses() {
@@ -3898,12 +3924,9 @@ function bindEvents() {
       const q = e.target.value;
       state.addressSearch = q;
       state.archiveShowAll = Boolean(q);
-      // Immediate client-side filter from already-loaded list, then server confirms
+      // Filtro immediato client-side con ranking di pertinenza
       if (q) {
-        const ql = q.toLowerCase();
-        state.addresses = state.allAddresses.filter(a =>
-          [a.customer, a.activity, a.location, a.fullAddress, a.notes].some(v => (v || "").toLowerCase().includes(ql))
-        );
+        applyAddressFilter();
         renderArchive();
       }
       // Server confirm debounced: avoid one API call + render per keystroke
