@@ -1222,7 +1222,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.068 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.069 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -1571,9 +1571,21 @@ async function renderGoogleMap(result) {
     hasPoints = true;
   };
 
+  const addLunchMarker = (lat, lng, title) => {
+    if (!lat || !lng) return;
+    const pos = { lat: Number(lat), lng: Number(lng) };
+    new google.maps.Marker({ position: pos, map, title,
+      label: { text: "🍽", fontSize: "14px" },
+      icon: { path: google.maps.SymbolPath.CIRCLE, scale: 10,
+              fillColor: "#e97316", fillOpacity: 0.9, strokeColor: "#fff", strokeWeight: 2 }
+    });
+    bounds.extend(pos);
+    hasPoints = true;
+  };
+
   if (startCoord) addMarker(startCoord.lat, startCoord.lng, "P", result.start?.label || "Partenza");
   for (const row of rows) {
-    if (row.type === "lunch") continue;
+    if (row.type === "lunch") { addLunchMarker(row.lat, row.lng, row.customer || "Pausa pranzo"); continue; }
     if (row.type === "rest") { addRestMarker(row.lat, row.lng, row.customer); continue; }
     addMarker(row.lat, row.lng, String(row.stopNumber), row.customer);
   }
@@ -1581,11 +1593,10 @@ async function renderGoogleMap(result) {
 
   if (hasPoints) map.fitBounds(bounds);
 
-  // Draw route — include rest stops as waypoints so the polyline passes through them
+  // Draw route — include rest stops and lunch stops as waypoints
   const allPoints = [];
   if (startCoord) allPoints.push(startCoord);
   for (const row of rows) {
-    if (row.type === "lunch") continue;
     if (row.lat && row.lng) allPoints.push({ lat: Number(row.lat), lng: Number(row.lng) });
   }
   if (endCoord) allPoints.push(endCoord);

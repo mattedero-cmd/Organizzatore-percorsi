@@ -1,3 +1,6 @@
+## v4.069 — 2026-06-11
+- Fix: pausa pranzo non visibile sulla mappa — aggiunto marker arancione (🍽) e waypoint nel tracciato per le pause pranzo con lat/lng
+
 ## v4.068 — 2026-06-11
 - Fix: tab bar iniziava a scorrere con il contenuto su iOS — overflow-x:hidden su .shell interrompe position:fixed; cambiato in overflow-x:clip
 - Fix: "Prima tappa fissa" ora presente su tutte le tappe, non solo la prima
