@@ -540,7 +540,15 @@ function openMenu(section = null) {
   renderMenu();
 }
 
-function closeMenu() {
+function closeMenu(revertTheme = true) {
+  if (revertTheme && state._previewTheme) {
+    state.themeMode = state._previewTheme.mode;
+    state.themePalette = state._previewTheme.palette;
+    if (state._previewTheme.brandColor !== undefined) state.settings.brandColor = state._previewTheme.brandColor;
+    if (state._previewTheme.brandColor2 !== undefined) state.settings.brandColor2 = state._previewTheme.brandColor2;
+    applyTheme();
+    state._previewTheme = null;
+  }
   state.menuOpen = false;
   state.menuSection = null;
   const existing = document.getElementById("bsheet-overlay");
@@ -573,12 +581,29 @@ function renderMenu() {
     const ov = document.getElementById("bsheet-overlay");
     if (!ov) return;
     ov.querySelectorAll("[data-menu-go]").forEach(btn => {
-      btn.addEventListener("click", () => { state.menuSection = btn.dataset.menuGo; refreshSheet(); });
+      btn.addEventListener("click", () => {
+        if (btn.dataset.menuGo === "settings" && !state._previewTheme) {
+          state._previewTheme = { mode: state.themeMode, palette: state.themePalette, brandColor: state.settings.brandColor, brandColor2: state.settings.brandColor2 };
+        }
+        state.menuSection = btn.dataset.menuGo;
+        refreshSheet();
+      });
     });
     ov.querySelectorAll("[data-stats-tab]").forEach(btn => {
       btn.addEventListener("click", () => { state.statsTab = btn.dataset.statsTab; refreshSheet(); });
     });
-    ov.querySelector("#bsheet-back")?.addEventListener("click", () => { state.menuSection = null; refreshSheet(); });
+    ov.querySelector("#bsheet-back")?.addEventListener("click", () => {
+      if (state.menuSection === "settings" && state._previewTheme) {
+        state.themeMode = state._previewTheme.mode;
+        state.themePalette = state._previewTheme.palette;
+        if (state._previewTheme.brandColor !== undefined) state.settings.brandColor = state._previewTheme.brandColor;
+        if (state._previewTheme.brandColor2 !== undefined) state.settings.brandColor2 = state._previewTheme.brandColor2;
+        applyTheme();
+        state._previewTheme = null;
+      }
+      state.menuSection = null;
+      refreshSheet();
+    });
     ov.querySelector("#bsheet-close")?.addEventListener("click", () => closeMenu());
     ov.querySelector("#logout-btn")?.addEventListener("click", async () => {
       await fetch("/api/auth/logout", { method: "POST" });
@@ -616,7 +641,15 @@ function renderMenu() {
         brandColor: v.brandColor || state.settings.brandColor || "",
         brandColor2: v.brandColor2 || state.settings.brandColor2 || ""
       };
-      state.settings = await api("/api/settings", { method: "PUT", body: JSON.stringify(newSettings) });
+      let saved;
+      try {
+        saved = await api("/api/settings", { method: "PUT", body: JSON.stringify(newSettings) });
+      } catch (err) {
+        showToast(err.message || "Errore nel salvataggio");
+        return;
+      }
+      state._previewTheme = null;
+      state.settings = saved;
       state.navigatorPref = state.settings.navigatorPref;
       try { localStorage.setItem("navigatorPref", state.navigatorPref); } catch {}
       state.themeMode = state.settings.themeMode || "auto";
@@ -634,7 +667,7 @@ function renderMenu() {
       applyTheme();
       render(); // aggiorna il form percorso con i nuovi default
       showToast("Impostazioni salvate");
-      closeMenu();
+      closeMenu(false);
     });
     ov.querySelector("#change-pw-form")?.addEventListener("submit", async e => {
       e.preventDefault();
@@ -1222,7 +1255,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.069 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.071 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -3246,8 +3279,8 @@ async function replanFromResult() {
     name: result.name || "Percorso giornaliero",
     id: result.id,
     scheduledDate: v.scheduledDate || result.scheduledDate || "",
-    start: { label: result.start?.label || "", address: v.startAddress || result.start?.address || "" },
-    end: { sameAsStart: v.endSameAsStart === "on", label: result.end?.label || "", address: v.endAddress || result.end?.address || "" },
+    start: { label: v.startLabel || result.start?.label || "", address: v.startAddress || result.start?.address || "" },
+    end: { sameAsStart: v.endSameAsStart === "on", label: v.endLabel || result.end?.label || "", address: v.endAddress || result.end?.address || "" },
     startTime: v.startTime || result.startTime || result.summary?.dayStart || "07:00",
     timingMode,
     arrivalLeadMinutes: Number(v.arrivalLeadMinutes ?? result.arrivalLeadMinutes ?? 10),
@@ -3318,15 +3351,31 @@ function renderResultEditPanels(result) {
           ${timingMode === "arrive_at" ? `<label class="rp-when-time" style="max-width:160px;"><span class="rp-label">Arrivo target</span><input name="firstArrivalTime" type="time" step="300" value="${escapeHtml(firstArrivalTime)}" /></label>` : ""}
         </div>
         <div class="rv-field-full">
-          <label class="rp-label" style="display:block;margin-bottom:4px;">Partenza da</label>
-          <input name="startAddress" type="text" value="${escapeHtml(startAddr)}" placeholder="Indirizzo di partenza" style="width:100%;box-sizing:border-box;" />
+          <span class="rp-label" style="display:block;margin-bottom:4px;">Partenza da</span>
+          <div class="rv-addr-block">
+            <div class="rv-addr-row">
+              <input id="rv-start-search" type="text" value="${escapeHtml(result.start?.label || startAddr)}" placeholder="Cerca archivio o digita indirizzo…" autocomplete="off" />
+              <input type="hidden" name="startAddress" id="rv-start-addr-h" value="${escapeHtml(startAddr)}" />
+              <input type="hidden" name="startLabel" id="rv-start-label-h" value="${escapeHtml(result.start?.label || '')}" />
+              ${state.googleMapsKey ? `<button type="button" class="btn icon-btn rv-addr-map-btn" data-rv-addr="start" title="Scegli sulla mappa">${I.map(15)}</button>` : ""}
+            </div>
+            <div id="rv-start-sugg" class="stop-suggestions"></div>
+          </div>
         </div>
         <div class="rv-field-full" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-          <label class="rp-label" style="flex:1;min-width:120px;">Arrivo a</label>
+          <span class="rp-label" style="flex:1;min-width:120px;">Arrivo a</span>
           <label class="stop-opt-check"><input type="checkbox" name="endSameAsStart" id="rv-end-same" ${endSame ? "checked" : ""} /><span>= partenza</span></label>
         </div>
         <div class="rv-field-full" id="rv-end-addr-wrap" ${endSame ? 'style="display:none"' : ""}>
-          <input name="endAddress" type="text" value="${escapeHtml(endAddr)}" placeholder="Indirizzo di arrivo" style="width:100%;box-sizing:border-box;" />
+          <div class="rv-addr-block">
+            <div class="rv-addr-row">
+              <input id="rv-end-search" type="text" value="${escapeHtml(result.end?.label || endAddr)}" placeholder="Cerca archivio o digita indirizzo…" autocomplete="off" />
+              <input type="hidden" name="endAddress" id="rv-end-addr-h" value="${escapeHtml(endAddr)}" />
+              <input type="hidden" name="endLabel" id="rv-end-label-h" value="${escapeHtml(result.end?.label || '')}" />
+              ${state.googleMapsKey ? `<button type="button" class="btn icon-btn rv-addr-map-btn" data-rv-addr="end" title="Scegli sulla mappa">${I.map(15)}</button>` : ""}
+            </div>
+            <div id="rv-end-sugg" class="stop-suggestions"></div>
+          </div>
         </div>
         <div class="rv-field-full" style="display:flex;align-items:center;gap:12px;padding-top:4px;">
           <label class="stop-opt-check">
@@ -4895,12 +4944,33 @@ function bindEvents() {
       const sug = document.querySelector("#stop-suggestions");
       if (sug) sug.innerHTML = renderStopSuggestions();
     }
-    // rv-settings-form startAddress: se "= partenza" è attivo, aggiorna end in tempo reale
-    if (e.target.name === "startAddress" && e.target.closest("#rv-settings-form")) {
-      const endSame = document.getElementById("rv-end-same");
-      if (endSame?.checked) {
-        const endInp = document.querySelector("#rv-settings-form [name='endAddress']");
-        if (endInp) endInp.value = e.target.value;
+    // rv-start-search / rv-end-search: ricerca archivio + sync campi nascosti
+    if (e.target.id === "rv-start-search" || e.target.id === "rv-end-search") {
+      const isStart = e.target.id === "rv-start-search";
+      const q = e.target.value;
+      const addrH = document.getElementById(isStart ? "rv-start-addr-h" : "rv-end-addr-h");
+      const labelH = document.getElementById(isStart ? "rv-start-label-h" : "rv-end-label-h");
+      const suggEl = document.getElementById(isStart ? "rv-start-sugg" : "rv-end-sugg");
+      // Testo libero: aggiorna il campo indirizzo nascosto in tempo reale
+      if (addrH) addrH.value = q;
+      if (labelH) labelH.value = "";
+      // Mostra suggerimenti dall'archivio
+      if (suggEl) {
+        const matches = q.trim().length > 0 ? rankAddressMatches(state.allAddresses, q.trim().toLowerCase()).slice(0, 6) : [];
+        suggEl.innerHTML = matches.map(a => `
+          <div class="stop-suggestion-item" data-rv-addr-sugg="${isStart ? "start" : "end"}" data-addr-id="${a.id}">
+            <span class="stop-suggestion-name">${escapeHtml(addressName(a))}</span>
+            <span class="stop-suggestion-addr">${escapeHtml(a.fullAddress || "")}</span>
+          </div>`).join("");
+      }
+      // Sincronizza arrivo se "= partenza" è attivo
+      if (isStart && document.getElementById("rv-end-same")?.checked) {
+        const endSearch = document.getElementById("rv-end-search");
+        const endAddrH = document.getElementById("rv-end-addr-h");
+        const endLabelH = document.getElementById("rv-end-label-h");
+        if (endSearch) endSearch.value = q;
+        if (endAddrH) endAddrH.value = q;
+        if (endLabelH) endLabelH.value = "";
       }
     }
     // rv result-view stop autocomplete
@@ -5260,12 +5330,75 @@ function bindEvents() {
       return;
     }
 
+    // Suggerimento partenza/arrivo nel pannello impostazioni giro
+    const addrSuggItem = e.target.closest("[data-rv-addr-sugg]");
+    if (addrSuggItem) {
+      const isStart = addrSuggItem.dataset.rvAddrSugg === "start";
+      const addr = state.allAddresses.find(a => String(a.id) === addrSuggItem.dataset.addrId);
+      if (!addr) return;
+      const searchEl = document.getElementById(isStart ? "rv-start-search" : "rv-end-search");
+      const addrH = document.getElementById(isStart ? "rv-start-addr-h" : "rv-end-addr-h");
+      const labelH = document.getElementById(isStart ? "rv-start-label-h" : "rv-end-label-h");
+      const suggEl = document.getElementById(isStart ? "rv-start-sugg" : "rv-end-sugg");
+      const name = addressName(addr);
+      if (searchEl) searchEl.value = name;
+      if (addrH) addrH.value = addr.fullAddress || "";
+      if (labelH) labelH.value = addr.customer || "";
+      if (suggEl) suggEl.innerHTML = "";
+      if (isStart && document.getElementById("rv-end-same")?.checked) {
+        const es = document.getElementById("rv-end-search");
+        const ea = document.getElementById("rv-end-addr-h");
+        const el = document.getElementById("rv-end-label-h");
+        if (es) es.value = name;
+        if (ea) ea.value = addr.fullAddress || "";
+        if (el) el.value = addr.customer || "";
+      }
+      return;
+    }
+
+    // Pulsante mappa partenza/arrivo nel pannello impostazioni giro
+    const mapAddrBtn = e.target.closest(".rv-addr-map-btn[data-rv-addr]");
+    if (mapAddrBtn) {
+      const isStart = mapAddrBtn.dataset.rvAddr === "start";
+      const addrH = document.getElementById(isStart ? "rv-start-addr-h" : "rv-end-addr-h");
+      const labelH = document.getElementById(isStart ? "rv-start-label-h" : "rv-end-label-h");
+      openMapPickerForField({
+        labelEl: labelH,
+        addressEl: addrH,
+        onConfirm: (label, address) => {
+          const searchEl = document.getElementById(isStart ? "rv-start-search" : "rv-end-search");
+          if (searchEl) searchEl.value = label || address;
+          if (isStart && document.getElementById("rv-end-same")?.checked) {
+            const es = document.getElementById("rv-end-search");
+            const ea = document.getElementById("rv-end-addr-h");
+            const el = document.getElementById("rv-end-label-h");
+            if (es) es.value = label || address;
+            if (ea) ea.value = address;
+            if (el) el.value = label;
+          }
+        }
+      });
+      return;
+    }
+
     // timing mode change → refresh extra fields inline
 
     // end-same-as-start toggle
     if (e.target.id === "rv-end-same") {
       const wrap = document.getElementById("rv-end-addr-wrap");
       if (wrap) wrap.style.display = e.target.checked ? "none" : "";
+      // Se si attiva "= partenza", sincronizza subito i campi arrivo
+      if (e.target.checked) {
+        const startVal = document.getElementById("rv-start-search")?.value || "";
+        const startAddr = document.getElementById("rv-start-addr-h")?.value || "";
+        const startLabel = document.getElementById("rv-start-label-h")?.value || "";
+        const es = document.getElementById("rv-end-search");
+        const ea = document.getElementById("rv-end-addr-h");
+        const el = document.getElementById("rv-end-label-h");
+        if (es) es.value = startVal;
+        if (ea) ea.value = startAddr;
+        if (el) el.value = startLabel;
+      }
       return;
     }
 
@@ -6078,8 +6211,22 @@ async function init() {
     const shareTokenMatch = window.location.pathname.match(/^\/share\/([a-zA-Z0-9_-]+)/);
     if (shareTokenMatch) handleShareImport(shareTokenMatch[1]);
   } catch {
-    hideSplash();
-    renderAuthScreen(false);
+    // Errore di rete (non 401) — riprova una volta dopo 2s prima di mostrare il login
+    await new Promise(r => setTimeout(r, 2000));
+    try {
+      const retryRes = await fetch(window.location.origin + '/api/auth/me');
+      const retryMe = await retryRes.json().catch(() => ({}));
+      if (!retryRes.ok) { hideSplash(); renderAuthScreen(retryMe.setup === true); return; }
+      state.user = retryMe;
+      state._authVerified = true;
+      await initApp();
+      updateGreeting();
+      hideSplash();
+      if (!retryMe.nickname) showNicknameSetup();
+    } catch {
+      hideSplash();
+      renderAuthScreen(false);
+    }
   }
 }
 

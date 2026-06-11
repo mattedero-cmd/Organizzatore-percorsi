@@ -1,3 +1,11 @@
+## v4.071 — 2026-06-11
+- Fix: pulsante "Salva impostazioni" sembrava bloccato se l'API restituiva errore — aggiunto try/catch con toast
+- Fix: cambio tema nelle impostazioni veniva applicato anche senza salvare — ora l'anteprima è live ma si annulla chiudendo senza salvare
+- Fix: errore di rete al riavvio (es. riapertura da background su iOS) mostrava il login screen — ora riprova dopo 2s prima di cedere
+
+## v4.070 — 2026-06-11
+- Feature: campi partenza/arrivo in "Modifica impostazioni giro" ora usano la barra di ricerca con archivio indirizzi e selettore su Maps (come nella creazione giro)
+
 ## v4.069 — 2026-06-11
 - Fix: pausa pranzo non visibile sulla mappa — aggiunto marker arancione (🍽) e waypoint nel tracciato per le pause pranzo con lat/lng
 

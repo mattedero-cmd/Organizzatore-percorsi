@@ -2186,6 +2186,10 @@ tbody tr:last-child td {
   border-bottom: 1px solid var(--line);
 }
 
+.rv-addr-block { position: relative; }
+.rv-addr-row { display: flex; gap: 6px; align-items: center; }
+.rv-addr-row input[type="text"] { flex: 1; min-width: 0; }
+
 .rv-settings-form,
 .rv-add-stop-body {
   padding: 12px 14px;
