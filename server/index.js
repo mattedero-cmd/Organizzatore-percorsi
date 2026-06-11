@@ -260,8 +260,8 @@ function serveStatic(request, response) {
     return;
   }
 
-  if (safePath === "/index.html" || url.pathname === "/") {
-    serveIndex(request, response, filePath);
+  if (safePath === "/index.html" || url.pathname === "/" || url.pathname.startsWith("/share/")) {
+    serveIndex(request, response, path.join(publicDir, "index.html"));
     return;
   }
 
@@ -286,6 +286,9 @@ function serveStatic(request, response) {
     response.end(content);
   });
 }
+
+// Finestra di dedup per /api/plan: chiave → { at, promise }
+const recentPlanRequests = new Map();
 
 async function handleApi(request, response) {
   const url = new URL(request.url, `http://${request.headers.host}`);
@@ -600,6 +603,14 @@ async function handleApi(request, response) {
 
     if (method === "POST" && url.pathname === "/api/plan") {
       const body = await parseBody(request);
+      // Dedup: richiesta identica dello stesso utente entro 10s (doppio
+      // submit / retry di rete) riusa il risultato senza creare un duplicato
+      const dedupKey = `${userId}:${JSON.stringify(body)}`;
+      const recent = recentPlanRequests.get(dedupKey);
+      if (recent && Date.now() - recent.at < 10000 && recent.promise) {
+        return sendJson(response, 200, await recent.promise);
+      }
+      const planPromise = (async () => {
       const settings = await getSettings(userId);
       const allAddresses = await listAddresses("", userId);
       let route = await planRoute(body, settings, allAddresses);
@@ -613,7 +624,7 @@ async function handleApi(request, response) {
           route.name = existing.name; // preserve the original name
           route.notes = existing.notes ?? route.notes;
           await updateRoutePayload(existing.id, route, userId);
-          return sendJson(response, 200, route);
+          return route;
         }
       }
 
@@ -663,7 +674,18 @@ async function handleApi(request, response) {
         endAddress: route.end?.address || route.end?.fullAddress || ""
       }, userId);
       route.id = saved.id;
-      return sendJson(response, 200, route);
+      return route;
+      })();
+      recentPlanRequests.set(dedupKey, { at: Date.now(), promise: planPromise });
+      for (const [k, v] of recentPlanRequests) {
+        if (Date.now() - v.at > 30000) recentPlanRequests.delete(k);
+      }
+      try {
+        return sendJson(response, 200, await planPromise);
+      } catch (err) {
+        recentPlanRequests.delete(dedupKey);
+        throw err;
+      }
     }
 
     if (method === "POST" && url.pathname === "/api/route-shape") {

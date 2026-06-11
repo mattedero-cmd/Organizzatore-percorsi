@@ -1674,7 +1674,9 @@ tbody tr:last-child td {
   border: 1px solid var(--accent-border);
   color: #f0fffe;
   transform: translateY(130%);
-  transition: transform 180ms ease;
+  opacity: 0;
+  pointer-events: none;
+  transition: transform 180ms ease, opacity 180ms ease;
   z-index: 10000;
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
@@ -1717,6 +1719,8 @@ tbody tr:last-child td {
 
 .toast.show {
   transform: translateY(0);
+  opacity: 1;
+  pointer-events: auto;
 }
 
 /* ═══════════════════════════════════════════════════════════

@@ -1,3 +1,9 @@
+## v4.065 — 2026-06-11
+- Fix: link condivisi davano 404 NOT_FOUND — aggiunta route /share/(.*) → index.html in vercel.json e fallback SPA nel server Node
+- Fix: elemento fantasma in basso a destra — il toast vuoto restava visibile (aggiunti opacity:0 e pointer-events:none nello stato nascosto)
+- Fix: id sempre 0/null da SQLite — ogni runSql apre un nuovo processo sqlite3, quindi last_insert_rowid() in chiamata separata valeva 0: corretti saveRoute (id 0 al client), createAddress (rispondeva null) e createUser; ora INSERT+SELECT in unica invocazione
+- Fix: giri duplicati da doppio click/retry — guard state.planning nel client e dedup server su /api/plan (richieste identiche entro 10s riusano lo stesso risultato)
+
 ## v4.064 — 2026-06-11
 - Nuovo: integrazione Meteo Trentino — per le tappe in Trentino il meteo usa il bollettino ufficiale della Provincia (località più vicina tra 22 principali); temperatura all'orario di arrivo interpolata tra min/max del giorno; warning automatici per temporali/pioggia/neve/vento; fallback automatico a Open-Meteo fuori Trentino o in caso di errore
 

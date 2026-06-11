@@ -541,9 +541,10 @@ export async function createAddress(address, userId = null) {
     const rows = await runSql(`INSERT INTO addresses (${cols}) VALUES (${vals}) RETURNING *;`, true);
     return rowToAddress(rows[0]);
   }
-  await runSql(`INSERT INTO addresses (${cols}) VALUES (${vals});`);
-  const rows = await runSql("SELECT * FROM addresses WHERE id = last_insert_rowid();", true);
-  return rowToAddress(rows[0]);
+  // INSERT+SELECT in unica invocazione: ogni runSql apre un nuovo processo
+  // sqlite3, quindi last_insert_rowid() in chiamata separata vale sempre 0
+  const rows = await runSql(`INSERT INTO addresses (${cols}) VALUES (${vals}); SELECT * FROM addresses WHERE id = last_insert_rowid();`, true);
+  return rows[0] ? rowToAddress(rows[0]) : null;
 }
 
 export async function updateAddress(id, address, userId = null) {
@@ -621,11 +622,12 @@ export async function saveRoute(route, userId = null, source = null) {
     `, true);
     return { id: rows[0]?.id };
   }
-  await runSql(`
+  const rows = await runSql(`
     INSERT INTO planned_routes (name, scheduled_date, start_label, start_address, end_label, end_address, start_time, first_arrival_required, total_km, total_drive_minutes, total_work_minutes, total_cost, weather_captured_at, payload_json, user_id, source, notes)
     VALUES (${sqlValue(route.name || "")}, ${sqlValue(route.scheduledDate || route.scheduled_date || "")}, ${sqlValue(route.startLabel || "")}, ${sqlValue(route.startAddress || "")}, ${sqlValue(route.endLabel || "")}, ${sqlValue(route.endAddress || "")}, ${sqlValue(route.startTime || "")}, ${sqlValue(route.firstArrivalRequired || "")}, ${sqlValue(Number(route.summary?.totalKm || 0))}, ${sqlValue(Number(route.summary?.totalDriveMinutes || 0))}, ${sqlValue(Number(route.summary?.totalWorkMinutes || 0))}, ${sqlValue(Number(route.summary?.totalCost || 0))}, ${sqlValue(route.weatherCapturedAt || "")}, ${sqlValue(JSON.stringify(route))}, ${userIdVal}, ${sourceVal}, ${notesVal});
-  `);
-  const rows = await runSql("SELECT last_insert_rowid() AS id;", true);
+  
+    SELECT last_insert_rowid() AS id;
+  `, true);
   return { id: rows[0]?.id };
 }
 
@@ -699,8 +701,7 @@ export async function createUser(username, passwordHash) {
     const rows = await runSql(`INSERT INTO users (username, password_hash) VALUES (${sqlValue(username)}, ${sqlValue(passwordHash)}) RETURNING id, username, created_at;`, true);
     return rows[0] ? { id: rows[0].id, username: rows[0].username } : null;
   }
-  await runSql(`INSERT INTO users (username, password_hash) VALUES (${sqlValue(username)}, ${sqlValue(passwordHash)});`);
-  const rows = await runSql("SELECT id, username FROM users WHERE id = last_insert_rowid();", true);
+  const rows = await runSql(`INSERT INTO users (username, password_hash) VALUES (${sqlValue(username)}, ${sqlValue(passwordHash)}); SELECT id, username FROM users WHERE id = last_insert_rowid();`, true);
   return rows[0] ? { id: rows[0].id, username: rows[0].username } : null;
 }
 

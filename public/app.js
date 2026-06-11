@@ -1201,7 +1201,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.064 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.065 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -3381,6 +3381,7 @@ function renderResultEditPanels(result) {
 // ── plan route ────────────────────────────────────────────────────────────────
 
 async function planCurrentRoute() {
+  if (state.planning) return;
   updateRouteFromForm();
   if (!state.route.stops.length) { showToast("Aggiungi almeno una tappa"); return; }
   state.planning = true;
