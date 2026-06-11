@@ -705,7 +705,10 @@ async function insertBreaks(rows, options) {
           const end = parseTime(rows[i].serviceEndTime);
           if (end != null && end <= fixedMin) insertIdx = i + 1;
         }
-        insertions.push(await makeLunchEntry(insertIdx, rows[insertIdx - 1] ?? null, rows[insertIdx] ?? null, fixedMin));
+        const lunchEntry = await makeLunchEntry(insertIdx, rows[insertIdx - 1] ?? null, rows[insertIdx] ?? null, fixedMin);
+        lunchEntry.lunchForFixed = true;
+        lunchEntry.fixedLunchAt = fixedMin;
+        insertions.push(lunchEntry);
       }
       placed = true;
     }

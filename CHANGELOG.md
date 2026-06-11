@@ -1,3 +1,7 @@
+## v4.067 — 2026-06-11
+- Fix: pausa pranzo con orario fisso (es. 12:30) veniva inserita all'orario di partenza della tappa precedente (es. 11:58) invece che all'orario impostato — il caso "gap tra tappe" non impostava lunchForFixed/fixedLunchAt
+- Fix: ricerca tappe (campo "Cerca e aggiungi tappa") e ricerca tappe nel risultato usavano plain .filter().includes() senza ranking — ora usano rankAddressMatches come la ricerca archivio
+
 ## v4.066 — 2026-06-11
 - Fix: tema Aziendali non sostituiva il turchese di default in molte parti dell'app — applyBrandColor ora override anche --bg, --tab-bg, --tab-border, --tab-text, --card-corner, --btn-primary-text, --btn-primary-shine; in modalità chiara il background diventa una tinta pallida del colore aziendale, in modalità scura una versione quasi nera
 

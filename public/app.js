@@ -1222,7 +1222,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.066 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.067 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -1637,9 +1637,7 @@ async function renderGoogleMap(result) {
 function renderStopSuggestions() {
   const q = state.stopSearchText.trim().toLowerCase();
   if (!q) return "";
-  const matches = state.allAddresses.filter(a =>
-    [a.customer, a.activity, a.location, a.fullAddress].some(v => (v || "").toLowerCase().includes(q))
-  ).slice(0, 8);
+  const matches = rankAddressMatches(state.allAddresses, q).slice(0, 8);
   if (!matches.length) return `<div class="stop-suggestion-empty">Nessun risultato</div>`;
   return matches.map(a => `
     <div class="stop-suggestion-item" data-suggest-id="${a.id}">
@@ -4902,9 +4900,7 @@ function bindEvents() {
       const addRow = document.getElementById("rv-add-saved-row");
       if (addRow) addRow.style.display = "none";
       if (!q) { sug.innerHTML = ""; return; }
-      const matches = state.allAddresses.filter(a =>
-        [a.customer, a.activity, a.location, a.fullAddress].some(v => (v || "").toLowerCase().includes(q))
-      ).slice(0, 8);
+      const matches = rankAddressMatches(state.allAddresses, q).slice(0, 8);
       sug.innerHTML = matches.length
         ? matches.map(a => `
           <div class="stop-suggestion-item" data-rv-suggest-id="${a.id}">
