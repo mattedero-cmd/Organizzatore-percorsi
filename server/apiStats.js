@@ -12,7 +12,7 @@
  *   "internal"      — internal /api/* calls (route planning, archive, etc.)
  */
 
-import { runSql, sqlValue, getDbMode } from "./db.js";
+import { dbAll, dbRun, dbExec, getDbMode } from "./db.js";
 
 const FLUSH_INTERVAL_MS = 60_000; // flush to DB every minute
 
@@ -33,18 +33,21 @@ async function flush() {
   for (const [key, count] of entries) {
     const [day, service, endpoint] = key.split("|");
     try {
+      // endpoint può essere "" → la colonna ha DEFAULT '' ma fa parte della PK:
+      // usare COALESCE-like esplicito per non inserire NULL (bindable mappa ""→NULL)
+      const params = [day, service, endpoint || "-", count];
       if (getDbMode() === "postgres") {
-        await runSql(`
+        await dbRun(`
           INSERT INTO api_calls (day, service, endpoint, count)
-          VALUES (${sqlValue(day)}, ${sqlValue(service)}, ${sqlValue(endpoint)}, ${count})
+          VALUES (?, ?, ?, ?)
           ON CONFLICT (day, service, endpoint) DO UPDATE SET count = api_calls.count + EXCLUDED.count;
-        `);
+        `, params);
       } else {
-        await runSql(`
+        await dbRun(`
           INSERT INTO api_calls (day, service, endpoint, count)
-          VALUES (${sqlValue(day)}, ${sqlValue(service)}, ${sqlValue(endpoint)}, ${count})
-          ON CONFLICT (day, service, endpoint) DO UPDATE SET count = count + ${count};
-        `);
+          VALUES (?, ?, ?, ?)
+          ON CONFLICT (day, service, endpoint) DO UPDATE SET count = count + excluded.count;
+        `, params);
       }
     } catch (err) {
       // Put back in buffer if flush failed, will retry next interval
@@ -56,30 +59,25 @@ async function flush() {
 }
 
 export async function initApiStatsTable() {
-  if (getDbMode() === "postgres") {
-    await runSql(`
-      CREATE TABLE IF NOT EXISTS api_calls (
-        day TEXT NOT NULL,
-        service TEXT NOT NULL,
-        endpoint TEXT NOT NULL DEFAULT '',
-        count INTEGER NOT NULL DEFAULT 0,
-        PRIMARY KEY (day, service, endpoint)
-      );
-    `);
-  } else {
-    await runSql(`
-      CREATE TABLE IF NOT EXISTS api_calls (
-        day TEXT NOT NULL,
-        service TEXT NOT NULL,
-        endpoint TEXT NOT NULL DEFAULT '',
-        count INTEGER NOT NULL DEFAULT 0,
-        PRIMARY KEY (day, service, endpoint)
-      );
-    `);
-  }
-  // Flush every minute, also flush on SIGTERM
-  setInterval(flush, FLUSH_INTERVAL_MS);
-  process.once("SIGTERM", flush);
+  // stesso DDL per SQLite e PostgreSQL
+  await dbExec(`
+    CREATE TABLE IF NOT EXISTS api_calls (
+      day TEXT NOT NULL,
+      service TEXT NOT NULL,
+      endpoint TEXT NOT NULL DEFAULT '',
+      count INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (day, service, endpoint)
+    );
+  `);
+  // Flush every minute, also flush on SIGTERM.
+  // unref(): il timer non deve tenere vivo il processo.
+  // Registrare un handler SIGTERM sostituisce la terminazione di default,
+  // quindi dopo il flush bisogna uscire esplicitamente.
+  setInterval(flush, FLUSH_INTERVAL_MS).unref();
+  process.once("SIGTERM", async () => {
+    try { await flush(); } catch {}
+    process.exit(0);
+  });
 }
 
 // ── Admin query ───────────────────────────────────────────────────────────────
@@ -90,13 +88,13 @@ export async function initApiStatsTable() {
  */
 export async function getApiStats(days = 30) {
   const cutoff = new Date(Date.now() - days * 86400_000).toISOString().slice(0, 10);
-  const rows = await runSql(`
+  const rows = await dbAll(`
     SELECT day, service, SUM(count) AS total
     FROM api_calls
-    WHERE day >= ${sqlValue(cutoff)}
+    WHERE day >= ?
     GROUP BY day, service
     ORDER BY day DESC, service ASC;
-  `, true);
+  `, [cutoff]);
   return rows;
 }
 
@@ -105,12 +103,12 @@ export async function getApiStats(days = 30) {
  */
 export async function getApiStatsDetail(service, days = 30) {
   const cutoff = new Date(Date.now() - days * 86400_000).toISOString().slice(0, 10);
-  const rows = await runSql(`
+  const rows = await dbAll(`
     SELECT day, endpoint, SUM(count) AS total
     FROM api_calls
-    WHERE service = ${sqlValue(service)} AND day >= ${sqlValue(cutoff)}
+    WHERE service = ? AND day >= ?
     GROUP BY day, endpoint
     ORDER BY day DESC, total DESC;
-  `, true);
+  `, [service, cutoff]);
   return rows;
 }

@@ -88,11 +88,13 @@ server/
 
 ## Database
 
-- **Locale**: SQLite in `./data/work-routes.sqlite`
+- **Locale**: SQLite in `./data/work-routes.sqlite` via `better-sqlite3` (connessione persistente, WAL)
 - **Produzione** (Vercel): PostgreSQL via env var `DATABASE_URL`
 - Il codice in `db.js` gestisce entrambi — usa `getDbMode()` per distinguere
+- **API query (v4.074)**: `dbAll(sql, params)` per SELECT/RETURNING, `dbRun(sql, params)` per scritture, `dbExec(sql)` per DDL multi-statement. Placeholder `?` (convertiti in `$n` su Postgres). **Mai concatenare valori nelle stringhe SQL** — `runSql`/`sqlValue` non esistono più.
+- `bindable()` in `db.js` mappa `""` → NULL (semantica storica del vecchio `sqlValue`): le ricerche/concatenazioni devono usare `coalesce()` su ogni colonna potenzialmente NULL
 - Le migrazioni sono in `migrateAuth()` in `db.js` — vengono eseguite all'avvio
-- Per aggiungere una colonna: aggiungi `ALTER TABLE ... ADD COLUMN ...` dentro `migrateAuth()` con `IF NOT EXISTS` (SQLite) o `DO $$ ... EXCEPTION WHEN duplicate_column` (Postgres)
+- Per aggiungere una colonna: aggiungi `ALTER TABLE ... ADD COLUMN ...` dentro `migrateAuth()` con try/catch su `isAlreadyExistsError`
 
 ---
 
@@ -163,7 +165,7 @@ Non usare `stopPropagation()` sui container dei pulsanti — rompe tutto. È pre
 | Data/ora sovrapposti su iOS | `min-height: unset`, `gap: 23px`, `max-width: 75%` su `.rp-when-row` |
 | Sosta/ristorante chiuso inserito comunque | `googleMapsService.js`: quando tutti i candidati sono chiusi all'orario previsto, restituisce `null` invece di inserire con warning |
 | Login impossibile su Safari PWA con Face ID | `fetch()` con URL relativo lancia `TypeError: "The string did not match the expected pattern."` in Safari PWA — fix: `window.location.origin + path` in **tutti** i fetch, inclusi `api()`, `fetch('/api/auth/me')` e il form di login |
-| Server crash ad avvio su Vercel (forced login) | `runSql` e `sqlValue` non erano `export` in `db.js` — import da `apiStats.js` crashava il server; **esportare sempre** le funzioni DB usate da moduli esterni |
+| Server crash ad avvio su Vercel (forced login) | Funzioni DB non esportate da `db.js` — import da `apiStats.js` crashava il server; **esportare sempre** le funzioni DB usate da moduli esterni (oggi: `dbAll`/`dbRun`/`dbExec`) |
 | Impostazioni tappa mancanti per tappe spezzate | `getRvStopRow` escludeva `stopPart === "morning"` — fix: includere morning nel filtro, calcolare `rvStopIdx` solo per morning/undefined |
 | Flag "Prima tappa" ignorato dal planner | Planner cercava `fixedFirst` solo in pos. 0 — fix: `findIndex` su tutta la lista + `splice`/`unshift` |
 | Pranzo non prioritario sulle soste | `cumulative` non si azzerava al punto pranzo — fix: reset a 0 e avanzamento `prevServiceEnd` quando `lunchIns.beforeIndex === i` |

@@ -1,12 +1,9 @@
 import fs from "node:fs";
 import path from "node:path";
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
-
-const execFileAsync = promisify(execFile);
 
 let databasePath;
 let pgPool;
+let sqliteDb; // connessione better-sqlite3 persistente (una sola per processo)
 let dbMode = "sqlite";
 
 function postgresUrl() {
@@ -25,11 +22,53 @@ function postgresUrl() {
   }) || "";
 }
 
-export function sqlValue(value) {
-  if (value === null || value === undefined || value === "") return "NULL";
-  if (typeof value === "number") return Number.isFinite(value) ? String(value) : "NULL";
-  if (typeof value === "boolean") return value ? "1" : "0";
-  return `'${String(value).replaceAll("'", "''")}'`;
+// ── Query layer ───────────────────────────────────────────────────────────────
+// Tutte le query passano da qui con placeholder `?` e parametri separati:
+// niente più concatenazione di valori nelle stringhe SQL (ex sqlValue).
+// In modalità Postgres i `?` vengono convertiti in $1..$n.
+
+// Stessa semantica del vecchio sqlValue: "" e non-finiti diventano NULL,
+// i boolean diventano 1/0 (le colonne *_enabled sono INTEGER).
+function bindable(value) {
+  if (value === null || value === undefined || value === "") return null;
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value === "boolean") return value ? 1 : 0;
+  return String(value);
+}
+
+function toPgPlaceholders(sql) {
+  let i = 0;
+  return sql.replace(/\?/g, () => `$${++i}`);
+}
+
+// SELECT o INSERT/UPDATE ... RETURNING — restituisce le righe.
+export async function dbAll(sql, params = []) {
+  const bound = params.map(bindable);
+  if (dbMode === "postgres") {
+    const result = await pgPool.query(toPgPlaceholders(sql), bound);
+    return result.rows;
+  }
+  return sqliteDb.prepare(sql).all(...bound);
+}
+
+// INSERT/UPDATE/DELETE senza RETURNING — restituisce { lastID, changes }.
+export async function dbRun(sql, params = []) {
+  const bound = params.map(bindable);
+  if (dbMode === "postgres") {
+    const result = await pgPool.query(toPgPlaceholders(sql), bound);
+    return { lastID: null, changes: result.rowCount ?? 0 };
+  }
+  const info = sqliteDb.prepare(sql).run(...bound);
+  return { lastID: Number(info.lastInsertRowid), changes: info.changes };
+}
+
+// DDL / script multi-statement senza parametri (CREATE TABLE, ALTER, INDEX).
+export async function dbExec(sql) {
+  if (dbMode === "postgres") {
+    await pgPool.query(sql);
+    return;
+  }
+  sqliteDb.exec(sql);
 }
 
 function rowToAddress(row) {
@@ -134,18 +173,6 @@ function rowToRoute(row) {
   };
 }
 
-export async function runSql(sql, json = false) {
-  if (dbMode === "postgres") {
-    const result = await pgPool.query(sql);
-    return json ? result.rows : [];
-  }
-  const args = json ? ["-json", databasePath, sql] : ["-batch", databasePath, sql];
-  const { stdout } = await execFileAsync("sqlite3", args, { maxBuffer: 1024 * 1024 * 10 });
-  if (!json) return [];
-  const trimmed = stdout.trim();
-  return trimmed ? JSON.parse(trimmed) : [];
-}
-
 export async function initDb(rootDir) {
   const connectionString = postgresUrl();
   if (connectionString) {
@@ -162,8 +189,11 @@ export async function initDb(rootDir) {
   databasePath = path.resolve(rootDir, process.env.DATABASE_PATH || "./data/work-routes.sqlite");
   fs.mkdirSync(path.dirname(databasePath), { recursive: true });
 
-  await runSql(`
-    PRAGMA journal_mode = WAL;
+  const { default: Database } = await import("better-sqlite3");
+  sqliteDb = new Database(databasePath);
+  sqliteDb.pragma("journal_mode = WAL");
+
+  await dbExec(`
     CREATE TABLE IF NOT EXISTS addresses (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       customer TEXT NOT NULL,
@@ -253,7 +283,7 @@ export async function initDb(rootDir) {
 }
 
 async function initPostgresDb() {
-  await runSql(`
+  await dbExec(`
     CREATE TABLE IF NOT EXISTS addresses (
       id SERIAL PRIMARY KEY,
       customer TEXT NOT NULL,
@@ -340,72 +370,72 @@ async function initPostgresDb() {
 }
 
 async function tableColumns(tableName) {
+  // tableName è sempre una costante del codice, mai input utente
   if (dbMode === "postgres") {
-    const rows = await runSql(`
+    const rows = await dbAll(`
       SELECT column_name AS name
       FROM information_schema.columns
-      WHERE table_schema = 'public' AND table_name = ${sqlValue(tableName)};
-    `, true);
+      WHERE table_schema = 'public' AND table_name = ?;
+    `, [tableName]);
     return rows.map((row) => row.name);
   }
-  const rows = await runSql(`PRAGMA table_info(${tableName});`, true);
-  return rows.map((row) => row.name);
+  return sqliteDb.pragma(`table_info(${tableName})`).map((row) => row.name);
 }
 
 async function migratePlannedRoutes() {
   const routeCols = await tableColumns("planned_routes");
   if (!routeCols.includes("scheduled_date")) {
-    await runSql("ALTER TABLE planned_routes ADD COLUMN scheduled_date TEXT DEFAULT '';");
+    await dbExec("ALTER TABLE planned_routes ADD COLUMN scheduled_date TEXT DEFAULT '';");
   }
   if (!routeCols.includes("weather_captured_at")) {
-    await runSql("ALTER TABLE planned_routes ADD COLUMN weather_captured_at TEXT DEFAULT '';");
+    await dbExec("ALTER TABLE planned_routes ADD COLUMN weather_captured_at TEXT DEFAULT '';");
   }
 
   const addrCols = await tableColumns("addresses");
   if (!addrCols.includes("phone")) {
-    await runSql("ALTER TABLE addresses ADD COLUMN phone TEXT DEFAULT '';");
+    await dbExec("ALTER TABLE addresses ADD COLUMN phone TEXT DEFAULT '';");
   }
   if (!addrCols.includes("email")) {
-    await runSql("ALTER TABLE addresses ADD COLUMN email TEXT DEFAULT '';");
+    await dbExec("ALTER TABLE addresses ADD COLUMN email TEXT DEFAULT '';");
   }
   if (!addrCols.includes("phone2")) {
-    await runSql("ALTER TABLE addresses ADD COLUMN phone2 TEXT DEFAULT '';");
+    await dbExec("ALTER TABLE addresses ADD COLUMN phone2 TEXT DEFAULT '';");
   }
   if (!addrCols.includes("phone_type")) {
-    await runSql("ALTER TABLE addresses ADD COLUMN phone_type TEXT DEFAULT 'cell';");
+    await dbExec("ALTER TABLE addresses ADD COLUMN phone_type TEXT DEFAULT 'cell';");
   }
   if (!addrCols.includes("phone2_type")) {
-    await runSql("ALTER TABLE addresses ADD COLUMN phone2_type TEXT DEFAULT 'fisso';");
+    await dbExec("ALTER TABLE addresses ADD COLUMN phone2_type TEXT DEFAULT 'fisso';");
   }
   if (!addrCols.includes("phone_name")) {
-    await runSql("ALTER TABLE addresses ADD COLUMN phone_name TEXT DEFAULT '';");
+    await dbExec("ALTER TABLE addresses ADD COLUMN phone_name TEXT DEFAULT '';");
   }
   if (!addrCols.includes("phone2_name")) {
-    await runSql("ALTER TABLE addresses ADD COLUMN phone2_name TEXT DEFAULT '';");
+    await dbExec("ALTER TABLE addresses ADD COLUMN phone2_name TEXT DEFAULT '';");
   }
   if (!addrCols.includes("phone_preferred")) {
-    await runSql("ALTER TABLE addresses ADD COLUMN phone_preferred TEXT DEFAULT 'phone';");
+    await dbExec("ALTER TABLE addresses ADD COLUMN phone_preferred TEXT DEFAULT 'phone';");
   }
 
   if (!addrCols.includes("address_type")) {
-    await runSql("ALTER TABLE addresses ADD COLUMN address_type TEXT DEFAULT 'customer';");
+    await dbExec("ALTER TABLE addresses ADD COLUMN address_type TEXT DEFAULT 'customer';");
   }
   if (!addrCols.includes("weekly_hours")) {
-    await runSql("ALTER TABLE addresses ADD COLUMN weekly_hours TEXT DEFAULT NULL;");
+    await dbExec("ALTER TABLE addresses ADD COLUMN weekly_hours TEXT DEFAULT NULL;");
   }
 
   const settingsCols = await tableColumns("settings");
   if (!settingsCols.includes("navigator_pref")) {
-    await runSql("ALTER TABLE settings ADD COLUMN navigator_pref TEXT DEFAULT 'google';");
+    await dbExec("ALTER TABLE settings ADD COLUMN navigator_pref TEXT DEFAULT 'google';");
   }
   if (!settingsCols.includes("theme_pref")) {
-    await runSql("ALTER TABLE settings ADD COLUMN theme_pref TEXT DEFAULT 'auto';");
+    await dbExec("ALTER TABLE settings ADD COLUMN theme_pref TEXT DEFAULT 'auto';");
   }
   if (!settingsCols.includes("lunch_break_minutes")) {
-    await runSql("ALTER TABLE settings ADD COLUMN lunch_break_minutes INTEGER DEFAULT 45;");
+    await dbExec("ALTER TABLE settings ADD COLUMN lunch_break_minutes INTEGER DEFAULT 45;");
   }
   if (!settingsCols.includes("lunch_break_enabled")) {
-    await runSql("ALTER TABLE settings ADD COLUMN lunch_break_enabled INTEGER DEFAULT 1;");
+    await dbExec("ALTER TABLE settings ADD COLUMN lunch_break_enabled INTEGER DEFAULT 1;");
   }
 }
 
@@ -418,7 +448,7 @@ function isAlreadyExistsError(err) {
 export async function migrateSettingsColumns() {
   const cols = ["default_start_label TEXT DEFAULT ''", "default_start_address TEXT DEFAULT ''", "rest_interval_min INTEGER DEFAULT 120", "rest_max_deviation_min INTEGER DEFAULT 40", "rest_duration_min INTEGER DEFAULT 15", "drive_markup_min_per_hour INTEGER DEFAULT 10"];
   for (const col of cols) {
-    try { await runSql(`ALTER TABLE settings ADD COLUMN ${col};`); } catch (err) { if (!isAlreadyExistsError(err)) console.warn("migrateSettingsColumns:", err.message); }
+    try { await dbExec(`ALTER TABLE settings ADD COLUMN ${col};`); } catch (err) { if (!isAlreadyExistsError(err)) console.warn("migrateSettingsColumns:", err.message); }
   }
   const newSettingsCols = [
     "earliest_break_time TEXT DEFAULT '08:00'",
@@ -429,14 +459,14 @@ export async function migrateSettingsColumns() {
     "theme_palette TEXT DEFAULT 'default'"
   ];
   for (const col of newSettingsCols) {
-    try { await runSql(`ALTER TABLE settings ADD COLUMN ${col};`); } catch (err) { if (!isAlreadyExistsError(err)) console.warn("migrateSettingsColumns:", err.message); }
+    try { await dbExec(`ALTER TABLE settings ADD COLUMN ${col};`); } catch (err) { if (!isAlreadyExistsError(err)) console.warn("migrateSettingsColumns:", err.message); }
   }
   const addrCols = await tableColumns("addresses");
   if (!addrCols.includes("place_id")) {
-    await runSql("ALTER TABLE addresses ADD COLUMN place_id TEXT DEFAULT NULL;");
+    await dbExec("ALTER TABLE addresses ADD COLUMN place_id TEXT DEFAULT NULL;");
   }
   if (!addrCols.includes("activity")) {
-    await runSql("ALTER TABLE addresses ADD COLUMN activity TEXT DEFAULT '';");
+    await dbExec("ALTER TABLE addresses ADD COLUMN activity TEXT DEFAULT '';");
   }
 }
 
@@ -458,7 +488,7 @@ async function migrateUserSettingsCols() {
   ];
   for (const [col, def] of toAdd) {
     if (!cols.includes(col)) {
-      try { await runSql(`ALTER TABLE user_settings ADD COLUMN ${col} ${def};`); } catch (e) { if (!isAlreadyExistsError(e)) console.warn("migrateUserSettingsCols:", e.message); }
+      try { await dbExec(`ALTER TABLE user_settings ADD COLUMN ${col} ${def};`); } catch (e) { if (!isAlreadyExistsError(e)) console.warn("migrateUserSettingsCols:", e.message); }
     }
   }
 }
@@ -466,7 +496,7 @@ async function migrateUserSettingsCols() {
 async function migrateUserNickname() {
   const cols = await tableColumns("users");
   if (!cols.includes("nickname")) {
-    try { await runSql("ALTER TABLE users ADD COLUMN nickname TEXT DEFAULT NULL;"); } catch (e) { if (!isAlreadyExistsError(e)) console.warn("migrateUserNickname:", e.message); }
+    try { await dbExec("ALTER TABLE users ADD COLUMN nickname TEXT DEFAULT NULL;"); } catch (e) { if (!isAlreadyExistsError(e)) console.warn("migrateUserNickname:", e.message); }
   }
 }
 
@@ -476,18 +506,18 @@ async function migrateAuth() {
   // Add user_id to addresses
   const addrCols = await tableColumns("addresses");
   if (!addrCols.includes("user_id")) {
-    try { await runSql("ALTER TABLE addresses ADD COLUMN user_id INTEGER;"); } catch (e) { if (!isAlreadyExistsError(e)) console.warn(e.message); }
+    try { await dbExec("ALTER TABLE addresses ADD COLUMN user_id INTEGER;"); } catch (e) { if (!isAlreadyExistsError(e)) console.warn(e.message); }
   }
   // Add user_id to planned_routes
   const routeCols = await tableColumns("planned_routes");
   if (!routeCols.includes("user_id")) {
-    try { await runSql("ALTER TABLE planned_routes ADD COLUMN user_id INTEGER;"); } catch (e) { if (!isAlreadyExistsError(e)) console.warn(e.message); }
+    try { await dbExec("ALTER TABLE planned_routes ADD COLUMN user_id INTEGER;"); } catch (e) { if (!isAlreadyExistsError(e)) console.warn(e.message); }
   }
   if (!routeCols.includes("source")) {
-    try { await runSql("ALTER TABLE planned_routes ADD COLUMN source TEXT DEFAULT NULL;"); } catch (e) { if (!isAlreadyExistsError(e)) console.warn(e.message); }
+    try { await dbExec("ALTER TABLE planned_routes ADD COLUMN source TEXT DEFAULT NULL;"); } catch (e) { if (!isAlreadyExistsError(e)) console.warn(e.message); }
   }
   if (!routeCols.includes("notes")) {
-    try { await runSql("ALTER TABLE planned_routes ADD COLUMN notes TEXT DEFAULT NULL;"); } catch (e) { if (!isAlreadyExistsError(e)) console.warn(e.message); }
+    try { await dbExec("ALTER TABLE planned_routes ADD COLUMN notes TEXT DEFAULT NULL;"); } catch (e) { if (!isAlreadyExistsError(e)) console.warn(e.message); }
   }
   await initSharedRoutesTable();
   await createIndexes();
@@ -504,7 +534,7 @@ async function createIndexes() {
     "CREATE INDEX IF NOT EXISTS idx_shared_routes_expires ON shared_routes (expires_at);"
   ];
   for (const sql of indexes) {
-    try { await runSql(sql); } catch (e) { console.warn("createIndexes:", e.message); }
+    try { await dbExec(sql); } catch (e) { console.warn("createIndexes:", e.message); }
   }
 }
 
@@ -512,7 +542,7 @@ async function migrateWeeklyHours() {
   // One-shot: convert old open_morning/close_morning/open_afternoon/close_afternoon
   // into weekly_hours for addresses that don't have it yet.
   // Applies the same hours to Mon–Fri (1–5); Sat (6) and Sun (0) default to closed.
-  const rows = await runSql("SELECT id, open_morning, close_morning, open_afternoon, close_afternoon FROM addresses WHERE weekly_hours IS NULL;", true);
+  const rows = await dbAll("SELECT id, open_morning, close_morning, open_afternoon, close_afternoon FROM addresses WHERE weekly_hours IS NULL;");
   for (const row of rows) {
     const om = row.open_morning || "";
     const cm = row.close_morning || "";
@@ -530,62 +560,103 @@ async function migrateWeeklyHours() {
       6: { closed: true, continuous: false, openMorning: "", closeMorning: "", openAfternoon: "", closeAfternoon: "" },
       0: { closed: true, continuous: false, openMorning: "", closeMorning: "", openAfternoon: "", closeAfternoon: "" }
     };
-    await runSql(`UPDATE addresses SET weekly_hours = ${sqlValue(JSON.stringify(wh))} WHERE id = ${sqlValue(Number(row.id))};`);
+    await dbRun("UPDATE addresses SET weekly_hours = ? WHERE id = ?;", [JSON.stringify(wh), Number(row.id)]);
   }
 }
 
 export async function listAddresses(search = "", userId = null) {
   const term = String(search || "").trim().toLowerCase();
-  const userFilter = userId != null ? ` AND user_id = ${sqlValue(Number(userId))}` : "";
-  if (dbMode === "postgres") {
-    const where = term ? `WHERE lower(concat_ws(' ', customer, activity, location, full_address, notes)) LIKE ${sqlValue(`%${term}%`)}${userFilter}` : (userFilter ? `WHERE 1=1${userFilter}` : "");
-    const rows = await runSql(`SELECT * FROM addresses ${where} ORDER BY lower(nullif(trim(coalesce(activity,'')), '')) NULLS LAST, lower(nullif(trim(coalesce(customer,'')), '')) NULLS LAST, lower(coalesce(location,'')), id ASC;`, true);
-    return rows.map(rowToAddress);
+  const conds = [];
+  const params = [];
+  if (term) {
+    if (dbMode === "postgres") {
+      conds.push("lower(concat_ws(' ', customer, activity, location, full_address, notes)) LIKE ?");
+    } else {
+      // coalesce su tutto: un solo campo NULL annullerebbe l'intera concatenazione
+      conds.push("lower(coalesce(customer,'') || ' ' || coalesce(activity,'') || ' ' || coalesce(location,'') || ' ' || coalesce(full_address,'') || ' ' || coalesce(notes,'')) LIKE ?");
+    }
+    params.push(`%${term}%`);
   }
-  const where = term ? `WHERE lower(customer || ' ' || coalesce(activity,'') || ' ' || location || ' ' || full_address || ' ' || notes) LIKE ${sqlValue(`%${term}%`)}${userFilter}` : (userFilter ? `WHERE 1=1${userFilter}` : "");
-  const rows = await runSql(`SELECT * FROM addresses ${where} ORDER BY nullif(trim(coalesce(activity,'')), '') COLLATE NOCASE, nullif(trim(coalesce(customer,'')), '') COLLATE NOCASE, location COLLATE NOCASE, id ASC;`, true);
+  if (userId != null) {
+    conds.push("user_id = ?");
+    params.push(Number(userId));
+  }
+  const where = conds.length ? `WHERE ${conds.join(" AND ")}` : "";
+  const orderBy = dbMode === "postgres"
+    ? "ORDER BY lower(nullif(trim(coalesce(activity,'')), '')) NULLS LAST, lower(nullif(trim(coalesce(customer,'')), '')) NULLS LAST, lower(coalesce(location,'')), id ASC"
+    : "ORDER BY nullif(trim(coalesce(activity,'')), '') COLLATE NOCASE, nullif(trim(coalesce(customer,'')), '') COLLATE NOCASE, location COLLATE NOCASE, id ASC";
+  const rows = await dbAll(`SELECT * FROM addresses ${where} ${orderBy};`, params);
   return rows.map(rowToAddress);
 }
 
 export async function getAddress(id, userId = null) {
-  const userFilter = userId != null ? ` AND user_id = ${sqlValue(Number(userId))}` : "";
-  const rows = await runSql(`SELECT * FROM addresses WHERE id = ${sqlValue(Number(id))}${userFilter};`, true);
+  const sql = `SELECT * FROM addresses WHERE id = ?${userId != null ? " AND user_id = ?" : ""};`;
+  const params = userId != null ? [Number(id), Number(userId)] : [Number(id)];
+  const rows = await dbAll(sql, params);
   return rows[0] ? rowToAddress(rows[0]) : null;
 }
 
+function addressValues(address) {
+  return [
+    address.customer || "Senza nome",
+    address.activity || "",
+    address.location || "",
+    address.fullAddress || address.full_address || "",
+    address.addressType || "customer",
+    address.phone || "",
+    address.phoneType || "cell",
+    address.phoneName || "",
+    address.phone2 || "",
+    address.phone2Type || "fisso",
+    address.phone2Name || "",
+    address.phonePreferred || "phone",
+    address.email || "",
+    address.notes || "",
+    address.openMorning || address.open_morning || "",
+    address.closeMorning || address.close_morning || "",
+    address.openAfternoon || address.open_afternoon || "",
+    address.closeAfternoon || address.close_afternoon || "",
+    Number(address.defaultDuration || address.default_duration || 45),
+    address.weeklyHours ? JSON.stringify(address.weeklyHours) : null,
+    address.lat === undefined ? null : Number(address.lat),
+    address.lng === undefined ? null : Number(address.lng),
+    address.placeId !== undefined ? address.placeId : (address.place_id ?? null)
+  ];
+}
+
+const ADDRESS_COLS = "customer, activity, location, full_address, address_type, phone, phone_type, phone_name, phone2, phone2_type, phone2_name, phone_preferred, email, notes, open_morning, close_morning, open_afternoon, close_afternoon, default_duration, weekly_hours, lat, lng, place_id";
+
 export async function createAddress(address, userId = null) {
-  const userIdVal = userId != null ? sqlValue(Number(userId)) : "NULL";
-  const cols = `customer, activity, location, full_address, address_type, phone, phone_type, phone_name, phone2, phone2_type, phone2_name, phone_preferred, email, notes, open_morning, close_morning, open_afternoon, close_afternoon, default_duration, weekly_hours, lat, lng, place_id, user_id`;
-  const vals = `${sqlValue(address.customer || "Senza nome")}, ${sqlValue(address.activity || "")}, ${sqlValue(address.location || "")}, ${sqlValue(address.fullAddress || address.full_address || "")}, ${sqlValue(address.addressType || "customer")}, ${sqlValue(address.phone || "")}, ${sqlValue(address.phoneType || "cell")}, ${sqlValue(address.phoneName || "")}, ${sqlValue(address.phone2 || "")}, ${sqlValue(address.phone2Type || "fisso")}, ${sqlValue(address.phone2Name || "")}, ${sqlValue(address.phonePreferred || "phone")}, ${sqlValue(address.email || "")}, ${sqlValue(address.notes || "")}, ${sqlValue(address.openMorning || address.open_morning || "")}, ${sqlValue(address.closeMorning || address.close_morning || "")}, ${sqlValue(address.openAfternoon || address.open_afternoon || "")}, ${sqlValue(address.closeAfternoon || address.close_afternoon || "")}, ${sqlValue(Number(address.defaultDuration || address.default_duration || 45))}, ${sqlValue(address.weeklyHours ? JSON.stringify(address.weeklyHours) : null)}, ${sqlValue(address.lat === undefined ? null : Number(address.lat))}, ${sqlValue(address.lng === undefined ? null : Number(address.lng))}, ${sqlValue(address.placeId || address.place_id || null)}, ${userIdVal}`;
-  if (dbMode === "postgres") {
-    const rows = await runSql(`INSERT INTO addresses (${cols}) VALUES (${vals}) RETURNING *;`, true);
-    return rowToAddress(rows[0]);
-  }
-  // INSERT+SELECT in unica invocazione: ogni runSql apre un nuovo processo
-  // sqlite3, quindi last_insert_rowid() in chiamata separata vale sempre 0
-  const rows = await runSql(`INSERT INTO addresses (${cols}) VALUES (${vals}); SELECT * FROM addresses WHERE id = last_insert_rowid();`, true);
+  const placeholders = ADDRESS_COLS.split(",").map(() => "?").join(", ");
+  const rows = await dbAll(
+    `INSERT INTO addresses (${ADDRESS_COLS}, user_id) VALUES (${placeholders}, ?) RETURNING *;`,
+    [...addressValues(address), userId != null ? Number(userId) : null]
+  );
   return rows[0] ? rowToAddress(rows[0]) : null;
 }
 
 export async function updateAddress(id, address, userId = null) {
-  const userFilter = userId != null ? ` AND user_id = ${sqlValue(Number(userId))}` : "";
-  const setClause = `customer = ${sqlValue(address.customer || "Senza nome")}, activity = ${sqlValue(address.activity || "")}, location = ${sqlValue(address.location || "")}, full_address = ${sqlValue(address.fullAddress || "")}, address_type = ${sqlValue(address.addressType || "customer")}, phone = ${sqlValue(address.phone || "")}, phone_type = ${sqlValue(address.phoneType || "cell")}, phone_name = ${sqlValue(address.phoneName || "")}, phone2 = ${sqlValue(address.phone2 || "")}, phone2_type = ${sqlValue(address.phone2Type || "fisso")}, phone2_name = ${sqlValue(address.phone2Name || "")}, phone_preferred = ${sqlValue(address.phonePreferred || "phone")}, email = ${sqlValue(address.email || "")}, notes = ${sqlValue(address.notes || "")}, open_morning = ${sqlValue(address.openMorning || "")}, close_morning = ${sqlValue(address.closeMorning || "")}, open_afternoon = ${sqlValue(address.openAfternoon || "")}, close_afternoon = ${sqlValue(address.closeAfternoon || "")}, default_duration = ${sqlValue(Number(address.defaultDuration || 45))}, weekly_hours = ${sqlValue(address.weeklyHours ? JSON.stringify(address.weeklyHours) : null)}, lat = ${sqlValue(address.lat === undefined ? null : Number(address.lat))}, lng = ${sqlValue(address.lng === undefined ? null : Number(address.lng))}, place_id = ${sqlValue(address.placeId !== undefined ? address.placeId : (address.place_id ?? null))}`;
-  if (dbMode === "postgres") {
-    const rows = await runSql(`UPDATE addresses SET ${setClause}, updated_at = NOW() WHERE id = ${sqlValue(Number(id))}${userFilter} RETURNING *;`, true);
-    return rows[0] ? rowToAddress(rows[0]) : null;
-  }
-  await runSql(`UPDATE addresses SET ${setClause}, updated_at = CURRENT_TIMESTAMP WHERE id = ${sqlValue(Number(id))}${userFilter};`);
-  return getAddress(id, userId);
+  const setClause = ADDRESS_COLS.split(",").map((col) => `${col.trim()} = ?`).join(", ");
+  const userFilter = userId != null ? " AND user_id = ?" : "";
+  const params = [...addressValues(address), Number(id)];
+  if (userId != null) params.push(Number(userId));
+  const nowFn = dbMode === "postgres" ? "NOW()" : "CURRENT_TIMESTAMP";
+  const rows = await dbAll(
+    `UPDATE addresses SET ${setClause}, updated_at = ${nowFn} WHERE id = ?${userFilter} RETURNING *;`,
+    params
+  );
+  return rows[0] ? rowToAddress(rows[0]) : null;
 }
 
 export async function deleteAddress(id, userId = null) {
-  const userFilter = userId != null ? ` AND user_id = ${sqlValue(Number(userId))}` : "";
-  await runSql(`DELETE FROM addresses WHERE id = ${sqlValue(Number(id))}${userFilter};`);
+  const sql = `DELETE FROM addresses WHERE id = ?${userId != null ? " AND user_id = ?" : ""};`;
+  const params = userId != null ? [Number(id), Number(userId)] : [Number(id)];
+  await dbRun(sql, params);
   return { ok: true };
 }
 
 export async function getSettings(userId) {
-  const rows = await runSql(`SELECT * FROM user_settings WHERE user_id = ${sqlValue(Number(userId))};`, true);
+  const rows = await dbAll("SELECT * FROM user_settings WHERE user_id = ?;", [Number(userId)]);
   return rowToSettings(rows[0] || {});
 }
 
@@ -619,78 +690,110 @@ export async function updateSettings(userId, settings) {
     brand_color: /^#[0-9a-fA-F]{6}$/.test(settings.brandColor || "") ? settings.brandColor : "",
     brand_color2: /^#[0-9a-fA-F]{6}$/.test(settings.brandColor2 || "") ? settings.brandColor2 : ""
   };
+  // le chiavi sono costanti del codice — solo i valori sono parametrizzati
   const cols = Object.keys(vals).join(", ");
-  const sqlVals = Object.values(vals).map(v => typeof v === "string" ? sqlValue(v) : String(v)).join(", ");
-  const updates = Object.entries(vals).map(([k, v]) => `${k} = ${typeof v === "string" ? sqlValue(v) : String(v)}`).join(", ");
+  const placeholders = Object.keys(vals).map(() => "?").join(", ");
+  const params = [Number(userId), ...Object.values(vals)];
   if (dbMode === "postgres") {
-    await runSql(`INSERT INTO user_settings (user_id, ${cols}) VALUES (${sqlValue(Number(userId))}, ${sqlVals}) ON CONFLICT (user_id) DO UPDATE SET ${updates};`);
+    const updates = Object.keys(vals).map((k) => `${k} = EXCLUDED.${k}`).join(", ");
+    await dbRun(`INSERT INTO user_settings (user_id, ${cols}) VALUES (?, ${placeholders}) ON CONFLICT (user_id) DO UPDATE SET ${updates};`, params);
   } else {
-    await runSql(`INSERT OR REPLACE INTO user_settings (user_id, ${cols}) VALUES (${sqlValue(Number(userId))}, ${sqlVals});`);
+    await dbRun(`INSERT OR REPLACE INTO user_settings (user_id, ${cols}) VALUES (?, ${placeholders});`, params);
   }
   return getSettings(userId);
 }
 
 export async function saveRoute(route, userId = null, source = null) {
-  const userIdVal = userId != null ? sqlValue(Number(userId)) : "NULL";
-  const sourceVal = source ? sqlValue(source) : "NULL";
-  const notesVal = route.notes ? sqlValue(route.notes) : "NULL";
-  if (dbMode === "postgres") {
-    const rows = await runSql(`
-      INSERT INTO planned_routes (name, scheduled_date, start_label, start_address, end_label, end_address, start_time, first_arrival_required, total_km, total_drive_minutes, total_work_minutes, total_cost, weather_captured_at, payload_json, user_id, source, notes)
-      VALUES (${sqlValue(route.name || "")}, ${sqlValue(route.scheduledDate || route.scheduled_date || "")}, ${sqlValue(route.startLabel || "")}, ${sqlValue(route.startAddress || "")}, ${sqlValue(route.endLabel || "")}, ${sqlValue(route.endAddress || "")}, ${sqlValue(route.startTime || "")}, ${sqlValue(route.firstArrivalRequired || "")}, ${sqlValue(Number(route.summary?.totalKm || 0))}, ${sqlValue(Number(route.summary?.totalDriveMinutes || 0))}, ${sqlValue(Number(route.summary?.totalWorkMinutes || 0))}, ${sqlValue(Number(route.summary?.totalCost || 0))}, ${sqlValue(route.weatherCapturedAt || "")}, ${sqlValue(JSON.stringify(route))}, ${userIdVal}, ${sourceVal}, ${notesVal})
-      RETURNING id;
-    `, true);
-    return { id: rows[0]?.id };
-  }
-  const rows = await runSql(`
+  const params = [
+    route.name || "",
+    route.scheduledDate || route.scheduled_date || "",
+    route.startLabel || "",
+    route.startAddress || "",
+    route.endLabel || "",
+    route.endAddress || "",
+    route.startTime || "",
+    route.firstArrivalRequired || "",
+    Number(route.summary?.totalKm || 0),
+    Number(route.summary?.totalDriveMinutes || 0),
+    Number(route.summary?.totalWorkMinutes || 0),
+    Number(route.summary?.totalCost || 0),
+    route.weatherCapturedAt || "",
+    JSON.stringify(route),
+    userId != null ? Number(userId) : null,
+    source || null,
+    route.notes || null
+  ];
+  const rows = await dbAll(`
     INSERT INTO planned_routes (name, scheduled_date, start_label, start_address, end_label, end_address, start_time, first_arrival_required, total_km, total_drive_minutes, total_work_minutes, total_cost, weather_captured_at, payload_json, user_id, source, notes)
-    VALUES (${sqlValue(route.name || "")}, ${sqlValue(route.scheduledDate || route.scheduled_date || "")}, ${sqlValue(route.startLabel || "")}, ${sqlValue(route.startAddress || "")}, ${sqlValue(route.endLabel || "")}, ${sqlValue(route.endAddress || "")}, ${sqlValue(route.startTime || "")}, ${sqlValue(route.firstArrivalRequired || "")}, ${sqlValue(Number(route.summary?.totalKm || 0))}, ${sqlValue(Number(route.summary?.totalDriveMinutes || 0))}, ${sqlValue(Number(route.summary?.totalWorkMinutes || 0))}, ${sqlValue(Number(route.summary?.totalCost || 0))}, ${sqlValue(route.weatherCapturedAt || "")}, ${sqlValue(JSON.stringify(route))}, ${userIdVal}, ${sourceVal}, ${notesVal});
-  
-    SELECT last_insert_rowid() AS id;
-  `, true);
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    RETURNING id;
+  `, params);
   return { id: rows[0]?.id };
 }
 
 export async function updateRouteNotes(id, notes, userId = null) {
-  const userFilter = userId != null ? ` AND user_id = ${sqlValue(Number(userId))}` : "";
-  await runSql(`UPDATE planned_routes SET notes = ${sqlValue(notes || "")} WHERE id = ${sqlValue(Number(id))}${userFilter};`);
+  const sql = `UPDATE planned_routes SET notes = ? WHERE id = ?${userId != null ? " AND user_id = ?" : ""};`;
+  const params = [notes || "", Number(id)];
+  if (userId != null) params.push(Number(userId));
+  await dbRun(sql, params);
 }
 
 export async function countRoutesByDate(date, userId = null) {
-  const userFilter = userId != null ? ` AND user_id = ${sqlValue(Number(userId))}` : "";
-  const rows = await runSql(`SELECT COUNT(*) as n FROM planned_routes WHERE scheduled_date = ${sqlValue(date)}${userFilter};`, true);
+  const sql = `SELECT COUNT(*) as n FROM planned_routes WHERE scheduled_date = ?${userId != null ? " AND user_id = ?" : ""};`;
+  const params = userId != null ? [date, Number(userId)] : [date];
+  const rows = await dbAll(sql, params);
   return Number(rows[0]?.n ?? rows[0]?.count ?? 0);
 }
 
 export async function listRoutes(userId = null) {
-  const userFilter = userId != null ? `WHERE user_id = ${sqlValue(Number(userId))}` : "";
-  if (dbMode === "postgres") {
-    const rows = await runSql(`SELECT * FROM planned_routes ${userFilter} ORDER BY COALESCE(NULLIF(scheduled_date, ''), created_at::date::text) DESC, id DESC;`, true);
-    return rows.map(rowToRouteSummary);
-  }
-  const rows = await runSql(`SELECT * FROM planned_routes ${userFilter} ORDER BY COALESCE(NULLIF(scheduled_date, ''), created_at) DESC, id DESC;`, true);
+  const userFilter = userId != null ? "WHERE user_id = ?" : "";
+  const params = userId != null ? [Number(userId)] : [];
+  const orderBy = dbMode === "postgres"
+    ? "ORDER BY COALESCE(NULLIF(scheduled_date, ''), created_at::date::text) DESC, id DESC"
+    : "ORDER BY COALESCE(NULLIF(scheduled_date, ''), created_at) DESC, id DESC";
+  const rows = await dbAll(`SELECT * FROM planned_routes ${userFilter} ${orderBy};`, params);
   return rows.map(rowToRouteSummary);
 }
 
 export async function getRoute(id, userId = null) {
-  const userFilter = userId != null ? ` AND user_id = ${sqlValue(Number(userId))}` : "";
-  const rows = await runSql(`SELECT * FROM planned_routes WHERE id = ${sqlValue(Number(id))}${userFilter};`, true);
+  const sql = `SELECT * FROM planned_routes WHERE id = ?${userId != null ? " AND user_id = ?" : ""};`;
+  const params = userId != null ? [Number(id), Number(userId)] : [Number(id)];
+  const rows = await dbAll(sql, params);
   return rows[0] ? rowToRoute(rows[0]) : null;
 }
 
 export async function updateRoutePayload(id, route, userId = null) {
-  const userFilter = userId != null ? ` AND user_id = ${sqlValue(Number(userId))}` : "";
-  await runSql(`
-    UPDATE planned_routes SET scheduled_date = ${sqlValue(route.scheduledDate || "")}, total_km = ${sqlValue(Number(route.summary?.totalKm || 0))}, total_drive_minutes = ${sqlValue(Number(route.summary?.totalDriveMinutes || 0))}, total_work_minutes = ${sqlValue(Number(route.summary?.totalWorkMinutes || 0))}, total_cost = ${sqlValue(Number(route.summary?.totalCost || 0))}, weather_captured_at = ${sqlValue(route.weatherCapturedAt || "")}, payload_json = ${sqlValue(JSON.stringify(route))}
-    WHERE id = ${sqlValue(Number(id))}${userFilter};
-  `);
+  const params = [
+    route.scheduledDate || "",
+    Number(route.summary?.totalKm || 0),
+    Number(route.summary?.totalDriveMinutes || 0),
+    Number(route.summary?.totalWorkMinutes || 0),
+    Number(route.summary?.totalCost || 0),
+    route.weatherCapturedAt || "",
+    JSON.stringify(route),
+    Number(id)
+  ];
+  let sql = `UPDATE planned_routes SET scheduled_date = ?, total_km = ?, total_drive_minutes = ?, total_work_minutes = ?, total_cost = ?, weather_captured_at = ?, payload_json = ? WHERE id = ?`;
+  if (userId != null) {
+    sql += " AND user_id = ?";
+    params.push(Number(userId));
+  }
+  await dbRun(`${sql};`, params);
   return getRoute(id, userId);
 }
 
 export async function routeNameExists(name, userId, excludeId = null) {
-  const userFilter = userId != null ? ` AND user_id = ${sqlValue(Number(userId))}` : "";
-  const excludeFilter = excludeId != null ? ` AND id != ${sqlValue(Number(excludeId))}` : "";
-  const rows = await runSql(`SELECT COUNT(*) as n FROM planned_routes WHERE name = ${sqlValue(String(name).trim())}${userFilter}${excludeFilter};`, true);
+  let sql = "SELECT COUNT(*) as n FROM planned_routes WHERE name = ?";
+  const params = [String(name).trim()];
+  if (userId != null) {
+    sql += " AND user_id = ?";
+    params.push(Number(userId));
+  }
+  if (excludeId != null) {
+    sql += " AND id != ?";
+    params.push(Number(excludeId));
+  }
+  const rows = await dbAll(`${sql};`, params);
   return Number(rows[0]?.n ?? rows[0]?.count ?? 0) > 0;
 }
 
@@ -699,66 +802,65 @@ export async function renameRoute(id, name, userId = null) {
   const stored = await getRoute(id, userId);
   if (!stored) return null;
   const payload = { ...(stored.payload || {}), name: nextName };
-  const userFilter = userId != null ? ` AND user_id = ${sqlValue(Number(userId))}` : "";
 
-  await runSql(`
-    UPDATE planned_routes SET name = ${sqlValue(nextName)}, payload_json = ${sqlValue(JSON.stringify(payload))}
-    WHERE id = ${sqlValue(Number(id))}${userFilter};
-  `);
+  let sql = "UPDATE planned_routes SET name = ?, payload_json = ? WHERE id = ?";
+  const params = [nextName, JSON.stringify(payload), Number(id)];
+  if (userId != null) {
+    sql += " AND user_id = ?";
+    params.push(Number(userId));
+  }
+  await dbRun(`${sql};`, params);
   return getRoute(id, userId);
 }
 
 export async function deleteRoute(id, userId = null) {
-  const userFilter = userId != null ? ` AND user_id = ${sqlValue(Number(userId))}` : "";
-  await runSql(`DELETE FROM planned_routes WHERE id = ${sqlValue(Number(id))}${userFilter};`);
+  const sql = `DELETE FROM planned_routes WHERE id = ?${userId != null ? " AND user_id = ?" : ""};`;
+  const params = userId != null ? [Number(id), Number(userId)] : [Number(id)];
+  await dbRun(sql, params);
   return { ok: true };
 }
 
 // ── auth DB functions ─────────────────────────────────────────────────────────
 
 export async function createUser(username, passwordHash) {
-  if (dbMode === "postgres") {
-    const rows = await runSql(`INSERT INTO users (username, password_hash) VALUES (${sqlValue(username)}, ${sqlValue(passwordHash)}) RETURNING id, username, created_at;`, true);
-    return rows[0] ? { id: rows[0].id, username: rows[0].username } : null;
-  }
-  const rows = await runSql(`INSERT INTO users (username, password_hash) VALUES (${sqlValue(username)}, ${sqlValue(passwordHash)}); SELECT id, username FROM users WHERE id = last_insert_rowid();`, true);
+  const rows = await dbAll("INSERT INTO users (username, password_hash) VALUES (?, ?) RETURNING id, username;", [username, passwordHash]);
   return rows[0] ? { id: rows[0].id, username: rows[0].username } : null;
 }
 
 export async function findUserByUsername(username) {
-  const rows = await runSql(`SELECT * FROM users WHERE lower(username) = lower(${sqlValue(username)});`, true);
+  const rows = await dbAll("SELECT * FROM users WHERE lower(username) = lower(?);", [username]);
   return rows[0] || null;
 }
 
 export async function findUserById(id) {
-  const rows = await runSql(`SELECT id, username FROM users WHERE id = ${sqlValue(Number(id))};`, true);
+  const rows = await dbAll("SELECT id, username FROM users WHERE id = ?;", [Number(id)]);
   return rows[0] || null;
 }
 
 export async function updateUserPassword(userId, newHash) {
-  await runSql(`UPDATE users SET password_hash = ${sqlValue(newHash)} WHERE id = ${sqlValue(Number(userId))};`);
+  await dbRun("UPDATE users SET password_hash = ? WHERE id = ?;", [newHash, Number(userId)]);
 }
 
 export async function updateUserNickname(userId, nickname) {
-  await runSql(`UPDATE users SET nickname = ${sqlValue(nickname || null)} WHERE id = ${sqlValue(Number(userId))};`);
+  await dbRun("UPDATE users SET nickname = ? WHERE id = ?;", [nickname || null, Number(userId)]);
 }
 
 export async function getUserById(id) {
-  const rows = await runSql(`SELECT id, username, nickname FROM users WHERE id = ${sqlValue(Number(id))};`, true);
+  const rows = await dbAll("SELECT id, username, nickname FROM users WHERE id = ?;", [Number(id)]);
   return rows[0] || null;
 }
 
 export async function createSession(token, userId) {
   const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-  await runSql(`INSERT INTO sessions (token, user_id, expires_at) VALUES (${sqlValue(token)}, ${sqlValue(Number(userId))}, ${sqlValue(expiresAt)});`);
+  await dbRun("INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, ?);", [token, Number(userId), expiresAt]);
 }
 
 export async function getSession(token) {
   if (!token) return null;
-  const rows = await runSql(`SELECT user_id, expires_at FROM sessions WHERE token = ${sqlValue(token)};`, true);
+  const rows = await dbAll("SELECT user_id, expires_at FROM sessions WHERE token = ?;", [token]);
   if (!rows[0]) return null;
   if (new Date(rows[0].expires_at) < new Date()) {
-    await runSql(`DELETE FROM sessions WHERE token = ${sqlValue(token)};`);
+    await dbRun("DELETE FROM sessions WHERE token = ?;", [token]);
     return null;
   }
   return Number(rows[0].user_id);
@@ -767,23 +869,23 @@ export async function getSession(token) {
 export async function extendSession(token) {
   if (!token) return;
   const newExpiry = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-  await runSql(`UPDATE sessions SET expires_at = ${sqlValue(newExpiry)} WHERE token = ${sqlValue(token)};`);
+  await dbRun("UPDATE sessions SET expires_at = ? WHERE token = ?;", [newExpiry, token]);
 }
 
 export async function deleteSession(token) {
   if (!token) return;
-  await runSql(`DELETE FROM sessions WHERE token = ${sqlValue(token)};`);
+  await dbRun("DELETE FROM sessions WHERE token = ?;", [token]);
 }
 
 export async function purgeExpiredSessions() {
-  await runSql(`DELETE FROM sessions WHERE expires_at < ${sqlValue(new Date().toISOString())};`);
+  await dbRun("DELETE FROM sessions WHERE expires_at < ?;", [new Date().toISOString()]);
 }
 
 // ── Shared routes ─────────────────────────────────────────────────────────────
 
 export async function initSharedRoutesTable() {
   if (dbMode === "postgres") {
-    await runSql(`
+    await dbExec(`
       CREATE TABLE IF NOT EXISTS shared_routes (
         token TEXT PRIMARY KEY,
         user_id INTEGER NOT NULL,
@@ -793,7 +895,7 @@ export async function initSharedRoutesTable() {
       );
     `);
   } else {
-    await runSql(`
+    await dbExec(`
       CREATE TABLE IF NOT EXISTS shared_routes (
         token TEXT PRIMARY KEY,
         user_id INTEGER NOT NULL,
@@ -807,72 +909,68 @@ export async function initSharedRoutesTable() {
 
 export async function createSharedRoute(token, userId, routeJson) {
   const expiresAt = new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString();
-  await runSql(`
-    INSERT INTO shared_routes (token, user_id, route_json, expires_at)
-    VALUES (${sqlValue(token)}, ${sqlValue(Number(userId))}, ${sqlValue(routeJson)}, ${sqlValue(expiresAt)});
-  `);
+  await dbRun("INSERT INTO shared_routes (token, user_id, route_json, expires_at) VALUES (?, ?, ?, ?);", [token, Number(userId), routeJson, expiresAt]);
   return { token, expiresAt };
 }
 
 export async function getSharedRoute(token) {
   if (!token) return null;
-  const rows = await runSql(`SELECT * FROM shared_routes WHERE token = ${sqlValue(token)};`, true);
+  const rows = await dbAll("SELECT * FROM shared_routes WHERE token = ?;", [token]);
   if (!rows[0]) return null;
   if (new Date(rows[0].expires_at) < new Date()) {
-    await runSql(`DELETE FROM shared_routes WHERE token = ${sqlValue(token)};`);
+    await dbRun("DELETE FROM shared_routes WHERE token = ?;", [token]);
     return null;
   }
   try { return JSON.parse(rows[0].route_json); } catch { return null; }
 }
 
 export async function purgeExpiredSharedRoutes() {
-  await runSql(`DELETE FROM shared_routes WHERE expires_at < ${sqlValue(new Date().toISOString())};`);
+  await dbRun("DELETE FROM shared_routes WHERE expires_at < ?;", [new Date().toISOString()]);
 }
 
 export async function hasAnyUser() {
-  const rows = await runSql("SELECT COUNT(*) AS count FROM users;", true);
+  const rows = await dbAll("SELECT COUNT(*) AS count FROM users;");
   return Number(rows[0]?.count ?? 0) > 0;
 }
 
 export async function adminListUsers() {
   // expires_at è salvato come ISO con T/Z (toISOString); CURRENT_TIMESTAMP di
   // SQLite è "YYYY-MM-DD HH:MM:SS" → confronto stringa errato. Usa ISO da JS.
-  const nowIso = sqlValue(new Date().toISOString());
-  return runSql(`
+  return dbAll(`
     SELECT u.id, u.username, u.created_at,
-      (SELECT COUNT(*) FROM sessions s WHERE s.user_id = u.id AND s.expires_at > ${nowIso}) AS active_sessions,
+      (SELECT COUNT(*) FROM sessions s WHERE s.user_id = u.id AND s.expires_at > ?) AS active_sessions,
       (SELECT COUNT(*) FROM planned_routes r WHERE r.user_id = u.id) AS route_count,
       (SELECT COUNT(*) FROM addresses a WHERE a.user_id = u.id) AS address_count
     FROM users u ORDER BY u.created_at DESC;
-  `, true);
+  `, [new Date().toISOString()]);
 }
 
 export async function adminListSessions() {
-  return runSql(`
+  return dbAll(`
     SELECT s.token, s.user_id, s.created_at, s.expires_at, u.username
     FROM sessions s JOIN users u ON u.id = s.user_id
-    WHERE s.expires_at > ${sqlValue(new Date().toISOString())}
+    WHERE s.expires_at > ?
     ORDER BY s.created_at DESC;
-  `, true);
+  `, [new Date().toISOString()]);
 }
 
 export async function adminDeleteUserSessions(userId) {
-  await runSql(`DELETE FROM sessions WHERE user_id = ${sqlValue(Number(userId))};`);
+  await dbRun("DELETE FROM sessions WHERE user_id = ?;", [Number(userId)]);
 }
 
 export async function adminDeleteUser(userId) {
-  await runSql(`DELETE FROM sessions WHERE user_id = ${sqlValue(Number(userId))};`);
-  await runSql(`DELETE FROM planned_routes WHERE user_id = ${sqlValue(Number(userId))};`);
-  await runSql(`DELETE FROM addresses WHERE user_id = ${sqlValue(Number(userId))};`);
-  await runSql(`DELETE FROM user_settings WHERE user_id = ${sqlValue(Number(userId))};`);
-  await runSql(`DELETE FROM users WHERE id = ${sqlValue(Number(userId))};`);
+  await dbRun("DELETE FROM sessions WHERE user_id = ?;", [Number(userId)]);
+  await dbRun("DELETE FROM planned_routes WHERE user_id = ?;", [Number(userId)]);
+  await dbRun("DELETE FROM addresses WHERE user_id = ?;", [Number(userId)]);
+  await dbRun("DELETE FROM user_settings WHERE user_id = ?;", [Number(userId)]);
+  await dbRun("DELETE FROM users WHERE id = ?;", [Number(userId)]);
 }
 
 export async function adminGetStats() {
-  const [users] = await runSql(`SELECT COUNT(*) AS c FROM users;`, true);
-  const [routes] = await runSql(`SELECT COUNT(*) AS c FROM planned_routes;`, true);
-  const [addresses] = await runSql(`SELECT COUNT(*) AS c FROM addresses;`, true);
-  const [sessions] = await runSql(`SELECT COUNT(*) AS c FROM sessions WHERE expires_at > ${sqlValue(new Date().toISOString())};`, true);
+  const [users] = await dbAll("SELECT COUNT(*) AS c FROM users;");
+  const [routes] = await dbAll("SELECT COUNT(*) AS c FROM planned_routes;");
+  const [addresses] = await dbAll("SELECT COUNT(*) AS c FROM addresses;");
+  const [sessions] = await dbAll("SELECT COUNT(*) AS c FROM sessions WHERE expires_at > ?;", [new Date().toISOString()]);
   return {
     users: Number(users?.c || 0),
     routes: Number(routes?.c || 0),
@@ -885,20 +983,38 @@ export function getDbMode() { return dbMode; }
 export function getDbPath() { return databasePath || null; }
 
 export async function assignOrphanedData(userId) {
-  await runSql(`UPDATE addresses SET user_id = ${sqlValue(Number(userId))} WHERE user_id IS NULL;`);
-  await runSql(`UPDATE planned_routes SET user_id = ${sqlValue(Number(userId))} WHERE user_id IS NULL;`);
+  await dbRun("UPDATE addresses SET user_id = ? WHERE user_id IS NULL;", [Number(userId)]);
+  await dbRun("UPDATE planned_routes SET user_id = ? WHERE user_id IS NULL;", [Number(userId)]);
   // Migrate old settings to user_settings if not yet done
-  const existing = await runSql(`SELECT user_id FROM user_settings WHERE user_id = ${sqlValue(Number(userId))};`, true);
+  const existing = await dbAll("SELECT user_id FROM user_settings WHERE user_id = ?;", [Number(userId)]);
   if (!existing.length) {
-    const oldRows = await runSql("SELECT * FROM settings WHERE id = 1;", true);
+    const oldRows = await dbAll("SELECT * FROM settings WHERE id = 1;");
     const s = oldRows[0] || {};
+    const cols = "user_id, km_rate, drive_hour_rate, work_hour_rate, navigator_pref, theme_pref, lunch_break_minutes, lunch_break_enabled, default_start_label, default_start_address, rest_interval_min, rest_max_deviation_min, rest_duration_min, drive_markup_min_per_hour, earliest_break_time, max_detour_km, max_return_time";
+    const params = [
+      Number(userId),
+      s.km_rate ?? 0.65,
+      s.drive_hour_rate ?? 22,
+      s.work_hour_rate ?? 60,
+      s.navigator_pref ?? "google",
+      s.theme_pref ?? "auto",
+      s.lunch_break_minutes ?? 45,
+      s.lunch_break_enabled ?? 1,
+      s.default_start_label ?? "",
+      s.default_start_address ?? "",
+      s.rest_interval_min ?? 120,
+      s.rest_max_deviation_min ?? 40,
+      s.rest_duration_min ?? 15,
+      s.drive_markup_min_per_hour ?? 10,
+      s.earliest_break_time ?? "08:00",
+      s.max_detour_km ?? 1.7,
+      s.max_return_time ?? ""
+    ];
+    const placeholders = params.map(() => "?").join(", ");
     if (dbMode === "postgres") {
-      await runSql(`INSERT INTO user_settings (user_id, km_rate, drive_hour_rate, work_hour_rate, navigator_pref, theme_pref, lunch_break_minutes, lunch_break_enabled, default_start_label, default_start_address, rest_interval_min, rest_max_deviation_min, rest_duration_min, drive_markup_min_per_hour, earliest_break_time, max_detour_km, max_return_time)
-        VALUES (${sqlValue(Number(userId))}, ${s.km_rate ?? 0.65}, ${s.drive_hour_rate ?? 22}, ${s.work_hour_rate ?? 60}, ${sqlValue(s.navigator_pref ?? 'google')}, ${sqlValue(s.theme_pref ?? 'auto')}, ${s.lunch_break_minutes ?? 45}, ${s.lunch_break_enabled ?? 1}, ${sqlValue(s.default_start_label ?? '')}, ${sqlValue(s.default_start_address ?? '')}, ${s.rest_interval_min ?? 120}, ${s.rest_max_deviation_min ?? 40}, ${s.rest_duration_min ?? 15}, ${s.drive_markup_min_per_hour ?? 10}, ${sqlValue(s.earliest_break_time ?? '08:00')}, ${s.max_detour_km ?? 1.7}, ${sqlValue(s.max_return_time ?? '')})
-        ON CONFLICT (user_id) DO NOTHING;`);
+      await dbRun(`INSERT INTO user_settings (${cols}) VALUES (${placeholders}) ON CONFLICT (user_id) DO NOTHING;`, params);
     } else {
-      await runSql(`INSERT OR IGNORE INTO user_settings (user_id, km_rate, drive_hour_rate, work_hour_rate, navigator_pref, theme_pref, lunch_break_minutes, lunch_break_enabled, default_start_label, default_start_address, rest_interval_min, rest_max_deviation_min, rest_duration_min, drive_markup_min_per_hour, earliest_break_time, max_detour_km, max_return_time)
-        VALUES (${sqlValue(Number(userId))}, ${s.km_rate ?? 0.65}, ${s.drive_hour_rate ?? 22}, ${s.work_hour_rate ?? 60}, ${sqlValue(s.navigator_pref ?? 'google')}, ${sqlValue(s.theme_pref ?? 'auto')}, ${s.lunch_break_minutes ?? 45}, ${s.lunch_break_enabled ?? 1}, ${sqlValue(s.default_start_label ?? '')}, ${sqlValue(s.default_start_address ?? '')}, ${s.rest_interval_min ?? 120}, ${s.rest_max_deviation_min ?? 40}, ${s.rest_duration_min ?? 15}, ${s.drive_markup_min_per_hour ?? 10}, ${sqlValue(s.earliest_break_time ?? '08:00')}, ${s.max_detour_km ?? 1.7}, ${sqlValue(s.max_return_time ?? '')});`);
+      await dbRun(`INSERT OR IGNORE INTO user_settings (${cols}) VALUES (${placeholders});`, params);
     }
   }
 }

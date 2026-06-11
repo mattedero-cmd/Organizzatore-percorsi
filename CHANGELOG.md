@@ -1,3 +1,10 @@
+## v4.074 — 2026-06-11
+- Refactor DB: `db.js` passa da sqlite3 CLI (un processo per query) a `better-sqlite3` con connessione persistente — query locali ~100x più veloci
+- Sicurezza: tutte le query SQL ora parametrizzate (`dbAll`/`dbRun`/`dbExec` con placeholder) — eliminata ogni concatenazione di valori (ex `sqlValue`), su SQLite e PostgreSQL
+- Fix: ricerca indirizzi non trovava righe con campi vuoti (location/notes NULL annullavano la concatenazione LIKE in SQLite) — coalesce su tutte le colonne
+- Fix: il server non terminava con SIGTERM — l'handler di flush statistiche teneva vivo il processo; ora flush + exit espliciti, timer con unref()
+- `apiStats.js` migrato alla nuova API parametrizzata
+
 ## v4.073 — 2026-06-11
 - Analisi criticità app: applicati i fix di sicurezza e robustezza ad alto impatto
 - Sicurezza: admin login non crasha più con body senza `secret` (TypeError→500) e confronto del secret reso timing-safe
