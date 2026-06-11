@@ -1,3 +1,6 @@
+## v4.066 — 2026-06-11
+- Fix: tema Aziendali non sostituiva il turchese di default in molte parti dell'app — applyBrandColor ora override anche --bg, --tab-bg, --tab-border, --tab-text, --card-corner, --btn-primary-text, --btn-primary-shine; in modalità chiara il background diventa una tinta pallida del colore aziendale, in modalità scura una versione quasi nera
+
 ## v4.065 — 2026-06-11
 - Fix: link condivisi davano 404 NOT_FOUND — aggiunta route /share/(.*) → index.html in vercel.json e fallback SPA nel server Node
 - Fix: elemento fantasma in basso a destra — il toast vuoto restava visibile (aggiunti opacity:0 e pointer-events:none nello stato nascosto)

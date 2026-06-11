@@ -291,11 +291,11 @@ function _mix(c,t,f) { return { r:c.r*f+t.r*(1-f), g:c.g*f+t.g*(1-f), b:c.b*f+t.
 function applyBrandColor(hex) {
   if (!hex || !/^#[0-9a-fA-F]{6}$/.test(hex)) return;
   const el = document.documentElement;
+  const isDark = el.dataset.theme === "night";
   const rgb = _hexToRgb(hex);
-  const dark = _mix(rgb, {r:0,g:0,b:0}, 0.72);     // darken ~28%
-  const light = _mix(rgb, {r:255,g:255,b:255}, 0.72); // lighten ~28%
+  const dark = _mix(rgb, {r:0,g:0,b:0}, 0.72);
+  const light = _mix(rgb, {r:255,g:255,b:255}, 0.72);
   const darkOk = _mix(rgb, {r:0,g:0,b:0}, 0.58);
-  // muted: blend towards grey
   const grey = { r:130, g:150, b:148 };
   const muted = _mix(rgb, grey, 0.35);
 
@@ -316,10 +316,29 @@ function applyBrandColor(hex) {
   el.style.setProperty("--btn-primary-bg", `linear-gradient(135deg,${_toHex(light)} 0%,${hex} 55%,${_toHex(dark)} 100%)`);
   el.style.setProperty("--btn-primary-border", _rgba(rgb, 0.45));
   el.style.setProperty("--btn-primary-glow", _rgba(rgb, 0.28));
+  el.style.setProperty("--btn-primary-text", "#ffffff");
+  el.style.setProperty("--btn-primary-shine", "rgba(255,255,255,0.28)");
   el.style.setProperty("--top-line-a", _rgba(rgb, 0.90));
   el.style.setProperty("--card-top-a", _rgba(rgb, 0.50));
+  el.style.setProperty("--card-corner", _rgba(rgb, 0.10));
   el.style.setProperty("--blob1", _rgba(rgb, 0.26));
   el.style.setProperty("--blob3", _rgba(rgb, 0.18));
+
+  // Background e tab: tinta derivata dal colore aziendale (chiara/scura in base al tema)
+  if (isDark) {
+    const bgDark = _mix(rgb, {r:5,g:8,b:15}, 0.94);
+    el.style.setProperty("--bg", _toHex(bgDark));
+    el.style.setProperty("--tab-bg", _rgba(bgDark, 0.85));
+    el.style.setProperty("--tab-border", _rgba(rgb, 0.06));
+    el.style.setProperty("--tab-text", _toHex(_mix(rgb, {r:0,g:0,b:0}, 0.70)));
+  } else {
+    const bgLight = _mix(rgb, {r:255,g:255,b:255}, 0.92);
+    const tabBgLight = _mix(rgb, {r:255,g:255,b:255}, 0.80);
+    el.style.setProperty("--bg", _toHex(bgLight));
+    el.style.setProperty("--tab-bg", _rgba(tabBgLight, 0.90));
+    el.style.setProperty("--tab-border", _rgba(rgb, 0.14));
+    el.style.setProperty("--tab-text", _toHex(_mix(rgb, {r:255,g:255,b:255}, 0.48)));
+  }
 }
 
 // Secondo colore aziendale: ruoli visibili dedicati (sottotitolo header, pill
@@ -362,7 +381,9 @@ function clearBrandColor() {
   ["--primary","--primary-dark","--accent","--accent-bg","--accent-border","--accent-glow",
    "--ok","--muted","--line","--line-strong","--grid-line","--tab-active-text",
    "--tab-active-border","--tab-active-bg","--btn-primary-bg","--btn-primary-border",
-   "--btn-primary-glow","--top-line-a","--card-top-a","--blob1","--blob3"
+   "--btn-primary-glow","--btn-primary-text","--btn-primary-shine",
+   "--top-line-a","--card-top-a","--card-corner","--blob1","--blob3",
+   "--bg","--tab-bg","--tab-border","--tab-text"
   ].forEach(v => document.documentElement.style.removeProperty(v));
 }
 
@@ -1201,7 +1222,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.065 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.066 &mdash; giugno 2026</p>
         </div>
       </div>
 
