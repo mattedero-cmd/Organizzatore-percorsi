@@ -773,7 +773,7 @@ ${addressList}
     return sendJson(response, 404, { error: "Endpoint non trovato" });
   } catch (error) {
     console.error(error);
-    return sendJson(response, 500, { error: error.message || "Errore server" });
+    return sendJson(response, error.statusCode || 500, { error: error.message || "Errore server" });
   }
 }
 

@@ -657,10 +657,10 @@ export async function planRoute(payload, settings, restStops = []) {
   const dayOfWeek = new Date(scheduledDate + "T12:00:00").getDay();
   const stops = (payload.stops || []).map((s, i) => normalizeStop(s, i, dayOfWeek));
   if (!payload.start?.address && !payload.start?.fullAddress) {
-    throw new Error("Inserisci un punto di partenza.");
+    throw Object.assign(new Error("Inserisci un punto di partenza."), { statusCode: 400 });
   }
   if (!stops.length) {
-    throw new Error("Aggiungi almeno una tappa.");
+    throw Object.assign(new Error("Aggiungi almeno una tappa."), { statusCode: 400 });
   }
 
   const end = payload.end?.sameAsStart
