@@ -280,6 +280,56 @@ const state = {
 
 // ── theme ────────────────────────────────────────────────────────────────────
 
+function _hexToRgb(hex) {
+  const h = hex.replace("#", "");
+  return { r: parseInt(h.slice(0,2),16), g: parseInt(h.slice(2,4),16), b: parseInt(h.slice(4,6),16) };
+}
+function _toHex({r,g,b}) { return "#"+[r,g,b].map(v=>Math.min(255,Math.max(0,Math.round(v))).toString(16).padStart(2,"0")).join(""); }
+function _rgba({r,g,b},a) { return `rgba(${Math.round(r)},${Math.round(g)},${Math.round(b)},${a})`; }
+function _mix(c,t,f) { return { r:c.r*f+t.r*(1-f), g:c.g*f+t.g*(1-f), b:c.b*f+t.b*(1-f) }; }
+
+function applyBrandColor(hex) {
+  if (!hex || !/^#[0-9a-fA-F]{6}$/.test(hex)) return;
+  const el = document.documentElement;
+  const rgb = _hexToRgb(hex);
+  const dark = _mix(rgb, {r:0,g:0,b:0}, 0.72);     // darken ~28%
+  const light = _mix(rgb, {r:255,g:255,b:255}, 0.72); // lighten ~28%
+  const darkOk = _mix(rgb, {r:0,g:0,b:0}, 0.58);
+  // muted: blend towards grey
+  const grey = { r:130, g:150, b:148 };
+  const muted = _mix(rgb, grey, 0.35);
+
+  el.style.setProperty("--primary", hex);
+  el.style.setProperty("--primary-dark", _toHex(dark));
+  el.style.setProperty("--accent", hex);
+  el.style.setProperty("--accent-bg", _rgba(rgb, 0.10));
+  el.style.setProperty("--accent-border", _rgba(rgb, 0.30));
+  el.style.setProperty("--accent-glow", _rgba(rgb, 0.18));
+  el.style.setProperty("--ok", _toHex(darkOk));
+  el.style.setProperty("--muted", _toHex(muted));
+  el.style.setProperty("--line", _rgba(rgb, 0.14));
+  el.style.setProperty("--line-strong", _rgba(rgb, 0.30));
+  el.style.setProperty("--grid-line", _rgba(rgb, 0.06));
+  el.style.setProperty("--tab-active-text", _toHex(dark));
+  el.style.setProperty("--tab-active-border", _rgba(rgb, 0.32));
+  el.style.setProperty("--tab-active-bg", _rgba(rgb, 0.14));
+  el.style.setProperty("--btn-primary-bg", `linear-gradient(135deg,${_toHex(light)} 0%,${hex} 55%,${_toHex(dark)} 100%)`);
+  el.style.setProperty("--btn-primary-border", _rgba(rgb, 0.45));
+  el.style.setProperty("--btn-primary-glow", _rgba(rgb, 0.28));
+  el.style.setProperty("--top-line-a", _rgba(rgb, 0.90));
+  el.style.setProperty("--card-top-a", _rgba(rgb, 0.50));
+  el.style.setProperty("--blob1", _rgba(rgb, 0.26));
+  el.style.setProperty("--blob3", _rgba(rgb, 0.18));
+}
+
+function clearBrandColor() {
+  ["--primary","--primary-dark","--accent","--accent-bg","--accent-border","--accent-glow",
+   "--ok","--muted","--line","--line-strong","--grid-line","--tab-active-text",
+   "--tab-active-border","--tab-active-bg","--btn-primary-bg","--btn-primary-border",
+   "--btn-primary-glow","--top-line-a","--card-top-a","--blob1","--blob3"
+  ].forEach(v => document.documentElement.style.removeProperty(v));
+}
+
 function applyTheme() {
   const mode = state.themeMode || "auto";
   const palette = state.themePalette || "default";
@@ -297,7 +347,14 @@ function applyTheme() {
     legno:   isDark ? "legno"          : "legno-giorno",
   };
   state.theme = map[palette] || (isDark ? "night" : "day");
+  if (palette === "custom") state.theme = isDark ? "night" : "day";
   document.documentElement.dataset.theme = state.theme;
+  // Applica/rimuovi colori aziendali personalizzati
+  if (palette === "custom" && state.settings?.brandColor) {
+    applyBrandColor(state.settings.brandColor);
+  } else {
+    clearBrandColor();
+  }
   try {
     localStorage.setItem("pl_theme", JSON.stringify({ mode, palette }));
     // cookie per il server-side theme injection (no-JS path e primo caricamento)
@@ -496,7 +553,8 @@ function renderMenu() {
         noBreakEarlyMin: Number(v.noBreakEarlyMin ?? 120),
         noBreakBeforeHomeMin: Number(v.noBreakBeforeHomeMin ?? 60),
         noBreakBeforeLunchMin: Number(v.noBreakBeforeLunchMin ?? 60),
-        noBreakAfterLunchMin: Number(v.noBreakAfterLunchMin ?? 120)
+        noBreakAfterLunchMin: Number(v.noBreakAfterLunchMin ?? 120),
+        brandColor: v.brandColor || state.settings.brandColor || ""
       };
       state.settings = await api("/api/settings", { method: "PUT", body: JSON.stringify(newSettings) });
       state.navigatorPref = state.settings.navigatorPref;
@@ -574,6 +632,9 @@ function renderMenu() {
         document.querySelectorAll(".palette-chip").forEach(c => c.classList.remove("active"));
         paletteChip.classList.add("active");
         document.getElementById("themePaletteInput").value = paletteChip.dataset.palette;
+        // Mostra/nascondi color picker aziendali
+        const brandRow = document.getElementById("brand-color-row");
+        if (brandRow) brandRow.style.display = paletteChip.dataset.palette === "custom" ? "" : "none";
         // live preview
         state.themePalette = paletteChip.dataset.palette;
         applyTheme();
@@ -584,6 +645,18 @@ function renderMenu() {
       if (e.target.name === "themeMode") {
         state.themeMode = e.target.value;
         applyTheme();
+      }
+      // Live preview colore aziendale
+      if (e.target.name === "brandColor") {
+        const hex = e.target.value;
+        const preview = document.getElementById("brand-color-preview");
+        if (preview) preview.textContent = hex;
+        const chip = document.getElementById("palette-chip-custom");
+        if (chip) chip.querySelector(".palette-swatch").style.background = `linear-gradient(135deg,#1a1a1a 50%,${hex} 50%)`;
+        if (state.themePalette === "custom") {
+          state.settings = { ...state.settings, brandColor: hex };
+          applyTheme();
+        }
       }
     });
     ov.querySelectorAll("[data-stepper]").forEach(btn => {
@@ -878,6 +951,14 @@ function renderMenuSettings() {
               <button type="button" class="palette-chip${(s.themePalette||"default")==="pietra"?" active":""}" data-palette="pietra"><span class="palette-swatch" style="background:linear-gradient(135deg,#0e0d0c 50%,#ede0d0 50%)"></span>Pietra</button>
               <button type="button" class="palette-chip${(s.themePalette||"default")==="foresta"?" active":""}" data-palette="foresta"><span class="palette-swatch" style="background:linear-gradient(135deg,#060d06 50%,#c8e8b0 50%)"></span>Foresta</button>
               <button type="button" class="palette-chip${(s.themePalette||"default")==="legno"?" active":""}" data-palette="legno"><span class="palette-swatch" style="background:linear-gradient(135deg,#0c0800 50%,#f0dcc0 50%)"></span>Legno</button>
+              <button type="button" class="palette-chip${(s.themePalette||"default")==="custom"?" active":""}" data-palette="custom" id="palette-chip-custom"><span class="palette-swatch" style="background:${s.brandColor ? `linear-gradient(135deg,#1a1a1a 50%,${s.brandColor} 50%)` : "linear-gradient(135deg,#1a1a1a 50%,#888 50%)"}"></span>Aziendali</button>
+            </div>
+          </div>
+          <div class="sg-approw" id="brand-color-row" style="${(s.themePalette||"default")==="custom" ? "" : "display:none"}">
+            <span class="sg-label">Colore aziendale</span>
+            <div style="display:flex;align-items:center;gap:10px;">
+              <input type="color" name="brandColor" id="brandColorInput" value="${escapeHtml(s.brandColor||"#00a896")}" style="width:44px;height:32px;border:none;padding:0;border-radius:6px;cursor:pointer;background:transparent;" />
+              <span class="stop-meta" id="brand-color-preview" style="font-size:0.8rem;">${s.brandColor||"#00a896"}</span>
             </div>
           </div>
           <input type="hidden" name="themePalette" id="themePaletteInput" value="${s.themePalette||"default"}" />
@@ -1072,7 +1153,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.060 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.061 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -1201,6 +1282,7 @@ async function loadInitialData() {
   state.navigatorPref = settings.navigatorPref || localStorage.getItem("navigatorPref") || "google";
   state.themeMode = settings.themeMode || (settings.themePref === "light" ? "light" : settings.themePref === "dark" ? "dark" : "auto");
   state.themePalette = settings.themePalette || "default";
+  if (settings.brandColor) state.settings = { ...state.settings, brandColor: settings.brandColor };
   state.route.lunchBreak = settings.lunchBreakEnabled !== false;
   state.route.lunchBreakMinutes = settings.lunchBreakMinutes || 45;
   if (settings.defaultStartLabel || settings.defaultStartAddress) {

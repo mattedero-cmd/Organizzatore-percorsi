@@ -1,3 +1,6 @@
+## v4.061 — 2026-06-09
+- Nuovo: palette "Aziendali" — color picker nel menu impostazioni per scegliere il colore primario; tutti i bottoni, accenti, tab e decorazioni cambiano in tempo reale; salvato come brandColor nelle impostazioni
+
 ## v4.060 — 2026-06-09
 - Fix bug v4.059: pranzo dynamic-split posizionato all'orario sbagliato (es. 09:00 invece di 12:30) — aggiunto lunchForFixed+fixedLunchAt sull'entry del pranzo
 - Fix: indirizzo di casa dalle impostazioni non compariva nel form percorso — render() chiamato dopo salvataggio impostazioni
