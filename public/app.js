@@ -778,7 +778,7 @@ function renderMenuInfo() {
   return `
     ${menuHeader("Info app", true)}
     <div class="bsheet-section-body">
-      <p class="stop-meta" style="margin-bottom:8px;">Percorsi lavoro — Versione 1.0</p>
+      <p class="stop-meta" style="margin-bottom:8px;">Percorsi lavoro — Versione 1.1</p>
       <p class="stop-meta">Pianificazione giornaliera giri commerciali con ottimizzazione automatica del percorso, gestione orari di apertura, soste automatiche e stima costi.</p>
       <p class="stop-meta" style="margin-top:12px;">Google Maps${state.mapApiConfigured ? " ✓ attivo" : " — non configurato (usa stime locali)"}. Whisper${state.whisperConfigured ? " ✓ attivo" : " — non configurato"}.</p>
     </div>`;
@@ -2343,10 +2343,18 @@ async function planCurrentRoute() {
   render();
   try {
     const r = state.route;
+    const autoName = (() => {
+      if (r.name) return r.name;
+      const d = r.scheduledDate ? r.scheduledDate.split("-") : null;
+      const dateStr = d ? `${d[2]}/${d[1]}/${d[0]}` : "";
+      const firstStop = r.stops[0];
+      const label = firstStop?.customer || firstStop?.location || "";
+      return dateStr && label ? `${dateStr} – ${label}` : dateStr || label || "Percorso giornaliero";
+    })();
     state.result = await api("/api/plan", {
       method: "POST",
       body: JSON.stringify({
-        name: r.name || "Percorso giornaliero",
+        name: autoName,
         scheduledDate: r.scheduledDate,
         start: { label: r.startLabel, address: r.startAddress },
         end: { sameAsStart: r.endSameAsStart, label: r.endLabel, address: r.endAddress },
