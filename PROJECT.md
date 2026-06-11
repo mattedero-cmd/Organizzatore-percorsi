@@ -74,41 +74,38 @@ Regola: mantenere il progetto sincronizzato su GitHub. Vercel deve pubblicare da
 
 ```text
 public/
-  index.html               # shell PWA, carica script in ordine preciso
-  app.js                   # logica principale, state, render, eventi
-  styles.css
-  cache-fix.css
-  order-feature.css
-  map-feature.css
-  startup-guard.js         # intercetta fetch /api/routes e /api/addresses lista
-  map-enhancer.js          # intercetta fetch /api/plan e /api/routes/:id, inietta mappa Leaflet
-  order-enhancer.js        # intercetta fetch, permette riordino manuale tappe
-  route-actions-enhancer.js # aggiunge pulsanti rinomina/elimina ai giri salvati
-  contact-tools.js         # import contatti da .vcf/.csv, seed da Excel
-  archive-filter-enhancer.js # filtri cliente/citta nell'archivio
-  service-worker.js        # PWA offline, cache v18
+  index.html               # shell PWA, carica SOLO app.js + styles.css
+  app.js                   # logica principale, state, render, eventi — tutta la UI
+  styles.css               # CSS unico
+  service-worker.js        # PWA offline, cache versionata
   manifest.webmanifest
   seed-addresses.json
+  route-management-lite.js    # NO-OP (compatibilità HTML in cache)
+  archive-filter-enhancer.js  # NO-OP (compatibilità HTML in cache)
 server/
   index.js                 # HTTP server, routing API (no Express)
   db.js                    # SQLite/Postgres, CRUD, supporto prefisso RouteOrg_
   planner.js               # ottimizzazione percorso, permutazioni
+  googleMapsService.js     # Places/Geocoding/Directions
   mapService.js            # routing MapQuest/ORS/fallback
   weatherService.js        # meteo Open-Meteo/OpenWeatherMap
   voiceParser.js           # parser comandi vocali
+  apiStats.js              # tracciamento chiamate API esterne
+  auth.js                  # hash password, token
   env.js                   # caricamento .env
 ```
 
-## Ordine caricamento script in index.html (importante)
+## Caricamento script in index.html
 
-```text
-startup-guard.js → map-enhancer.js → order-enhancer.js →
-route-actions-enhancer.js → contact-tools.js → archive-filter-enhancer.js →
-app.js (module)
-```
+`index.html` carica **solo** `app.js` (ES module) e `styles.css`. Tutta la UI vive
+in `app.js` seguendo i pattern `render()`/`api()`/`_svg()`.
 
-Ogni enhancer wrappa `window.fetch` in questo ordine. Il chain e:
-app.js → archive-filter → contact-tools → route-actions → order-enhancer → map-enhancer → startup-guard → native fetch
+> Nota storica: in passato esisteva una catena di "enhancer/guard/lite" che
+> wrappavano `window.fetch` e riscrivevano `#app.innerHTML`. Sono stati rimossi
+> (v4.073) perché non più caricati e fonte di bug/duplicazione. Restano solo due
+> file no-op (`route-management-lite.js`, `archive-filter-enhancer.js`) come
+> innocua compatibilità per eventuali HTML ancora in cache PWA. **Non
+> reintrodurre** script paralleli: ogni funzionalità va dentro `app.js`.
 
 ## API principali
 

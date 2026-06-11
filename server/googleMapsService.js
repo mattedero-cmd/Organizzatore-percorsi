@@ -138,6 +138,16 @@ export function isOpenAtTime(periods, targetDay, targetMin) {
 
 // Cache per evitare chiamate doppie nella stessa area durante una pianificazione
 const placesCache = new Map();
+const PLACES_CACHE_MAX = 500;
+
+// set con eviction FIFO: senza limite la Map cresce indefinitamente
+// su processi long-running (Docker) — coerente con CACHE_MAX_SIZE di mapService
+function placesCacheSet(key, value) {
+  if (placesCache.size >= PLACES_CACHE_MAX) {
+    placesCache.delete(placesCache.keys().next().value);
+  }
+  placesCache.set(key, value);
+}
 
 function placesCacheKey(lat, lng) {
   return `${Math.round(lat * 50) / 50},${Math.round(lng * 50) / 50}`;
@@ -198,9 +208,10 @@ export async function findNearbyRestStop(lat, lng, segFromLat, segFromLng, segTo
     trackCall("google_maps", "nearby_search");
     const res = await fetch(url, { signal: AbortSignal.timeout(6000) });
     const data = await res.json();
-    console.log("[Places]", lat.toFixed(4), lng.toFixed(4), "→ status:", data.status, "results:", data.results?.length ?? 0);
+    // Niente coordinate nei log: sono posizioni dell'utente (vedi CLAUDE.md §3)
+    console.log("[Places]", "status:", data.status, "results:", data.results?.length ?? 0);
     if (data.status !== "OK" || !data.results?.length) {
-      placesCache.set(cacheKey, null);
+      placesCacheSet(cacheKey, null);
       return null;
     }
 
@@ -217,7 +228,7 @@ export async function findNearbyRestStop(lat, lng, segFromLat, segFromLng, segTo
       .sort((a, b) => placesScore(b) - placesScore(a))
       .slice(0, 5);
 
-    if (!candidates.length) { placesCache.set(cacheKey, null); return null; }
+    if (!candidates.length) { placesCacheSet(cacheKey, null); return null; }
 
     let chosen = candidates[0];
     let chosenOpenAtBreak = null;
@@ -241,7 +252,7 @@ export async function findNearbyRestStop(lat, lng, segFromLat, segFromLng, segTo
         chosenOpenAtBreak = null;
       } else {
         // All candidates definitively closed at break time — skip this location
-        placesCache.set(cacheKey, null);
+        placesCacheSet(cacheKey, null);
         return null;
       }
     }
@@ -259,10 +270,10 @@ export async function findNearbyRestStop(lat, lng, segFromLat, segFromLng, segTo
       addressType: "rest",
       fromPlaces: true
     };
-    placesCache.set(cacheKey, result);
+    placesCacheSet(cacheKey, result);
     return result;
   } catch {
-    placesCache.set(cacheKey, null);
+    placesCacheSet(cacheKey, null);
     return null;
   }
 }
@@ -290,9 +301,9 @@ export async function findNearbyRestaurant(lat, lng, segFromLat, segFromLng, seg
     trackCall("google_maps", "nearby_search");
     const res = await fetch(url, { signal: AbortSignal.timeout(6000) });
     const data = await res.json();
-    console.log("[Places/restaurant]", lat.toFixed(4), lng.toFixed(4), "→ status:", data.status, "results:", data.results?.length ?? 0);
+    console.log("[Places/restaurant]", "status:", data.status, "results:", data.results?.length ?? 0);
     if (data.status !== "OK" || !data.results?.length) {
-      placesCache.set(cacheKey, null);
+      placesCacheSet(cacheKey, null);
       return null;
     }
 
@@ -310,7 +321,7 @@ export async function findNearbyRestaurant(lat, lng, segFromLat, segFromLng, seg
       .sort((a, b) => placesScore(b) - placesScore(a))
       .slice(0, 5);
 
-    if (!candidates.length) { placesCache.set(cacheKey, null); return null; }
+    if (!candidates.length) { placesCacheSet(cacheKey, null); return null; }
 
     let chosen = candidates[0];
     let chosenOpenAtBreak = null;
@@ -325,7 +336,7 @@ export async function findNearbyRestaurant(lat, lng, segFromLat, segFromLng, seg
       const unknown = withHours.filter(x => x.openAtBreak === null);
       if (open.length) { chosen = open[0].p; chosenOpenAtBreak = true; }
       else if (unknown.length) { chosen = unknown[0].p; chosenOpenAtBreak = null; }
-      else { placesCache.set(cacheKey, null); return null; }
+      else { placesCacheSet(cacheKey, null); return null; }
     }
 
     const result = {
@@ -341,10 +352,10 @@ export async function findNearbyRestaurant(lat, lng, segFromLat, segFromLng, seg
       addressType: "restaurant",
       fromPlaces: true
     };
-    placesCache.set(cacheKey, result);
+    placesCacheSet(cacheKey, result);
     return result;
   } catch {
-    placesCache.set(cacheKey, null);
+    placesCacheSet(cacheKey, null);
     return null;
   }
 }

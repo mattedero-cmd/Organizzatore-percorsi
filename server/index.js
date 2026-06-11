@@ -87,15 +87,24 @@ const loginAttempts = new Map(); // ip → { count, resetAt }
 const LOGIN_MAX_ATTEMPTS = 10;
 const LOGIN_WINDOW_MS = 15 * 60 * 1000; // 15 min
 
-function checkLoginRateLimit(ip) {
+// IP reale dietro Vercel/proxy: senza X-Forwarded-For tutti gli utenti
+// condividerebbero l'IP del proxy (stesso fix già applicato all'admin login)
+function clientIp(request) {
+  return request.headers["x-forwarded-for"]?.split(",")[0].trim()
+    || request.headers["x-real-ip"]
+    || request.socket.remoteAddress
+    || "unknown";
+}
+
+function checkLoginRateLimit(key, max = LOGIN_MAX_ATTEMPTS) {
   const now = Date.now();
-  const entry = loginAttempts.get(ip);
+  const entry = loginAttempts.get(key);
   if (!entry || now > entry.resetAt) {
-    loginAttempts.set(ip, { count: 1, resetAt: now + LOGIN_WINDOW_MS });
+    loginAttempts.set(key, { count: 1, resetAt: now + LOGIN_WINDOW_MS });
     return true;
   }
   entry.count++;
-  if (entry.count > LOGIN_MAX_ATTEMPTS) return false;
+  if (entry.count > max) return false;
   return true;
 }
 
@@ -353,7 +362,7 @@ async function handleApi(request, response) {
       }
 
       if (method === "POST" && url.pathname === "/api/auth/register") {
-        const ip = request.socket.remoteAddress || "unknown";
+        const ip = clientIp(request);
         if (!checkLoginRateLimit(ip)) {
           return sendJson(response, 429, { error: "Troppi tentativi. Riprova tra 15 minuti." });
         }
@@ -373,7 +382,7 @@ async function handleApi(request, response) {
       }
 
       if (method === "POST" && url.pathname === "/api/auth/login") {
-        const ip = request.socket.remoteAddress || "unknown";
+        const ip = clientIp(request);
         if (!checkLoginRateLimit(ip)) {
           return sendJson(response, 429, { error: "Troppi tentativi. Riprova tra 15 minuti." });
         }
@@ -396,6 +405,10 @@ async function handleApi(request, response) {
         const cookies = parseCookies(request.headers.cookie);
         const userId = await getSession(cookies.session || "");
         if (!userId) return sendJson(response, 401, { error: "Non autenticato" });
+        // Anti brute-force della password attuale con cookie rubato
+        if (!checkLoginRateLimit(`cp:${userId}`)) {
+          return sendJson(response, 429, { error: "Troppi tentativi. Riprova tra 15 minuti." });
+        }
         const body = await parseBody(request);
         const { currentPassword, newPassword } = body;
         if (!currentPassword || !newPassword || newPassword.length < 6) {
@@ -405,6 +418,7 @@ async function handleApi(request, response) {
         if (!fullUser || !(await verifyPassword(currentPassword, fullUser.password_hash))) {
           return sendJson(response, 401, { error: "Password attuale non corretta" });
         }
+        resetLoginRateLimit(`cp:${userId}`);
         const newHash = await hashPassword(newPassword);
         await updateUserPassword(userId, newHash);
         return sendJson(response, 200, { ok: true });
@@ -424,17 +438,19 @@ async function handleApi(request, response) {
     if (url.pathname.startsWith("/api/admin")) {
       // Login admin — non richiede token
       if (method === "POST" && url.pathname === "/api/admin/login") {
-        const ip = request.headers["x-forwarded-for"]?.split(",")[0].trim()
-          || request.headers["x-real-ip"]
-          || request.socket.remoteAddress
-          || "unknown";
+        const ip = clientIp(request);
         if (!checkAdminRateLimit(ip)) {
           return sendJson(response, 429, { error: "Troppi tentativi. Riprova tra 30 minuti." });
         }
         const secret = (process.env.ADMIN_SECRET || "").trim();
         if (!secret) return sendJson(response, 503, { error: "Admin non configurato" });
         const body = await parseBody(request);
-        if (body.secret.trim() !== secret) {
+        // Guardia tipo (body senza secret → TypeError → 500) + confronto
+        // timing-safe: HMAC di entrambi i valori per avere lunghezza uguale
+        const provided = typeof body.secret === "string" ? body.secret.trim() : "";
+        const providedMac = createHmac("sha256", "admin-login-cmp").update(provided).digest();
+        const expectedMac = createHmac("sha256", "admin-login-cmp").update(secret).digest();
+        if (!provided || !timingSafeEqual(providedMac, expectedMac)) {
           return sendJson(response, 401, { error: "Credenziali non valide" });
         }
         const token = generateAdminToken();
@@ -512,6 +528,10 @@ async function handleApi(request, response) {
     // ── Share routes (GET public, no auth needed) ─────────────────────────────
     const shareMatch = url.pathname.match(/^\/api\/share\/([a-zA-Z0-9_-]+)$/);
     if (shareMatch && method === "GET") {
+      // Endpoint pubblico: throttle per IP contro enumerazione dei token
+      if (!checkLoginRateLimit(`share:${clientIp(request)}`, 30)) {
+        return sendJson(response, 429, { error: "Troppe richieste. Riprova tra qualche minuto." });
+      }
       const route = await getSharedRoute(shareMatch[1]);
       if (!route) return sendJson(response, 404, { error: "Link scaduto o non trovato" });
       return sendJson(response, 200, route);
@@ -608,7 +628,14 @@ async function handleApi(request, response) {
       const dedupKey = `${userId}:${JSON.stringify(body)}`;
       const recent = recentPlanRequests.get(dedupKey);
       if (recent && Date.now() - recent.at < 10000 && recent.promise) {
-        return sendJson(response, 200, await recent.promise);
+        try {
+          return sendJson(response, 200, await recent.promise);
+        } catch (err) {
+          // La richiesta originale è fallita: rimuovi la entry così i retry
+          // successivi ripartono da zero invece di riusare la promise rigettata
+          recentPlanRequests.delete(dedupKey);
+          throw err;
+        }
       }
       const planPromise = (async () => {
       const settings = await getSettings(userId);
@@ -857,9 +884,10 @@ ${addressList}
         return sendJson(response, 500, { error: err.error?.message || "Errore OpenAI" });
       }
       const oaiData = await oaiRes.json();
+      const content = oaiData?.choices?.[0]?.message?.content;
       let parsed;
       try {
-        parsed = JSON.parse(oaiData.choices[0].message.content);
+        parsed = JSON.parse(content);
       } catch {
         return sendJson(response, 500, { error: "Risposta AI non valida" });
       }

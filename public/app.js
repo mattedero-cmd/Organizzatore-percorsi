@@ -135,7 +135,10 @@ function buildWhatsAppMessage(result, row) {
     const dateStr = scheduledDate ? (() => {
       const [, m, d] = scheduledDate.split("-");
       const MONTHS = ["gennaio","febbraio","marzo","aprile","maggio","giugno","luglio","agosto","settembre","ottobre","novembre","dicembre"];
-      return `${Number(d)} ${MONTHS[Number(m) - 1]}`;
+      const month = MONTHS[Number(m) - 1];
+      // Data in formato inatteso → niente "12 undefined" nel messaggio
+      if (!month || !Number(d)) return "";
+      return `${Number(d)} ${month}`;
     })() : "";
     const timeStr = row.arrivalTime ? row.arrivalTime.slice(0, 5) : "";
     const parts = [
@@ -167,7 +170,7 @@ function showSpinner(msg = "Calcolo in corso…") {
     el.id = "loading-overlay";
     document.body.appendChild(el);
   }
-  el.innerHTML = `<div class="loading-box"><div class="loading-spinner"></div><p>${msg}</p></div>`;
+  el.innerHTML = `<div class="loading-box"><div class="loading-spinner"></div><p>${escapeHtml(msg)}</p></div>`;
   el.style.display = "flex";
 }
 function hideSpinner() {
@@ -606,7 +609,7 @@ function renderMenu() {
     });
     ov.querySelector("#bsheet-close")?.addEventListener("click", () => closeMenu());
     ov.querySelector("#logout-btn")?.addEventListener("click", async () => {
-      await fetch("/api/auth/logout", { method: "POST" });
+      await fetch(window.location.origin + "/api/auth/logout", { method: "POST" });
       state.user = null;
       closeMenu();
       renderAuthScreen(false);
@@ -679,7 +682,7 @@ function renderMenu() {
         return;
       }
       try {
-        const res = await fetch("/api/auth/change-password", {
+        const res = await fetch(window.location.origin + "/api/auth/change-password", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ currentPassword: v.currentPassword, newPassword: v.newPassword })
@@ -698,7 +701,7 @@ function renderMenu() {
       const v = readForm(e.target);
       const errEl = document.getElementById("nickname-error");
       try {
-        const res = await fetch("/api/auth/profile", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ nickname: v.nickname }) });
+        const res = await fetch(window.location.origin + "/api/auth/profile", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ nickname: v.nickname }) });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) { if (errEl) errEl.textContent = data.error || "Errore"; return; }
         state.user = { ...state.user, nickname: data.nickname };
@@ -1255,7 +1258,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.072 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.073 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -2250,7 +2253,7 @@ function renderSaved() {
             <div class="saved-card-info">
               <input type="date" class="saved-date-input" data-reschedule-route="${route.id}" value="${escapeHtml(route.scheduledDate || "")}" title="Cambia data e ricalcola" onclick="event.stopPropagation()" />
               <span>${escapeHtml(route.startTime || "--:--")}</span>
-              <span>${Number(route.totalKm).toFixed(1)} km</span>
+              <span>${(Number(route.totalKm) || 0).toFixed(1)} km</span>
               <span>${euro(route.totalCost)}</span>
             </div>
             <div class="stop-meta saved-card-route">${escapeHtml(route.startLabel || "—")} → ${escapeHtml(route.endLabel || "—")}</div>
@@ -2690,7 +2693,10 @@ function renderResult() {
       ${renderManualOrder(result)}
 
       <div class="result-list">
-        ${(()=>{let rvStopIdx=-1;return rows.map(row => {
+        ${(()=>{let rvStopIdx=-1;
+          // Lookup indirizzi O(1): evita un find() lineare per ogni riga (O(righe×indirizzi))
+          const addrById = new Map((state.allAddresses || []).map(a => [String(a.id), a]));
+          return rows.map(row => {
           // Build Maps URL for a break row (rest or restaurant lunch)
           const breakMapsUrl = (r) => {
             if (!r.lat || !r.lng) return null;
@@ -2738,7 +2744,7 @@ function renderResult() {
           </article>`;
           }
 
-          const addr = state.allAddresses.find(a => String(a.id) === String(row.addressId));
+          const addr = addrById.get(String(row.addressId));
           if (!row.stopPart || row.stopPart === "morning") rvStopIdx++;
           const thisStopIdx = (!row.stopPart || row.stopPart === "morning") ? rvStopIdx : -1;
           const isAfternoon = row.stopPart === "afternoon";
@@ -3218,13 +3224,14 @@ async function shareRoute(routeId) {
 async function handleShareImport(token) {
   try {
     showSpinner("Caricamento giro…");
-    const route = await fetch(`/api/share/${token}`).then(r => r.ok ? r.json() : Promise.reject(new Error("Link scaduto o non valido")));
+    // URL assoluto: fetch relativo lancia TypeError su Safari PWA (vedi CLAUDE.md)
+    const route = await fetch(`${window.location.origin}/api/share/${token}`).then(r => r.ok ? r.json() : Promise.reject(new Error("Link scaduto o non valido")));
     hideSpinner();
 
     // Mostra preview e chiede conferma
     const name = route.name || "Giro condiviso";
     const stops = (route.rows || route.plannedStops || []).filter(s => !s.type);
-    const stopNames = stops.slice(0, 5).map(s => `• ${s.customer || s.customer}`).join("\n");
+    const stopNames = stops.slice(0, 5).map(s => `• ${s.customer || s.location || "Tappa"}`).join("\n");
     const more = stops.length > 5 ? `\n… e altri ${stops.length - 5}` : "";
     const confirm = window.confirm(`Importare il giro "${name}"?\n\n${stopNames}${more}\n\nVerrà aggiunto ai tuoi giri salvati.`);
     if (!confirm) return;
@@ -3254,19 +3261,24 @@ function _readResultEditForm() {
 }
 
 async function replanFromResult() {
+  if (state.planning) return; // doppio click su Ricalcola → due POST /api/plan concorrenti
   const result = normalizeSavedRoute(state.result);
   const v = _readResultEditForm();
 
   // Reconstruct stops from current result rows (skip breaks)
-  const stops = (result.rows || [])
-    .filter(r => !r.type)
+  const customerRows = (result.rows || []).filter(r => !r.type);
+  const stops = customerRows
     .filter((r, i, arr) => !r.stopPart || r.stopPart === "morning" || arr.findIndex(x => x.addressId === r.addressId && !x.stopPart) === i)
     .map(r => ({
       uid: crypto.randomUUID(),
       addressId: r.addressId ?? null,
       customer: r.customer, location: r.location,
       fullAddress: r.address, notes: r.notes,
-      durationMinutes: Number(r.durationMinutes || 45),
+      // Tappa spezzata dal pranzo: passa il filtro solo la riga morning, quindi
+      // somma le durate di tutte le parti (stesso pattern del toggle pranzo)
+      durationMinutes: r.stopPart === "morning" && r.stopUid
+        ? (customerRows.filter(x => x.stopUid === r.stopUid).reduce((t, x) => t + Number(x.durationMinutes || 0), 0) || Number(r.durationMinutes || 45))
+        : Number(r.durationMinutes || 45),
       lat: r.lat, lng: r.lng,
       weeklyHours: r.weeklyHours ?? null,
       ignoreHours: r.ignoreHours === true,
@@ -3528,7 +3540,7 @@ function updateVoiceButton() {
 
 async function transcribeBlob(blob, mimeType) {
   showToast("Trascrizione in corso…");
-  const res = await fetch("/api/voice/transcribe", {
+  const res = await fetch(window.location.origin + "/api/voice/transcribe", {
     method: "POST",
     headers: { "Content-Type": mimeType },
     body: blob
@@ -5605,18 +5617,27 @@ function bindEvents() {
       const current = state.savedRoutes.find(r => String(r.id) === String(id))?.name || "";
       const name = window.prompt("Nuovo nome giro:", current);
       if (!name) return;
-      await api(`/api/routes/${id}`, { method: "PUT", body: JSON.stringify({ name }) });
-      await refreshSavedRoutes();
-      renderSaved();
+      try {
+        await api(`/api/routes/${id}`, { method: "PUT", body: JSON.stringify({ name }) });
+        await refreshSavedRoutes();
+        renderSaved();
+      } catch (err) {
+        showToast(err.message);
+      }
       return;
     }
 
     const deleteRoute = e.target.closest("[data-delete-route]");
     if (deleteRoute) {
       if (!confirm("Eliminare questo giro?")) return;
-      await api(`/api/routes/${deleteRoute.dataset.deleteRoute}`, { method: "DELETE" });
-      await refreshSavedRoutes();
-      renderSaved();
+      try {
+        await api(`/api/routes/${deleteRoute.dataset.deleteRoute}`, { method: "DELETE" });
+        await refreshSavedRoutes();
+        renderSaved();
+        showToast("Giro eliminato");
+      } catch (err) {
+        showToast(err.message);
+      }
       return;
     }
 

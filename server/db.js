@@ -471,15 +471,17 @@ async function migrateUserNickname() {
 }
 
 async function migrateAuth() {
+  // try/catch su tutte le ALTER: due cold start serverless concorrenti possono
+  // entrambi vedere la colonna assente e tentare l'ALTER — uno dei due fallirebbe
   // Add user_id to addresses
   const addrCols = await tableColumns("addresses");
   if (!addrCols.includes("user_id")) {
-    await runSql("ALTER TABLE addresses ADD COLUMN user_id INTEGER;");
+    try { await runSql("ALTER TABLE addresses ADD COLUMN user_id INTEGER;"); } catch (e) { if (!isAlreadyExistsError(e)) console.warn(e.message); }
   }
   // Add user_id to planned_routes
   const routeCols = await tableColumns("planned_routes");
   if (!routeCols.includes("user_id")) {
-    await runSql("ALTER TABLE planned_routes ADD COLUMN user_id INTEGER;");
+    try { await runSql("ALTER TABLE planned_routes ADD COLUMN user_id INTEGER;"); } catch (e) { if (!isAlreadyExistsError(e)) console.warn(e.message); }
   }
   if (!routeCols.includes("source")) {
     try { await runSql("ALTER TABLE planned_routes ADD COLUMN source TEXT DEFAULT NULL;"); } catch (e) { if (!isAlreadyExistsError(e)) console.warn(e.message); }
@@ -488,6 +490,22 @@ async function migrateAuth() {
     try { await runSql("ALTER TABLE planned_routes ADD COLUMN notes TEXT DEFAULT NULL;"); } catch (e) { if (!isAlreadyExistsError(e)) console.warn(e.message); }
   }
   await initSharedRoutesTable();
+  await createIndexes();
+}
+
+// Indici sulle colonne usate da tutte le query filtrate per utente/scadenza.
+// CREATE INDEX IF NOT EXISTS è supportato sia da SQLite che da PostgreSQL.
+async function createIndexes() {
+  const indexes = [
+    "CREATE INDEX IF NOT EXISTS idx_addresses_user ON addresses (user_id);",
+    "CREATE INDEX IF NOT EXISTS idx_routes_user ON planned_routes (user_id);",
+    "CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions (user_id);",
+    "CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions (expires_at);",
+    "CREATE INDEX IF NOT EXISTS idx_shared_routes_expires ON shared_routes (expires_at);"
+  ];
+  for (const sql of indexes) {
+    try { await runSql(sql); } catch (e) { console.warn("createIndexes:", e.message); }
+  }
 }
 
 async function migrateWeeklyHours() {
@@ -817,9 +835,12 @@ export async function hasAnyUser() {
 }
 
 export async function adminListUsers() {
+  // expires_at è salvato come ISO con T/Z (toISOString); CURRENT_TIMESTAMP di
+  // SQLite è "YYYY-MM-DD HH:MM:SS" → confronto stringa errato. Usa ISO da JS.
+  const nowIso = sqlValue(new Date().toISOString());
   return runSql(`
     SELECT u.id, u.username, u.created_at,
-      (SELECT COUNT(*) FROM sessions s WHERE s.user_id = u.id AND s.expires_at > CURRENT_TIMESTAMP) AS active_sessions,
+      (SELECT COUNT(*) FROM sessions s WHERE s.user_id = u.id AND s.expires_at > ${nowIso}) AS active_sessions,
       (SELECT COUNT(*) FROM planned_routes r WHERE r.user_id = u.id) AS route_count,
       (SELECT COUNT(*) FROM addresses a WHERE a.user_id = u.id) AS address_count
     FROM users u ORDER BY u.created_at DESC;
@@ -830,7 +851,7 @@ export async function adminListSessions() {
   return runSql(`
     SELECT s.token, s.user_id, s.created_at, s.expires_at, u.username
     FROM sessions s JOIN users u ON u.id = s.user_id
-    WHERE s.expires_at > CURRENT_TIMESTAMP
+    WHERE s.expires_at > ${sqlValue(new Date().toISOString())}
     ORDER BY s.created_at DESC;
   `, true);
 }
@@ -851,7 +872,7 @@ export async function adminGetStats() {
   const [users] = await runSql(`SELECT COUNT(*) AS c FROM users;`, true);
   const [routes] = await runSql(`SELECT COUNT(*) AS c FROM planned_routes;`, true);
   const [addresses] = await runSql(`SELECT COUNT(*) AS c FROM addresses;`, true);
-  const [sessions] = await runSql(`SELECT COUNT(*) AS c FROM sessions WHERE expires_at > CURRENT_TIMESTAMP;`, true);
+  const [sessions] = await runSql(`SELECT COUNT(*) AS c FROM sessions WHERE expires_at > ${sqlValue(new Date().toISOString())};`, true);
   return {
     users: Number(users?.c || 0),
     routes: Number(routes?.c || 0),

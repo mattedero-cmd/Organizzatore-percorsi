@@ -1,3 +1,22 @@
+## v4.073 — 2026-06-11
+- Analisi criticità app: applicati i fix di sicurezza e robustezza ad alto impatto
+- Sicurezza: admin login non crasha più con body senza `secret` (TypeError→500) e confronto del secret reso timing-safe
+- Sicurezza: rate limit di `/auth/register` e `/auth/login` ora usa `X-Forwarded-For` (dietro Vercel l'IP del proxy era condiviso → lockout/bypass)
+- Sicurezza: aggiunto rate limit a `/auth/change-password` (anti brute-force della password attuale con cookie rubato)
+- Sicurezza: throttling per IP sull'endpoint pubblico `/api/share/:token` (anti enumerazione)
+- Sicurezza: rimosse le coordinate utente dai log di `googleMapsService.js`
+- Fix: dedup di `/api/plan` non resta più "bloccato" su una promise rigettata per 10s
+- Fix: guardia su risposta OpenAI malformata in `/api/voice/understand`
+- Fix DB: conteggio sessioni attive (admin) errato in SQLite per confronto `CURRENT_TIMESTAMP` vs ISO — ora confronto coerente
+- Fix DB: ALTER di migrazione resi tutti idempotenti (race su cold start) + indici su `user_id`/`expires_at`
+- Fix: `replanFromResult` perdeva la durata delle tappe spezzate dal pranzo + guardia anti doppio click
+- Fix: `buildWhatsAppMessage` non genera più "12 undefined" con date in formato inatteso
+- Fix: km "NaN" sulle card giri salvati quando `totalKm` è assente
+- Fix: fetch resi assoluti (`window.location.origin`) anche su logout/profilo/password/voce/import (TypeError su Safari PWA)
+- Perf: lookup indirizzi O(1) in `renderResult` (era O(righe×indirizzi)); cap alla `placesCache` (memory leak)
+- Hardening: `escapeHtml` sul messaggio dello spinner
+- Pulizia: rimossi 14 file JS/CSS morti in `public/` (enhancer/guard/lite non più caricati); doc PROJECT.md/DECISIONI.md allineate
+
 ## v4.072 — 2026-06-11
 - Fix: giri salvati con nomi duplicati — il controllo unicità ora si applica anche quando il client invia un nome esplicito
 - Fix: nuovo giro sempre nominato "Percorso giornaliero" — rimosso il fallback fisso; il server genera sempre il nome smart (sede/cliente + data)

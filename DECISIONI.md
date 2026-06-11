@@ -128,11 +128,15 @@ Conseguenza pratica: migliorare l'import file e la creazione manuale veloce nell
 
 Data: 2026-06-02
 
-Decisione: nella versione pubblica attuale telefono ed email vengono aggiunti tramite `contact-actions-lite.js` e salvati anche nelle note come righe `Tel:` ed `Email:`.
+Decisione (storica): telefono ed email erano aggiunti tramite `contact-actions-lite.js` e salvati anche nelle note come righe `Tel:` ed `Email:`.
 
-Motivo: il database pubblico non espone ancora colonne native `phone` ed `email`. Salvare i dati nelle note permette di usare subito i pulsanti `Chiama` e `Email` senza rischiare una migrazione database urgente in produzione.
+Motivo: il database pubblico non esponeva ancora colonne native `phone` ed `email`.
 
-Conseguenza pratica: quando si fara la migrazione nativa, importare `Tel:` ed `Email:` dalle note nei nuovi campi e lasciare il modulo lite come fallback o rimuoverlo.
+> **Aggiornamento v4.073**: la migrazione nativa è stata completata — `db.js`
+> ha colonne `phone`/`email` dedicate e `app.js` le gestisce direttamente.
+> `contact-actions-lite.js` (e tutti gli altri enhancer/guard/lite) sono stati
+> **rimossi** perché non più caricati. La migrazione `migrateContactNotes()` in
+> `app.js` importa eventuali `Tel:`/`Email:` ancora presenti nelle note.
 
 ## D008 - Risultato percorso: navigazione esterna come fonte affidabile
 
