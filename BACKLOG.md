@@ -25,3 +25,5 @@ Elenco dei punti del piano di stabilizzazione non ancora completati, in ordine d
 - Toggle calcolo costi per giro (default off)
 - Palette "Aziendali" con due colori personalizzabili (primario + secondario)
 - Guida in-app aggiornata
+- Integrazione Meteo Trentino (bollettino ufficiale per tappe in Trentino, fallback Open-Meteo)
+- Tema aziendale bicolore + ranking pertinenza ricerca archivio

@@ -905,6 +905,14 @@ function renderMenuGuide() {
         </ul>
       `)}
 
+      ${section("🌤 Meteo", `
+        <ul>
+          <li>Ogni tappa mostra la previsione per l'orario di arrivo stimato.</li>
+          <li>Per le tappe in <b>Trentino</b> viene usato il bollettino ufficiale di <b>Meteo Trentino</b> (località più vicina); altrove Open-Meteo.</li>
+          <li>Per i giri passati viene mostrato il meteo storico effettivo.</li>
+        </ul>
+      `)}
+
       ${section("🎨 Colori aziendali", `
         <ul>
           <li>Nel menu <b>Impostazioni → Palette</b> scegli <b>Aziendali</b>.</li>
