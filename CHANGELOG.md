@@ -1,3 +1,13 @@
+## v4.068 — 2026-06-11
+- Fix: tab bar iniziava a scorrere con il contenuto su iOS — overflow-x:hidden su .shell interrompe position:fixed; cambiato in overflow-x:clip
+- Fix: "Prima tappa fissa" ora presente su tutte le tappe, non solo la prima
+- Fix: aggiunta tappa in giro esistente — pannello "Aggiungi tappa" rimane aperto dopo l'aggiunta e mostra il pulsante Ricalcola
+- Fix: checkbox "Pranzo alle" rimossa dai singoli stop (era un'impostazione globale del giro, non della tappa); rimane solo in "Modifica impostazioni giro"
+- Fix: selettore disponibilità/fissa nella finestra oraria abilitato appena l'utente inserisce un orario, senza richiedere il ricalcolo
+- Fix/Feature: punto di arrivo si aggiorna in tempo reale quando si modifica il punto di partenza e il flag "= partenza" è attivo
+- Feature: "Deviazione max" in Impostazioni → Soste automatiche ora si imposta in minuti (non km); applicata anche alla ricerca ristoranti per pausa pranzo
+- Feature: tempo di viaggio verso il ristorante incluso nella durata totale della pausa pranzo
+
 ## v4.067 — 2026-06-11
 - Fix: pausa pranzo con orario fisso (es. 12:30) veniva inserita all'orario di partenza della tappa precedente (es. 11:58) invece che all'orario impostato — il caso "gap tra tappe" non impostava lunchForFixed/fixedLunchAt
 - Fix: ricerca tappe (campo "Cerca e aggiungi tappa") e ricerca tappe nel risultato usavano plain .filter().includes() senza ranking — ora usano rankAddressMatches come la ricerca archivio

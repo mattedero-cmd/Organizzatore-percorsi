@@ -1,5 +1,12 @@
 import { routeBetween, findNearbyRestStop, findNearbyRestaurant, resolvePlace, isOpenAtTime } from "./googleMapsService.js";
 
+function haversineKm(a, b) {
+  const R = 6371, toRad = d => d * Math.PI / 180;
+  const dLat = toRad(b.lat - a.lat), dLng = toRad(b.lng - a.lng);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.asin(Math.sqrt(h));
+}
+
 const MAX_EXACT_STOPS = 7;
 
 export function parseTime(value) {
@@ -602,7 +609,9 @@ async function insertBreaks(rows, options) {
   const EARLIEST_BREAK = options?.earliestBreakTime ?? (8 * 60);
   const NO_BREAK_BEFORE_LUNCH = Number(options?.noBreakBeforeLunchMin ?? 60);
   const NO_BREAK_AFTER_LUNCH = Number(options?.noBreakAfterLunchMin ?? 120);
-  const maxDetourKm = Number(options?.maxDetourKm ?? 1.5);
+  // Converti deviazione max da minuti a km (velocità media 50 km/h)
+  const maxDetourMin = Number(options?.maxDetourMin ?? options?.maxDetourKm ?? 10);
+  const maxDetourKm = maxDetourMin / 60 * 50;
 
   // ── insertions list ──────────────────────────────────────────────────────────
   const insertions = [];
@@ -611,17 +620,22 @@ async function insertBreaks(rows, options) {
   const makeLunchEntry = async (beforeIndex, refRow, nextRow, lunchTimeMin) => {
     const fromRow = refRow || (beforeIndex > 0 ? rows[beforeIndex - 1] : null);
     const toRow = nextRow || (beforeIndex < rows.length ? rows[beforeIndex] : null);
-    // Try saved restaurants first, then Places search
-    const saved = findNearestRestStop(restaurantStops, fromRow?.lat, fromRow?.lng, toRow?.lat, toRow?.lng, 3.0, lunchTimeMin, scheduledDate);
+    // Try saved restaurants first, then Places search (rispetta deviazione max)
+    const saved = findNearestRestStop(restaurantStops, fromRow?.lat, fromRow?.lng, toRow?.lat, toRow?.lng, maxDetourKm, lunchTimeMin, scheduledDate);
     const spot = saved || (fromRow?.lat
-      ? await findNearbyRestaurant(fromRow.lat, fromRow.lng, fromRow.lat, fromRow.lng, toRow?.lat, toRow?.lng, 8000, lunchTimeMin, scheduledDate).catch(() => null)
+      ? await findNearbyRestaurant(fromRow.lat, fromRow.lng, fromRow.lat, fromRow.lng, toRow?.lat, toRow?.lng, Math.round(maxDetourKm * 1000 * 1.5), lunchTimeMin, scheduledDate, maxDetourKm).catch(() => null)
       : null);
-    const label = spot?.rating ? `${spot.customer} · ⭐ ${spot.rating} (${spot.reviewCount})` : spot?.customer;
-    return spot
-      ? { beforeIndex, type: "lunch", duration: lunchBreakMinutes,
-          customer: label, location: spot.location || "", address: spot.fullAddress || "",
-          lat: spot.lat ?? null, lng: spot.lng ?? null, placeId: spot.placeId ?? null }
-      : { beforeIndex, type: "lunch", duration: lunchBreakMinutes, customer: "Pausa pranzo" };
+    if (!spot) return { beforeIndex, type: "lunch", duration: lunchBreakMinutes, customer: "Pausa pranzo" };
+    // Stima tempo di viaggio verso il ristorante (haversine / 50 km/h)
+    const travelKm = (fromRow?.lat && fromRow?.lng && spot.lat && spot.lng)
+      ? haversineKm({ lat: fromRow.lat, lng: fromRow.lng }, { lat: spot.lat, lng: spot.lng })
+      : 0;
+    const travelMin = Math.min(Math.round(travelKm / 50 * 60), maxDetourMin);
+    const totalDuration = lunchBreakMinutes + travelMin;
+    const label = spot.rating ? `${spot.customer} · ⭐ ${spot.rating} (${spot.reviewCount})` : spot.customer;
+    return { beforeIndex, type: "lunch", duration: totalDuration, travelMinutes: travelMin,
+      customer: label, location: spot.location || "", address: spot.fullAddress || "",
+      lat: spot.lat ?? null, lng: spot.lng ?? null, placeId: spot.placeId ?? null };
   };
 
   if (lunchBreakEnabled) {
@@ -1025,7 +1039,7 @@ export async function planRoute(payload, settings, restStops = []) {
     restMaxDeviationMin: settings?.restMaxDeviationMin ?? 40,
     restDurationMin: settings?.restDurationMin ?? 15,
     earliestBreakTime: settings?.earliestBreakTime != null ? parseTime(settings.earliestBreakTime) : (8 * 60),
-    maxDetourKm: settings?.maxDetourKm ?? 1.5,
+    maxDetourMin: settings?.maxDetourMin ?? 10,
     lunchOpenTime: settings?.lunchOpenTime ?? "11:30",
     lunchCloseTime: settings?.lunchCloseTime ?? "14:00",
     noBreakEarlyMin: settings?.noBreakEarlyMin ?? 120,

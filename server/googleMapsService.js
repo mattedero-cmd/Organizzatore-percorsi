@@ -267,7 +267,7 @@ export async function findNearbyRestStop(lat, lng, segFromLat, segFromLng, segTo
   }
 }
 
-export async function findNearbyRestaurant(lat, lng, segFromLat, segFromLng, segToLat, segToLng, radiusM = 8000, lunchTimeMin = null, scheduledDate = null) {
+export async function findNearbyRestaurant(lat, lng, segFromLat, segFromLng, segToLat, segToLng, radiusM = 8000, lunchTimeMin = null, scheduledDate = null, maxDetourKm = 2.5) {
   if (!lat || !lng) return null;
   const key = API_KEY();
   if (!key) return null;
@@ -276,7 +276,7 @@ export async function findNearbyRestaurant(lat, lng, segFromLat, segFromLng, seg
   if (placesCache.has(cacheKey)) return placesCache.get(cacheKey);
 
   const EXCLUDE_KEYWORDS = /hotel|alberg|catering|banquet|spa|resort/i;
-  const MAX_DETOUR_KM = 2.5;
+  const MAX_DETOUR_KM = maxDetourKm;
 
   const hasSegment = segFromLat != null && segToLat != null;
   const checkHours = lunchTimeMin != null && scheduledDate != null;

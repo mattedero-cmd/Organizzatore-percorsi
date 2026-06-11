@@ -81,7 +81,7 @@ function rowToSettings(row) {
     restDurationMin: Number(row.rest_duration_min ?? 15),
     driveMarkupMinPerHour: Number(row.drive_markup_min_per_hour ?? 10),
     earliestBreakTime: row.earliest_break_time ?? "08:00",
-    maxDetourKm: Number(row.max_detour_km ?? 1.5),
+    maxDetourMin: Number(row.max_detour_min ?? 10),
     maxReturnTime: row.max_return_time ?? "",
     iconStyle: row.icon_style ?? "color",
     lunchOpenTime: row.lunch_open_time ?? "11:30",
@@ -423,6 +423,7 @@ export async function migrateSettingsColumns() {
   const newSettingsCols = [
     "earliest_break_time TEXT DEFAULT '08:00'",
     "max_detour_km REAL DEFAULT 1.5",
+    "max_detour_min REAL DEFAULT 10",
     "max_return_time TEXT DEFAULT ''",
     "theme_mode TEXT DEFAULT 'auto'",
     "theme_palette TEXT DEFAULT 'default'"
@@ -587,7 +588,7 @@ export async function updateSettings(userId, settings) {
     rest_duration_min: Number(settings.restDurationMin ?? 15),
     drive_markup_min_per_hour: Number(settings.driveMarkupMinPerHour ?? 10),
     earliest_break_time: settings.earliestBreakTime || "08:00",
-    max_detour_km: Number(settings.maxDetourKm ?? 1.5),
+    max_detour_min: Number(settings.maxDetourMin ?? 10),
     max_return_time: settings.maxReturnTime || "",
     icon_style: settings.iconStyle || "color",
     lunch_open_time: settings.lunchOpenTime || "11:30",

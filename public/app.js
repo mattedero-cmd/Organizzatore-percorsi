@@ -604,7 +604,7 @@ function renderMenu() {
         restMaxDeviationMin: Number(v.restMaxDeviationMin || 40),
         restDurationMin: Number(v.restDurationMin || 15),
         earliestBreakTime: v.earliestBreakTime || "08:00",
-        maxDetourKm: Math.round((Number(v.maxDetourKm) || 1.5) * 2) / 2,
+        maxDetourMin: Math.round(Number(v.maxDetourMin) || 10),
         maxReturnTime: v.maxReturnTime || "",
         driveMarkupMinPerHour: Number(v.driveMarkupMinPerHour || 10),
         lunchOpenTime: v.lunchOpenTime || "11:30",
@@ -950,7 +950,7 @@ function renderMenuSettings() {
           )}
           ${pair(
             vcol("Durata sosta", stp("restDurationMin", s.restDurationMin || 15, 5, 60, 5), "min"),
-            vcol("Deviazione max", stp("maxDetourKm", s.maxDetourKm !== undefined ? Math.round(s.maxDetourKm * 2) / 2 : 1.5, 0.5, 10, 0.5), "km")
+            vcol("Deviazione max", stp("maxDetourMin", s.maxDetourMin !== undefined ? s.maxDetourMin : 10, 1, 30, 1), "min")
           )}
           ${irow("Prima sosta non prima delle", timeInput("earliestBreakTime", s.earliestBreakTime || "08:00"))}
           ${irow("Pausa vietata nelle prime", stp("noBreakEarlyMin", s.noBreakEarlyMin ?? 120, 0, 240, 10), "min di giornata")}
@@ -1222,7 +1222,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.067 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.068 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -1698,11 +1698,10 @@ function renderStops() {
           <input type="checkbox" data-stop="${stop.uid}:ignoreHours" ${stop.ignoreHours ? "checked" : ""} />
           <span>Ignora orari di apertura</span>
         </label>
-        ${isFirst ? `
         <label class="stop-opt-check" title="Mantieni questa tappa per prima anche dopo l'ottimizzazione">
           <input type="checkbox" data-stop="${stop.uid}:fixedFirst" ${isPinned ? "checked" : ""} />
           <span>Prima tappa fissa</span>
-        </label>` : ""}
+        </label>
       </div>
     </article>`;
   }).join("")}</div>`;
@@ -2528,11 +2527,6 @@ function stopDetailExtra(result, row, addr, stopIdx) {
           <label class="stop-opt-check"><input type="checkbox" data-rv-stop="${stopIdx}:fixedFirst" ${row.fixedFirst ? "checked" : ""} /><span>Prima tappa</span></label>
           <label class="stop-opt-check"><input type="checkbox" data-rv-stop="${stopIdx}:ignoreHours" ${row.ignoreHours ? "checked" : ""} /><span>Ignora orari</span></label>
         </div>
-        ${!(addr?.closeMorning && addr?.openAfternoon) ? `
-        <div class="rv-stop-edit-row" style="margin-top:6px;gap:6px;">
-          <label class="stop-opt-check" style="gap:4px;"><input type="checkbox" data-rv-lunch-toggle ${result.lunchFixedTime ? "checked" : ""} /><span>${I.fork(12)} Pranzo alle</span></label>
-          <input type="time" step="300" value="${escapeHtml(result.lunchFixedTime || "12:30")}" data-rv-lunch-time style="width:88px;${!result.lunchFixedTime ? "display:none;" : ""}" ${!result.lunchFixedTime ? "disabled" : ""} />
-        </div>` : ""}
         <button type="button" class="btn${state.dirtyStops.has(String(stopIdx)) ? " primary" : ""} rv-stop-replan-btn">${I.navigate(14)} Ricalcola</button>
       </div>`);
   }
@@ -4890,6 +4884,14 @@ function bindEvents() {
       const sug = document.querySelector("#stop-suggestions");
       if (sug) sug.innerHTML = renderStopSuggestions();
     }
+    // rv-settings-form startAddress: se "= partenza" è attivo, aggiorna end in tempo reale
+    if (e.target.name === "startAddress" && e.target.closest("#rv-settings-form")) {
+      const endSame = document.getElementById("rv-end-same");
+      if (endSame?.checked) {
+        const endInp = document.querySelector("#rv-settings-form [name='endAddress']");
+        if (endInp) endInp.value = e.target.value;
+      }
+    }
     // rv result-view stop autocomplete
     if (e.target.id === "rv-stop-search") {
       const q = e.target.value.trim().toLowerCase();
@@ -5012,11 +5014,22 @@ function bindEvents() {
       const [idx, key] = rvs.dataset.rvStop.split(":");
       if (key === "timeFrom" || key === "timeTo") {
         const row = getRvStopRow(idx);
-        if (row && row.timeWindowMode === "fixed") {
+        if (row) {
           const editBlock = rvs.closest(".rv-stop-edit");
-          const durInp = editBlock?.querySelector("[data-rv-stop$=':durationMinutes']");
-          if (durInp && row.timeFrom && row.timeTo) {
-            durInp.value = minsToHHMM(Math.max(0, hhmmToMins(row.timeTo) - hhmmToMins(row.timeFrom)));
+          // Enable mode selector as soon as the user has entered any time
+          if (row.timeFrom || row.timeTo) {
+            const modeContainer = editBlock?.querySelector(".stop-window-mode");
+            if (modeContainer) {
+              modeContainer.classList.remove("disabled");
+              modeContainer.querySelectorAll("input[type=radio]").forEach(r => r.disabled = false);
+            }
+          }
+          // Update duration when mode is fixed and both bounds are known
+          if (row.timeWindowMode === "fixed") {
+            const durInp = editBlock?.querySelector("[data-rv-stop$=':durationMinutes']");
+            if (durInp && row.timeFrom && row.timeTo) {
+              durInp.value = minsToHHMM(Math.max(0, hhmmToMins(row.timeTo) - hhmmToMins(row.timeFrom)));
+            }
           }
         }
       }
@@ -5271,6 +5284,7 @@ function bindEvents() {
       if (!addr) { showToast("Seleziona prima un contatto dalla lista"); return; }
       if (!state.resultPendingStops) state.resultPendingStops = [];
       state.resultPendingStops.push(addressToStop(addr));
+      state.expandedPanels.add("rv-add-stop-panel");
       document.getElementById("rv-stop-search").value = "";
       document.getElementById("rv-selected-address-id").value = "";
       document.getElementById("rv-stop-suggestions").innerHTML = "";
@@ -5294,6 +5308,7 @@ function bindEvents() {
         durationMinutes: hhmmToMins(document.getElementById("rv-custom-duration")?.value) || 45,
         weeklyHours: null, lat, lng, recognized: !!lat, temporary: true
       });
+      state.expandedPanels.add("rv-add-stop-panel");
       showToast("Tappa aggiunta — premi Ricalcola");
       renderResult();
       return;
@@ -5315,6 +5330,7 @@ function bindEvents() {
         state.allAddresses.unshift(saved);
         if (!state.resultPendingStops) state.resultPendingStops = [];
         state.resultPendingStops.push(addressToStop(saved));
+        state.expandedPanels.add("rv-add-stop-panel");
         showToast(`${customer} salvato — premi Ricalcola`);
         renderResult();
       } catch (err) { showToast(err.message); }
