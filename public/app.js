@@ -1665,7 +1665,7 @@ function renderArchive() {
               ${a.phone ? `<div class="stop-meta">${phoneIcon(a.phoneType)} ${escapeHtml(a.phone)}${a.phoneName ? ` <span class="phone-name-badge">${escapeHtml(a.phoneName)}</span>` : ""}${a.phonePreferred === "phone" && a.phone2 ? " ★" : ""}</div>` : ""}
               ${a.phone2 ? `<div class="stop-meta">${phoneIcon(a.phone2Type)} ${escapeHtml(a.phone2)}${a.phone2Name ? ` <span class="phone-name-badge">${escapeHtml(a.phone2Name)}</span>` : ""}${a.phonePreferred === "phone2" ? " ★" : ""}</div>` : ""}
               ${a.email ? `<div class="stop-meta">${I.email(13)} ${escapeHtml(a.email)}</div>` : ""}
-              <div class="stop-meta">${weeklyHoursSummary(a)}</div>
+              <div class="stop-meta stop-meta-clip" title="${escapeHtml(weeklyHoursSummary(a))}">${weeklyHoursSummary(a)}</div>
               <div class="actions">
                 ${a.phone ? `<a class="btn" href="tel:${escapeHtml(a.phone)}" title="${escapeHtml(a.phoneName || a.phone)}">${phoneIcon(a.phoneType)}</a>` : ""}
                 ${a.phone2 ? `<a class="btn" href="tel:${escapeHtml(a.phone2)}" title="${escapeHtml(a.phone2Name || a.phone2)}">${phoneIcon(a.phone2Type)}</a>` : ""}
@@ -2336,6 +2336,7 @@ function addressToStop(address, durationOverride = null) {
 // ── plan route ────────────────────────────────────────────────────────────────
 
 async function planCurrentRoute() {
+  if (state.planning) return;
   updateRouteFromForm();
   if (!state.route.stops.length) { showToast("Aggiungi almeno una tappa"); return; }
   state.planning = true;
@@ -3739,7 +3740,11 @@ function bindEvents() {
         );
         renderArchive();
       }
-      refreshAllData().then(() => renderArchive());
+      // Server confirm debounced: avoid one API call + render per keystroke
+      clearTimeout(state._archiveSearchTimer);
+      state._archiveSearchTimer = setTimeout(() => {
+        refreshAllData().then(() => renderArchive());
+      }, 350);
     }
     // stop autocomplete
     if (e.target.id === "stop-search") {
@@ -4017,7 +4022,7 @@ function bindEvents() {
       return;
     }
 
-    if (e.target.closest("#plan-route")) { await planCurrentRoute(); return; }
+    if (e.target.closest("#plan-route")) { if (state.planning) return; await planCurrentRoute(); return; }
     if (e.target.closest("#listen-command")) { toggleVoiceRecording(); return; }
     if (e.target.closest("#apply-command")) {
       try { await applyVoiceCommand(); } catch (err) { showToast(err.message); }
@@ -4060,9 +4065,14 @@ function bindEvents() {
     const delAddr = e.target.closest("[data-delete-address]");
     if (delAddr) {
       if (!confirm("Eliminare questo contatto?")) return;
-      await api(`/api/addresses/${delAddr.dataset.deleteAddress}`, { method: "DELETE" });
-      await refreshAllData();
-      render();
+      try {
+        await api(`/api/addresses/${delAddr.dataset.deleteAddress}`, { method: "DELETE" });
+        await refreshAllData();
+        render();
+        showToast("Contatto eliminato");
+      } catch (err) {
+        showToast(`Errore eliminazione: ${err.message}`);
+      }
       return;
     }
 

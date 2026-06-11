@@ -246,8 +246,8 @@ function serveStatic(request, response) {
     return;
   }
 
-  if (safePath === "/index.html" || url.pathname === "/") {
-    serveIndex(request, response, filePath);
+  if (safePath === "/index.html" || url.pathname === "/" || url.pathname.startsWith("/share/")) {
+    serveIndex(request, response, path.join(publicDir, "index.html"));
     return;
   }
 
@@ -272,6 +272,9 @@ function serveStatic(request, response) {
     response.end(content);
   });
 }
+
+// Dedup window for /api/plan: key → { at, promise }
+const recentPlanRequests = new Map();
 
 async function handleApi(request, response) {
   const url = new URL(request.url, `http://${request.headers.host}`);
@@ -542,6 +545,16 @@ async function handleApi(request, response) {
 
     if (method === "POST" && url.pathname === "/api/plan") {
       const body = await parseBody(request);
+      // Dedup: identical plan request from same user within 10s (double-submit / network retry)
+      const dedupKey = `${userId}:${JSON.stringify(body)}`;
+      const recent = recentPlanRequests.get(dedupKey);
+      if (recent && Date.now() - recent.at < 10000) {
+        if (recent.promise) {
+          const cached = await recent.promise;
+          return sendJson(response, 200, cached);
+        }
+      }
+      const planPromise = (async () => {
       const settings = await getSettings(userId);
       const allAddresses = await listAddresses("", userId);
       let route = await planRoute(body, settings, allAddresses);
@@ -556,7 +569,20 @@ async function handleApi(request, response) {
         endAddress: route.end?.address || route.end?.fullAddress || ""
       }, userId);
       route.id = saved.id;
-      return sendJson(response, 200, route);
+      return route;
+      })();
+      recentPlanRequests.set(dedupKey, { at: Date.now(), promise: planPromise });
+      // Evict stale entries to keep the map small
+      for (const [k, v] of recentPlanRequests) {
+        if (Date.now() - v.at > 30000) recentPlanRequests.delete(k);
+      }
+      try {
+        const planned = await planPromise;
+        return sendJson(response, 200, planned);
+      } catch (err) {
+        recentPlanRequests.delete(dedupKey);
+        throw err;
+      }
     }
 
     if (method === "POST" && url.pathname === "/api/route-shape") {
