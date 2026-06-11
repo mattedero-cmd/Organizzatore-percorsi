@@ -1,3 +1,6 @@
+## v4.062 — 2026-06-11
+- Fix: ricerca archivio — ranking per pertinenza: con 1-3 lettere i contatti il cui nome inizia con la query emergono in cima invece di restare sepolti tra i match casuali in note/indirizzi (ordine: prefisso nome, prefisso parola, nome, città, indirizzo, note)
+
 ## v4.061 — 2026-06-09
 - Nuovo: palette "Aziendali" — color picker nel menu impostazioni per scegliere il colore primario; tutti i bottoni, accenti, tab e decorazioni cambiano in tempo reale; salvato come brandColor nelle impostazioni
 

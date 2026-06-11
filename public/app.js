@@ -1153,7 +1153,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.061 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.062 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -1224,13 +1224,38 @@ function renderMenuInfo() {
 
 // ── data loading ──────────────────────────────────────────────────────────────
 
+// Ranking per pertinenza: anche con 1-2 lettere i risultati "giusti" emergono
+// in cima invece di restare sepolti tra i match casuali in note e indirizzi
+function rankAddressMatches(list, query) {
+  const ql = (query || "").toLowerCase();
+  if (!ql) return list;
+  const score = (a) => {
+    const cust = (a.customer || "").toLowerCase();
+    const act = (a.activity || "").toLowerCase();
+    const name = act + " " + cust;
+    if (cust.startsWith(ql) || act.startsWith(ql)) return 0;
+    if (name.split(/\s+/).some(w => w.startsWith(ql))) return 1;
+    if (name.includes(ql)) return 2;
+    if ((a.location || "").toLowerCase().includes(ql)) return 3;
+    if ((a.fullAddress || "").toLowerCase().includes(ql)) return 4;
+    if ((a.notes || "").toLowerCase().includes(ql)) return 5;
+    return -1;
+  };
+  return list
+    .map(a => ({ a, s: score(a) }))
+    .filter(x => x.s >= 0)
+    .sort((x, y) => x.s - y.s)
+    .map(x => x.a);
+}
+
 async function refreshAddresses() {
   if (!state.addressSearch && !state.archiveShowAll) {
     state.addresses = [];
     return;
   }
   const q = encodeURIComponent(state.addressSearch);
-  state.addresses = await api(`/api/addresses?search=${q}`).catch(() => []);
+  const found = await api(`/api/addresses?search=${q}`).catch(() => []);
+  state.addresses = rankAddressMatches(found, state.addressSearch);
 }
 
 async function refreshAddressesForRoute() {
@@ -4774,13 +4799,8 @@ function bindEvents() {
       const cursor = e.target.selectionStart;
       state.addressSearch = q;
       state.archiveShowAll = Boolean(q);
-      // Client-side filter from already-loaded list
-      const ql = q.toLowerCase();
-      state.addresses = q
-        ? state.allAddresses.filter(a =>
-            [a.customer, a.activity, a.location, a.fullAddress, a.notes].some(v => (v || "").toLowerCase().includes(ql))
-          )
-        : [];
+      // Client-side filter from already-loaded list, con ranking di pertinenza
+      state.addresses = q ? rankAddressMatches(state.allAddresses, q) : [];
       renderArchive();
       // Restore focus + cursor after DOM replacement
       const inp = document.getElementById("archive-search");
