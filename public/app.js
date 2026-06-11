@@ -322,6 +322,42 @@ function applyBrandColor(hex) {
   el.style.setProperty("--blob3", _rgba(rgb, 0.18));
 }
 
+// Secondo colore aziendale: ruoli visibili dedicati (sottotitolo header, pill
+// di stato, bottoni ghost, etichette metriche) attivati da html[data-brand2]
+function applyBrandColor2(hex2, hex1) {
+  const el = document.documentElement;
+  if (!hex2 || !/^#[0-9a-fA-F]{6}$/.test(hex2) || hex2.toLowerCase() === (hex1 || "").toLowerCase()) {
+    clearBrandColor2();
+    return;
+  }
+  const rgb2 = _hexToRgb(hex2);
+  const dark2 = _mix(rgb2, {r:0,g:0,b:0}, 0.70);
+  el.style.setProperty("--brand2", _toHex(dark2));
+  el.style.setProperty("--brand2-bg", _rgba(rgb2, 0.12));
+  el.style.setProperty("--brand2-border", _rgba(rgb2, 0.34));
+  el.style.setProperty("--brand2-glow", _rgba(rgb2, 0.18));
+  // dettagli decorativi condivisi: seconda metà di linee e blob
+  el.style.setProperty("--top-line-b", _rgba(rgb2, 0.7));
+  el.style.setProperty("--card-top-b", _rgba(rgb2, 0.4));
+  el.style.setProperty("--blob2", _rgba(rgb2, 0.22));
+  el.style.setProperty("--blob4", _rgba(rgb2, 0.16));
+  el.style.setProperty("--accent2", _rgba(rgb2, 0.12));
+  if (hex1 && /^#[0-9a-fA-F]{6}$/.test(hex1)) {
+    const rgb1 = _hexToRgb(hex1);
+    const light1 = _mix(rgb1, {r:255,g:255,b:255}, 0.72);
+    el.style.setProperty("--btn-primary-bg", `linear-gradient(135deg,${_toHex(light1)} 0%,${hex1} 45%,${_toHex(dark2)} 100%)`);
+  }
+  el.dataset.brand2 = "1";
+}
+
+function clearBrandColor2() {
+  const el = document.documentElement;
+  ["--brand2","--brand2-bg","--brand2-border","--brand2-glow",
+   "--top-line-b","--card-top-b","--blob2","--blob4","--accent2"
+  ].forEach(v => el.style.removeProperty(v));
+  delete el.dataset.brand2;
+}
+
 function clearBrandColor() {
   ["--primary","--primary-dark","--accent","--accent-bg","--accent-border","--accent-glow",
    "--ok","--muted","--line","--line-strong","--grid-line","--tab-active-text",
@@ -352,8 +388,10 @@ function applyTheme() {
   // Applica/rimuovi colori aziendali personalizzati
   if (palette === "custom" && state.settings?.brandColor) {
     applyBrandColor(state.settings.brandColor);
+    applyBrandColor2(state.settings.brandColor2, state.settings.brandColor);
   } else {
     clearBrandColor();
+    clearBrandColor2();
   }
   try {
     localStorage.setItem("pl_theme", JSON.stringify({ mode, palette }));
@@ -554,7 +592,8 @@ function renderMenu() {
         noBreakBeforeHomeMin: Number(v.noBreakBeforeHomeMin ?? 60),
         noBreakBeforeLunchMin: Number(v.noBreakBeforeLunchMin ?? 60),
         noBreakAfterLunchMin: Number(v.noBreakAfterLunchMin ?? 120),
-        brandColor: v.brandColor || state.settings.brandColor || ""
+        brandColor: v.brandColor || state.settings.brandColor || "",
+        brandColor2: v.brandColor2 || state.settings.brandColor2 || ""
       };
       state.settings = await api("/api/settings", { method: "PUT", body: JSON.stringify(newSettings) });
       state.navigatorPref = state.settings.navigatorPref;
@@ -646,15 +685,18 @@ function renderMenu() {
         state.themeMode = e.target.value;
         applyTheme();
       }
-      // Live preview colore aziendale
-      if (e.target.name === "brandColor") {
-        const hex = e.target.value;
-        const preview = document.getElementById("brand-color-preview");
-        if (preview) preview.textContent = hex;
+      // Live preview colori aziendali
+      if (e.target.name === "brandColor" || e.target.name === "brandColor2") {
+        const c1 = document.getElementById("brandColorInput")?.value || "";
+        const c2 = document.getElementById("brandColor2Input")?.value || "";
+        const p1 = document.getElementById("brand-color-preview");
+        if (p1) p1.textContent = c1;
+        const p2 = document.getElementById("brand-color2-preview");
+        if (p2) p2.textContent = c2;
         const chip = document.getElementById("palette-chip-custom");
-        if (chip) chip.querySelector(".palette-swatch").style.background = `linear-gradient(135deg,#1a1a1a 50%,${hex} 50%)`;
+        if (chip) chip.querySelector(".palette-swatch").style.background = `linear-gradient(135deg,${c1} 50%,${c2 || "#1a1a1a"} 50%)`;
         if (state.themePalette === "custom") {
-          state.settings = { ...state.settings, brandColor: hex };
+          state.settings = { ...state.settings, brandColor: c1, brandColor2: c2 };
           applyTheme();
         }
       }
@@ -951,14 +993,20 @@ function renderMenuSettings() {
               <button type="button" class="palette-chip${(s.themePalette||"default")==="pietra"?" active":""}" data-palette="pietra"><span class="palette-swatch" style="background:linear-gradient(135deg,#0e0d0c 50%,#ede0d0 50%)"></span>Pietra</button>
               <button type="button" class="palette-chip${(s.themePalette||"default")==="foresta"?" active":""}" data-palette="foresta"><span class="palette-swatch" style="background:linear-gradient(135deg,#060d06 50%,#c8e8b0 50%)"></span>Foresta</button>
               <button type="button" class="palette-chip${(s.themePalette||"default")==="legno"?" active":""}" data-palette="legno"><span class="palette-swatch" style="background:linear-gradient(135deg,#0c0800 50%,#f0dcc0 50%)"></span>Legno</button>
-              <button type="button" class="palette-chip${(s.themePalette||"default")==="custom"?" active":""}" data-palette="custom" id="palette-chip-custom"><span class="palette-swatch" style="background:${s.brandColor ? `linear-gradient(135deg,#1a1a1a 50%,${s.brandColor} 50%)` : "linear-gradient(135deg,#1a1a1a 50%,#888 50%)"}"></span>Aziendali</button>
+              <button type="button" class="palette-chip${(s.themePalette||"default")==="custom"?" active":""}" data-palette="custom" id="palette-chip-custom"><span class="palette-swatch" style="background:${s.brandColor ? `linear-gradient(135deg,${s.brandColor} 50%,${s.brandColor2 || "#1a1a1a"} 50%)` : "linear-gradient(135deg,#1a1a1a 50%,#888 50%)"}"></span>Aziendali</button>
             </div>
           </div>
           <div class="sg-approw" id="brand-color-row" style="${(s.themePalette||"default")==="custom" ? "" : "display:none"}">
-            <span class="sg-label">Colore aziendale</span>
-            <div style="display:flex;align-items:center;gap:10px;">
-              <input type="color" name="brandColor" id="brandColorInput" value="${escapeHtml(s.brandColor||"#00a896")}" style="width:44px;height:32px;border:none;padding:0;border-radius:6px;cursor:pointer;background:transparent;" />
-              <span class="stop-meta" id="brand-color-preview" style="font-size:0.8rem;">${s.brandColor||"#00a896"}</span>
+            <span class="sg-label">Colori aziendali</span>
+            <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+              <label style="display:flex;align-items:center;gap:8px;font-size:0.82rem;">Primario
+                <input type="color" name="brandColor" id="brandColorInput" value="${escapeHtml(s.brandColor||"#00a896")}" style="width:44px;height:32px;border:none;padding:0;border-radius:6px;cursor:pointer;background:transparent;" />
+                <span class="stop-meta" id="brand-color-preview" style="font-size:0.8rem;">${s.brandColor||"#00a896"}</span>
+              </label>
+              <label style="display:flex;align-items:center;gap:8px;font-size:0.82rem;">Secondario
+                <input type="color" name="brandColor2" id="brandColor2Input" value="${escapeHtml(s.brandColor2||s.brandColor||"#a855f7")}" style="width:44px;height:32px;border:none;padding:0;border-radius:6px;cursor:pointer;background:transparent;" />
+                <span class="stop-meta" id="brand-color2-preview" style="font-size:0.8rem;">${s.brandColor2||"—"}</span>
+              </label>
             </div>
           </div>
           <input type="hidden" name="themePalette" id="themePaletteInput" value="${s.themePalette||"default"}" />
@@ -1153,7 +1201,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.062 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.063 &mdash; giugno 2026</p>
         </div>
       </div>
 

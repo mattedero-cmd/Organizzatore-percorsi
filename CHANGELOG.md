@@ -1,3 +1,7 @@
+## v4.063 — 2026-06-11
+- Nuovo: palette Aziendali con DUE colori — primario (tab, titoli, bottoni principali) e secondario (sottotitolo header, pill di stato, bottoni ghost, etichette metriche, linee decorative); anteprima live e swatch bicolore
+- Fix: brandColor non veniva persistito dal server (updateSettings lo scartava) — il colore aziendale si perdeva al ricaricamento; aggiunte colonne brand_color/brand_color2 con validazione hex
+
 ## v4.062 — 2026-06-11
 - Fix: ricerca archivio — ranking per pertinenza: con 1-3 lettere i contatti il cui nome inizia con la query emergono in cima invece di restare sepolti tra i match casuali in note/indirizzi (ordine: prefisso nome, prefisso parola, nome, città, indirizzo, note)
 

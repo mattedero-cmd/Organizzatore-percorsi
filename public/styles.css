@@ -3981,3 +3981,32 @@ details[open] .bsheet-guide-arrow { transform: rotate(180deg); }
 .stop-title { color: var(--text); font-size: 0.95rem; }
 .stop-meta { color: var(--muted); font-size: 0.85rem; line-height: 1.45; }
 label { color: var(--muted); font-size: 0.8rem; font-weight: 600; }
+
+/* ─── Palette aziendale bicolore: ruoli del secondo colore ───────────
+   Attivo solo con html[data-brand2] (palette "Aziendali" con 2 colori).
+   Il primario resta su tab, titoli e bottoni primari; il secondario
+   colora sottotitolo header, pill di stato, bottoni ghost, etichette. */
+html[data-brand2] .eyebrow { color: var(--brand2); }
+html[data-brand2] .status {
+  color: var(--brand2);
+  border-color: var(--brand2-border);
+  background: var(--brand2-bg);
+  box-shadow: 0 0 8px var(--brand2-glow);
+}
+html[data-brand2] .btn.ghost {
+  color: var(--brand2);
+  border-color: var(--brand2-border);
+  background: var(--brand2-bg);
+  box-shadow: 0 0 12px var(--brand2-glow), inset 0 1px 0 rgba(255,255,255,0.08);
+}
+html[data-brand2] .btn.ghost:hover:not(:disabled) {
+  color: var(--brand2);
+  border-color: var(--brand2-border);
+  background: var(--brand2-bg);
+  box-shadow: 0 0 22px var(--brand2-glow);
+}
+html[data-brand2] .metric-label { color: var(--brand2); }
+html[data-brand2] .sg-label { color: var(--brand2); }
+html[data-brand2] .menu-btn { border-color: var(--brand2-border); color: var(--brand2); }
+html[data-brand2] .menu-btn:hover { border-color: var(--brand2-border); box-shadow: 0 0 10px var(--brand2-glow); }
+html[data-brand2] .visit-history-details[open] .visit-history-toggle { color: var(--brand2); }
