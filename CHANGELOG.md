@@ -1,3 +1,9 @@
+## v4.072 — 2026-06-11
+- Fix: giri salvati con nomi duplicati — il controllo unicità ora si applica anche quando il client invia un nome esplicito
+- Fix: nuovo giro sempre nominato "Percorso giornaliero" — rimosso il fallback fisso; il server genera sempre il nome smart (sede/cliente + data)
+- Fix: aggiungere tappe a un giro esistente creava un duplicato — planCurrentRoute passa ora l'id del risultato corrente se disponibile
+- Fix: sezione "Novità" in Info app aggiornata a v4.070
+
 ## v4.071 — 2026-06-11
 - Fix: pulsante "Salva impostazioni" sembrava bloccato se l'API restituiva errore — aggiunto try/catch con toast
 - Fix: cambio tema nelle impostazioni veniva applicato anche senza salvare — ora l'anteprima è live ma si annulla chiudendo senza salvare

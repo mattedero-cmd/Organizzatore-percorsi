@@ -454,6 +454,7 @@ async function migrateUserSettingsCols() {
     ["no_break_after_lunch_min", "INTEGER DEFAULT 120"],
     ["brand_color", "TEXT DEFAULT ''"],
     ["brand_color2", "TEXT DEFAULT ''"],
+    ["max_detour_min", "REAL DEFAULT 10"],
   ];
   for (const [col, def] of toAdd) {
     if (!cols.includes(col)) {

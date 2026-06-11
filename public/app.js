@@ -1255,7 +1255,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.071 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.072 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -1265,6 +1265,18 @@ function renderMenuInfo() {
       <ul class="info-list">
         <li>${state.mapApiConfigured ? _svg('<polyline points="20 6 9 17 4 12"/>', 14) + " Google Maps attivo — percorsi reali e ottimizzazione avanzata" : _svg('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>', 14) + " Google Maps non configurato — stime distanze locali"}</li>
         <li>${state.whisperConfigured ? _svg('<polyline points="20 6 9 17 4 12"/>', 14) + " Comandi vocali attivi (Whisper)" : _svg('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>', 14) + " Comandi vocali non configurati"}</li>
+      </ul>
+
+      <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v4.070</p>
+      <ul class="info-list">
+        <li>Partenza/arrivo in modifica giro: stessa barra di ricerca e selettore Maps della creazione percorso</li>
+        <li>Pausa pranzo visibile sulla mappa con marker arancione e inclusa nel tracciato</li>
+        <li>Deviazione max soste in minuti (non km); tempo viaggio al ristorante incluso nella durata pranzo</li>
+        <li>Tab bar rimane fissa su iOS (fix overflow-x:clip); "Prima tappa fissa" su tutte le tappe</li>
+        <li>Selettore finestra oraria attivo appena si inserisce un orario, senza ricalcolo</li>
+        <li>Tema aziendale (palette custom): tutti i colori dell'app rispettano il colore scelto</li>
+        <li>Anteprima tema live nelle impostazioni — si annulla chiudendo senza salvare</li>
+        <li>Fix pausa pranzo con orario fisso inserita all'orario sbagliato</li>
       </ul>
 
       <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v4.060</p>
@@ -3465,7 +3477,8 @@ async function planCurrentRoute() {
     state.result = await api("/api/plan", {
       method: "POST",
       body: JSON.stringify({
-        name: r.name || "Percorso giornaliero",
+        name: r.name || "",
+        id: state.result?.id || undefined,
         scheduledDate: r.scheduledDate,
         start: { label: r.startLabel, address: r.startAddress },
         end: { sameAsStart: r.endSameAsStart, label: r.endLabel, address: r.endAddress },

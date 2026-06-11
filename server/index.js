@@ -628,9 +628,7 @@ async function handleApi(request, response) {
         }
       }
 
-      const saved = await saveRoute({
-        ...route,
-        name: body.name || await (async () => {
+      const autoName = await (async () => {
           const MONTHS_IT = ["gen","feb","mar","apr","mag","giu","lug","ago","set","ott","nov","dic"];
           const d = route.scheduledDate;
           const dateSuffix = d
@@ -640,20 +638,18 @@ async function handleApi(request, response) {
           // Customer stops only (no breaks, no split afternoon duplicates)
           const stops = (route.rows || []).filter(r => !r.type && r.stopPart !== "afternoon");
 
-          let base = "Percorso";
-          if (stops.length > 0) {
-            // All stops share the same location (city/office) → use location
-            const locations = [...new Set(stops.map(s => (s.location || "").trim()).filter(Boolean))];
-            // All stops share the same customer → use customer
-            const customers = [...new Set(stops.map(s => (s.customer || "").trim()).filter(Boolean))];
-
-            if (locations.length === 1) {
-              base = locations[0];
-            } else if (customers.length === 1) {
-              base = customers[0];
-            } else {
-              // Mixed: use first stop's customer
-              base = stops[0].customer || stops[0].location || "Percorso";
+          let base = body.name && body.name.trim() ? body.name.trim() : "Percorso";
+          if (!body.name || !body.name.trim()) {
+            if (stops.length > 0) {
+              const locations = [...new Set(stops.map(s => (s.location || "").trim()).filter(Boolean))];
+              const customers = [...new Set(stops.map(s => (s.customer || "").trim()).filter(Boolean))];
+              if (locations.length === 1) {
+                base = locations[0];
+              } else if (customers.length === 1) {
+                base = customers[0];
+              } else {
+                base = stops[0].customer || stops[0].location || "Percorso";
+              }
             }
           }
 
@@ -666,7 +662,10 @@ async function handleApi(request, response) {
             name = `${candidate} (${n++})`;
           }
           return name;
-        })(),
+        })();
+      const saved = await saveRoute({
+        ...route,
+        name: autoName,
         scheduledDate: route.scheduledDate,
         startLabel: body.start?.label || "",
         startAddress: body.start?.address || body.start?.fullAddress || "",
