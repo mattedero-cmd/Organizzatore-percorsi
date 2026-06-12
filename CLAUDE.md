@@ -175,6 +175,12 @@ Non usare `stopPropagation()` sui container dei pulsanti — rompe tutto. È pre
 | Pranzo non prioritario sulle soste | `cumulative` non si azzerava al punto pranzo — fix: reset a 0 e avanzamento `prevServiceEnd` quando `lunchIns.beforeIndex === i` |
 | Finestra fissa prima tappa non ritarda partenza | Planner non back-calcolava da `timeFrom` — fix: se prima tappa ha `timeWindowMode="fixed"`, impostare `targetArrival = parseTime(timeFrom)` |
 | Ricalcolo crea nuovo giro invece di aggiornare | `/api/plan` con `body.id` ora chiama `updateRoutePayload` se il giro esiste già |
+| XSS stored nel pannello admin via username | Niente `onclick` inline con dati interpolati — usare `data-*` + event delegation. `esc()` NON fa escaping per contesto JS-string (apici), solo HTML |
+| CSRF su route mutanti | `isSameOrigin()` rifiuta POST/PUT/DELETE/PATCH con Origin cross-site (oltre a `SameSite=Lax`) |
+| Rate limit aggirabile via XFF spoofing | `clientIp()` si fida degli header solo se `TRUST_PROXY` (default true); preferito `X-Real-IP`. Mettere `TRUST_PROXY=false` se l'app è esposta senza proxy fidato |
+| Username non validato (abilitava XSS admin) | `validUsername()` in setup/register: 3-30 char, `^[\p{L}\p{N}._@\- ]+$`, no apici/tag |
+
+> **Nota sicurezza chiavi/segreti**: la chiave Maps **server** (`GOOGLE_MAPS_SERVER_KEY`) non va mai esposta al client; `/api/config` serve solo la chiave **browser** (`GOOGLE_MAPS_API_KEY`, da restringere per referrer). `ADMIN_SECRET`/`OPENAI_API_KEY` solo lato server.
 
 ---
 

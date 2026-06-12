@@ -41,8 +41,7 @@ import {
   adminDeleteUserSessions,
   adminDeleteUser,
   adminGetStats,
-  getDbMode,
-  getDbPath
+  getDbMode
 } from "./db.js";
 import { hashPassword, verifyPassword, generateToken } from "./auth.js";
 import { loadEnv } from "./env.js";
@@ -87,13 +86,42 @@ const loginAttempts = new Map(); // ip → { count, resetAt }
 const LOGIN_MAX_ATTEMPTS = 10;
 const LOGIN_WINDOW_MS = 15 * 60 * 1000; // 15 min
 
-// IP reale dietro Vercel/proxy: senza X-Forwarded-For tutti gli utenti
-// condividerebbero l'IP del proxy (stesso fix già applicato all'admin login)
+// IP reale per il rate limiting.
+// Gli header X-Forwarded-For / X-Real-IP sono fidati SOLO dietro un proxy
+// fidato (Vercel li riscrive). Se l'app fosse esposta direttamente, un
+// attaccante potrebbe spoofarli e bypassare il rate limit → brute-force.
+// TRUST_PROXY=false disabilita la fiducia negli header (usa solo il socket).
+const TRUST_PROXY = process.env.TRUST_PROXY !== "false"; // default true (deploy Vercel)
 function clientIp(request) {
-  return request.headers["x-forwarded-for"]?.split(",")[0].trim()
-    || request.headers["x-real-ip"]
-    || request.socket.remoteAddress
-    || "unknown";
+  if (TRUST_PROXY) {
+    // x-real-ip è impostato dal proxy ed è meno manipolabile della prima
+    // entry di x-forwarded-for (che il client può pre-popolare)
+    if (request.headers["x-real-ip"]) return request.headers["x-real-ip"];
+    const xff = request.headers["x-forwarded-for"];
+    if (xff) return xff.split(",")[0].trim();
+  }
+  return request.socket.remoteAddress || "unknown";
+}
+
+// Difesa CSRF: le richieste mutanti devono provenire dalla stessa origin.
+// Con cookie SameSite=Lax il rischio è già basso; questo chiude la finestra
+// residua rifiutando POST/PUT/DELETE/PATCH con Origin cross-site.
+function isSameOrigin(request) {
+  const origin = request.headers.origin;
+  if (!origin) return true; // alcune richieste same-origin non inviano Origin
+  try {
+    return new URL(origin).host === request.headers.host;
+  } catch {
+    return false;
+  }
+}
+
+// Username: lettere/numeri unicode, spazio e . _ @ - (3-30 char).
+// Esclude apici, < > " ; ( ) ecc. → previene XSS quando l'username viene
+// mostrato nel pannello admin (difesa in profondità) e input malevoli.
+const USERNAME_RE = /^[\p{L}\p{N}._@\- ]{3,30}$/u;
+function validUsername(name) {
+  return typeof name === "string" && USERNAME_RE.test(name.trim());
 }
 
 function checkLoginRateLimit(key, max = LOGIN_MAX_ATTEMPTS) {
@@ -304,6 +332,11 @@ async function handleApi(request, response) {
   const method = request.method || "GET";
 
   try {
+    // CSRF: blocca le richieste mutanti da origin diverse
+    if ((method === "POST" || method === "PUT" || method === "DELETE" || method === "PATCH") && !isSameOrigin(request)) {
+      return sendJson(response, 403, { error: "Origine non consentita" });
+    }
+
     if (method === "GET" && url.pathname === "/api/health") {
       return sendJson(response, 200, {
         ok: true,
@@ -350,6 +383,7 @@ async function handleApi(request, response) {
         const body = await parseBody(request);
         const { username, password } = body;
         if (!username || !password || password.length < 6) return sendJson(response, 400, { error: "Username e password (min 6 caratteri) obbligatori" });
+        if (!validUsername(username)) return sendJson(response, 400, { error: "Username non valido: 3-30 caratteri, solo lettere, numeri, spazio e . _ @ -" });
         const hash = await hashPassword(password);
         const user = await createUser(username.trim(), hash);
         if (!user) return sendJson(response, 500, { error: "Errore creazione utente" });
@@ -369,6 +403,7 @@ async function handleApi(request, response) {
         const body = await parseBody(request);
         const { username, password } = body;
         if (!username || !password || password.length < 6) return sendJson(response, 400, { error: "Username e password (min 6 caratteri) obbligatori" });
+        if (!validUsername(username)) return sendJson(response, 400, { error: "Username non valido: 3-30 caratteri, solo lettere, numeri, spazio e . _ @ -" });
         const existing = await findUserByUsername(username.trim());
         if (existing) return sendJson(response, 409, { error: "Username già in uso" });
         const hash = await hashPassword(password);
@@ -464,10 +499,10 @@ async function handleApi(request, response) {
 
       if (method === "GET" && url.pathname === "/api/admin/stats") {
         const stats = await adminGetStats();
+        // dbPath omesso di proposito: rivelerebbe il filesystem del server
         return sendJson(response, 200, {
           ...stats,
-          dbMode: getDbMode(),
-          dbPath: getDbPath()
+          dbMode: getDbMode()
         });
       }
 

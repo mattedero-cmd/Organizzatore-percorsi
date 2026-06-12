@@ -110,8 +110,7 @@ async function loadStats() {
   kpiAddresses.textContent = stats.addresses;
   kpiSessions.textContent  = stats.activeSessions;
   const mode = stats.dbMode === "postgres" ? "PostgreSQL" : "SQLite";
-  const pathStr = stats.dbPath ? ` — ${stats.dbPath}` : "";
-  dbInfo.innerHTML = `<strong>DB:</strong> ${esc(mode)}${esc(pathStr)}`;
+  dbInfo.innerHTML = `<strong>DB:</strong> ${esc(mode)}`;
 }
 
 async function loadUsers() {
@@ -122,27 +121,40 @@ async function loadUsers() {
     return;
   }
 
+  // Niente onclick inline con dati interpolati: l'username finirebbe in un
+  // contesto JS-string e potrebbe rompere l'escaping (XSS stored). Usiamo
+  // attributi data-* (escaped per contesto HTML attribute) + event delegation.
   usersTbody.innerHTML = users.map(u => `
     <tr>
-      <td class="mono">${u.id}</td>
+      <td class="mono">${esc(u.id)}</td>
       <td><strong>${esc(u.username)}</strong></td>
-      <td class="mono">${fmtDate(u.createdAt)}</td>
+      <td class="mono">${esc(fmtDate(u.createdAt))}</td>
       <td>
         ${u.activeSessions > 0
-          ? `<span class="badge badge-green">${u.activeSessions}</span>`
+          ? `<span class="badge badge-green">${esc(u.activeSessions)}</span>`
           : `<span class="badge badge-gray">0</span>`}
       </td>
-      <td>${u.routeCount}</td>
-      <td>${u.addressCount}</td>
+      <td>${esc(u.routeCount)}</td>
+      <td>${esc(u.addressCount)}</td>
       <td>
         <div class="action-cell">
-          <button class="btn btn-warning" onclick="kickUser(${u.id}, '${esc(u.username)}')">Kick sessioni</button>
-          <button class="btn btn-danger" onclick="deleteUser(${u.id}, '${esc(u.username)}')">Elimina utente</button>
+          <button class="btn btn-warning" data-action="kick" data-id="${esc(u.id)}" data-username="${esc(u.username)}">Kick sessioni</button>
+          <button class="btn btn-danger" data-action="delete" data-id="${esc(u.id)}" data-username="${esc(u.username)}">Elimina utente</button>
         </div>
       </td>
     </tr>
   `).join("");
 }
+
+// Event delegation: i dati arrivano da dataset (mai eseguiti come codice)
+usersTbody.addEventListener("click", (e) => {
+  const btn = e.target.closest("button[data-action]");
+  if (!btn) return;
+  const id = Number(btn.dataset.id);
+  const username = btn.dataset.username || "";
+  if (btn.dataset.action === "kick") kickUser(id, username);
+  else if (btn.dataset.action === "delete") deleteUser(id, username);
+});
 
 async function loadSessions() {
   const sessions = await adminApi("/api/admin/sessions");
@@ -248,7 +260,7 @@ async function refreshAll() {
 }
 
 // ── Actions ───────────────────────────────────────────────────────────────────
-window.kickUser = async function(id, username) {
+async function kickUser(id, username) {
   if (!confirm(`Terminare tutte le sessioni di "${username}"?`)) return;
   try {
     await adminApi(`/api/admin/users/${id}/kick`, { method: "POST" });
@@ -256,9 +268,9 @@ window.kickUser = async function(id, username) {
   } catch (err) {
     alert("Errore: " + err.message);
   }
-};
+}
 
-window.deleteUser = async function(id, username) {
+async function deleteUser(id, username) {
   if (!confirm(`Eliminare definitivamente l'utente "${username}" e tutti i suoi dati (percorsi, indirizzi, impostazioni, sessioni)?\n\nQuesta operazione è irreversibile.`)) return;
   try {
     await adminApi(`/api/admin/users/${id}`, { method: "DELETE" });

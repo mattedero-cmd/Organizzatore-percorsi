@@ -1,3 +1,10 @@
+## v4.076 — 2026-06-12
+- Sicurezza (XSS): pannello admin non usa più `onclick` inline con username interpolato — event delegation con `data-*`. Un utente registrato con username malevolo non può più eseguire JS nella sessione admin
+- Sicurezza (CSRF): le richieste mutanti (POST/PUT/DELETE/PATCH) vengono rifiutate se l'header Origin è cross-site — chiude la finestra residua lasciata da SameSite=Lax
+- Sicurezza (brute-force): rate limit non più aggirabile via spoofing di X-Forwarded-For — header fidati solo dietro proxy (TRUST_PROXY, default attivo su Vercel), preferito X-Real-IP
+- Sicurezza: validazione username in registrazione/setup (3-30 char, no apici/tag) — difesa in profondità contro XSS e input malevoli
+- Sicurezza: rimosso il path del DB dalle statistiche admin (info disclosure sul filesystem del server)
+
 ## v4.075 — 2026-06-12
 - Sicurezza: split chiavi Google Maps — chiave server (`GOOGLE_MAPS_SERVER_KEY`, ristretta IP/API) per le chiamate lato server, chiave browser (`GOOGLE_MAPS_API_KEY`, ristretta referrer) servita al client. Fallback alla chiave browser durante la transizione del deploy per evitare downtime
 - Anti-frode: la chiave usata lato server non viene più esposta a chi ispeziona il traffico del client
