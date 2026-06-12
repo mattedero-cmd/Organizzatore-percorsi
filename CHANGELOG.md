@@ -1,3 +1,7 @@
+## v4.075 — 2026-06-12
+- Sicurezza: split chiavi Google Maps — chiave server (`GOOGLE_MAPS_SERVER_KEY`, ristretta IP/API) per le chiamate lato server, chiave browser (`GOOGLE_MAPS_API_KEY`, ristretta referrer) servita al client. Fallback alla chiave browser durante la transizione del deploy per evitare downtime
+- Anti-frode: la chiave usata lato server non viene più esposta a chi ispeziona il traffico del client
+
 ## v4.074 — 2026-06-11
 - Refactor DB: `db.js` passa da sqlite3 CLI (un processo per query) a `better-sqlite3` con connessione persistente — query locali ~100x più veloci
 - Sicurezza: tutte le query SQL ora parametrizzate (`dbAll`/`dbRun`/`dbExec` con placeholder) — eliminata ogni concatenazione di valori (ex `sqlValue`), su SQLite e PostgreSQL

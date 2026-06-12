@@ -46,10 +46,14 @@ Ad ogni modifica a `public/app.js` o `public/styles.css`, aggiorna **sempre**:
 Se dimentichi questo passaggio, gli utenti continuano a vedere la versione vecchia dalla cache PWA.
 
 ### 3. Sicurezza — non committare mai
-- Chiave Google Maps API (`AIzaSy...`) — solo Vercel env vars (`GOOGLE_MAPS_API_KEY`)
+- Chiavi Google Maps (`AIzaSy...`) — solo Vercel env vars
 - `OPENAI_API_KEY` — solo Vercel env vars
 - `ADMIN_SECRET` — solo Vercel env vars
 - Indirizzi personali, coordinate di casa o dati identificativi dell'utente
+
+**Due chiavi Google Maps distinte (v4.075)** — non confonderle:
+- `GOOGLE_MAPS_API_KEY` = chiave **browser**, ristretta per HTTP referrer sul dominio Vercel. È l'unica servita al client da `GET /api/config` e usata per caricare la Maps JS API in `app.js`.
+- `GOOGLE_MAPS_SERVER_KEY` = chiave **server**, ristretta per IP/API. Usata SOLO lato server (`googleMapsService.js`, `/api/addresses/:id/opening`). **Mai** restituirla al client. C'è un fallback a `GOOGLE_MAPS_API_KEY` solo per non rompere il deploy se la var server manca.
 
 ### 4. Branch e deploy
 - **Push direttamente su `main`** — deploy automatico su Vercel, visibile a tutti gli utenti.

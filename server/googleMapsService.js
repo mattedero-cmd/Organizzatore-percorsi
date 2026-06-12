@@ -1,6 +1,8 @@
 import { trackCall } from "./apiStats.js";
 
-const API_KEY = () => process.env.GOOGLE_MAPS_API_KEY || "";
+// Chiave server-side: ristretta per IP/API su Google Console, MAI servita al client.
+// Fallback alla chiave browser durante la transizione del deploy (zero downtime).
+const API_KEY = () => process.env.GOOGLE_MAPS_SERVER_KEY || process.env.GOOGLE_MAPS_API_KEY || "";
 const BASE = "https://maps.googleapis.com/maps/api";
 
 function toRad(deg) { return deg * Math.PI / 180; }

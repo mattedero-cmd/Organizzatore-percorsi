@@ -579,7 +579,8 @@ async function handleApi(request, response) {
     if (openingMatch && method === "GET") {
       const addr = await getAddress(openingMatch[1], userId);
       if (!addr) return sendJson(response, 404, { error: "Non trovato" });
-      const apiKey = process.env.GOOGLE_MAPS_API_KEY || "";
+      // chiamata lato server → usa la chiave server (ristretta), non quella browser
+      const apiKey = process.env.GOOGLE_MAPS_SERVER_KEY || process.env.GOOGLE_MAPS_API_KEY || "";
       if (!apiKey) return sendJson(response, 503, { error: "API non configurata" });
       const BASE_MAPS = "https://maps.googleapis.com/maps/api";
       let placeId = addr.placeId;
