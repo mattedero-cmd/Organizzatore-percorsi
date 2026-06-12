@@ -1260,7 +1260,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.074 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.075 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -1592,6 +1592,8 @@ async function renderGoogleMap(result) {
   const center = firstCoord?.lat ? { lat: Number(firstCoord.lat), lng: Number(firstCoord.lng) } : { lat: 46.0, lng: 11.0 };
 
   const map = new google.maps.Map(el, { center, zoom: 10, mapTypeControl: false, fullscreenControl: false, styles: getMapDarkStyles() });
+  // Forza il ridisegno delle tile su Safari — senza questo la mappa appare bianca
+  setTimeout(() => google.maps.event.trigger(map, "resize"), 200);
   const bounds = new google.maps.LatLngBounds();
   let hasPoints = false;
 
@@ -2251,7 +2253,7 @@ function renderSaved() {
       <div class="saved-list">
         ${state.savedRoutes.map(route => `
           <article class="card saved-card${route.source === "imported" ? " saved-card--imported" : ""}" data-open-route="${route.id}" style="cursor:pointer;">
-            <p class="saved-card-name">${escapeHtml(route.name)}${route.source === "imported" ? ` <span class="badge badge-imported">Importato</span>` : ""}</p>
+            <p class="saved-card-name">${escapeHtml(route.name)}${route.source === "imported" ? ` <span class="badge badge-imported">${route.sharedBy ? "Condiviso da " + escapeHtml(route.sharedBy) : "Importato"}</span>` : ""}</p>
             <div class="saved-card-info">
               <input type="date" class="saved-date-input" data-reschedule-route="${route.id}" value="${escapeHtml(route.scheduledDate || "")}" title="Cambia data e ricalcola" onclick="event.stopPropagation()" />
               <span>${escapeHtml(route.startTime || "--:--")}</span>

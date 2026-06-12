@@ -752,8 +752,10 @@ async function handleApi(request, response) {
     if (shareRouteMatch && method === "POST") {
       const route = await getRoute(shareRouteMatch[1], userId);
       if (!route) return sendJson(response, 404, { error: "Giro non trovato" });
+      const sharer = await getUserById(userId);
+      const sharerName = sharer?.nickname || sharer?.username || null;
       const token = generateToken();
-      const routeData = { ...(route.payload || route), source: "imported" };
+      const routeData = { ...(route.payload || route), source: "imported", sharedBy: sharerName };
       await createSharedRoute(token, userId, JSON.stringify(routeData));
       const host = request.headers.host || "";
       const proto = process.env.NODE_ENV === "production" ? "https" : "http";

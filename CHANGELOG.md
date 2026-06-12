@@ -1,3 +1,7 @@
+## v4.075 — 2026-06-12
+- Feature: giri condivisi mostrano "Condiviso da [nickname]" invece di "Importato" — il nickname viene incluso nel link al momento della condivisione
+- Fix: Google Maps in bianco su Safari desktop vecchio — aggiunto trigger resize dopo l'inizializzazione per forzare il rendering delle tile
+
 ## v4.074 — 2026-06-12
 - Fix: eliminazione contatto crashava l'app su iOS — rimosso confirm() nativo, sostituito con conferma inline sulla card; aggiunto try/catch
 - Feature: selezione multipla contatti — pulsante "Seleziona" in archivio attiva la modalità con checkbox; pulsante "Elimina (N)" elimina tutti i selezionati in parallelo
