@@ -1260,7 +1260,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.076 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.077 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -1561,22 +1561,51 @@ async function loadGoogleMapsScript() {
   return _mapsLoadPromise;
 }
 
+// Cache della mappa percorso: render() ricrea tutto il DOM a ogni cambio di stato,
+// e ricostruire la mappa significa rifare geocoding + Directions API (rete = batteria
+// + quota Google). Se il giro non è cambiato si riattacca il nodo DOM già pronto.
+let _routeMapCache = { key: null, el: null, map: null };
+const _geocodeCache = new Map();
+
+function _routeMapKey(result) {
+  const pt = (p) => p ? [p.lat, p.lng, p.label || p.address || ""].join(",") : "";
+  const rowsKey = (result.rows || []).map(r =>
+    [r.addressId, r.stopNumber, r.type, r.lat, r.lng, r.fullAddress || r.address || r.customer].join("|")
+  ).join(";");
+  return `${document.documentElement.dataset.theme}::${pt(result.start)}::${rowsKey}::${pt(result.end)}`;
+}
+
 async function renderGoogleMap(result) {
   const el = document.querySelector("#route-map");
   if (!el) return;
+
+  const cacheKey = _routeMapKey(result);
+  if (_routeMapCache.map && _routeMapCache.el && _routeMapCache.key === cacheKey) {
+    el.replaceWith(_routeMapCache.el);
+    setTimeout(() => google.maps.event.trigger(_routeMapCache.map, "resize"), 200);
+    return;
+  }
+
   const ready = await loadGoogleMapsScript();
   if (!ready || !window.google?.maps) { el.style.display = "none"; return; }
 
-  // Geocode an address string using Google Geocoder
-  const geocodeStr = (addressStr) => new Promise(resolve => {
-    if (!addressStr) return resolve(null);
-    new google.maps.Geocoder().geocode({ address: addressStr }, (res, st) => {
-      if (st === "OK" && res[0]) {
-        const loc = res[0].geometry.location;
-        resolve({ lat: loc.lat(), lng: loc.lng() });
-      } else resolve(null);
+  // Geocode an address string using Google Geocoder (con cache: stessi indirizzi
+  // non vengono rigeocodificati, anche i null per evitare retry inutili)
+  const geocodeStr = (addressStr) => {
+    if (!addressStr) return Promise.resolve(null);
+    if (_geocodeCache.has(addressStr)) return Promise.resolve(_geocodeCache.get(addressStr));
+    return new Promise(resolve => {
+      new google.maps.Geocoder().geocode({ address: addressStr }, (res, st) => {
+        let coord = null;
+        if (st === "OK" && res[0]) {
+          const loc = res[0].geometry.location;
+          coord = { lat: loc.lat(), lng: loc.lng() };
+        }
+        _geocodeCache.set(addressStr, coord);
+        resolve(coord);
+      });
     });
-  });
+  };
 
   // Enrich rows with coordinates — from payload, allAddresses cache, or geocoding
   const rawRows = result.rows || [];
@@ -1693,6 +1722,8 @@ async function renderGoogleMap(result) {
       }
     });
   }
+
+  _routeMapCache = { key: cacheKey, el, map };
 }
 
 // ── render: route tab ─────────────────────────────────────────────────────────

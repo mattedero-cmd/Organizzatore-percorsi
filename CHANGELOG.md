@@ -1,3 +1,6 @@
+## v4.077 — 2026-06-12
+- Fix: consumo batteria ridotto — blob di sfondo non più animati all'infinito (2 cicli e poi statici); mappa risultato riusata invece di essere ricostruita (con geocoding e Directions API) a ogni re-render; service worker serve gli asset versionati cache-first invece di riscaricarli dalla rete a ogni apertura
+
 ## v4.076 — 2026-06-12
 - Feature: calcolo costi multi-operatore — ogni operatore ha la propria tariffa €/h lavoro; ore guida moltiplicate per n. operatori × tariffa guida unica; €/km invariato; pulsante +/× per aggiungere/rimuovere operatori (max 8)
 
