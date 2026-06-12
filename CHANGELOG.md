@@ -1,3 +1,6 @@
+## v4.077 — 2026-06-12
+- Fix: dopo un reload in background su iOS, l'app ripristina invisibilmente la tab e il giro aperti prima dell'interruzione (localStorage pl_nav)
+
 ## v4.076 — 2026-06-12
 - Feature: calcolo costi multi-operatore — ogni operatore ha la propria tariffa €/h lavoro; ore guida moltiplicate per n. operatori × tariffa guida unica; €/km invariato; pulsante +/× per aggiungere/rimuovere operatori (max 8)
 

@@ -531,8 +531,13 @@ function hideSplash() {
 function setActiveTab(tab) {
   state.activeTab = tab;
   document.querySelectorAll(".tab").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
+  // Persisti la tab attiva e il giro corrente per il ripristino dopo reload
+  try {
+    const snap = { tab };
+    if (tab === "result" && state.result?.id) snap.resultId = state.result.id;
+    localStorage.setItem("pl_nav", JSON.stringify(snap));
+  } catch {}
   if (tab === "archive") {
-    // Refresh saved routes so visit calendar is up to date, then render
     refreshSavedRoutes().then(() => render());
   } else {
     render();
@@ -1260,7 +1265,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.076 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.077 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -6417,6 +6422,28 @@ function renderAuthScreen(isSetup = false) {
 
 async function initApp() {
   await loadInitialData();
+
+  // Ripristina la tab e il giro aperti prima del reload (iOS background)
+  try {
+    const snap = JSON.parse(localStorage.getItem("pl_nav") || "{}");
+    if (snap.tab && snap.tab !== "route") {
+      state.activeTab = snap.tab;
+      document.querySelectorAll(".tab").forEach(b => b.classList.toggle("active", b.dataset.tab === snap.tab));
+    }
+    if (snap.tab === "result" && snap.resultId) {
+      // Prova a trovare il giro nella lista già caricata, altrimenti lo scarica
+      const cached = state.savedRoutes.find(r => String(r.id) === String(snap.resultId));
+      if (cached) {
+        state.result = cached;
+      } else {
+        try {
+          const loaded = await api(`/api/routes/${snap.resultId}`);
+          if (loaded) state.result = loaded;
+        } catch {}
+      }
+    }
+  } catch {}
+
   render();
 }
 
