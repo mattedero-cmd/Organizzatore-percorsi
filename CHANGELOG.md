@@ -1,3 +1,6 @@
+## v4.076 — 2026-06-12
+- Feature: calcolo costi multi-operatore — ogni operatore ha la propria tariffa €/h lavoro; ore guida moltiplicate per n. operatori × tariffa guida unica; €/km invariato; pulsante +/× per aggiungere/rimuovere operatori (max 8)
+
 ## v4.075 — 2026-06-12
 - Feature: giri condivisi mostrano "Condiviso da [nickname]" invece di "Importato" — il nickname viene incluso nel link al momento della condivisione
 - Fix: Google Maps in bianco su Safari desktop vecchio — aggiunto trigger resize dopo l'inizializzazione per forzare il rendering delle tile

@@ -1692,6 +1692,17 @@ tbody tr:last-child td {
   gap: 8px;
   margin-bottom: 2px;
 }
+.rv-cost-section-title {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 .rv-cost-rate-lbl {
   flex: 1;
   display: flex;
@@ -1712,6 +1723,23 @@ tbody tr:last-child td {
   color: var(--text);
   font-size: 0.9rem;
   font-weight: 600;
+}
+.rv-cost-operators {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.rv-cost-op-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+.rv-cost-op-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--accent);
+  min-width: 36px;
+  padding-bottom: 8px;
 }
 .metric-total .metric-label { color: var(--accent); }
 .metric-total .metric-value { color: var(--accent); }

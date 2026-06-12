@@ -1260,7 +1260,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.075 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.076 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -2852,7 +2852,10 @@ function renderResult() {
         <div class="metric"><div class="metric-label">Giornata</div><div class="metric-value">${escapeHtml(summary.dayStart)}–${escapeHtml(summary.dayEnd)}</div></div>
       </div>
       ${(() => {
-        const rates = state.resultCostRates || { kmRate: state.settings.kmRate ?? 0.65, driveHourRate: state.settings.driveHourRate ?? 22, workHourRate: state.settings.workHourRate ?? 22 };
+        const rates = state.resultCostRates || defaultCostRates();
+        const operators = Array.isArray(rates.operators) && rates.operators.length > 0
+          ? rates.operators
+          : [{ workHourRate: rates.workHourRate ?? state.settings.workHourRate ?? 22 }];
         const costs = state.showCosts ? calcResultCosts(summary) : null;
         return `<div class="rv-costs-section">
           <label class="rv-costs-toggle-row">
@@ -2861,15 +2864,29 @@ function renderResult() {
             ${costs ? `<span class="rv-costs-badge">${euro(costs.totalCost)}</span>` : ""}
           </label>
           ${state.showCosts ? `<div class="rv-costs-body">
+            <div class="rv-cost-section-title">Tariffe base</div>
             <div class="rv-cost-rates">
               <label class="rv-cost-rate-lbl">€/km<input type="number" data-rv-rate="kmRate" value="${rates.kmRate}" min="0" step="0.01" /></label>
-              <label class="rv-cost-rate-lbl">€/h guida<input type="number" data-rv-rate="driveHourRate" value="${rates.driveHourRate}" min="0" step="1" /></label>
-              <label class="rv-cost-rate-lbl">€/h lavoro<input type="number" data-rv-rate="workHourRate" value="${rates.workHourRate}" min="0" step="1" /></label>
+              <label class="rv-cost-rate-lbl">€/h guida × op.<input type="number" data-rv-rate="driveHourRate" value="${rates.driveHourRate}" min="0" step="1" /></label>
             </div>
-            <div class="summary-grid" style="margin-top:10px;">
+            <div class="rv-cost-section-title" style="margin-top:12px;">
+              Operatori
+              <button type="button" id="rv-add-operator" class="btn icon-btn" style="padding:2px 8px;font-size:0.78rem;height:auto;" ${operators.length >= 8 ? "disabled" : ""}>${I.plus(11)} Aggiungi</button>
+            </div>
+            <div class="rv-cost-operators">
+              ${operators.map((op, i) => `
+                <div class="rv-cost-op-row">
+                  <span class="rv-cost-op-label">Op. ${i + 1}</span>
+                  <label class="rv-cost-rate-lbl" style="flex:1;">€/h lavoro
+                    <input type="number" data-rv-op-rate="1" data-rv-op-idx="${i}" value="${op.workHourRate ?? 22}" min="0" step="1" />
+                  </label>
+                  ${operators.length > 1 ? `<button type="button" class="btn icon-btn danger" data-remove-operator="${i}" style="padding:4px 6px;align-self:flex-end;">${I.trash(12)}</button>` : ""}
+                </div>`).join("")}
+            </div>
+            <div class="summary-grid" style="margin-top:12px;">
               <div class="metric"><div class="metric-label">Costo km</div><div class="metric-value">${euro(costs.costKm)}</div></div>
-              <div class="metric"><div class="metric-label">Costo guida</div><div class="metric-value">${euro(costs.costDrive)}</div></div>
-              <div class="metric"><div class="metric-label">Costo lavoro</div><div class="metric-value">${euro(costs.costWork)}</div></div>
+              <div class="metric"><div class="metric-label">Costo guida<br><span style="font-size:0.68rem;font-weight:500;opacity:0.7;">${costs.nOps} op. × ${minutesLabel(summary.totalDriveMinutes)}</span></div><div class="metric-value">${euro(costs.costDrive)}</div></div>
+              <div class="metric"><div class="metric-label">Costo lavoro<br><span style="font-size:0.68rem;font-weight:500;opacity:0.7;">${costs.nOps} op. × ${minutesLabel(summary.totalWorkMinutes)}</span></div><div class="metric-value">${euro(costs.costWork)}</div></div>
               <div class="metric metric-total"><div class="metric-label">Totale</div><div class="metric-value">${euro(costs.totalCost)}</div></div>
             </div>
           </div>` : ""}
@@ -2889,13 +2906,26 @@ function renderResult() {
 
 // ── cost calculation (client-side, uses per-route rates) ─────────────────────
 
+function defaultCostRates() {
+  return {
+    kmRate: state.settings.kmRate ?? 0.65,
+    driveHourRate: state.settings.driveHourRate ?? 22,
+    operators: [{ workHourRate: state.settings.workHourRate ?? 22 }]
+  };
+}
+
 function calcResultCosts(summary) {
-  const rates = state.resultCostRates || { kmRate: state.settings.kmRate ?? 0.65, driveHourRate: state.settings.driveHourRate ?? 22, workHourRate: state.settings.workHourRate ?? 22 };
+  const rates = state.resultCostRates || defaultCostRates();
+  const operators = Array.isArray(rates.operators) && rates.operators.length > 0
+    ? rates.operators
+    : [{ workHourRate: rates.workHourRate ?? state.settings.workHourRate ?? 22 }];
+  const nOps = operators.length;
   const costKm = summary.totalKm * (rates.kmRate ?? 0.65);
-  const costDrive = (summary.totalDriveMinutes / 60) * (rates.driveHourRate ?? 22);
-  const costWork = (summary.totalWorkMinutes / 60) * (rates.workHourRate ?? 22);
+  const costDrive = (summary.totalDriveMinutes / 60) * (rates.driveHourRate ?? 22) * nOps;
+  const workRateSum = operators.reduce((s, op) => s + (op.workHourRate ?? 22), 0);
+  const costWork = (summary.totalWorkMinutes / 60) * workRateSum;
   const totalCost = costKm + costDrive + costWork;
-  return { costKm, costDrive, costWork, totalCost };
+  return { costKm, costDrive, costWork, totalCost, nOps };
 }
 
 // ── print / PDF export ────────────────────────────────────────────────────────
@@ -5234,7 +5264,7 @@ function bindEvents() {
     if (e.target.id === "rv-costs-check") {
       state.showCosts = e.target.checked;
       if (state.showCosts && !state.resultCostRates) {
-        state.resultCostRates = { kmRate: state.settings.kmRate ?? 0.65, driveHourRate: state.settings.driveHourRate ?? 22, workHourRate: state.settings.workHourRate ?? 22 };
+        state.resultCostRates = defaultCostRates();
       }
       renderResult();
     }
@@ -5242,7 +5272,18 @@ function bindEvents() {
       const key = e.target.dataset.rvRate;
       const val = Number(e.target.value);
       if (!isNaN(val) && val >= 0) {
-        state.resultCostRates = { ...(state.resultCostRates || {}), [key]: val };
+        state.resultCostRates = { ...(state.resultCostRates || defaultCostRates()), [key]: val };
+        renderResult();
+      }
+    }
+    if (e.target.dataset.rvOpRate !== undefined) {
+      const idx = Number(e.target.dataset.rvOpIdx);
+      const val = Number(e.target.value);
+      if (!isNaN(val) && val >= 0) {
+        const r = state.resultCostRates || defaultCostRates();
+        const ops = [...(r.operators || [{ workHourRate: r.workHourRate ?? 22 }])];
+        ops[idx] = { ...ops[idx], workHourRate: val };
+        state.resultCostRates = { ...r, operators: ops };
         renderResult();
       }
     }
@@ -5837,6 +5878,27 @@ function bindEvents() {
       state.addressForm = { ...emptyForm, ...addr };
       render();
       requestAnimationFrame(() => document.getElementById("address-form")?.scrollIntoView({ behavior: "smooth", block: "start" }));
+      return;
+    }
+
+    // Costs: add operator
+    if (e.target.closest("#rv-add-operator")) {
+      const r = state.resultCostRates || defaultCostRates();
+      const ops = [...(r.operators || [{ workHourRate: r.workHourRate ?? 22 }])];
+      if (ops.length < 8) ops.push({ workHourRate: ops[ops.length - 1]?.workHourRate ?? state.settings.workHourRate ?? 22 });
+      state.resultCostRates = { ...r, operators: ops };
+      renderResult();
+      return;
+    }
+    // Costs: remove operator
+    const removeOp = e.target.closest("[data-remove-operator]");
+    if (removeOp) {
+      const idx = Number(removeOp.dataset.removeOperator);
+      const r = state.resultCostRates || defaultCostRates();
+      const ops = [...(r.operators || [])];
+      if (ops.length > 1) ops.splice(idx, 1);
+      state.resultCostRates = { ...r, operators: ops };
+      renderResult();
       return;
     }
 
