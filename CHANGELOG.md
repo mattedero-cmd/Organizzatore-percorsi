@@ -1,3 +1,7 @@
+## v4.074 — 2026-06-12
+- Fix: eliminazione contatto crashava l'app su iOS — rimosso confirm() nativo, sostituito con conferma inline sulla card; aggiunto try/catch
+- Feature: selezione multipla contatti — pulsante "Seleziona" in archivio attiva la modalità con checkbox; pulsante "Elimina (N)" elimina tutti i selezionati in parallelo
+
 ## v4.073 — 2026-06-11
 - Feature: costi nascosti di default — toggle "Calcola costi" in fondo al giro attiva la sezione con tariffe modificabili per-giro (non impatta le impostazioni globali)
 - Fix: costi rimossi dalle card giri salvati e dall'intestazione risultato (appaiono solo quando il toggle è attivo)

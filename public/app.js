@@ -271,6 +271,9 @@ const state = {
   showCosts: false,
   resultCostRates: null,
   manualOrderRows: null,
+  archiveSelectMode: false,
+  archiveSelected: new Set(),
+  archiveDeletePending: null,
   planning: false,
   stopFilter: "",
   importWizard: null,
@@ -1257,7 +1260,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.073 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.074 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -2346,29 +2349,43 @@ function renderVisitCalendar(addressId) {
 function renderArchive() {
   const form = state.addressForm;
   const showingResults = state.archiveShowAll || state.addressSearch;
+  const sel = state.archiveSelectMode;
+  const selSet = state.archiveSelected;
+  const nSel = selSet.size;
   app.innerHTML = `
     <section class="grid">
       <div class="panel">
         <div class="section-head">
           <h2>Archivio</h2>
           <div class="row">
-            <button class="btn" id="import-contacts">${I.upload(14)} Importa</button>
-            ${state.googleClientId ? `<button class="btn" id="import-google-contacts">${I.link(14)} Google</button>` : ""}
-            <button class="btn" id="new-address">${I.plus(14)} Nuovo</button>
+            ${sel ? `
+              <button class="btn" id="archive-select-all">${I.check(14)} Tutti</button>
+              <button class="btn danger" id="archive-delete-selected" ${nSel === 0 ? "disabled" : ""}>${I.trash(14)} Elimina${nSel > 0 ? ` (${nSel})` : ""}</button>
+              <button class="btn" id="archive-cancel-select">${I.close(13)} Annulla</button>
+            ` : `
+              <button class="btn" id="import-contacts">${I.upload(14)} Importa</button>
+              ${state.googleClientId ? `<button class="btn" id="import-google-contacts">${I.link(14)} Google</button>` : ""}
+              <button class="btn" id="new-address">${I.plus(14)} Nuovo</button>
+              ${showingResults ? `<button class="btn" id="archive-start-select">${I.check(14)} Seleziona</button>` : ""}
+            `}
           </div>
         </div>
-        <div class="row" style="gap:8px; margin-bottom:10px;">
+        ${!sel ? `<div class="row" style="gap:8px; margin-bottom:10px;">
           <input id="archive-search" placeholder="Cerca per nome, città, indirizzo…" value="${escapeHtml(state.addressSearch)}" style="flex:1" autocomplete="off" />
           ${showingResults
             ? `<button class="btn" id="hide-all-addresses">${I.eyeOff(14)} Nascondi</button>`
             : `<button class="btn" id="show-all-addresses">${I.eye(14)} Mostra tutti</button>`}
-        </div>
+        </div>` : ""}
         <input id="vcf-input" type="file" accept=".vcf,.vcard,.csv" style="display:none" />
         <div class="archive-list">
           ${!showingResults
             ? `<div class="empty" style="grid-column:1/-1">Cerca un contatto per nome o città, oppure premi <b>Mostra tutti</b>.</div>`
-            : state.addresses.map(a => `
-            <article class="card archive-card">
+            : state.addresses.map(a => {
+              const isSel = sel && selSet.has(String(a.id));
+              const isPending = state.archiveDeletePending === String(a.id);
+              return `
+            <article class="card archive-card${isSel ? " archive-card--selected" : ""}" ${sel ? `data-select-address="${a.id}" style="cursor:pointer;"` : ""}>
+              ${sel ? `<span class="archive-check-dot${isSel ? " archive-check-dot--on" : ""}">${isSel ? _svg('<polyline points="20 6 9 17 4 12"/>',13) : ""}</span>` : ""}
               <p class="stop-title">${a.addressType === "rest" ? "☕ " : a.addressType === "restaurant" ? "🍽 " : a.addressType === "favorite" ? "⭐ " : ""}${escapeHtml(a.activity || a.customer)}</p>
               ${a.activity ? `<div class="stop-meta" style="font-weight:600">👤 ${escapeHtml(a.customer)}</div>` : ""}
               <div class="stop-meta">${escapeHtml(a.fullAddress)}</div>
@@ -2376,20 +2393,25 @@ function renderArchive() {
               ${a.phone2 ? `<div class="stop-meta">${phoneIcon(a.phone2Type)} ${escapeHtml(a.phone2)}${a.phone2Name ? ` <span class="phone-name-badge">${escapeHtml(a.phone2Name)}</span>` : ""}${a.phonePreferred === "phone2" ? " ★" : ""}</div>` : ""}
               ${a.email ? `<div class="stop-meta">${I.email(13)} ${escapeHtml(a.email)}</div>` : ""}
               <div class="stop-meta">${weeklyHoursSummary(a)}</div>
-              <div class="actions">
+              ${!sel ? `<div class="actions">
                 ${a.phone ? `<a class="btn" href="tel:${escapeHtml(a.phone)}" title="${escapeHtml(a.phoneName || a.phone)}">${phoneIcon(a.phoneType)}</a>` : ""}
                 ${a.phone2 ? `<a class="btn" href="tel:${escapeHtml(a.phone2)}" title="${escapeHtml(a.phone2Name || a.phone2)}">${phoneIcon(a.phone2Type)}</a>` : ""}
                 ${a.email ? `<a class="btn icon-btn" href="mailto:${escapeHtml(a.email)}" title="${escapeHtml(a.email)}">${I.email(15)}</a>` : ""}
                 <button class="btn icon-btn" data-check-opening="${a.id}" title="Verifica orari apertura">${I.clock(15)}</button>
                 <button class="btn" data-edit-address="${a.id}">${I.edit(13)} Modifica</button>
-                <button class="btn danger icon-btn" data-delete-address="${a.id}" title="Elimina">${I.trash(14)}</button>
-              </div>
+                ${isPending
+                  ? `<span class="archive-delete-confirm">Eliminare?
+                      <button class="btn danger" data-confirm-delete-address="${a.id}">Sì</button>
+                      <button class="btn" data-cancel-delete-address="1">No</button>
+                    </span>`
+                  : `<button class="btn danger icon-btn" data-delete-address="${a.id}" title="Elimina">${I.trash(14)}</button>`}
+              </div>` : ""}
               <div class="opening-status" id="opening-status-${a.id}" style="display:none"></div>
-              <details class="visit-history-details" ${state.visitCalendar[a.id] !== undefined ? "open" : ""}>
+              ${!sel ? `<details class="visit-history-details" ${state.visitCalendar[a.id] !== undefined ? "open" : ""}>
                 <summary class="visit-history-toggle">📅 Storico visite</summary>
                 ${renderVisitCalendar(a.id)}
-              </details>
-            </article>`).join("") || `<div class="empty" style="grid-column:1/-1">Nessun contatto trovato.</div>`}
+              </details>` : ""}
+            </article>`;}).join("") || `<div class="empty" style="grid-column:1/-1">Nessun contatto trovato.</div>`}
         </div>
       </div>
 
@@ -5816,12 +5838,87 @@ function bindEvents() {
       return;
     }
 
+    // Archive: start select mode
+    if (e.target.closest("#archive-start-select")) {
+      state.archiveSelectMode = true;
+      state.archiveSelected = new Set();
+      state.archiveDeletePending = null;
+      renderArchive();
+      return;
+    }
+    // Archive: cancel select mode
+    if (e.target.closest("#archive-cancel-select")) {
+      state.archiveSelectMode = false;
+      state.archiveSelected = new Set();
+      renderArchive();
+      return;
+    }
+    // Archive: select all
+    if (e.target.closest("#archive-select-all")) {
+      if (state.archiveSelected.size === state.addresses.length) {
+        state.archiveSelected = new Set();
+      } else {
+        state.archiveSelected = new Set(state.addresses.map(a => String(a.id)));
+      }
+      renderArchive();
+      return;
+    }
+    // Archive: bulk delete selected
+    if (e.target.closest("#archive-delete-selected")) {
+      const ids = [...state.archiveSelected];
+      if (!ids.length) return;
+      try {
+        showSpinner(`Eliminazione ${ids.length} contatt${ids.length === 1 ? "o" : "i"}…`);
+        await Promise.all(ids.map(id => api(`/api/addresses/${id}`, { method: "DELETE" })));
+        state.archiveSelected = new Set();
+        state.archiveSelectMode = false;
+        await refreshAllData();
+        renderArchive();
+        showToast(`${ids.length} contatt${ids.length === 1 ? "o eliminato" : "i eliminati"}`);
+      } catch (err) {
+        showToast("Errore nell'eliminazione: " + err.message);
+      } finally {
+        hideSpinner();
+      }
+      return;
+    }
+    // Archive: toggle card in select mode
+    const selCard = e.target.closest("[data-select-address]");
+    if (selCard && state.archiveSelectMode) {
+      const id = String(selCard.dataset.selectAddress);
+      if (state.archiveSelected.has(id)) state.archiveSelected.delete(id);
+      else state.archiveSelected.add(id);
+      renderArchive();
+      return;
+    }
+    // Archive: single delete (first click → pending confirm)
     const delAddr = e.target.closest("[data-delete-address]");
     if (delAddr) {
-      if (!confirm("Eliminare questo contatto?")) return;
-      await api(`/api/addresses/${delAddr.dataset.deleteAddress}`, { method: "DELETE" });
-      await refreshAllData();
-      render();
+      state.archiveDeletePending = String(delAddr.dataset.deleteAddress);
+      renderArchive();
+      return;
+    }
+    // Archive: confirm single delete
+    const confirmDel = e.target.closest("[data-confirm-delete-address]");
+    if (confirmDel) {
+      const id = confirmDel.dataset.confirmDeleteAddress;
+      try {
+        await api(`/api/addresses/${id}`, { method: "DELETE" });
+        state.archiveDeletePending = null;
+        await refreshAllData();
+        renderArchive();
+        showToast("Contatto eliminato");
+      } catch (err) {
+        state.archiveDeletePending = null;
+        showToast("Errore: " + err.message);
+        renderArchive();
+      }
+      return;
+    }
+    // Archive: cancel single delete
+    if (e.target.closest("[data-cancel-delete-address]")) {
+      state.archiveDeletePending = null;
+      renderArchive();
       return;
     }
 

@@ -1472,6 +1472,35 @@ textarea:focus {
   display: grid;
   gap: 8px;
   min-width: 0;
+  position: relative;
+}
+.archive-card--selected {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  background: color-mix(in srgb, var(--accent) 8%, var(--bg2));
+}
+.archive-check-dot {
+  position: absolute;
+  top: 10px; right: 10px;
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  border: 2px solid var(--line);
+  background: var(--bg);
+  display: flex; align-items: center; justify-content: center;
+  transition: background 0.12s, border-color 0.12s;
+}
+.archive-check-dot--on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.archive-delete-confirm {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.83rem;
+  color: var(--text);
+  flex-wrap: wrap;
 }
 .opening-status {
   font-size: 0.78rem;
