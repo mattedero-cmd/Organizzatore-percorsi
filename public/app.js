@@ -1265,7 +1265,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.079 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.080 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -1275,6 +1275,18 @@ function renderMenuInfo() {
       <ul class="info-list">
         <li>${state.mapApiConfigured ? _svg('<polyline points="20 6 9 17 4 12"/>', 14) + " Google Maps attivo — percorsi reali e ottimizzazione avanzata" : _svg('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>', 14) + " Google Maps non configurato — stime distanze locali"}</li>
         <li>${state.whisperConfigured ? _svg('<polyline points="20 6 9 17 4 12"/>', 14) + " Comandi vocali attivi (Whisper)" : _svg('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>', 14) + " Comandi vocali non configurati"}</li>
+      </ul>
+
+      <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v4.080</p>
+      <ul class="info-list">
+        <li>Ricerca archivio senza scroll-jump: la lista si aggiorna senza distruggere l'input</li>
+        <li>Crash "mostra tutti" + elimina risolto: storico visite ora lazy (generato solo all'apertura)</li>
+        <li>Selezione multipla archivio: pulsante Seleziona sempre visibile, carica automaticamente tutti i contatti</li>
+        <li>Ripristino tab e giro dopo reload in background (iOS)</li>
+        <li>Giro condiviso mostra "Condiviso da [nickname]" invece di badge "Importato"</li>
+        <li>Calcolo costi multi-operatore: tariffa lavoro oraria per operatore, ore guida × N operatori</li>
+        <li>Calcolo costi nascosto di default, attivabile con toggle nel riepilogo giro</li>
+        <li>Fix impostazioni: salvataggio con try/catch, anteprima tema annullata al Chiudi</li>
       </ul>
 
       <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v4.070</p>
@@ -2353,6 +2365,48 @@ function renderVisitCalendar(addressId) {
 
 // ── render: archive tab ───────────────────────────────────────────────────────
 
+function buildArchiveListHTML() {
+  const showingResults = state.archiveShowAll || state.addressSearch;
+  const sel = state.archiveSelectMode;
+  const selSet = state.archiveSelected;
+  if (!showingResults) {
+    return `<div class="empty" style="grid-column:1/-1">Cerca un contatto per nome o città, oppure premi <b>Mostra tutti</b>.</div>`;
+  }
+  return state.addresses.map(a => {
+    const isSel = sel && selSet.has(String(a.id));
+    const isPending = state.archiveDeletePending === String(a.id);
+    return `
+      <article class="card archive-card${isSel ? " archive-card--selected" : ""}" ${sel ? `data-select-address="${a.id}" style="cursor:pointer;"` : ""}>
+        ${sel ? `<span class="archive-check-dot${isSel ? " archive-check-dot--on" : ""}">${isSel ? _svg('<polyline points="20 6 9 17 4 12"/>',13) : ""}</span>` : ""}
+        <p class="stop-title">${a.addressType === "rest" ? "☕ " : a.addressType === "restaurant" ? "🍽 " : a.addressType === "favorite" ? "⭐ " : ""}${escapeHtml(a.activity || a.customer)}</p>
+        ${a.activity ? `<div class="stop-meta" style="font-weight:600">👤 ${escapeHtml(a.customer)}</div>` : ""}
+        <div class="stop-meta">${escapeHtml(a.fullAddress)}</div>
+        ${a.phone ? `<div class="stop-meta">${phoneIcon(a.phoneType)} ${escapeHtml(a.phone)}${a.phoneName ? ` <span class="phone-name-badge">${escapeHtml(a.phoneName)}</span>` : ""}${a.phonePreferred === "phone" && a.phone2 ? " ★" : ""}</div>` : ""}
+        ${a.phone2 ? `<div class="stop-meta">${phoneIcon(a.phone2Type)} ${escapeHtml(a.phone2)}${a.phone2Name ? ` <span class="phone-name-badge">${escapeHtml(a.phone2Name)}</span>` : ""}${a.phonePreferred === "phone2" ? " ★" : ""}</div>` : ""}
+        ${a.email ? `<div class="stop-meta">${I.email(13)} ${escapeHtml(a.email)}</div>` : ""}
+        <div class="stop-meta">${weeklyHoursSummary(a)}</div>
+        ${!sel ? `<div class="actions">
+          ${a.phone ? `<a class="btn" href="tel:${escapeHtml(a.phone)}" title="${escapeHtml(a.phoneName || a.phone)}">${phoneIcon(a.phoneType)}</a>` : ""}
+          ${a.phone2 ? `<a class="btn" href="tel:${escapeHtml(a.phone2)}" title="${escapeHtml(a.phone2Name || a.phone2)}">${phoneIcon(a.phone2Type)}</a>` : ""}
+          ${a.email ? `<a class="btn icon-btn" href="mailto:${escapeHtml(a.email)}" title="${escapeHtml(a.email)}">${I.email(15)}</a>` : ""}
+          <button class="btn icon-btn" data-check-opening="${a.id}" title="Verifica orari apertura">${I.clock(15)}</button>
+          <button class="btn" data-edit-address="${a.id}">${I.edit(13)} Modifica</button>
+          ${isPending
+            ? `<span class="archive-delete-confirm">Eliminare?
+                <button class="btn danger" data-confirm-delete-address="${a.id}">Sì</button>
+                <button class="btn" data-cancel-delete-address="1">No</button>
+              </span>`
+            : `<button class="btn danger icon-btn" data-delete-address="${a.id}" title="Elimina">${I.trash(14)}</button>`}
+        </div>` : ""}
+        <div class="opening-status" id="opening-status-${a.id}" style="display:none"></div>
+        ${!sel ? `<details class="visit-history-details" ${state.visitCalendar[a.id] !== undefined ? "open" : ""} data-cal-addr="${a.id}">
+          <summary class="visit-history-toggle">📅 Storico visite</summary>
+          <div class="visit-cal-body">${state.visitCalendar[a.id] !== undefined ? renderVisitCalendar(a.id) : ""}</div>
+        </details>` : ""}
+      </article>`;
+  }).join("") || `<div class="empty" style="grid-column:1/-1">Nessun contatto trovato.</div>`;
+}
+
 function renderArchive() {
   const form = state.addressForm;
   const showingResults = state.archiveShowAll || state.addressSearch;
@@ -2385,40 +2439,7 @@ function renderArchive() {
         </div>` : ""}
         <input id="vcf-input" type="file" accept=".vcf,.vcard,.csv" style="display:none" />
         <div class="archive-list">
-          ${!showingResults
-            ? `<div class="empty" style="grid-column:1/-1">Cerca un contatto per nome o città, oppure premi <b>Mostra tutti</b>.</div>`
-            : state.addresses.map(a => {
-              const isSel = sel && selSet.has(String(a.id));
-              const isPending = state.archiveDeletePending === String(a.id);
-              return `
-            <article class="card archive-card${isSel ? " archive-card--selected" : ""}" ${sel ? `data-select-address="${a.id}" style="cursor:pointer;"` : ""}>
-              ${sel ? `<span class="archive-check-dot${isSel ? " archive-check-dot--on" : ""}">${isSel ? _svg('<polyline points="20 6 9 17 4 12"/>',13) : ""}</span>` : ""}
-              <p class="stop-title">${a.addressType === "rest" ? "☕ " : a.addressType === "restaurant" ? "🍽 " : a.addressType === "favorite" ? "⭐ " : ""}${escapeHtml(a.activity || a.customer)}</p>
-              ${a.activity ? `<div class="stop-meta" style="font-weight:600">👤 ${escapeHtml(a.customer)}</div>` : ""}
-              <div class="stop-meta">${escapeHtml(a.fullAddress)}</div>
-              ${a.phone ? `<div class="stop-meta">${phoneIcon(a.phoneType)} ${escapeHtml(a.phone)}${a.phoneName ? ` <span class="phone-name-badge">${escapeHtml(a.phoneName)}</span>` : ""}${a.phonePreferred === "phone" && a.phone2 ? " ★" : ""}</div>` : ""}
-              ${a.phone2 ? `<div class="stop-meta">${phoneIcon(a.phone2Type)} ${escapeHtml(a.phone2)}${a.phone2Name ? ` <span class="phone-name-badge">${escapeHtml(a.phone2Name)}</span>` : ""}${a.phonePreferred === "phone2" ? " ★" : ""}</div>` : ""}
-              ${a.email ? `<div class="stop-meta">${I.email(13)} ${escapeHtml(a.email)}</div>` : ""}
-              <div class="stop-meta">${weeklyHoursSummary(a)}</div>
-              ${!sel ? `<div class="actions">
-                ${a.phone ? `<a class="btn" href="tel:${escapeHtml(a.phone)}" title="${escapeHtml(a.phoneName || a.phone)}">${phoneIcon(a.phoneType)}</a>` : ""}
-                ${a.phone2 ? `<a class="btn" href="tel:${escapeHtml(a.phone2)}" title="${escapeHtml(a.phone2Name || a.phone2)}">${phoneIcon(a.phone2Type)}</a>` : ""}
-                ${a.email ? `<a class="btn icon-btn" href="mailto:${escapeHtml(a.email)}" title="${escapeHtml(a.email)}">${I.email(15)}</a>` : ""}
-                <button class="btn icon-btn" data-check-opening="${a.id}" title="Verifica orari apertura">${I.clock(15)}</button>
-                <button class="btn" data-edit-address="${a.id}">${I.edit(13)} Modifica</button>
-                ${isPending
-                  ? `<span class="archive-delete-confirm">Eliminare?
-                      <button class="btn danger" data-confirm-delete-address="${a.id}">Sì</button>
-                      <button class="btn" data-cancel-delete-address="1">No</button>
-                    </span>`
-                  : `<button class="btn danger icon-btn" data-delete-address="${a.id}" title="Elimina">${I.trash(14)}</button>`}
-              </div>` : ""}
-              <div class="opening-status" id="opening-status-${a.id}" style="display:none"></div>
-              ${!sel ? `<details class="visit-history-details" ${state.visitCalendar[a.id] !== undefined ? "open" : ""} data-cal-addr="${a.id}">
-                <summary class="visit-history-toggle">📅 Storico visite</summary>
-                <div class="visit-cal-body">${state.visitCalendar[a.id] !== undefined ? renderVisitCalendar(a.id) : ""}</div>
-              </details>` : ""}
-            </article>`;}).join("") || `<div class="empty" style="grid-column:1/-1">Nessun contatto trovato.</div>`}
+          ${buildArchiveListHTML()}
         </div>
       </div>
 
@@ -5026,30 +5047,26 @@ function bindEvents() {
       if (inp) { inp.focus(); inp.setSelectionRange(cursor, cursor); }
       return;
     }
-    // archive search
+    // archive search — aggiorna solo la lista, MAI l'input: niente scroll-jump
     if (e.target.id === "archive-search") {
       const q = e.target.value;
-      const cursor = e.target.selectionStart;
       state.addressSearch = q;
-      // Client-side filter from already-loaded list, con ranking di pertinenza
       state.addresses = q ? rankAddressMatches(state.allAddresses, q) : [];
-      renderArchive();
-      // preventScroll: evita che focus() sul nuovo input faccia saltare la pagina
-      const inp = document.getElementById("archive-search");
-      if (inp) { inp.focus({ preventScroll: true }); inp.setSelectionRange(cursor, cursor); }
-      // Conferma con server dopo 300 ms; ri-renderizza solo se i risultati sono cambiati
+      const listEl = document.querySelector(".archive-list");
+      if (listEl) listEl.innerHTML = buildArchiveListHTML();
+      else renderArchive();
+      // Conferma con server dopo 300 ms; aggiorna lista solo se i risultati cambiano
       clearTimeout(state._archiveSearchTimer);
       const prevIds = state.addresses.map(a => a.id).join(",");
       state._archiveSearchTimer = setTimeout(() => {
         refreshAddresses().then(() => {
           const newIds = state.addresses.map(a => a.id).join(",");
           if (newIds !== prevIds) {
-            renderArchive();
-            const inp2 = document.getElementById("archive-search");
-            if (inp2) { inp2.focus({ preventScroll: true }); inp2.setSelectionRange(inp2.value.length, inp2.value.length); }
+            const el = document.querySelector(".archive-list");
+            if (el) el.innerHTML = buildArchiveListHTML();
           }
         });
-      }, 300);
+      }, 400);
     }
     // stop autocomplete
     if (e.target.id === "stop-search") {
