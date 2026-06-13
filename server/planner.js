@@ -621,11 +621,20 @@ async function insertBreaks(rows, options) {
   const makeLunchEntry = async (beforeIndex, refRow, nextRow, lunchTimeMin) => {
     const fromRow = refRow || (beforeIndex > 0 ? rows[beforeIndex - 1] : null);
     const toRow = nextRow || (beforeIndex < rows.length ? rows[beforeIndex] : null);
-    // Try saved restaurants first — also verify haversine from current pos ≤ maxDetourKm
+    // Ristoranti salvati: se è "sul percorso" (perpendicolare ≤ 2 km) non c'è limite di distanza
+    // lungo la strada (posso guidare 30 min se è sulla mia via). Se è "fuori percorso" si applica
+    // il limite maxDetourKm come deviazione massima accettabile.
+    const ON_ROUTE_PERP_KM = 2.0;
     let savedSpot = findNearestRestStop(restaurantStops, fromRow?.lat, fromRow?.lng, toRow?.lat, toRow?.lng, maxDetourKm, lunchTimeMin, scheduledDate);
-    if (savedSpot && fromRow?.lat && fromRow?.lng) {
-      const directKm = haversineKm({ lat: fromRow.lat, lng: fromRow.lng }, { lat: savedSpot.lat, lng: savedSpot.lng });
-      if (directKm > maxDetourKm) savedSpot = null; // troppo lontano dalla posizione attuale
+    if (savedSpot && fromRow?.lat && fromRow?.lng && toRow?.lat && toRow?.lng) {
+      const { perpKm } = perpDistToSegment(savedSpot.lat, savedSpot.lng, fromRow.lat, fromRow.lng, toRow.lat, toRow.lng);
+      const isOnRoute = perpKm <= ON_ROUTE_PERP_KM;
+      if (!isOnRoute) {
+        // Fuori percorso: applica limite deviazione haversine
+        const directKm = haversineKm({ lat: fromRow.lat, lng: fromRow.lng }, { lat: savedSpot.lat, lng: savedSpot.lng });
+        if (directKm > maxDetourKm) savedSpot = null;
+      }
+      // Sul percorso: nessun limite di distanza — è sul mio cammino
     }
     const spot = savedSpot || (fromRow?.lat
       ? await findNearbyRestaurant(fromRow.lat, fromRow.lng, fromRow.lat, fromRow.lng, toRow?.lat, toRow?.lng, Math.round(maxDetourKm * 1000 * 1.5), lunchTimeMin, scheduledDate, maxDetourKm).catch(() => null)
@@ -787,7 +796,8 @@ async function insertBreaks(rows, options) {
     if (rows[beforeIndex]?.fixedWindow && rows[beforeIndex]?.stopPart === "afternoon") {
       return false;
     }
-    // Prefer saved stops near the route segment (perpendicular distance ≤ 2 km)
+    // Soste salvate: perpendicolare ≤ 2 km = "sul percorso" (nessun limite distanza).
+    // Se fuori percorso il limite haversine è maxDetourKm.
     let spot = findNearestRestStop(restStops, refLat, refLng, toLat, toLng, 2.0, breakTimeMin, scheduledDate);
     if (!spot && refLat && refLng) {
       spot = await findNearbyRestStop(refLat, refLng, fromLat, fromLng, toLat, toLng, 15000, breakTimeMin, scheduledDate, maxDetourKm).catch(() => null);
@@ -802,8 +812,11 @@ async function insertBreaks(rows, options) {
     const travelKm = (refLat != null && refLng != null && spot.lat != null && spot.lng != null)
       ? haversineKm({ lat: refLat, lng: refLng }, { lat: spot.lat, lng: spot.lng })
       : 0;
-    // Se la sosta è troppo lontana dalla posizione effettiva, scarta e riprova alla prossima finestra
-    if (travelKm > maxDetourKm) { return false; }
+    // Controlla deviazione solo per posti fuori dal percorso (perpendicolare > 2 km)
+    if (travelKm > 0 && refLat != null && refLng != null && toLat != null && toLng != null) {
+      const { perpKm } = perpDistToSegment(spot.lat, spot.lng, refLat, refLng, toLat, toLng);
+      if (perpKm > 2.0 && travelKm > maxDetourKm) { return false; }
+    }
     const travelMin = Math.round(travelKm / 50 * 60);
     insertions.push({
       beforeIndex, type: "rest", duration: REST_DUR,
@@ -825,17 +838,18 @@ async function insertBreaks(rows, options) {
     // If lunch is inserted before this row, reset cumulative — lunch resets the rest-stop clock
     if (lunchIns && lunchIns.beforeIndex === i) {
       cumulative = 0;
-      // Advance prevServiceEnd past the lunch duration so subsequent break-time checks are accurate
-      prevServiceEnd = prevServiceEnd + lunchBreakMinutes;
+      // Advance prevServiceEnd past lunch duration + travel to restaurant (for accurate post-lunch timings)
+      prevServiceEnd = prevServiceEnd + lunchBreakMinutes + (lunchIns.travelMinutes || 0);
     }
 
     const row = rows[i];
     let remainingDrive = row.driveMinutes || 0;
     const workMin = row.durationMinutes || 0;
     let driveConsumed = 0; // minutes of this leg already accounted for by mid-leg breaks
+    let noSpotFound = false; // true se tryInsert ha fallito per mancanza di posto (non per orario)
 
     // Mid-leg breaks: insert as many as needed while driving toward stop i
-    while (cumulative > 0 && remainingDrive > 0 && cumulative + remainingDrive >= REST_MIN) {
+    while (remainingDrive > 0 && cumulative + remainingDrive >= REST_MIN) {
       const needed = REST_MIN - cumulative; // minutes of driving until break triggers
       const fraction = needed / (row.driveMinutes || 1);
       // Interpolate position along the route at the break point
@@ -845,20 +859,30 @@ async function insertBreaks(rows, options) {
       if (!isValidBreakTime(breakTime)) break;
       // Pass destination (row.lat/lng) so saved stops are checked against the segment
       const inserted = await tryInsert(i, interpLat, interpLng, lastLat, lastLng, row.lat, row.lng, driveConsumed + needed, breakTime);
-      if (!inserted) break;
+      if (!inserted) { noSpotFound = true; break; }
       driveConsumed += needed;
       remainingDrive -= needed;
       // cumulative was reset to 0 by tryInsert
     }
 
-    cumulative += remainingDrive;
-    if (cumulative >= REST_MAX) cumulative = Math.floor(REST_MAX / 2);
+    // Se tryInsert ha fallito per mancanza di posto, aggiungiamo solo i minuti fino al punto
+    // del tentativo (non tutto il tratto), così la prossima finestra rimane puntuale.
+    if (noSpotFound) {
+      const minutesTried = REST_MIN - cumulative; // quanti minuti avremmo percorso
+      cumulative += Math.min(minutesTried, remainingDrive);
+      // Non applichiamo il cap REST_MAX: la sosta era dovuta ma non c'era posto
+    } else {
+      cumulative += remainingDrive;
+      if (cumulative >= REST_MAX) cumulative = Math.floor(REST_MAX / 2);
+    }
 
     // Post-work break: after finishing work at this stop
     cumulative += workMin;
     prevServiceEnd = parseTime(row.serviceEndTime) || prevServiceEnd;
 
-    if (cumulative >= REST_MIN && i < rows.length - 1) {
+    // Step 4: non tentare sosta post-tappa se la prossima tappa è breve (< 30 min lavoro)
+    const nextWorkMin = rows[i + 1]?.durationMinutes ?? 0;
+    if (cumulative >= REST_MIN && i < rows.length - 1 && nextWorkMin >= 30) {
       const breakTime = prevServiceEnd;
       const nextRow = rows[i + 1];
       if (isValidBreakTime(breakTime)) {

@@ -1,3 +1,10 @@
+## v4.086 — 2026-06-13
+- Fix A: ristorante/sosta "sul percorso" (perp ≤ 2km) accettato senza limite di distanza; il limite maxDetourKm si applica solo a posti fuori percorso
+- Fix B: quando tryInsert fallisce per mancanza di posto, cumulative non viene bruciato dall'intero tratto rimanente — la prossima finestra rimane puntuale
+- Fix C: rimosso vincolo `cumulative > 0` dal loop mid-leg — soste ora possibili anche con cumulative=0 (es. subito dopo il pranzo)
+- Fix D: no sosta post-tappa se la prossima dura < 30 min (lavoro breve → aspetta di finire)
+- Fix E: prevServiceEnd dopo il pranzo include anche travelMinutes verso il ristorante
+
 ## v4.085 — 2026-06-13
 - Fix: ristorante/sosta salvata selezionata anche se a ore di distanza — aggiunto check haversine dalla posizione attuale (non solo distanza perpendicolare al segmento); se la distanza diretta supera maxDetourKm il posto salvato viene ignorato e si usa l'API
 - Fix: tempo di viaggio verso sosta/ristorante cappato a 10 min — rimosso Math.min(..., maxDetourMin); per le soste, se il viaggio supera maxDetourKm il posto viene scartato e si cerca il successivo
