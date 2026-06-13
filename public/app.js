@@ -1265,7 +1265,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.077 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.078 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -2414,9 +2414,9 @@ function renderArchive() {
                   : `<button class="btn danger icon-btn" data-delete-address="${a.id}" title="Elimina">${I.trash(14)}</button>`}
               </div>` : ""}
               <div class="opening-status" id="opening-status-${a.id}" style="display:none"></div>
-              ${!sel ? `<details class="visit-history-details" ${state.visitCalendar[a.id] !== undefined ? "open" : ""}>
+              ${!sel ? `<details class="visit-history-details" ${state.visitCalendar[a.id] !== undefined ? "open" : ""} data-cal-addr="${a.id}">
                 <summary class="visit-history-toggle">📅 Storico visite</summary>
-                ${renderVisitCalendar(a.id)}
+                <div class="visit-cal-body">${state.visitCalendar[a.id] !== undefined ? renderVisitCalendar(a.id) : ""}</div>
               </details>` : ""}
             </article>`;}).join("") || `<div class="empty" style="grid-column:1/-1">Nessun contatto trovato.</div>`}
         </div>
@@ -5031,20 +5031,23 @@ function bindEvents() {
       const q = e.target.value;
       const cursor = e.target.selectionStart;
       state.addressSearch = q;
-      state.archiveShowAll = Boolean(q);
       // Client-side filter from already-loaded list, con ranking di pertinenza
       state.addresses = q ? rankAddressMatches(state.allAddresses, q) : [];
       renderArchive();
-      // Restore focus + cursor after DOM replacement
+      // preventScroll: evita che focus() sul nuovo input faccia saltare la pagina
       const inp = document.getElementById("archive-search");
-      if (inp) { inp.focus(); inp.setSelectionRange(cursor, cursor); }
-      // Then confirm with server (only refreshAddresses, not all data)
+      if (inp) { inp.focus({ preventScroll: true }); inp.setSelectionRange(cursor, cursor); }
+      // Conferma con server dopo 300 ms; ri-renderizza solo se i risultati sono cambiati
       clearTimeout(state._archiveSearchTimer);
+      const prevIds = state.addresses.map(a => a.id).join(",");
       state._archiveSearchTimer = setTimeout(() => {
         refreshAddresses().then(() => {
-          renderArchive();
-          const inp2 = document.getElementById("archive-search");
-          if (inp2 && document.activeElement !== inp2) { inp2.focus(); inp2.setSelectionRange(inp2.value.length, inp2.value.length); }
+          const newIds = state.addresses.map(a => a.id).join(",");
+          if (newIds !== prevIds) {
+            renderArchive();
+            const inp2 = document.getElementById("archive-search");
+            if (inp2) { inp2.focus({ preventScroll: true }); inp2.setSelectionRange(inp2.value.length, inp2.value.length); }
+          }
         });
       }, 300);
     }
@@ -5995,11 +5998,10 @@ function bindEvents() {
     if (vcalNav) {
       const [addrId, y, m] = vcalNav.dataset.vcalNav.split(":");
       state.visitCalendar[addrId] = { year: Number(y), month: Number(m) };
-      // Re-render just the calendar div inside the card
       const calContainer = vcalNav.closest(".visit-history-details");
       if (calContainer) {
-        const content = calContainer.querySelector(".vcal, .visit-history-empty");
-        if (content) content.outerHTML = renderVisitCalendar(addrId);
+        const body = calContainer.querySelector(".visit-cal-body");
+        if (body) body.innerHTML = renderVisitCalendar(addrId);
       }
       return;
     }
@@ -6315,6 +6317,25 @@ function bindEvents() {
       showToast(`Importazione interrotta — ${w.saved} contatti salvati`);
     }
   });
+
+  // Lazy rendering storico visite: il contenuto del calendario viene generato
+  // solo quando l'utente apre il <details>, non per tutti i contatti insieme.
+  // Usa capture perché toggle non fa bubble.
+  app.addEventListener("toggle", e => {
+    const det = e.target;
+    if (!det.classList?.contains("visit-history-details")) return;
+    const addrId = det.dataset.calAddr;
+    if (!addrId) return;
+    if (det.open) {
+      if (state.visitCalendar[addrId] === undefined) state.visitCalendar[addrId] = {};
+      const body = det.querySelector(".visit-cal-body");
+      if (body && !body.querySelector(".vcal, .visit-history-empty")) {
+        body.innerHTML = renderVisitCalendar(addrId);
+      }
+    } else {
+      delete state.visitCalendar[addrId];
+    }
+  }, true);
 }
 
 // ── auth screen ───────────────────────────────────────────────────────────────
