@@ -1265,7 +1265,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.080 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.081 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -2418,7 +2418,7 @@ function renderArchive() {
       <div class="panel">
         <div class="section-head">
           <h2>Archivio</h2>
-          <div class="row">
+          <div class="row" style="flex-wrap:wrap;gap:6px;">
             ${sel ? `
               <button class="btn" id="archive-select-all">${I.check(14)} Tutti</button>
               <button class="btn danger" id="archive-delete-selected" ${nSel === 0 ? "disabled" : ""}>${I.trash(14)} Elimina${nSel > 0 ? ` (${nSel})` : ""}</button>

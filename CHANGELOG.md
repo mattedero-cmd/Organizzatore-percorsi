@@ -1,3 +1,6 @@
+## v4.081 — 2026-06-13
+- Fix: pulsante "Seleziona" non visibile su iPhone — aggiunto flex-wrap alla riga pulsanti header archivio
+
 ## v4.080 — 2026-06-13
 - Fix: scroll-jump ricerca archivio eliminato definitivamente — il search handler ora aggiorna solo il div .archive-list senza mai distruggere/ricreare l'input (estratto buildArchiveListHTML()). Novità v4.080
 
