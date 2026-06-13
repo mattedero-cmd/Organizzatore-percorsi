@@ -1115,7 +1115,7 @@ function renderMenuGuide() {
           <li><b>Tocca la card</b> del giro per aprirlo nel tab Risultato.</li>
           <li><b>Tocca il nome</b> del giro per rinominarlo.</li>
           <li>I pulsanti <b>Condividi</b>, <b>Duplica</b> ed <b>Elimina</b> sono visibili sulla card.</li>
-          <li>I giri con bordo viola e badge <b>Importato</b> sono stati ricevuti da un'altra persona tramite link di condivisione.</li>
+          <li>I giri con bordo viola e badge <b>Condiviso da [nome]</b> sono stati ricevuti da un'altra persona tramite link di condivisione.</li>
           <li>Il campo data sulla card permette di riprogrammare il giro a un altro giorno con ricalcolo automatico.</li>
         </ul>
       `)}
@@ -1149,7 +1149,7 @@ function renderMenuGuide() {
           <li>Chi riceve il link lo apre, vede una preview del giro e con un tocco lo importa nei propri giri salvati.</li>
           <li>Il link è valido per <b>5 giorni</b> dalla creazione.</li>
           <li>I contatti del giro condiviso non vengono aggiunti all'archivio del destinatario, ma rimangono incorporati nel giro e sono utilizzabili normalmente.</li>
-          <li>I giri importati sono riconoscibili dal bordo viola e dal badge <b>Importato</b>.</li>
+          <li>I giri importati sono riconoscibili dal bordo viola e dal badge <b>Condiviso da [nome]</b> con il nickname di chi li ha condivisi.</li>
         </ul>
       `)}
 
@@ -1265,7 +1265,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.081 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.082 &mdash; giugno 2026</p>
         </div>
       </div>
 

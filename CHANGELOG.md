@@ -1,3 +1,6 @@
+## v4.082 — 2026-06-13
+- Fix: badge "Condiviso da [nickname]" non appariva sui giri importati — rowToRouteSummary() in db.js non esponeva il campo sharedBy (era sepolto solo in payload), quindi la lista giri ripiegava sempre su "Importato". Ora sharedBy viene letto da payload.sharedBy e incluso nel sommario. Aggiornati anche i testi della guida.
+
 ## v4.081 — 2026-06-13
 - Fix: pulsante "Seleziona" non visibile su iPhone — aggiunto flex-wrap alla riga pulsanti header archivio
 

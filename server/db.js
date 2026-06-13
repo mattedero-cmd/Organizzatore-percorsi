@@ -123,6 +123,7 @@ function rowToRouteSummary(row) {
     createdAt: row.created_at,
     plannedStops: (payload.plannedStops || payload.rows || []).filter(s => !s.type).map(s => ({ customer: s.customer || "", location: s.location || "", addressId: s.addressId, stopUid: s.uid || s.stopUid, stopPart: s.stopPart })),
     source: row.source || null,
+    sharedBy: payload.sharedBy || null,
     notes: row.notes || ""
   };
 }
