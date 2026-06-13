@@ -1265,7 +1265,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.078 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.079 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -2373,7 +2373,7 @@ function renderArchive() {
               <button class="btn" id="import-contacts">${I.upload(14)} Importa</button>
               ${state.googleClientId ? `<button class="btn" id="import-google-contacts">${I.link(14)} Google</button>` : ""}
               <button class="btn" id="new-address">${I.plus(14)} Nuovo</button>
-              ${showingResults ? `<button class="btn" id="archive-start-select">${I.check(14)} Seleziona</button>` : ""}
+              <button class="btn" id="archive-start-select">${I.check(14)} Seleziona</button>
             `}
           </div>
         </div>
@@ -5910,8 +5910,12 @@ function bindEvents() {
       return;
     }
 
-    // Archive: start select mode
+    // Archive: start select mode (carica tutti i contatti se non già visibili)
     if (e.target.closest("#archive-start-select")) {
+      if (!state.archiveShowAll && !state.addressSearch) {
+        state.archiveShowAll = true;
+        await refreshAllData();
+      }
       state.archiveSelectMode = true;
       state.archiveSelected = new Set();
       state.archiveDeletePending = null;

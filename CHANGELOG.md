@@ -1,3 +1,6 @@
+## v4.079 — 2026-06-13
+- Fix: pulsante "Seleziona" ora sempre visibile in archivio (non solo dopo ricerca/mostra tutti); al click carica automaticamente tutti i contatti se non già mostrati
+
 ## v4.078 — 2026-06-13
 - Fix: ricerca archivio non saltava più la pagina a ogni lettera — rimosso state.archiveShowAll=Boolean(q) nel handler input; focus() con preventScroll:true; debounce ri-renderizza solo se i risultati cambiano
 - Fix: crash eliminando contatti in modalità "mostra tutti" — renderVisitCalendar() ora è lazy: viene chiamato solo all'apertura del <details> tramite capture listener su toggle, non per tutti i contatti insieme durante il render
