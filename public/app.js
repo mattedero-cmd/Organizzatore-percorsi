@@ -233,9 +233,7 @@ const state = {
   addresses: [],
   allAddresses: [],
   savedRoutes: [],
-  folders: [],            // [{ id, name, createdAt }] — persistite in localStorage
-  routeFolderMap: {},     // { [routeId]: folderId } — un giro in una sola cartella
-  routeEarnings: {},      // { [routeId]: number } — guadagno manuale per giro
+  folders: [],            // [{ id, name, createdAt }] — sincronizzate via /api/folders
   savedFolderId: null,    // cartella aperta nella vista "salvati" (null = radice)
   savedSearch: { name: "", dateFrom: "", dateTo: "", stop: "", shared: "all" },
   addressSearch: "",
@@ -1271,7 +1269,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.078 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.079 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -1283,12 +1281,12 @@ function renderMenuInfo() {
         <li>${state.whisperConfigured ? _svg('<polyline points="20 6 9 17 4 12"/>', 14) + " Comandi vocali attivi (Whisper)" : _svg('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>', 14) + " Comandi vocali non configurati"}</li>
       </ul>
 
-      <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v4.078</p>
+      <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v4.079</p>
       <ul class="info-list">
         <li>Ricerca avanzata nei giri salvati: per nome, intervallo di date, tappa (cliente/indirizzo) e stato di condivisione, combinabili tra loro</li>
         <li>Cartelle per organizzare i giri: crea, rinomina, elimina; sposta un giro in una cartella o toglilo. Eliminando una cartella i giri tornano "senza cartella"</li>
-        <li>Statistiche per cartella: ore di lavoro, km percorsi, ore di guida e guadagno totale dei giri contenuti</li>
-        <li>Guadagno per giro: campo manuale (non ricavabile dal percorso) sommato nelle statistiche di cartella</li>
+        <li>Le cartelle sono salvate sul tuo account e si sincronizzano tra tutti i dispositivi</li>
+        <li>Statistiche per cartella: ore di lavoro, km percorsi, ore di guida e costo totale dei giri contenuti</li>
       </ul>
 
       <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v4.070</p>
@@ -2262,26 +2260,16 @@ function readWeeklyHours() {
 
 // ── render: saved tab ─────────────────────────────────────────────────────────
 
-// ── cartelle giri: persistenza localStorage ───────────────────────────────────
-const LS_FOLDERS = "op_folders";
-const LS_ROUTE_FOLDER = "op_route_folder";
-const LS_ROUTE_EARNINGS = "op_route_earnings";
-
-function loadFoldersState() {
-  try { const f = JSON.parse(localStorage.getItem(LS_FOLDERS) || "[]"); state.folders = Array.isArray(f) ? f : []; }
-  catch { state.folders = []; }
-  try { const m = JSON.parse(localStorage.getItem(LS_ROUTE_FOLDER) || "{}"); state.routeFolderMap = (m && typeof m === "object") ? m : {}; }
-  catch { state.routeFolderMap = {}; }
-  try { const e = JSON.parse(localStorage.getItem(LS_ROUTE_EARNINGS) || "{}"); state.routeEarnings = (e && typeof e === "object") ? e : {}; }
-  catch { state.routeEarnings = {}; }
+// ── cartelle giri: sincronizzate lato server ───────────────────────────────────
+async function refreshFolders() {
+  state.folders = await api("/api/folders").catch(() => []);
 }
-function saveFolders() { try { localStorage.setItem(LS_FOLDERS, JSON.stringify(state.folders)); } catch {} }
-function saveRouteFolderMap() { try { localStorage.setItem(LS_ROUTE_FOLDER, JSON.stringify(state.routeFolderMap)); } catch {} }
-function saveRouteEarnings() { try { localStorage.setItem(LS_ROUTE_EARNINGS, JSON.stringify(state.routeEarnings)); } catch {} }
 
 function folderById(id) { return state.folders.find(f => String(f.id) === String(id)) || null; }
+// L'assegnazione cartella vive sul giro stesso (campo folderId restituito dall'API)
 function routeFolderId(routeId) {
-  const fid = state.routeFolderMap[String(routeId)];
+  const r = state.savedRoutes.find(x => String(x.id) === String(routeId));
+  const fid = r ? r.folderId : null;
   return (fid != null && folderById(fid)) ? fid : null;
 }
 function routesInFolder(folderId) {
@@ -2290,24 +2278,19 @@ function routesInFolder(folderId) {
     return folderId == null ? fid == null : String(fid) === String(folderId);
   });
 }
-function routeEarning(routeId) {
-  const v = state.routeEarnings[String(routeId)];
-  return (v == null || v === "") ? null : Number(v);
-}
 
-// Statistiche di cartella: km / ore guida / ore lavoro sono ricavate dal giro
-// (summary), il guadagno è inserito manualmente per giro (non esiste nei dati).
+// Statistiche di cartella: tutto è ricavato dai dati del giro (summary).
+// "Costo" = total_cost già memorizzato; nessun dato inventato o manuale.
 function folderStats(routes) {
   return routes.reduce((t, r) => {
     const n = normalizeSavedRoute(r);
     t.km += n.summary.totalKm;
     t.driveMin += n.summary.totalDriveMinutes;
     t.workMin += n.summary.totalWorkMinutes;
-    const e = routeEarning(r.id);
-    if (e != null && !Number.isNaN(e)) { t.earn += e; t.earnCount++; }
+    t.cost += n.summary.totalCost;
     t.count++;
     return t;
-  }, { km: 0, driveMin: 0, workMin: 0, earn: 0, earnCount: 0, count: 0 });
+  }, { km: 0, driveMin: 0, workMin: 0, cost: 0, count: 0 });
 }
 
 // ── ricerca avanzata giri ──────────────────────────────────────────────────────
@@ -2343,12 +2326,11 @@ function filterSavedRoutes(routes) {
 }
 
 function renderFolderStats(st) {
-  const earnVal = st.earnCount ? euro(st.earn) : "—";
   return `<div id="folder-stats" class="folder-stats">
     <div class="folder-stat"><span class="folder-stat-val">${minutesLabel(st.workMin)}</span><span class="folder-stat-lbl">Ore lavoro</span></div>
     <div class="folder-stat"><span class="folder-stat-val">${st.km.toFixed(0)} km</span><span class="folder-stat-lbl">Km percorsi</span></div>
     <div class="folder-stat"><span class="folder-stat-val">${minutesLabel(st.driveMin)}</span><span class="folder-stat-lbl">Ore guida</span></div>
-    <div class="folder-stat"><span class="folder-stat-val">${earnVal}</span><span class="folder-stat-lbl">Guadagno${st.earnCount && st.earnCount < st.count ? ` (${st.earnCount}/${st.count})` : ""}</span></div>
+    <div class="folder-stat"><span class="folder-stat-val">${euro(st.cost)}</span><span class="folder-stat-lbl">Costo totale</span></div>
   </div>`;
 }
 
@@ -2409,7 +2391,6 @@ function renderSavedToolbar(inFolder, folder) {
 
 function renderSavedCard(route) {
   const fid = routeFolderId(route.id);
-  const earn = routeEarning(route.id);
   const folderOpts = `<option value=""${fid == null ? " selected" : ""}>Senza cartella</option>` +
     state.folders.map(fl => `<option value="${fl.id}"${String(fid) === String(fl.id) ? " selected" : ""}>${escapeHtml(fl.name)}</option>`).join("");
   return `<article class="card saved-card${route.source === "imported" ? " saved-card--imported" : ""}" data-open-route="${route.id}" style="cursor:pointer;">
@@ -2424,9 +2405,6 @@ function renderSavedCard(route) {
     <div class="saved-card-manage" onclick="event.stopPropagation()">
       <label class="saved-card-folder">${I.folder(13)}
         <select data-move-route="${route.id}">${folderOpts}</select>
-      </label>
-      <label class="saved-card-earn"><span>€</span>
-        <input type="number" inputmode="decimal" step="0.01" min="0" data-earning-route="${route.id}" value="${earn != null && !Number.isNaN(earn) ? earn : ""}" placeholder="Guadagno" />
       </label>
     </div>
     <div class="saved-card-btns">
@@ -5237,21 +5215,6 @@ function bindEvents() {
       updateSavedList();
       return;
     }
-    // saved routes: guadagno manuale per giro
-    const earnInp = e.target.closest("[data-earning-route]");
-    if (earnInp) {
-      const id = earnInp.dataset.earningRoute;
-      const v = String(earnInp.value).trim();
-      if (v === "") delete state.routeEarnings[String(id)];
-      else state.routeEarnings[String(id)] = Number(v.replace(",", "."));
-      saveRouteEarnings();
-      // aggiorna la striscia statistiche cartella senza rimontare l'input
-      if (state.savedFolderId != null) {
-        const statsEl = document.getElementById("folder-stats");
-        if (statsEl) statsEl.outerHTML = renderFolderStats(folderStats(routesInFolder(state.savedFolderId)));
-      }
-      return;
-    }
     // archive search
     if (e.target.id === "archive-search") {
       const q = e.target.value;
@@ -5352,16 +5315,19 @@ function bindEvents() {
     if (e.target.id === "saved-search-from") { state.savedSearch.dateFrom = e.target.value; updateSavedList(); return; }
     if (e.target.id === "saved-search-to") { state.savedSearch.dateTo = e.target.value; updateSavedList(); return; }
     if (e.target.id === "saved-search-shared") { state.savedSearch.shared = e.target.value; updateSavedList(); return; }
-    // saved routes: sposta un giro in una cartella (o toglilo)
+    // saved routes: sposta un giro in una cartella (o toglilo) — sincronizzato
     const moveSel = e.target.closest("[data-move-route]");
     if (moveSel) {
       const id = moveSel.dataset.moveRoute;
       const val = moveSel.value;
-      if (val) state.routeFolderMap[String(id)] = val;
-      else delete state.routeFolderMap[String(id)];
-      saveRouteFolderMap();
-      renderSaved(); // il giro può lasciare la vista corrente: re-render completo
-      showToast(val ? "Spostato nella cartella" : "Tolto dalla cartella");
+      (async () => {
+        try {
+          await api(`/api/routes/${id}/folder`, { method: "PUT", body: JSON.stringify({ folderId: val || null }) });
+          await refreshSavedRoutes();
+          renderSaved(); // il giro può lasciare la vista corrente: re-render completo
+          showToast(val ? "Spostato nella cartella" : "Tolto dalla cartella");
+        } catch (err) { showToast(err.message); }
+      })();
       return;
     }
     // stop form (nuovo percorso) — solo aggiorna stato, NO render (iOS chiuderebbe il picker)
@@ -5963,13 +5929,11 @@ function bindEvents() {
     if (e.target.closest("#folder-create")) {
       const name = window.prompt("Nome della nuova cartella:");
       if (name && name.trim()) {
-        state.folders.push({
-          id: "f" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-          name: name.trim(),
-          createdAt: Date.now()
-        });
-        saveFolders();
-        renderSaved();
+        try {
+          await api("/api/folders", { method: "POST", body: JSON.stringify({ name: name.trim() }) });
+          await refreshFolders();
+          renderSaved();
+        } catch (err) { showToast(err.message); }
       }
       return;
     }
@@ -5992,7 +5956,13 @@ function bindEvents() {
       const fld = folderById(folderRenBtn.dataset.folderRename);
       if (!fld) return;
       const name = window.prompt("Nuovo nome cartella:", fld.name);
-      if (name && name.trim()) { fld.name = name.trim(); saveFolders(); renderSaved(); }
+      if (name && name.trim()) {
+        try {
+          await api(`/api/folders/${fld.id}`, { method: "PUT", body: JSON.stringify({ name: name.trim() }) });
+          await refreshFolders();
+          renderSaved();
+        } catch (err) { showToast(err.message); }
+      }
       return;
     }
     // cartelle: elimina (i giri NON vengono cancellati → tornano "senza cartella")
@@ -6002,15 +5972,14 @@ function bindEvents() {
       if (!fld) return;
       const n = routesInFolder(fld.id).length;
       if (!confirm(`Eliminare la cartella "${fld.name}"?${n ? ` I ${n} giri torneranno "senza cartella".` : ""}`)) return;
-      for (const k of Object.keys(state.routeFolderMap)) {
-        if (String(state.routeFolderMap[k]) === String(fld.id)) delete state.routeFolderMap[k];
-      }
-      state.folders = state.folders.filter(f => String(f.id) !== String(fld.id));
-      saveFolders();
-      saveRouteFolderMap();
-      if (String(state.savedFolderId) === String(fld.id)) state.savedFolderId = null;
-      renderSaved();
-      showToast("Cartella eliminata");
+      try {
+        await api(`/api/folders/${fld.id}`, { method: "DELETE" });
+        if (String(state.savedFolderId) === String(fld.id)) state.savedFolderId = null;
+        await refreshFolders();
+        await refreshSavedRoutes(); // i giri hanno perso l'assegnazione
+        renderSaved();
+        showToast("Cartella eliminata");
+      } catch (err) { showToast(err.message); }
       return;
     }
     // ricerca: azzera filtri
@@ -6724,8 +6693,8 @@ function renderAuthScreen(isSetup = false) {
 // ── init ──────────────────────────────────────────────────────────────────────
 
 async function initApp() {
-  loadFoldersState();
   await loadInitialData();
+  await refreshFolders();
 
   // Ripristina la tab e il giro aperti prima del reload (iOS background)
   try {
