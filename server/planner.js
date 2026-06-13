@@ -505,7 +505,8 @@ function perpDistToSegment(pLat, pLng, aLat, aLng, bLat, bLng) {
 // Falls back to 15 km haversine if no destination is known.
 function findNearestRestStop(restStops, fromLat, fromLng, toLat, toLng, maxPerpKm = 2.0, breakTimeMin = null, scheduledDate = null) {
   if (!restStops.length) return null;
-  if (!fromLat || !fromLng) return restStops[0];
+  // Senza coordinate correnti non possiamo valutare la distanza → nessuna sosta
+  if (!fromLat || !fromLng) return null;
   const hasSegment = toLat != null && toLng != null;
 
   const targetDay = (breakTimeMin != null && scheduledDate)
@@ -631,9 +632,8 @@ async function insertBreaks(rows, options) {
       ? haversineKm({ lat: fromRow.lat, lng: fromRow.lng }, { lat: spot.lat, lng: spot.lng })
       : 0;
     const travelMin = Math.min(Math.round(travelKm / 50 * 60), maxDetourMin);
-    const totalDuration = lunchBreakMinutes + travelMin;
     const label = spot.rating ? `${spot.customer} · ⭐ ${spot.rating} (${spot.reviewCount})` : spot.customer;
-    return { beforeIndex, type: "lunch", duration: totalDuration, travelMinutes: travelMin,
+    return { beforeIndex, type: "lunch", duration: lunchBreakMinutes, travelMinutes: travelMin, travelKm,
       customer: label, location: spot.location || "", address: spot.fullAddress || "",
       lat: spot.lat ?? null, lng: spot.lng ?? null, placeId: spot.placeId ?? null };
   };
@@ -795,9 +795,13 @@ async function insertBreaks(rows, options) {
     const warnings = spot.openAtBreak === false
       ? [{ msg: `La sosta "${spot.customer}" potrebbe essere chiusa all'orario previsto`, level: "warn" }]
       : [];
+    const travelKm = (refLat != null && refLng != null && spot.lat != null && spot.lng != null)
+      ? haversineKm({ lat: refLat, lng: refLng }, { lat: spot.lat, lng: spot.lng })
+      : 0;
+    const travelMin = Math.min(Math.round(travelKm / 50 * 60), maxDetourMin);
     insertions.push({
       beforeIndex, type: "rest", duration: REST_DUR,
-      driveOffset,
+      driveOffset, travelMinutes: travelMin, travelKm,
       customer: label,
       location: spot.location || "",
       address: spot.fullAddress || "",
@@ -872,6 +876,8 @@ async function insertBreaks(rows, options) {
     while (pending.length && pending[0].beforeIndex === i) {
       const brk = pending.shift();
       let refDep, brkEnd;
+      const travelMin = brk.lunchForFixed ? 0 : (brk.travelMinutes || 0);
+      const travelKm = brk.lunchForFixed ? 0 : (brk.travelKm || 0);
       if (brk.lunchForFixed) {
         // Fixed-window lunch: use the exact baked-in time, no shift
         refDep = brk.fixedLunchAt;
@@ -881,7 +887,7 @@ async function insertBreaks(rows, options) {
           ? parseTime(rows[i].departureTime) + timeShift
           : parseTime(rows[rows.length - 1].serviceEndTime) + timeShift;
         refDep = baseDep + (brk.driveOffset || 0);
-        brkEnd = refDep + brk.duration;
+        brkEnd = refDep + travelMin + brk.duration;
       }
       result.push({
         type: brk.type,
@@ -892,18 +898,18 @@ async function insertBreaks(rows, options) {
         lat: brk.lat ?? null,
         lng: brk.lng ?? null,
         departureTime: formatTime(refDep),
-        arrivalTime: formatTime(refDep),
-        serviceStartTime: formatTime(refDep),
+        arrivalTime: formatTime(refDep + travelMin),
+        serviceStartTime: formatTime(refDep + travelMin),
         serviceEndTime: formatTime(brkEnd),
         durationMinutes: brk.duration,
-        warnings: [],
-        driveMinutes: 0,
-        baseDriveMinutes: 0,
+        warnings: brk.warnings || [],
+        driveMinutes: travelMin,
+        baseDriveMinutes: travelMin,
         driveBufferMinutes: 0,
-        km: 0,
+        km: Number(travelKm.toFixed(1)),
         legSource: "break"
       });
-      if (!brk.noTimeShift) timeShift += brk.duration;
+      if (!brk.noTimeShift) timeShift += travelMin + brk.duration;
     }
     if (i < rows.length) {
       result.push(shiftRowTimes(rows[i], timeShift));
@@ -1056,11 +1062,19 @@ export async function planRoute(payload, settings, restStops = []) {
       departureTime: formatTime(parseTime(best.finalLeg.departureTime) + addedMinutes),
       arrivalTime: formatTime(parseTime(best.finalLeg.arrivalTime) + addedMinutes)
     },
-    summary: {
-      ...best.summary,
-      dayEnd: formatTime(parseTime(best.summary.dayEnd) + addedMinutes),
-      totalDayMinutes: best.summary.totalDayMinutes + addedMinutes
-    }
+    summary: (() => {
+      const breakDriveMin = enrichedRows
+        .filter(r => r.type === "rest" || r.type === "lunch")
+        .reduce((s, r) => s + (r.driveMinutes || 0), 0);
+      const totalDriveMinutes = best.summary.totalDriveMinutes + breakDriveMin;
+      return {
+        ...best.summary,
+        totalDriveMinutes,
+        totalDriveHours: minutesToHours(totalDriveMinutes),
+        dayEnd: formatTime(parseTime(best.summary.dayEnd) + addedMinutes),
+        totalDayMinutes: best.summary.totalDayMinutes + addedMinutes
+      };
+    })()
   };
 
   return {

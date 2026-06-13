@@ -1,3 +1,6 @@
+## v4.084 — 2026-06-13
+- Fix: soste e pause pranzo non rispettavano la deviazione effettiva dal percorso — findNearestRestStop() restituiva la prima sosta salvata senza valutare le coordinate; travelKm/travelMin ora calcolati separatamente per ogni sosta/ristorante e inseriti nel percorso come tratto di guida dedicato (driveMinutes, km) anziché sommarsi alla durata della pausa; timeShift include il viaggio verso la sosta
+
 ## v4.083 — 2026-06-13
 - Feature: ricerca avanzata nei giri salvati — per nome, intervallo di date (Da/A), tappa (cliente/indirizzo, riusa fuzzy-match `rankAddressMatches`) e stato di condivisione; criteri combinabili. La ricerca alla radice opera su tutti i giri, dentro una cartella si limita a quella cartella
 - Feature: cartelle sincronizzate lato server — crea, rinomina, elimina; sposta un giro in una cartella o toglilo; eliminando una cartella i giri tornano "senza cartella" (con conferma). Persistenza DB (`folders` table + `planned_routes.folder_id`), sincronizzazione tra dispositivi tramite `/api/folders` e `/api/routes/:id/folder`
