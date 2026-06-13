@@ -621,17 +621,21 @@ async function insertBreaks(rows, options) {
   const makeLunchEntry = async (beforeIndex, refRow, nextRow, lunchTimeMin) => {
     const fromRow = refRow || (beforeIndex > 0 ? rows[beforeIndex - 1] : null);
     const toRow = nextRow || (beforeIndex < rows.length ? rows[beforeIndex] : null);
-    // Try saved restaurants first, then Places search (rispetta deviazione max)
-    const saved = findNearestRestStop(restaurantStops, fromRow?.lat, fromRow?.lng, toRow?.lat, toRow?.lng, maxDetourKm, lunchTimeMin, scheduledDate);
-    const spot = saved || (fromRow?.lat
+    // Try saved restaurants first — also verify haversine from current pos ≤ maxDetourKm
+    let savedSpot = findNearestRestStop(restaurantStops, fromRow?.lat, fromRow?.lng, toRow?.lat, toRow?.lng, maxDetourKm, lunchTimeMin, scheduledDate);
+    if (savedSpot && fromRow?.lat && fromRow?.lng) {
+      const directKm = haversineKm({ lat: fromRow.lat, lng: fromRow.lng }, { lat: savedSpot.lat, lng: savedSpot.lng });
+      if (directKm > maxDetourKm) savedSpot = null; // troppo lontano dalla posizione attuale
+    }
+    const spot = savedSpot || (fromRow?.lat
       ? await findNearbyRestaurant(fromRow.lat, fromRow.lng, fromRow.lat, fromRow.lng, toRow?.lat, toRow?.lng, Math.round(maxDetourKm * 1000 * 1.5), lunchTimeMin, scheduledDate, maxDetourKm).catch(() => null)
       : null);
     if (!spot) return { beforeIndex, type: "lunch", duration: lunchBreakMinutes, customer: "Pausa pranzo" };
-    // Stima tempo di viaggio verso il ristorante (haversine / 50 km/h)
+    // Stima tempo di viaggio verso il ristorante (haversine / 50 km/h) — nessun cap: se è troppo lontano lo mostriamo reale
     const travelKm = (fromRow?.lat && fromRow?.lng && spot.lat && spot.lng)
       ? haversineKm({ lat: fromRow.lat, lng: fromRow.lng }, { lat: spot.lat, lng: spot.lng })
       : 0;
-    const travelMin = Math.min(Math.round(travelKm / 50 * 60), maxDetourMin);
+    const travelMin = Math.round(travelKm / 50 * 60);
     const label = spot.rating ? `${spot.customer} · ⭐ ${spot.rating} (${spot.reviewCount})` : spot.customer;
     return { beforeIndex, type: "lunch", duration: lunchBreakMinutes, travelMinutes: travelMin, travelKm,
       customer: label, location: spot.location || "", address: spot.fullAddress || "",
@@ -798,7 +802,9 @@ async function insertBreaks(rows, options) {
     const travelKm = (refLat != null && refLng != null && spot.lat != null && spot.lng != null)
       ? haversineKm({ lat: refLat, lng: refLng }, { lat: spot.lat, lng: spot.lng })
       : 0;
-    const travelMin = Math.min(Math.round(travelKm / 50 * 60), maxDetourMin);
+    // Se la sosta è troppo lontana dalla posizione effettiva, scarta e riprova alla prossima finestra
+    if (travelKm > maxDetourKm) { return false; }
+    const travelMin = Math.round(travelKm / 50 * 60);
     insertions.push({
       beforeIndex, type: "rest", duration: REST_DUR,
       driveOffset, travelMinutes: travelMin, travelKm,

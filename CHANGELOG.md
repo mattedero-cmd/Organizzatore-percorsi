@@ -1,3 +1,7 @@
+## v4.085 — 2026-06-13
+- Fix: ristorante/sosta salvata selezionata anche se a ore di distanza — aggiunto check haversine dalla posizione attuale (non solo distanza perpendicolare al segmento); se la distanza diretta supera maxDetourKm il posto salvato viene ignorato e si usa l'API
+- Fix: tempo di viaggio verso sosta/ristorante cappato a 10 min — rimosso Math.min(..., maxDetourMin); per le soste, se il viaggio supera maxDetourKm il posto viene scartato e si cerca il successivo
+
 ## v4.084 — 2026-06-13
 - Fix: soste e pause pranzo non rispettavano la deviazione effettiva dal percorso — findNearestRestStop() restituiva la prima sosta salvata senza valutare le coordinate; travelKm/travelMin ora calcolati separatamente per ogni sosta/ristorante e inseriti nel percorso come tratto di guida dedicato (driveMinutes, km) anziché sommarsi alla durata della pausa; timeShift include il viaggio verso la sosta
 
