@@ -69,6 +69,7 @@ const I = {
   fork:     (s) => _svg('<line x1="8" y1="6" x2="8" y2="2"/><line x1="16" y1="6" x2="16" y2="2"/><path d="M8 6a4 4 0 0 0 0 8v8"/><path d="M16 6a4 4 0 0 1 0 8v-4h-4"/>', s),
   coffee:   (s) => _svg('<path d="M17 8h1a4 4 0 1 1 0 8h-1"/><path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V8z"/><line x1="6" y1="2" x2="6" y2="4"/><line x1="10" y1="2" x2="10" y2="4"/><line x1="14" y1="2" x2="14" y2="4"/>', s),
   list:     (s) => _svg('<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>', s),
+  folder:   (s) => _svg('<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>', s),
   car:      (s) => _svg('<path d="M5 17H3a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v9a2 2 0 0 1-2 2h-3"/><circle cx="7.5" cy="17.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/>', s),
   wrench:   (s) => _svg('<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>', s),
   upload:   (s) => _svg('<polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/>', s),
@@ -232,6 +233,9 @@ const state = {
   addresses: [],
   allAddresses: [],
   savedRoutes: [],
+  folders: [],            // [{ id, name, createdAt }] — sincronizzate via /api/folders
+  savedFolderId: null,    // cartella aperta nella vista "salvati" (null = radice)
+  savedSearch: { name: "", dateFrom: "", dateTo: "", stop: "", shared: "all" },
   addressSearch: "",
   archiveShowAll: false,
   stopSearchText: "",
@@ -1265,7 +1269,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.082 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.083 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -1275,6 +1279,14 @@ function renderMenuInfo() {
       <ul class="info-list">
         <li>${state.mapApiConfigured ? _svg('<polyline points="20 6 9 17 4 12"/>', 14) + " Google Maps attivo — percorsi reali e ottimizzazione avanzata" : _svg('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>', 14) + " Google Maps non configurato — stime distanze locali"}</li>
         <li>${state.whisperConfigured ? _svg('<polyline points="20 6 9 17 4 12"/>', 14) + " Comandi vocali attivi (Whisper)" : _svg('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>', 14) + " Comandi vocali non configurati"}</li>
+      </ul>
+
+      <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v4.083</p>
+      <ul class="info-list">
+        <li>Ricerca avanzata nei giri salvati: per nome, intervallo di date, tappa (cliente/indirizzo) e stato di condivisione, combinabili tra loro</li>
+        <li>Cartelle per organizzare i giri: crea, rinomina, elimina; sposta un giro in una cartella o toglilo. Eliminando una cartella i giri tornano "senza cartella"</li>
+        <li>Le cartelle sono salvate sul tuo account e si sincronizzano tra tutti i dispositivi</li>
+        <li>Statistiche per cartella: ore di lavoro, km percorsi, ore di guida e costo totale dei giri contenuti</li>
       </ul>
 
       <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v4.080</p>
@@ -2260,33 +2272,198 @@ function readWeeklyHours() {
 
 // ── render: saved tab ─────────────────────────────────────────────────────────
 
+// ── cartelle giri: sincronizzate lato server ───────────────────────────────────
+async function refreshFolders() {
+  state.folders = await api("/api/folders").catch(() => []);
+}
+
+function folderById(id) { return state.folders.find(f => String(f.id) === String(id)) || null; }
+// L'assegnazione cartella vive sul giro stesso (campo folderId restituito dall'API)
+function routeFolderId(routeId) {
+  const r = state.savedRoutes.find(x => String(x.id) === String(routeId));
+  const fid = r ? r.folderId : null;
+  return (fid != null && folderById(fid)) ? fid : null;
+}
+function routesInFolder(folderId) {
+  return state.savedRoutes.filter(r => {
+    const fid = routeFolderId(r.id);
+    return folderId == null ? fid == null : String(fid) === String(folderId);
+  });
+}
+
+// Statistiche di cartella: tutto è ricavato dai dati del giro (summary).
+// "Costo" = total_cost già memorizzato; nessun dato inventato o manuale.
+function folderStats(routes) {
+  return routes.reduce((t, r) => {
+    const n = normalizeSavedRoute(r);
+    t.km += n.summary.totalKm;
+    t.driveMin += n.summary.totalDriveMinutes;
+    t.workMin += n.summary.totalWorkMinutes;
+    t.cost += n.summary.totalCost;
+    t.count++;
+    return t;
+  }, { km: 0, driveMin: 0, workMin: 0, cost: 0, count: 0 });
+}
+
+// ── ricerca avanzata giri ──────────────────────────────────────────────────────
+function normSearch(s) {
+  return String(s || "").toLowerCase().normalize("NFD").replace(/\p{Diacritic}/gu, "");
+}
+// Costruisce oggetti "indirizzo" dalle tappe del giro per riusare il fuzzy-match
+function routeStopObjects(route) {
+  const stops = Array.isArray(route.plannedStops) ? route.plannedStops
+    : Array.isArray(route.rows) ? route.rows.filter(r => !r.type) : [];
+  return stops.map(s => ({
+    customer: s.customer || "", activity: "",
+    location: s.location || "", fullAddress: s.address || s.fullAddress || "", notes: ""
+  }));
+}
+function savedSearchActive() {
+  const f = state.savedSearch;
+  return Boolean(f.name || f.dateFrom || f.dateTo || f.stop || f.shared !== "all");
+}
+function filterSavedRoutes(routes) {
+  const f = state.savedSearch;
+  const name = normSearch(f.name);
+  const stopQ = (f.stop || "").trim().toLowerCase();
+  return routes.filter(r => {
+    if (name && !normSearch(r.name).includes(name)) return false;
+    if (f.dateFrom && (r.scheduledDate || "") < f.dateFrom) return false;
+    if (f.dateTo && (r.scheduledDate || "") > f.dateTo) return false;
+    if (f.shared === "shared" && r.source !== "imported") return false;
+    if (f.shared === "notshared" && r.source === "imported") return false;
+    if (stopQ && !rankAddressMatches(routeStopObjects(r), stopQ).length) return false;
+    return true;
+  });
+}
+
+function renderFolderStats(st) {
+  return `<div id="folder-stats" class="folder-stats">
+    <div class="folder-stat"><span class="folder-stat-val">${minutesLabel(st.workMin)}</span><span class="folder-stat-lbl">Ore lavoro</span></div>
+    <div class="folder-stat"><span class="folder-stat-val">${st.km.toFixed(0)} km</span><span class="folder-stat-lbl">Km percorsi</span></div>
+    <div class="folder-stat"><span class="folder-stat-val">${minutesLabel(st.driveMin)}</span><span class="folder-stat-lbl">Ore guida</span></div>
+    <div class="folder-stat"><span class="folder-stat-val">${euro(st.cost)}</span><span class="folder-stat-lbl">Costo totale</span></div>
+  </div>`;
+}
+
+function renderFolderNav() {
+  const chips = state.folders.map(fld => {
+    const st = folderStats(routesInFolder(fld.id));
+    return `<button class="folder-chip" data-folder-open="${fld.id}">
+      ${I.folder(14)}
+      <span class="folder-chip-name">${escapeHtml(fld.name)}</span>
+      <span class="folder-chip-count">${st.count}</span>
+    </button>`;
+  }).join("");
+  return `<div class="folder-nav">
+    <div class="folder-nav-list">
+      ${chips || `<span class="folder-nav-empty">Nessuna cartella</span>`}
+    </div>
+    <button class="btn folder-create-btn" id="folder-create">${I.plus(14)} Nuova cartella</button>
+  </div>`;
+}
+
+function renderSavedToolbar(inFolder, folder) {
+  const f = state.savedSearch;
+  let html = "";
+  if (inFolder) {
+    const st = folderStats(routesInFolder(folder.id));
+    html += `<div class="folder-head">
+      <button class="btn" id="saved-folder-back">${I.arrowLeft(14)} Cartelle</button>
+      <div class="folder-head-actions">
+        <button class="btn" data-folder-rename="${folder.id}">${I.edit(13)} Rinomina</button>
+        <button class="btn danger" data-folder-delete="${folder.id}">${I.trash(13)} Elimina</button>
+      </div>
+    </div>
+    ${renderFolderStats(st)}`;
+  } else {
+    html += renderFolderNav();
+  }
+  html += `<div class="saved-search">
+    <input id="saved-search-name" class="saved-search-input" placeholder="Cerca per nome giro…" value="${escapeHtml(f.name)}" autocomplete="off" />
+    <details class="saved-filters"${(f.dateFrom || f.dateTo || f.stop || f.shared !== "all") ? " open" : ""}>
+      <summary>Filtri avanzati</summary>
+      <div class="saved-filters-body">
+        <label class="saved-filter-field"><span>Da</span><input type="date" id="saved-search-from" value="${escapeHtml(f.dateFrom)}" /></label>
+        <label class="saved-filter-field"><span>A</span><input type="date" id="saved-search-to" value="${escapeHtml(f.dateTo)}" /></label>
+        <label class="saved-filter-field saved-filter-field--wide"><span>Tappa</span><input id="saved-search-stop" placeholder="Cliente o indirizzo…" value="${escapeHtml(f.stop)}" autocomplete="off" /></label>
+        <label class="saved-filter-field"><span>Condivisione</span>
+          <select id="saved-search-shared">
+            <option value="all"${f.shared === "all" ? " selected" : ""}>Tutti</option>
+            <option value="shared"${f.shared === "shared" ? " selected" : ""}>Condivisi/importati</option>
+            <option value="notshared"${f.shared === "notshared" ? " selected" : ""}>Senza badge</option>
+          </select>
+        </label>
+        <button class="btn saved-search-clear" id="saved-search-clear">Azzera filtri</button>
+      </div>
+    </details>
+  </div>`;
+  return html;
+}
+
+function renderSavedCard(route) {
+  const fid = routeFolderId(route.id);
+  const folderOpts = `<option value=""${fid == null ? " selected" : ""}>Senza cartella</option>` +
+    state.folders.map(fl => `<option value="${fl.id}"${String(fid) === String(fl.id) ? " selected" : ""}>${escapeHtml(fl.name)}</option>`).join("");
+  return `<article class="card saved-card${route.source === "imported" ? " saved-card--imported" : ""}" data-open-route="${route.id}" style="cursor:pointer;">
+    <p class="saved-card-name">${escapeHtml(route.name)}${route.source === "imported" ? ` <span class="badge badge-imported">${route.sharedBy ? "Condiviso da " + escapeHtml(route.sharedBy) : "Importato"}</span>` : ""}</p>
+    <div class="saved-card-info">
+      <input type="date" class="saved-date-input" data-reschedule-route="${route.id}" value="${escapeHtml(route.scheduledDate || "")}" title="Cambia data e ricalcola" onclick="event.stopPropagation()" />
+      <span>${escapeHtml(route.startTime || "--:--")}</span>
+      <span>${Number(route.totalKm).toFixed(1)} km</span>
+    </div>
+    <div class="stop-meta saved-card-route">${escapeHtml(route.startLabel || "—")} → ${escapeHtml(route.endLabel || "—")}</div>
+    ${route.notes ? `<div class="saved-card-notes">${escapeHtml(route.notes)}</div>` : ""}
+    <div class="saved-card-manage" onclick="event.stopPropagation()">
+      <label class="saved-card-folder">${I.folder(13)}
+        <select data-move-route="${route.id}">${folderOpts}</select>
+      </label>
+    </div>
+    <div class="saved-card-btns">
+      <button class="btn saved-card-btn" data-rename-route="${route.id}">${I.edit(13)} Rinomina</button>
+      <button class="btn saved-card-btn" data-share-route="${route.id}">${I.share(13)} Condividi</button>
+      <button class="btn saved-card-btn" data-duplicate-route="${route.id}">${I.copy(13)} Duplica</button>
+      <button class="btn danger saved-card-btn" data-delete-route="${route.id}">${I.trash(13)} Elimina</button>
+    </div>
+    ${route.plannedStops?.length ? `<div class="saved-stops-list">${route.plannedStops.filter((s, i, arr) => !s.stopPart || s.stopPart === "morning" || arr.findIndex(x => x.addressId === s.addressId) === i).map((s, i) => { const isRest = s.addressType === "rest" || s.customer?.includes("⭐") || s.customer?.includes("★"); return `<span class="saved-stop-chip">${i + 1}. ${escapeHtml(s.customer)}${!isRest && s.location ? ` — ${escapeHtml(s.location)}` : ""}</span>`; }).join("")}</div>` : ""}
+  </article>`;
+}
+
+function renderSavedListContent() {
+  const inFolder = state.savedFolderId != null;
+  const hasSearch = savedSearchActive();
+  let base;
+  if (inFolder) base = routesInFolder(state.savedFolderId);
+  else if (hasSearch) base = state.savedRoutes.slice(); // ricerca alla radice = tutti i giri
+  else base = routesInFolder(null);                     // radice senza ricerca = senza cartella
+  const list = filterSavedRoutes(base);
+  if (!list.length) {
+    const msg = hasSearch ? "Nessun giro corrisponde ai criteri."
+      : inFolder ? "Cartella vuota. Sposta qui i giri dal menù di ogni giro."
+      : state.savedRoutes.length ? "Nessun giro senza cartella." : "Nessun giro salvato.";
+    return `<div class="empty">${msg}</div>`;
+  }
+  return list.map(route => renderSavedCard(route)).join("");
+}
+
+// Aggiorna solo la lista (non tocca l'input di ricerca → focus stabile, niente scroll-jump)
+function updateSavedList() {
+  const el = document.getElementById("saved-routes-list");
+  if (el) el.innerHTML = renderSavedListContent();
+}
+
 function renderSaved() {
+  const inFolder = state.savedFolderId != null;
+  const folder = inFolder ? folderById(state.savedFolderId) : null;
+  if (inFolder && !folder) { state.savedFolderId = null; return renderSaved(); }
   app.innerHTML = `
     <section class="panel">
       <div class="section-head">
-        <h2>Giri salvati</h2>
+        <h2>${inFolder ? escapeHtml(folder.name) : "Giri salvati"}</h2>
         <button class="btn" id="refresh-routes" title="Aggiorna">${I.refresh(14)}</button>
       </div>
-      <div class="saved-list">
-        ${state.savedRoutes.map(route => `
-          <article class="card saved-card${route.source === "imported" ? " saved-card--imported" : ""}" data-open-route="${route.id}" style="cursor:pointer;">
-            <p class="saved-card-name">${escapeHtml(route.name)}${route.source === "imported" ? ` <span class="badge badge-imported">${route.sharedBy ? "Condiviso da " + escapeHtml(route.sharedBy) : "Importato"}</span>` : ""}</p>
-            <div class="saved-card-info">
-              <input type="date" class="saved-date-input" data-reschedule-route="${route.id}" value="${escapeHtml(route.scheduledDate || "")}" title="Cambia data e ricalcola" onclick="event.stopPropagation()" />
-              <span>${escapeHtml(route.startTime || "--:--")}</span>
-              <span>${Number(route.totalKm).toFixed(1)} km</span>
-            </div>
-            <div class="stop-meta saved-card-route">${escapeHtml(route.startLabel || "—")} → ${escapeHtml(route.endLabel || "—")}</div>
-            ${route.notes ? `<div class="saved-card-notes">${escapeHtml(route.notes)}</div>` : ""}
-            <div class="saved-card-btns">
-              <button class="btn saved-card-btn" data-rename-route="${route.id}">${I.edit(13)} Rinomina</button>
-              <button class="btn saved-card-btn" data-share-route="${route.id}">${I.share(13)} Condividi</button>
-              <button class="btn saved-card-btn" data-duplicate-route="${route.id}">${I.copy(13)} Duplica</button>
-              <button class="btn danger saved-card-btn" data-delete-route="${route.id}">${I.trash(13)} Elimina</button>
-            </div>
-            ${route.plannedStops?.length ? `<div class="saved-stops-list">${route.plannedStops.filter((s, i, arr) => !s.stopPart || s.stopPart === "morning" || arr.findIndex(x => x.addressId === s.addressId) === i).map((s, i) => { const isRest = s.addressType === "rest" || s.customer?.includes("⭐") || s.customer?.includes("★"); return `<span class="saved-stop-chip">${i + 1}. ${escapeHtml(s.customer)}${!isRest && s.location ? ` — ${escapeHtml(s.location)}` : ""}</span>`; }).join("")}</div>` : ""}
-          </article>`).join("") || `<div class="empty">Nessun giro salvato.</div>`}
-      </div>
+      <div class="saved-toolbar">${renderSavedToolbar(inFolder, folder)}</div>
+      <div class="saved-list" id="saved-routes-list">${renderSavedListContent()}</div>
     </section>`;
 }
 
@@ -5047,6 +5224,18 @@ function bindEvents() {
       if (inp) { inp.focus(); inp.setSelectionRange(cursor, cursor); }
       return;
     }
+    // saved routes: ricerca per nome — aggiorna solo la lista (input resta montato → focus stabile)
+    if (e.target.id === "saved-search-name") {
+      state.savedSearch.name = e.target.value;
+      updateSavedList();
+      return;
+    }
+    // saved routes: ricerca per tappa
+    if (e.target.id === "saved-search-stop") {
+      state.savedSearch.stop = e.target.value;
+      updateSavedList();
+      return;
+    }
     // archive search — aggiorna solo la lista, MAI l'input: niente scroll-jump
     if (e.target.id === "archive-search") {
       const q = e.target.value;
@@ -5055,7 +5244,7 @@ function bindEvents() {
       const listEl = document.querySelector(".archive-list");
       if (listEl) listEl.innerHTML = buildArchiveListHTML();
       else renderArchive();
-      // Conferma con server dopo 300 ms; aggiorna lista solo se i risultati cambiano
+      // Conferma con server dopo 400 ms; aggiorna lista solo se i risultati cambiano
       clearTimeout(state._archiveSearchTimer);
       const prevIds = state.addresses.map(a => a.id).join(",");
       state._archiveSearchTimer = setTimeout(() => {
@@ -5142,6 +5331,25 @@ function bindEvents() {
 
   // timeFrom/timeTo stop-form + rv-row: render su "change" (picker iOS chiuso)
   app.addEventListener("change", e => {
+    // saved routes: filtri data / condivisione — aggiorna solo la lista
+    if (e.target.id === "saved-search-from") { state.savedSearch.dateFrom = e.target.value; updateSavedList(); return; }
+    if (e.target.id === "saved-search-to") { state.savedSearch.dateTo = e.target.value; updateSavedList(); return; }
+    if (e.target.id === "saved-search-shared") { state.savedSearch.shared = e.target.value; updateSavedList(); return; }
+    // saved routes: sposta un giro in una cartella (o toglilo) — sincronizzato
+    const moveSel = e.target.closest("[data-move-route]");
+    if (moveSel) {
+      const id = moveSel.dataset.moveRoute;
+      const val = moveSel.value;
+      (async () => {
+        try {
+          await api(`/api/routes/${id}/folder`, { method: "PUT", body: JSON.stringify({ folderId: val || null }) });
+          await refreshSavedRoutes();
+          renderSaved(); // il giro può lasciare la vista corrente: re-render completo
+          showToast(val ? "Spostato nella cartella" : "Tolto dalla cartella");
+        } catch (err) { showToast(err.message); }
+      })();
+      return;
+    }
     // stop form (nuovo percorso) — solo aggiorna stato, NO render (iOS chiuderebbe il picker)
     const sf = e.target.closest("[data-stop]");
     if (sf) {
@@ -5734,6 +5942,70 @@ function bindEvents() {
       await refreshSavedRoutes();
       renderSaved();
       showToast("Aggiornato");
+      return;
+    }
+
+    // cartelle: crea
+    if (e.target.closest("#folder-create")) {
+      const name = window.prompt("Nome della nuova cartella:");
+      if (name && name.trim()) {
+        try {
+          await api("/api/folders", { method: "POST", body: JSON.stringify({ name: name.trim() }) });
+          await refreshFolders();
+          renderSaved();
+        } catch (err) { showToast(err.message); }
+      }
+      return;
+    }
+    // cartelle: apri
+    const folderOpenBtn = e.target.closest("[data-folder-open]");
+    if (folderOpenBtn) {
+      state.savedFolderId = folderOpenBtn.dataset.folderOpen;
+      renderSaved();
+      return;
+    }
+    // cartelle: torna alla radice
+    if (e.target.closest("#saved-folder-back")) {
+      state.savedFolderId = null;
+      renderSaved();
+      return;
+    }
+    // cartelle: rinomina
+    const folderRenBtn = e.target.closest("[data-folder-rename]");
+    if (folderRenBtn) {
+      const fld = folderById(folderRenBtn.dataset.folderRename);
+      if (!fld) return;
+      const name = window.prompt("Nuovo nome cartella:", fld.name);
+      if (name && name.trim()) {
+        try {
+          await api(`/api/folders/${fld.id}`, { method: "PUT", body: JSON.stringify({ name: name.trim() }) });
+          await refreshFolders();
+          renderSaved();
+        } catch (err) { showToast(err.message); }
+      }
+      return;
+    }
+    // cartelle: elimina (i giri NON vengono cancellati → tornano "senza cartella")
+    const folderDelBtn = e.target.closest("[data-folder-delete]");
+    if (folderDelBtn) {
+      const fld = folderById(folderDelBtn.dataset.folderDelete);
+      if (!fld) return;
+      const n = routesInFolder(fld.id).length;
+      if (!confirm(`Eliminare la cartella "${fld.name}"?${n ? ` I ${n} giri torneranno "senza cartella".` : ""}`)) return;
+      try {
+        await api(`/api/folders/${fld.id}`, { method: "DELETE" });
+        if (String(state.savedFolderId) === String(fld.id)) state.savedFolderId = null;
+        await refreshFolders();
+        await refreshSavedRoutes(); // i giri hanno perso l'assegnazione
+        renderSaved();
+        showToast("Cartella eliminata");
+      } catch (err) { showToast(err.message); }
+      return;
+    }
+    // ricerca: azzera filtri
+    if (e.target.closest("#saved-search-clear")) {
+      state.savedSearch = { name: "", dateFrom: "", dateTo: "", stop: "", shared: "all" };
+      renderSaved();
       return;
     }
 
@@ -6464,6 +6736,7 @@ function renderAuthScreen(isSetup = false) {
 
 async function initApp() {
   await loadInitialData();
+  await refreshFolders();
 
   // Ripristina la tab e il giro aperti prima del reload (iOS background)
   try {

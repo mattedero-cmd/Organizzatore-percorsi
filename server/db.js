@@ -124,6 +124,7 @@ function rowToRouteSummary(row) {
     plannedStops: (payload.plannedStops || payload.rows || []).filter(s => !s.type).map(s => ({ customer: s.customer || "", location: s.location || "", addressId: s.addressId, stopUid: s.uid || s.stopUid, stopPart: s.stopPart })),
     source: row.source || null,
     sharedBy: payload.sharedBy || null,
+    folderId: row.folder_id ?? null,
     notes: row.notes || ""
   };
 }
@@ -488,7 +489,29 @@ async function migrateAuth() {
   if (!routeCols.includes("notes")) {
     try { await runSql("ALTER TABLE planned_routes ADD COLUMN notes TEXT DEFAULT NULL;"); } catch (e) { if (!isAlreadyExistsError(e)) console.warn(e.message); }
   }
+  if (!routeCols.includes("folder_id")) {
+    try { await runSql("ALTER TABLE planned_routes ADD COLUMN folder_id INTEGER;"); } catch (e) { if (!isAlreadyExistsError(e)) console.warn(e.message); }
+  }
+  await initFoldersTable();
   await initSharedRoutesTable();
+}
+
+async function initFoldersTable() {
+  if (dbMode === "postgres") {
+    await runSql(`CREATE TABLE IF NOT EXISTS folders (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER,
+      name TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );`);
+  } else {
+    await runSql(`CREATE TABLE IF NOT EXISTS folders (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER,
+      name TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );`);
+  }
 }
 
 async function migrateWeeklyHours() {
@@ -695,6 +718,46 @@ export async function deleteRoute(id, userId = null) {
   const userFilter = userId != null ? ` AND user_id = ${sqlValue(Number(userId))}` : "";
   await runSql(`DELETE FROM planned_routes WHERE id = ${sqlValue(Number(id))}${userFilter};`);
   return { ok: true };
+}
+
+// ── cartelle (organizzazione giri) ─────────────────────────────────────────────
+export async function listFolders(userId = null) {
+  const userFilter = userId != null ? `WHERE user_id = ${sqlValue(Number(userId))}` : "";
+  const rows = await runSql(`SELECT * FROM folders ${userFilter} ORDER BY lower(name), id;`, true);
+  return rows.map(r => ({ id: r.id, name: r.name || "", createdAt: r.created_at }));
+}
+
+export async function createFolder(name, userId = null) {
+  const nm = String(name || "").trim() || "Cartella";
+  const userVal = userId != null ? Number(userId) : null;
+  if (dbMode === "postgres") {
+    const rows = await runSql(`INSERT INTO folders (name, user_id) VALUES (${sqlValue(nm)}, ${sqlValue(userVal)}) RETURNING id, name, created_at;`, true);
+    return rows[0] ? { id: rows[0].id, name: rows[0].name, createdAt: rows[0].created_at } : null;
+  }
+  const rows = await runSql(`INSERT INTO folders (name, user_id) VALUES (${sqlValue(nm)}, ${sqlValue(userVal)}); SELECT id, name, created_at FROM folders WHERE id = last_insert_rowid();`, true);
+  return rows[0] ? { id: rows[0].id, name: rows[0].name, createdAt: rows[0].created_at } : null;
+}
+
+export async function renameFolder(id, name, userId = null) {
+  const nm = String(name || "").trim() || "Cartella";
+  const userFilter = userId != null ? ` AND user_id = ${sqlValue(Number(userId))}` : "";
+  await runSql(`UPDATE folders SET name = ${sqlValue(nm)} WHERE id = ${sqlValue(Number(id))}${userFilter};`);
+  return { id: Number(id), name: nm };
+}
+
+export async function deleteFolder(id, userId = null) {
+  const userFilter = userId != null ? ` AND user_id = ${sqlValue(Number(userId))}` : "";
+  // I giri NON vengono cancellati: tornano "senza cartella".
+  await runSql(`UPDATE planned_routes SET folder_id = NULL WHERE folder_id = ${sqlValue(Number(id))}${userFilter};`);
+  await runSql(`DELETE FROM folders WHERE id = ${sqlValue(Number(id))}${userFilter};`);
+  return { ok: true };
+}
+
+export async function setRouteFolder(routeId, folderId, userId = null) {
+  const userFilter = userId != null ? ` AND user_id = ${sqlValue(Number(userId))}` : "";
+  const fid = (folderId == null || folderId === "") ? "NULL" : sqlValue(Number(folderId));
+  await runSql(`UPDATE planned_routes SET folder_id = ${fid} WHERE id = ${sqlValue(Number(routeId))}${userFilter};`);
+  return getRoute(routeId, userId);
 }
 
 // ── auth DB functions ─────────────────────────────────────────────────────────

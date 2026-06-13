@@ -1,3 +1,8 @@
+## v4.083 — 2026-06-13
+- Feature: ricerca avanzata nei giri salvati — per nome, intervallo di date (Da/A), tappa (cliente/indirizzo, riusa fuzzy-match `rankAddressMatches`) e stato di condivisione; criteri combinabili. La ricerca alla radice opera su tutti i giri, dentro una cartella si limita a quella cartella
+- Feature: cartelle sincronizzate lato server — crea, rinomina, elimina; sposta un giro in una cartella o toglilo; eliminando una cartella i giri tornano "senza cartella" (con conferma). Persistenza DB (`folders` table + `planned_routes.folder_id`), sincronizzazione tra dispositivi tramite `/api/folders` e `/api/routes/:id/folder`
+- Feature: statistiche per cartella — ore lavoro, km percorsi, ore guida e costo totale (da `total_cost` già presente per giro)
+
 ## v4.082 — 2026-06-13
 - Fix: badge "Condiviso da [nickname]" non appariva sui giri importati — rowToRouteSummary() in db.js non esponeva il campo sharedBy (era sepolto solo in payload), quindi la lista giri ripiegava sempre su "Importato". Ora sharedBy viene letto da payload.sharedBy e incluso nel sommario. Aggiornati anche i testi della guida.
 

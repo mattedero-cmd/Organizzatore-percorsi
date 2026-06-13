@@ -19,6 +19,11 @@ import {
   renameRoute,
   routeNameExists,
   deleteRoute,
+  listFolders,
+  createFolder,
+  renameFolder,
+  deleteFolder,
+  setRouteFolder,
   createUser,
   findUserByUsername,
   findUserById,
@@ -745,6 +750,34 @@ async function handleApi(request, response) {
       const body = await parseBody(request);
       await updateRouteNotes(routeMatch[1], body.notes ?? "", userId);
       return sendJson(response, 200, { ok: true });
+    }
+
+    // ── cartelle (sincronizzate lato server) ──────────────────────────────────
+    if (method === "GET" && url.pathname === "/api/folders") {
+      return sendJson(response, 200, await listFolders(userId));
+    }
+    if (method === "POST" && url.pathname === "/api/folders") {
+      const body = await parseBody(request);
+      const folder = await createFolder(body.name, userId);
+      return sendJson(response, 201, folder);
+    }
+    const folderMatch = url.pathname.match(/^\/api\/folders\/(\d+)$/);
+    if (folderMatch && method === "PUT") {
+      const body = await parseBody(request);
+      const folder = await renameFolder(folderMatch[1], body.name, userId);
+      return sendJson(response, 200, folder);
+    }
+    if (folderMatch && method === "DELETE") {
+      await deleteFolder(folderMatch[1], userId);
+      return sendJson(response, 200, { ok: true });
+    }
+    // assegna/sposta un giro in una cartella (folderId null = senza cartella)
+    const routeFolderMatch = url.pathname.match(/^\/api\/routes\/(\d+)\/folder$/);
+    if (routeFolderMatch && method === "PUT") {
+      const body = await parseBody(request);
+      const route = await setRouteFolder(routeFolderMatch[1], body.folderId ?? null, userId);
+      if (!route) return sendJson(response, 404, { error: "Giro non trovato" });
+      return sendJson(response, 200, route);
     }
 
     // POST /api/routes/:id/share → crea link di condivisione
