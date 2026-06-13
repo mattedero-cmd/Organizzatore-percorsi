@@ -1,3 +1,10 @@
+## v4.078 — 2026-06-13
+- Feature: ricerca avanzata nei giri salvati — per nome, intervallo di date (Da/A), tappa (cliente/indirizzo, riusa il fuzzy-match `rankAddressMatches`) e stato di condivisione; criteri combinabili. La ricerca alla radice opera su tutti i giri, dentro una cartella si limita a quella cartella
+- Feature: cartelle per organizzare i giri (CRUD) — crea, rinomina, elimina; sposta un giro in una cartella o toglilo (un giro in una sola cartella); eliminando una cartella i giri NON vengono cancellati ma tornano "senza cartella" (con conferma). Persistenza in localStorage (`op_folders`, `op_route_folder`)
+- Feature: statistiche per cartella — ore lavoro, km percorsi, ore guida ricavate dal `summary` del giro; guadagno totale dalla somma dei valori manuali per giro
+- Feature: guadagno per giro — campo manuale (`op_route_earnings`) perché il dato non esiste nei dati del percorso (presente solo `totalCost`, che è il costo)
+- Nota tecnica: la ricerca aggiorna solo il contenitore lista (`#saved-routes-list`) senza rimontare l'input → focus stabile, nessun scroll-jump (evita il bug già visto in archivio)
+
 ## v4.077 — 2026-06-12
 - Fix: dopo un reload in background su iOS, l'app ripristina invisibilmente la tab e il giro aperti prima dell'interruzione (localStorage pl_nav)
 
