@@ -1,3 +1,9 @@
+## v4.114 — 2026-06-14
+- Nuovo: gap chiusura pranzo nelle tappe spezzate (mattina/pomeriggio) viene utilizzato produttivamente:
+  se il gap è abbastanza lungo cerca un ristorante raggiungibile (andata+pranzo+ritorno entro il gap,
+  con distanza max = (gapMin − lunchBreakMin) / 2 × 50km/h); altrimenti inserisce una sosta breve;
+  logica: pranzo non ancora fatto → priorità ristorante; pranzo già fatto → sosta se gap ≥ 20min
+
 ## v4.113 — 2026-06-14
 - Fix: scheduleStop — arrivo nel gap pranzo (es. 13:03 con chiusura 13:00–14:00): l'intervento ora attende l'apertura pomeridiana (14:00) invece di lavorare durante la chiusura
 - Fix: scheduleStop — lavoro supera la chiusura mattutina senza split possibile: l'intervento viene spostato al pomeriggio (14:00) invece di sforare

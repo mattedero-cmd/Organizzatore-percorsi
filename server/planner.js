@@ -653,7 +653,7 @@ async function insertBreaks(rows, options) {
   L(`soste salvate=${restStops.length} ristoranti salvati=${restaurantStops.length}`);
 
   // ── 1. Pausa pranzo ──────────────────────────────────────────────────────────
-  const makeLunchEntry = async (beforeIndex, refRow, nextRow, lunchTimeMin) => {
+  const makeLunchEntry = async (beforeIndex, refRow, nextRow, lunchTimeMin, effectiveLunchClose = LUNCH_CLOSE, maxDetourKmOverride = null) => {
     const fromRow = refRow || (beforeIndex > 0 ? rows[beforeIndex - 1] : null);
     const toRow = nextRow || (beforeIndex < rows.length ? rows[beforeIndex] : null);
     L(`  pranzo: da "${fromRow?.customer||"?"}" (${fromRow?.lat?.toFixed(4)||"?"}) verso "${toRow?.customer||"?"}" ore=${formatTime(lunchTimeMin)}`);
@@ -661,14 +661,15 @@ async function insertBreaks(rows, options) {
     // lungo la strada (posso guidare 30 min se è sulla mia via). Se è "fuori percorso" si applica
     // il limite maxDetourKm come deviazione massima accettabile.
     const ON_ROUTE_PERP_KM = 2.0;
-    let savedSpot = findNearestRestStop(restaurantStops, fromRow?.lat, fromRow?.lng, toRow?.lat, toRow?.lng, maxDetourKm, lunchTimeMin, scheduledDate);
+    const _maxDetourKmL = maxDetourKmOverride ?? maxDetourKm;
+    let savedSpot = findNearestRestStop(restaurantStops, fromRow?.lat, fromRow?.lng, toRow?.lat, toRow?.lng, _maxDetourKmL, lunchTimeMin, scheduledDate);
     let savedSpotOnRoute = false;
     if (savedSpot && fromRow?.lat && fromRow?.lng && toRow?.lat && toRow?.lng) {
       const { perpKm } = perpDistToSegment(savedSpot.lat, savedSpot.lng, fromRow.lat, fromRow.lng, toRow.lat, toRow.lng);
       const isOnRoute = perpKm <= ON_ROUTE_PERP_KM;
       if (!isOnRoute) {
         const directKm = haversineKm({ lat: fromRow.lat, lng: fromRow.lng }, { lat: savedSpot.lat, lng: savedSpot.lng });
-        if (directKm > maxDetourKm) { L(`    savedRist "${savedSpot.customer}" SCARTATO fuori-percorso perp=${perpKm.toFixed(1)}km direct=${directKm.toFixed(1)}km > max=${maxDetourKm.toFixed(1)}km`); savedSpot = null; }
+        if (directKm > _maxDetourKmL) { L(`    savedRist "${savedSpot.customer}" SCARTATO fuori-percorso perp=${perpKm.toFixed(1)}km direct=${directKm.toFixed(1)}km > max=${_maxDetourKmL.toFixed(1)}km`); savedSpot = null; }
         else L(`    savedRist "${savedSpot.customer}" fuori-percorso perp=${perpKm.toFixed(1)}km direct=${directKm.toFixed(1)}km OK`);
       } else {
         savedSpotOnRoute = true;
@@ -686,16 +687,16 @@ async function insertBreaks(rows, options) {
           return Math.round(t * segKm / 50 * 60);
         }
         const rawKm = haversineKm({ lat: from.lat, lng: from.lng }, { lat: candidate.lat, lng: candidate.lng });
-        return rawKm > maxDetourKm ? Infinity : Math.round(rawKm / 50 * 60);
+        return rawKm > _maxDetourKmL ? Infinity : Math.round(rawKm / 50 * 60);
       }
       return Math.round(haversineKm({ lat: from.lat, lng: from.lng }, { lat: candidate.lat, lng: candidate.lng }) / 50 * 60);
     };
 
-    // Valida candidato: calcola travelMin e verifica LUNCH_CLOSE
+    // Valida candidato: calcola travelMin e verifica effectiveLunchClose
     const validateSpot = (candidate, label) => {
       const tm = calcTravelMin(candidate, fromRow, toRow);
-      if (tm === Infinity) { L(`    ${label} "${candidate.customer}" SCARTATO fuori-percorso > max=${maxDetourKm.toFixed(1)}km`); return null; }
-      if (lunchTimeMin + tm > LUNCH_CLOSE) { L(`    ${label} "${candidate.customer}" SCARTATO arrivo=${formatTime(lunchTimeMin + tm)} > LUNCH_CLOSE=${formatTime(LUNCH_CLOSE)}`); return null; }
+      if (tm === Infinity) { L(`    ${label} "${candidate.customer}" SCARTATO fuori-percorso > max=${_maxDetourKmL.toFixed(1)}km`); return null; }
+      if (lunchTimeMin + tm > effectiveLunchClose) { L(`    ${label} "${candidate.customer}" SCARTATO arrivo=${formatTime(lunchTimeMin + tm)} > close=${formatTime(effectiveLunchClose)}`); return null; }
       return { spot: candidate, travelMin: tm };
     };
 
@@ -724,7 +725,7 @@ async function insertBreaks(rows, options) {
     }
     // Se il saved restaurant è stato scartato (o non c'è), prova Places API
     if (!spotResult && searchLat) {
-      const apiSpot = await findNearbyRestaurant(searchLat, searchLng, fromRow.lat, fromRow.lng, toRow?.lat, toRow?.lng, Math.round(maxDetourKm * 1000 * 1.5), lunchTimeMin, scheduledDate, maxDetourKm)
+      const apiSpot = await findNearbyRestaurant(searchLat, searchLng, fromRow.lat, fromRow.lng, toRow?.lat, toRow?.lng, Math.round(_maxDetourKmL * 1000 * 1.5), lunchTimeMin, scheduledDate, _maxDetourKmL)
         .then(r => { L(`    PlacesAPI ristorante @ (${searchLat.toFixed(4)},${searchLng.toFixed(4)}): ${r ? `"${r.customer}" (${r.rating}⭐)` : "nessuno"}`); return r; })
         .catch(e => { L(`    PlacesAPI ristorante: errore ${e.message}`); return null; });
       if (apiSpot) spotResult = validateSpot(apiSpot, "PlacesAPI");
@@ -732,8 +733,8 @@ async function insertBreaks(rows, options) {
     // Retry ristorante con raggio esteso se non trovato o scartato
     if (!spotResult && searchLat) {
       L(`    → retry ristorante raggio esteso...`);
-      const extRadius = Math.round(maxDetourKm * 1000 * 3);
-      const apiSpot2 = await findNearbyRestaurant(searchLat, searchLng, fromRow.lat, fromRow.lng, toRow?.lat, toRow?.lng, extRadius, lunchTimeMin, scheduledDate, maxDetourKm * 1.5)
+      const extRadius = Math.round(_maxDetourKmL * 1000 * 3);
+      const apiSpot2 = await findNearbyRestaurant(searchLat, searchLng, fromRow.lat, fromRow.lng, toRow?.lat, toRow?.lng, extRadius, lunchTimeMin, scheduledDate, _maxDetourKmL * 1.5)
         .then(r => { L(`    PlacesAPI ristorante (ext) @ (${searchLat.toFixed(4)},${searchLng.toFixed(4)}): ${r ? `"${r.customer}" (${r.rating}⭐)` : "nessuno"}`); return r; })
         .catch(e => { L(`    PlacesAPI ristorante (ext): errore ${e.message}`); return null; });
       if (apiSpot2) spotResult = validateSpot(apiSpot2, "PlacesAPI(ext)");
@@ -856,6 +857,35 @@ async function insertBreaks(rows, options) {
         if (lastEnd >= LUNCH_OPEN && lastEnd <= LUNCH_CLOSE) {
           insertions.push(await makeLunchEntry(rows.length, rows[rows.length - 1], null, lastEnd));
         }
+      }
+    }
+
+    // 4. Gap split-stop: se c'è una tappa spezzata (mattina/pomeriggio) e il pranzo
+    //    non è ancora stato piazzato, usa il gap tra chiusura mattina e apertura pomeridiana.
+    if (!placed) {
+      for (let i = 0; i < rows.length - 1; i++) {
+        const morRow = rows[i];
+        const aftRow = rows[i + 1];
+        if (morRow.stopPart !== "morning") continue;
+        if (aftRow.stopPart !== "afternoon") continue;
+        if (morRow.addressId !== aftRow.addressId) continue;
+        const gapStart = parseTime(morRow.serviceEndTime);
+        const gapEnd   = parseTime(aftRow.arrivalTime);
+        if (gapStart == null || gapEnd == null) continue;
+        const gapMin = gapEnd - gapStart;
+        L(`  gap split "${morRow.customer}": ${formatTime(gapStart)}-${formatTime(gapEnd)} (${gapMin}min disponibili)`);
+        if (gapMin > lunchBreakMinutes + 10) {
+          // Abbastanza tempo per pranzo: calcola distanza max raggiungibile
+          const maxTravelOneWay = Math.floor((gapMin - lunchBreakMinutes) / 2);
+          const gapMaxDetourKm = Math.min(maxDetourKm, maxTravelOneWay / 60 * 50);
+          const gapLunchClose  = gapStart + maxTravelOneWay;
+          L(`    travelMax=${maxTravelOneWay}min detourMax=${gapMaxDetourKm.toFixed(1)}km`);
+          const entry = await makeLunchEntry(i + 1, morRow, aftRow, gapStart, gapLunchClose, gapMaxDetourKm);
+          if (entry) { insertions.push(entry); placed = true; }
+        } else {
+          L(`    gap troppo breve per pranzo (${gapMin}min < ${lunchBreakMinutes + 10}min) — sosta nel gap gestita dalle soste automatiche`);
+        }
+        break; // gestisce solo il primo gap della giornata
       }
     }
   }
@@ -1016,14 +1046,30 @@ async function insertBreaks(rows, options) {
     prevServiceEnd = parseTime(row.serviceEndTime) || prevServiceEnd;
     L(`  post-work: cumul=${cumulative} prevEnd=${formatTime(prevServiceEnd)}`);
 
-    if (cumulative >= REST_MIN && i < rows.length - 1) {
+    // Gap tra mattina e pomeriggio (tappa spezzata per chiusura pranzo)
+    // Se pranzo già piazzato oppure gap troppo breve per pranzo, usa il gap per una sosta
+    const nextRow = rows[i + 1];
+    if (row.stopPart === "morning" && nextRow?.stopPart === "afternoon" && nextRow.addressId === row.addressId) {
+      const gapStart = parseTime(row.serviceEndTime);
+      const gapEnd   = parseTime(nextRow.arrivalTime);
+      const gapMin   = (gapStart != null && gapEnd != null) ? gapEnd - gapStart : 0;
+      const lunchAlreadyPlaced = insertions.some(ins => ins.type === "lunch");
+      const lunchPlannedInGap  = lunchAlreadyPlaced && insertions.find(ins => ins.type === "lunch")?.beforeIndex === i + 1;
+      L(`  gap split: ${formatTime(gapStart)}-${formatTime(gapEnd)} (${gapMin}min) pranzo=${lunchAlreadyPlaced ? "già piazzato" : "non ancora"}`);
+      if (!lunchPlannedInGap && gapMin >= REST_DUR + 5) {
+        const breakTime = gapStart != null ? gapStart : prevServiceEnd;
+        const valid = isValidBreakTime(breakTime);
+        L(`  gap break: gapMin=${gapMin}min breakTime=${formatTime(breakTime)} valid=${valid}`);
+        if (valid) {
+          await tryInsert(i + 1, row.lat, row.lng, row.lat, row.lng, nextRow.lat, nextRow.lng, 0, breakTime);
+        }
+      }
+    } else if (cumulative >= REST_MIN && i < rows.length - 1) {
       const breakTime = prevServiceEnd;
-      const nextRow = rows[i + 1];
       const valid = isValidBreakTime(breakTime);
       L(`  post-work break: breakTime=${formatTime(breakTime)} valid=${valid}`);
       if (valid) {
         // Cerca la sosta lungo il percorso verso la prossima tappa, non al punto di partenza.
-        // Usiamo una frazione proporzionale a ~20 min di guida nel prossimo segmento.
         const nextDrive = nextRow?.driveMinutes || 60;
         const frac = Math.min(0.5, 20 / nextDrive);
         const searchLat = (row.lat != null && nextRow?.lat != null) ? row.lat + (nextRow.lat - row.lat) * frac : row.lat;
