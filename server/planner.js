@@ -217,7 +217,8 @@ function scheduleStop(arrival, stop, opts = {}) {
       if (nextWin && serviceStart < win.end) {
         const morningWork = win.end - serviceStart;
         const afternoonWork = stop.durationMinutes - morningWork;
-        if (afternoonWork > 0 && nextWin.start + afternoonWork <= nextWin.end) {
+        // Only split if morning slice is worth it (>= 45 min); otherwise wait for next window
+        if (morningWork >= 45 && afternoonWork > 0 && nextWin.start + afternoonWork <= nextWin.end) {
           return {
             split: true,
             morningStart: serviceStart,
@@ -230,7 +231,7 @@ function scheduleStop(arrival, stop, opts = {}) {
             warnings
           };
         }
-        // Split not possible (afternoon too short) — wait for next window and do all there
+        // Morning slice too thin or afternoon doesn't fit — wait for next window and do all there
         if (nextWin.start + stop.durationMinutes <= nextWin.end) {
           return { split: false, serviceStart: nextWin.start, serviceEnd: nextWin.start + stop.durationMinutes,
             waitMinutes: nextWin.start - arrival, warnings: [...warnings, { msg: "intervento spostato al pomeriggio", level: "info" }] };
@@ -891,6 +892,33 @@ async function insertBreaks(rows, options) {
           L(`    gap troppo breve per pranzo (${gapMin}min < ${lunchBreakMinutes + 10}min) — sosta nel gap gestita dalle soste automatiche`);
         }
         break; // gestisce solo il primo gap della giornata
+      }
+    }
+
+    // ── Sezione 5: pranzo durante attesa prima dell'apertura ─────────────────
+    // Quando una tappa ha wait time lungo (arrivo prima dell'apertura), usa quel tempo per il pranzo
+    if (!placed) {
+      for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        if (row.stopPart) continue; // gestisce solo righe non-split
+        const arrMin = parseTime(row.arrivalTime);
+        const svcMin = parseTime(row.serviceStartTime);
+        if (arrMin == null || svcMin == null) continue;
+        const waitMin = svcMin - arrMin;
+        if (waitMin < lunchBreakMinutes + 10) continue;
+        // L'attesa deve sovrapporsi alla finestra pranzo
+        const lunchAt = Math.max(arrMin, LUNCH_OPEN);
+        const lunchEnd = Math.min(svcMin, LUNCH_CLOSE);
+        if (lunchAt + lunchBreakMinutes > lunchEnd) continue;
+        const maxTravelOneWay = Math.floor((lunchEnd - lunchAt - lunchBreakMinutes) / 2);
+        if (maxTravelOneWay < 0) continue;
+        const gapMaxDetourKm = Math.min(maxDetourKm, maxTravelOneWay / 60 * 50);
+        const gapLunchClose = lunchAt + maxTravelOneWay;
+        const prevRow = i > 0 ? rows[i - 1] : null;
+        L(`  wait-time pranzo "${row.customer}": attesa=${waitMin}min lunchAt=${formatTime(lunchAt)} travelMax=${maxTravelOneWay}min`);
+        const entry = await makeLunchEntry(i, prevRow, row, lunchAt, gapLunchClose, gapMaxDetourKm);
+        if (entry) { insertions.push(entry); placed = true; }
+        break;
       }
     }
   }

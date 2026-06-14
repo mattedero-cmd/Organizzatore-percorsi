@@ -1269,7 +1269,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.116 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.117 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -1281,8 +1281,10 @@ function renderMenuInfo() {
         <li>${state.whisperConfigured ? _svg('<polyline points="20 6 9 17 4 12"/>', 14) + " Comandi vocali attivi (Whisper)" : _svg('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>', 14) + " Comandi vocali non configurati"}</li>
       </ul>
 
-      <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v4.116</p>
+      <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v4.117</p>
       <ul class="info-list">
+        <li>Arrivo dopo chiusura mattutina: se non c'è abbastanza tempo prima della chiusura (< 45 min), l'intervento viene spostato interamente al pomeriggio invece di creare uno spicchio di lavoro troppo breve che i ritardi da soste renderebbero impossibile</li>
+        <li>Pranzo durante attesa apertura: quando si arriva vicino a una tappa che non è ancora aperta e c'è tempo prima dell'apertura, il planner cerca automaticamente un ristorante in zona per non sprecare quell'attesa</li>
         <li>Ricalcolo giro: gli orari di apertura vengono ora recuperati anche dall'archivio contatti locale quando non presenti nelle righe del risultato salvato — risolve definitivamente Fineco con "Non indicato" al ricalcolo</li>
         <li>Tempi di viaggio sempre visibili: ogni tappa, sosta e pranzo mostra ora il tempo di percorrenza (🚗 Xmin · Ykm) direttamente nella card senza dover espandere il dettaglio</li>
         <li>Ricalcolo giro: le tappe spezzate (es. 09:00–13:00 / 14:00–18:00) ora trasmettono correttamente gli orari e la durata totale al planner</li>

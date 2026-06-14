@@ -1,3 +1,7 @@
+## v4.117 — 2026-06-14
+- Fix planner: soglia minima 45 min per il lavoro mattutino — se il tempo prima della chiusura è inferiore, l'intervento viene spostato interamente al pomeriggio (risolve Fineco 13:03 che faceva 36min di lavoro durante la chiusura)
+- Nuovo planner: pranzo durante attesa apertura — se si arriva vicino a una tappa chiusa con tempo sufficiente nella finestra pranzo, cerca un ristorante in zona
+
 ## v4.116 — 2026-06-14
 - Fix: ricalcolo giro — gli orari vengono ora recuperati dall'archivio contatti locale (state.allAddresses) come fallback, risolvendo definitivamente il caso Fineco "Non indicato" su giri salvati in precedenza
 - Nuovo: tempi di viaggio sempre visibili su ogni card (tappa, sosta, pranzo) — mostra 🚗 Xmin · Ykm senza dover espandere il dettaglio
