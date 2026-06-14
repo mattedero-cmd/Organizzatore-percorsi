@@ -855,6 +855,13 @@ async function insertBreaks(rows, options) {
       spot = await findNearbyRestStop(refLat, refLng, fromLat, fromLng, toLat, toLng, 15000, breakTimeMin, scheduledDate, maxDetourKm, (msg) => L(`    ${msg}`))
         .then(r => { L(`    PlacesAPI sosta @ (${refLat?.toFixed(4)},${refLng?.toFixed(4)}): ${r ? `"${r.customer}"` : "nessuna"}`); return r; })
         .catch(e => { L(`    PlacesAPI sosta: errore ${e.message}`); return null; });
+      // Retry con raggio esteso se non trovato nulla
+      if (!spot) {
+        L(`    → retry raggio esteso 25km...`);
+        spot = await findNearbyRestStop(refLat, refLng, fromLat, fromLng, toLat, toLng, 25000, breakTimeMin, scheduledDate, maxDetourKm * 1.5, (msg) => L(`    [ext] ${msg}`))
+          .then(r => { L(`    PlacesAPI sosta (ext) @ (${refLat?.toFixed(4)},${refLng?.toFixed(4)}): ${r ? `"${r.customer}"` : "nessuna"}`); return r; })
+          .catch(e => { L(`    PlacesAPI sosta (ext): errore ${e.message}`); return null; });
+      }
     }
     if (!spot) { L(`    → nessun posto trovato, cumulative preservato`); return false; }
     const label = spot.rating

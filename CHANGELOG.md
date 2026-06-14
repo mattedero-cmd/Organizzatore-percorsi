@@ -1,3 +1,6 @@
+## v4.101 — 2026-06-14
+- Feature: se la ricerca sosta (15km) non trova nulla, retry automatico con raggio esteso 25km e maxDetour ×1.5 — vale per tutte le soste, non solo l'ultima
+
 ## v4.100 — 2026-06-14
 - Fix: nessuna sosta veniva tentata nell'ultima tratta verso casa anche con cumulative >= REST_MIN; ora dopo il loop principale si tenta un'ultima sosta se l'orario è valido (non nell'ultima ora prima di arrivare)
 
