@@ -1,3 +1,7 @@
+## v4.116 — 2026-06-14
+- Fix: ricalcolo giro — gli orari vengono ora recuperati dall'archivio contatti locale (state.allAddresses) come fallback, risolvendo definitivamente il caso Fineco "Non indicato" su giri salvati in precedenza
+- Nuovo: tempi di viaggio sempre visibili su ogni card (tappa, sosta, pranzo) — mostra 🚗 Xmin · Ykm senza dover espandere il dettaglio
+
 ## v4.115 — 2026-06-14
 - Fix: ricalcolo giro (replanFromResult) — le tappe spezzate (es. Fineco 09:00–13:00/14:00–18:00) ora trasmettono openMorning/closeMorning/openAfternoon/closeAfternoon al server, e la durata è la somma mattina+pomeriggio (non solo i 6min mattutini)
 - Fix: soste automatiche — le soste salvate vengono ora escluse se la distanza diretta dalla posizione corrente supera maxDetourKm, anche se risultavano "sul percorso" geometricamente (es. Obber in Imer inserita come sosta da Riva del Garda a 2h di distanza)

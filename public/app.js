@@ -1269,7 +1269,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.115 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.116 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -1281,11 +1281,13 @@ function renderMenuInfo() {
         <li>${state.whisperConfigured ? _svg('<polyline points="20 6 9 17 4 12"/>', 14) + " Comandi vocali attivi (Whisper)" : _svg('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>', 14) + " Comandi vocali non configurati"}</li>
       </ul>
 
-      <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v4.115</p>
+      <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v4.116</p>
       <ul class="info-list">
-        <li>Ricalcolo giro: le tappe spezzate (es. 09:00–13:00 / 14:00–18:00) ora trasmettono correttamente gli orari e la durata totale al planner — risolve i casi in cui dopo il ricalcolo la durata appariva come "00:06" invece di 3h</li>
-        <li>Soste automatiche: le soste salvate vengono ora scartate se si trovano troppo lontane dalla posizione attuale (anche se tecnicamente "sul percorso" ma vicino alla destinazione finale) — risolve Obber inserita come sosta da Riva del Garda quando in realtà è a 2h di macchina</li>
-        <li>Gap chiusura pranzo: se la tappa è spezzata e nel gap c'è tempo sufficiente, cerca automaticamente un ristorante raggiungibile (andata+mangiare+ritorno entro il gap); se il gap è troppo breve o il pranzo è già fatto, inserisce una sosta breve invece di lasciare il tempo morto</li>
+        <li>Ricalcolo giro: gli orari di apertura vengono ora recuperati anche dall'archivio contatti locale quando non presenti nelle righe del risultato salvato — risolve definitivamente Fineco con "Non indicato" al ricalcolo</li>
+        <li>Tempi di viaggio sempre visibili: ogni tappa, sosta e pranzo mostra ora il tempo di percorrenza (🚗 Xmin · Ykm) direttamente nella card senza dover espandere il dettaglio</li>
+        <li>Ricalcolo giro: le tappe spezzate (es. 09:00–13:00 / 14:00–18:00) ora trasmettono correttamente gli orari e la durata totale al planner</li>
+        <li>Soste automatiche: le soste salvate vengono ora scartate se si trovano troppo lontane dalla posizione attuale</li>
+        <li>Gap chiusura pranzo: se la tappa è spezzata e nel gap c'è tempo sufficiente, cerca automaticamente un ristorante raggiungibile</li>
       </ul>
 
       <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v4.113</p>
@@ -2991,6 +2993,7 @@ function renderResult() {
                 ${lunchUrl && lunchName
                   ? `<a class="stop-title break-place-link" href="${lunchUrl}" target="_blank" rel="noopener" style="margin:0">${escapeHtml(lunchName)}${row.location ? ` — ${escapeHtml(row.location)}` : ""}</a>`
                   : `<p class="stop-title" style="margin:0">Pausa pranzo</p>`}
+                ${row.driveMinutes > 0 ? `<div class="rc-drive-row">${I.car(12)} ${minutesLabel(row.driveMinutes)} · ${row.km.toFixed(1)} km</div>` : ""}
                 <div class="stop-meta">${escapeHtml(row.serviceStartTime)} – ${escapeHtml(row.serviceEndTime)} · ${minutesLabel(row.durationMinutes)}</div>
               </div>
             </div>
@@ -3008,6 +3011,7 @@ function renderResult() {
                 ${restUrl
                   ? `<a class="stop-title break-place-link" href="${restUrl}" target="_blank" rel="noopener" style="margin:0">${escapeHtml(row.customer)}${row.location ? ` — ${escapeHtml(row.location)}` : ""}</a>`
                   : `<p class="stop-title" style="margin:0">${escapeHtml(row.customer)}${row.location ? ` — ${escapeHtml(row.location)}` : ""}</p>`}
+                ${row.driveMinutes > 0 ? `<div class="rc-drive-row">${I.car(12)} ${minutesLabel(row.driveMinutes)} · ${row.km.toFixed(1)} km</div>` : ""}
                 <div class="stop-meta">${escapeHtml(row.serviceStartTime)} – ${escapeHtml(row.serviceEndTime)} · ${minutesLabel(row.durationMinutes)}</div>
                 ${row.address ? `<div class="stop-meta" style="font-size:0.8rem">${escapeHtml(row.address)}</div>` : ""}
               </div>
@@ -3041,12 +3045,16 @@ function renderResult() {
           const warnMsg = warnLevel ? (row.warnings.find(w => w.level === warnLevel || (warnLevel==="error" && /(chiusa|dopo|oltre)/.test(w.msg||w)))?.msg || "") : "";
           const expandId = `${row.stopNumber}${row.stopPart ? "-" + row.stopPart : ""}`;
           const arrivalDisplay = isAfternoon ? row.serviceStartTime : row.arrivalTime;
+          const driveMeta = !isAfternoon
+            ? `<div class="rc-drive-row">${I.car(12)} ${minutesLabel(row.driveMinutes)} · ${row.km.toFixed(1)} km</div>`
+            : "";
           return `
           <article class="card rc${cardClass}">
             <div class="rc-head" data-expand-stop="${expandId}">
               <div class="rc-left">
                 <div class="rc-num-name">${partBadge}<span class="rc-name">${stopTitle}</span></div>
                 <div class="rc-addr">${escapeHtml(row.address)}</div>
+                ${driveMeta}
                 ${warnLevel ? `<span class="badge ${warnLevel === "error" ? "badge-error" : "badge-warn"} rc-warn">${escapeHtml(warnMsg)}</span>` : ""}
               </div>
               <div class="rc-arrival">
@@ -3602,7 +3610,15 @@ async function replanFromResult() {
   const stops = (result.rows || [])
     .filter(r => !r.type)
     .filter((r, i, arr) => !r.stopPart || r.stopPart === "morning" || arr.findIndex(x => x.addressId === r.addressId && !x.stopPart) === i)
-    .map(r => ({
+    .map(r => {
+      // Fall back to address book for hours when result row lacks them (e.g. old saved routes)
+      const addr = r.addressId ? (state.allAddresses || []).find(a => String(a.id) === String(r.addressId)) : null;
+      const wh = r.weeklyHours || addr?.weeklyHours || null;
+      const om = r.openMorning || addr?.openMorning || "";
+      const cm = r.closeMorning || addr?.closeMorning || "";
+      const oa = r.openAfternoon || addr?.openAfternoon || "";
+      const ca = r.closeAfternoon || addr?.closeAfternoon || "";
+      return {
       uid: crypto.randomUUID(),
       addressId: r.addressId ?? null,
       customer: r.customer, location: r.location,
@@ -3611,18 +3627,18 @@ async function replanFromResult() {
         ? (() => { const af = (result.rows || []).find(x => x.stopPart === "afternoon" && x.addressId === r.addressId); return Number(r.durationMinutes || 0) + Number(af?.durationMinutes || 0) || 45; })()
         : Number(r.durationMinutes || 45),
       lat: r.lat, lng: r.lng,
-      weeklyHours: r.weeklyHours ?? null,
-      openMorning: r.openMorning || "",
-      closeMorning: r.closeMorning || "",
-      openAfternoon: r.openAfternoon || "",
-      closeAfternoon: r.closeAfternoon || "",
+      weeklyHours: wh,
+      openMorning: om,
+      closeMorning: cm,
+      openAfternoon: oa,
+      closeAfternoon: ca,
       ignoreHours: r.ignoreHours === true,
       fixedFirst: r.fixedFirst === true,
       timeFrom: r.timeFrom || "",
       timeTo: r.timeTo || "",
       timeWindowMode: r.timeWindowMode || "available",
       recognized: true
-    }));
+    };});
 
   // Add any newly queued stops from the result-view add-stop panel
   for (const s of (state.resultPendingStops || [])) stops.push(s);

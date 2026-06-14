@@ -2035,6 +2035,7 @@ tbody tr:last-child td {
 }
 
 .rc-warn { margin-top: 5px; display: inline-block; }
+.rc-drive-row { font-size: 0.73rem; color: var(--muted); margin-top: 3px; display: flex; align-items: center; gap: 4px; }
 
 /* arrival block */
 .rc-arrival {
