@@ -1,3 +1,8 @@
+## v4.087 — 2026-06-14
+- Fix: `needed` nel loop mid-leg poteva diventare negativo quando cumulative > REST_MIN → posizione interpolata e orario sosta errati; ora `Math.max(0, ...)`
+- Fix: soglia Fix D (30 min prossima tappa) rimossa — bloccava break post-Bolzano quando la tappa successiva era breve; il check post-work ora è sempre tentato
+- Fix: ristorante pranzo "sul percorso" ma irraggiungibile entro la finestra — aggiunto controllo `lunchTimeMin + travelMin > LUNCH_CLOSE` → scarta il ristorante e usa "Pausa pranzo" senza luogo
+
 ## v4.086 — 2026-06-13
 - Fix A: ristorante/sosta "sul percorso" (perp ≤ 2km) accettato senza limite di distanza; il limite maxDetourKm si applica solo a posti fuori percorso
 - Fix B: quando tryInsert fallisce per mancanza di posto, cumulative non viene bruciato dall'intero tratto rimanente — la prossima finestra rimane puntuale

@@ -645,6 +645,10 @@ async function insertBreaks(rows, options) {
       ? haversineKm({ lat: fromRow.lat, lng: fromRow.lng }, { lat: spot.lat, lng: spot.lng })
       : 0;
     const travelMin = Math.round(travelKm / 50 * 60);
+    // Se l'orario di ARRIVO al ristorante (lunchTimeMin + viaggio) supera la finestra pranzo, scarta
+    if (lunchTimeMin + travelMin > LUNCH_CLOSE) {
+      return { beforeIndex, type: "lunch", duration: lunchBreakMinutes, customer: "Pausa pranzo" };
+    }
     const label = spot.rating ? `${spot.customer} · ⭐ ${spot.rating} (${spot.reviewCount})` : spot.customer;
     return { beforeIndex, type: "lunch", duration: lunchBreakMinutes, travelMinutes: travelMin, travelKm,
       customer: label, location: spot.location || "", address: spot.fullAddress || "",
@@ -850,7 +854,7 @@ async function insertBreaks(rows, options) {
 
     // Mid-leg breaks: insert as many as needed while driving toward stop i
     while (remainingDrive > 0 && cumulative + remainingDrive >= REST_MIN) {
-      const needed = REST_MIN - cumulative; // minutes of driving until break triggers
+      const needed = Math.max(0, REST_MIN - cumulative); // non può essere negativo se cumulative > REST_MIN
       const fraction = needed / (row.driveMinutes || 1);
       // Interpolate position along the route at the break point
       const interpLat = (lastLat != null && row.lat != null) ? lastLat + (row.lat - lastLat) * fraction : (row.lat ?? lastLat);
@@ -868,7 +872,7 @@ async function insertBreaks(rows, options) {
     // Se tryInsert ha fallito per mancanza di posto, aggiungiamo solo i minuti fino al punto
     // del tentativo (non tutto il tratto), così la prossima finestra rimane puntuale.
     if (noSpotFound) {
-      const minutesTried = REST_MIN - cumulative; // quanti minuti avremmo percorso
+      const minutesTried = Math.max(0, REST_MIN - cumulative);
       cumulative += Math.min(minutesTried, remainingDrive);
       // Non applichiamo il cap REST_MAX: la sosta era dovuta ma non c'era posto
     } else {
@@ -880,9 +884,7 @@ async function insertBreaks(rows, options) {
     cumulative += workMin;
     prevServiceEnd = parseTime(row.serviceEndTime) || prevServiceEnd;
 
-    // Step 4: non tentare sosta post-tappa se la prossima tappa è breve (< 30 min lavoro)
-    const nextWorkMin = rows[i + 1]?.durationMinutes ?? 0;
-    if (cumulative >= REST_MIN && i < rows.length - 1 && nextWorkMin >= 30) {
+    if (cumulative >= REST_MIN && i < rows.length - 1) {
       const breakTime = prevServiceEnd;
       const nextRow = rows[i + 1];
       if (isValidBreakTime(breakTime)) {
