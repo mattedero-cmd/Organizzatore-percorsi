@@ -976,7 +976,7 @@ async function insertBreaks(rows, options) {
     }
   }
 
-  L(`=== FINE: ${insertions.length} inserzioni, timeShift=${addedMinutes??timeShift}min ===`);
+  L(`=== FINE: ${insertions.length} inserzioni timeShift=${timeShift}min ===`);
   return { rows: result, addedMinutes: timeShift, debugLog };
 }
 

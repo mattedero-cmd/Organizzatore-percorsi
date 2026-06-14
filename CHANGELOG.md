@@ -1,3 +1,6 @@
+## v4.090 — 2026-06-14
+- Fix: crash "addedMinutes is not defined" nell'ultima riga del log di insertBreaks — variabile corretta è timeShift; il crash impediva il popolamento di debugLog
+
 ## v4.089 — 2026-06-14
 - Fix: pulsante "Log" sempre visibile nel risultato (non condizionale al debugLog); se il giro non è stato ricalcolato mostra "Ricalcola per generare il log"
 
