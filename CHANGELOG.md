@@ -1,3 +1,7 @@
+## v4.110 — 2026-06-14
+- Fix: Open-Meteo 429 "too many requests" — aggiunta cache in-memory (openMeteoCache) in weatherService.js: stessa combinazione lat/lng/data/mode non ripete la chiamata HTTP
+- Fix: sosta salvata (es. Bar Caffè Obber) inserita due volte allo stesso beforeIndex — tryInsert ora salta le soste già presenti in insertions con stessa lat/lng
+
 ## v4.109 — 2026-06-14
 - Feature: meteo tappe in Provincia di Bolzano/Alto Adige usa Open Data Hub South Tyrol (14 comuni, da Bolzano a San Candido); fallback automatico su Open-Meteo se API non disponibile
 

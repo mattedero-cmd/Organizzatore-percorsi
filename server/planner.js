@@ -879,6 +879,11 @@ async function insertBreaks(rows, options) {
     // Soste salvate: perpendicolare ≤ 2 km = "sul percorso" (nessun limite distanza).
     // Se fuori percorso il limite haversine è maxDetourKm.
     let spot = findNearestRestStop(restStops, refLat, refLng, toLat, toLng, 2.0, breakTimeMin, scheduledDate);
+    // Non riusare uno spot già inserito in questa sessione (evita doppioni della stessa sosta)
+    if (spot && insertions.some(ins => ins.lat === spot.lat && ins.lng === spot.lng)) {
+      L(`    savedSosta "${spot.customer}" già usata — skip`);
+      spot = null;
+    }
     if (spot) { L(`    savedSosta "${spot.customer}" trovata`); }
     if (!spot && refLat && refLng) {
       spot = await findNearbyRestStop(refLat, refLng, fromLat, fromLng, toLat, toLng, 15000, breakTimeMin, scheduledDate, maxDetourKm, (msg) => L(`    ${msg}`))

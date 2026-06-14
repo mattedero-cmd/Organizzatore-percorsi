@@ -1269,7 +1269,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.109 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.110 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -1279,6 +1279,17 @@ function renderMenuInfo() {
       <ul class="info-list">
         <li>${state.mapApiConfigured ? _svg('<polyline points="20 6 9 17 4 12"/>', 14) + " Google Maps attivo — percorsi reali e ottimizzazione avanzata" : _svg('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>', 14) + " Google Maps non configurato — stime distanze locali"}</li>
         <li>${state.whisperConfigured ? _svg('<polyline points="20 6 9 17 4 12"/>', 14) + " Comandi vocali attivi (Whisper)" : _svg('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>', 14) + " Comandi vocali non configurati"}</li>
+      </ul>
+
+      <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v4.110</p>
+      <ul class="info-list">
+        <li>Meteo Provincia di Bolzano/Alto Adige: usa Open Data Hub South Tyrol (14 comuni); fallback su Open-Meteo</li>
+        <li>Open-Meteo: cache in-memory per data+coordinate — evita 429 quando più tappe hanno coordinate simili</li>
+        <li>Soste: stessa sosta salvata non viene più inserita due volte nello stesso percorso</li>
+        <li>Pausa pranzo durante la guida: centro di ricerca proporzionale al tempo disponibile (LUNCH_CLOSE − durata − partenza)</li>
+        <li>Retry ristorante con raggio esteso se il primo candidato è fuori finestra o fuori percorso</li>
+        <li>Soste cercate lungo il percorso (20 min avanti), non alla tappa di partenza</li>
+        <li>Retry sosta con raggio 25km anche quando il posto trovato supera maxDetour (non solo quando API restituisce null)</li>
       </ul>
 
       <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Riepilogo v4.001 – v4.100</p>

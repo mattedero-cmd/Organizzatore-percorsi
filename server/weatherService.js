@@ -104,7 +104,16 @@ function fromOpenMeteo(payload, row, scheduledDate, mode, source) {
   return weather;
 }
 
+// Cache in-memory per Open-Meteo: chiave = "lat,lng,date,mode"
+const openMeteoCache = new Map();
+
 async function openMeteoWeather(coords, row, scheduledDate, mode) {
+  const cacheKey = `${Math.round(coords.lat * 100) / 100},${Math.round(coords.lng * 100) / 100},${scheduledDate},${mode}`;
+  if (openMeteoCache.has(cacheKey)) {
+    const cached = openMeteoCache.get(cacheKey);
+    // Riusa i dati raw, ricalcola per questo specifico stop
+    return fromOpenMeteo(cached, row, scheduledDate, mode, "open-meteo");
+  }
   const baseUrl = mode === "historical"
     ? "https://archive-api.open-meteo.com/v1/archive"
     : "https://api.open-meteo.com/v1/forecast";
@@ -122,7 +131,9 @@ async function openMeteoWeather(coords, row, scheduledDate, mode) {
   trackCall("open_meteo", "forecast");
   const response = await fetch(url, { signal: AbortSignal.timeout(WEATHER_FETCH_TIMEOUT_MS) });
   if (!response.ok) throw new Error(`Meteo Open-Meteo non riuscito (${response.status})`);
-  return fromOpenMeteo(await response.json(), row, scheduledDate, mode, "open-meteo");
+  const data = await response.json();
+  openMeteoCache.set(cacheKey, data);
+  return fromOpenMeteo(data, row, scheduledDate, mode, "open-meteo");
 }
 
 async function openWeatherForecast(coords, row, scheduledDate) {
