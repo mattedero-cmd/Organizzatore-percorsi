@@ -1,3 +1,6 @@
+## v4.099 — 2026-06-14
+- Fix: quando il ristorante salvato viene scartato perché l'arrivo supera LUNCH_CLOSE, ora si tenta comunque la Places API per trovare un ristorante più vicino alla posizione attuale
+
 ## v4.098 — 2026-06-14
 - Fix: pausa pranzo su ristorante "sul percorso" calcolava travelKm=0 anche quando il ristorante era vicino alla fine di un lungo segmento (es. Bolzano dopo 1h19min di guida da San Candido) → orario pranzo irrealistico; ora travelKm = t × segKm dove t è la proiezione del ristorante lungo il segmento (0=inizio, 1=fine)
 

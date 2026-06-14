@@ -655,40 +655,43 @@ async function insertBreaks(rows, options) {
     } else if (!savedSpot) {
       L(`    savedRist: nessuno entro maxDetourKm=${maxDetourKm.toFixed(1)}km`);
     }
-    const spot = savedSpot || (fromRow?.lat
-      ? await findNearbyRestaurant(fromRow.lat, fromRow.lng, fromRow.lat, fromRow.lng, toRow?.lat, toRow?.lng, Math.round(maxDetourKm * 1000 * 1.5), lunchTimeMin, scheduledDate, maxDetourKm)
-          .then(r => { L(`    PlacesAPI ristorante: ${r ? `"${r.customer}" (${r.rating}⭐)` : "nessuno"}`); return r; })
-          .catch(e => { L(`    PlacesAPI ristorante: errore ${e.message}`); return null; })
-      : null);
-    if (!spot) { L(`    → Pausa pranzo senza luogo`); return { beforeIndex, type: "lunch", duration: lunchBreakMinutes, customer: "Pausa pranzo" }; }
-    // travelKm = tempo reale per raggiungere il ristorante dalla posizione attuale:
-    // - sul percorso (perp ≤ 2km): t * lunghezza_segmento (frazione del tragitto già previsto)
-    // - fuori percorso: haversine diretto (detour aggiuntivo)
-    let travelKm = 0;
-    if (fromRow?.lat && fromRow?.lng && spot.lat && spot.lng) {
-      if (toRow?.lat && toRow?.lng) {
-        const { perpKm, t } = perpDistToSegment(spot.lat, spot.lng, fromRow.lat, fromRow.lng, toRow.lat, toRow.lng);
+    const calcTravelMin = (candidate, from, to) => {
+      if (!from?.lat || !from?.lng || !candidate.lat || !candidate.lng) return 0;
+      if (to?.lat && to?.lng) {
+        const { perpKm, t } = perpDistToSegment(candidate.lat, candidate.lng, from.lat, from.lng, to.lat, to.lng);
         if (perpKm <= ON_ROUTE_PERP_KM) {
-          // Sul percorso: il ristorante si raggiunge dopo t * segmento di guida
-          const segKm = haversineKm({ lat: fromRow.lat, lng: fromRow.lng }, { lat: toRow.lat, lng: toRow.lng });
-          travelKm = t * segKm;
-        } else {
-          const rawKm = haversineKm({ lat: fromRow.lat, lng: fromRow.lng }, { lat: spot.lat, lng: spot.lng });
-          if (rawKm > maxDetourKm) {
-            L(`    "${spot.customer}" SCARTATO fuori-percorso perp=${perpKm.toFixed(1)}km direct=${rawKm.toFixed(1)}km > max=${maxDetourKm.toFixed(1)}km`);
-            return { beforeIndex, type: "lunch", duration: lunchBreakMinutes, customer: "Pausa pranzo" };
-          }
-          travelKm = rawKm;
+          const segKm = haversineKm({ lat: from.lat, lng: from.lng }, { lat: to.lat, lng: to.lng });
+          return Math.round(t * segKm / 50 * 60);
         }
-      } else {
-        travelKm = haversineKm({ lat: fromRow.lat, lng: fromRow.lng }, { lat: spot.lat, lng: spot.lng });
+        const rawKm = haversineKm({ lat: from.lat, lng: from.lng }, { lat: candidate.lat, lng: candidate.lng });
+        return rawKm > maxDetourKm ? Infinity : Math.round(rawKm / 50 * 60);
       }
+      return Math.round(haversineKm({ lat: from.lat, lng: from.lng }, { lat: candidate.lat, lng: candidate.lng }) / 50 * 60);
+    };
+
+    // Valida candidato: calcola travelMin e verifica LUNCH_CLOSE
+    const validateSpot = (candidate, label) => {
+      const tm = calcTravelMin(candidate, fromRow, toRow);
+      if (tm === Infinity) { L(`    ${label} "${candidate.customer}" SCARTATO fuori-percorso > max=${maxDetourKm.toFixed(1)}km`); return null; }
+      if (lunchTimeMin + tm > LUNCH_CLOSE) { L(`    ${label} "${candidate.customer}" SCARTATO arrivo=${formatTime(lunchTimeMin + tm)} > LUNCH_CLOSE=${formatTime(LUNCH_CLOSE)}`); return null; }
+      return { spot: candidate, travelMin: tm };
+    };
+
+    let spotResult = null;
+    if (savedSpot) {
+      spotResult = validateSpot(savedSpot, "savedRist");
     }
-    const travelMin = Math.round(travelKm / 50 * 60);
-    if (lunchTimeMin + travelMin > LUNCH_CLOSE) {
-      L(`    "${spot.customer}" SCARTATO arrivo=${formatTime(lunchTimeMin + travelMin)} > LUNCH_CLOSE=${formatTime(LUNCH_CLOSE)}`);
-      return { beforeIndex, type: "lunch", duration: lunchBreakMinutes, customer: "Pausa pranzo" };
+    // Se il saved restaurant è stato scartato (o non c'è), prova Places API
+    if (!spotResult && fromRow?.lat) {
+      const apiSpot = await findNearbyRestaurant(fromRow.lat, fromRow.lng, fromRow.lat, fromRow.lng, toRow?.lat, toRow?.lng, Math.round(maxDetourKm * 1000 * 1.5), lunchTimeMin, scheduledDate, maxDetourKm)
+        .then(r => { L(`    PlacesAPI ristorante: ${r ? `"${r.customer}" (${r.rating}⭐)` : "nessuno"}`); return r; })
+        .catch(e => { L(`    PlacesAPI ristorante: errore ${e.message}`); return null; });
+      if (apiSpot) spotResult = validateSpot(apiSpot, "PlacesAPI");
     }
+    if (!spotResult) { L(`    → Pausa pranzo senza luogo`); return { beforeIndex, type: "lunch", duration: lunchBreakMinutes, customer: "Pausa pranzo" }; }
+    const { spot, travelMin } = spotResult;
+    const travelKm = travelMin / 60 * 50;
+    L(`    → PRANZO "${spot.customer}" travelMin=${travelMin} arrivo=${formatTime(lunchTimeMin + travelMin)}`);
     L(`    → PRANZO "${spot.customer}" travelMin=${travelMin} arrivo=${formatTime(lunchTimeMin + travelMin)}`);
     const label = spot.rating ? `${spot.customer} · ⭐ ${spot.rating} (${spot.reviewCount})` : spot.customer;
     return { beforeIndex, type: "lunch", duration: lunchBreakMinutes, travelMinutes: travelMin, travelKm,
