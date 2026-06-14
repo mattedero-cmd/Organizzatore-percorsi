@@ -198,6 +198,28 @@ async function weatherbitForecast(coords, row, scheduledDate) {
 
 const MT_BBOX = { latMin: 45.65, latMax: 46.55, lngMin: 10.40, lngMax: 12.00 };
 
+// Provincia Autonoma di Bolzano — bounding box e comuni principali
+// API: Open Data Hub South Tyrol (pubblica, no auth)
+const BZ_BBOX = { latMin: 46.37, latMax: 47.10, lngMin: 10.38, lngMax: 12.48 };
+
+// Codici ISTAT dei principali comuni (usati come mun{code} nell'ODH API)
+const BZ_LOCALITIES = [
+  { code: "021008", name: "Bolzano",        lat: 46.4981, lng: 11.3548 },
+  { code: "021049", name: "Merano",          lat: 46.6688, lng: 11.1597 },
+  { code: "021013", name: "Bressanone",      lat: 46.7154, lng: 11.6567 },
+  { code: "021015", name: "Brunico",         lat: 46.7958, lng: 11.9358 },
+  { code: "021035", name: "San Candido",     lat: 46.7333, lng: 12.2831 },
+  { code: "021108", name: "Vipiteno",        lat: 46.8969, lng: 11.4336 },
+  { code: "021093", name: "Silandro",        lat: 46.6278, lng: 10.7739 },
+  { code: "021043", name: "Laives",          lat: 46.4314, lng: 11.3378 },
+  { code: "021002", name: "Appiano",         lat: 46.5533, lng: 11.2644 },
+  { code: "021016", name: "Caldaro",         lat: 46.4158, lng: 11.2456 },
+  { code: "021036", name: "Sarentino",       lat: 46.6342, lng: 11.3564 },
+  { code: "021070", name: "Ortisei",         lat: 46.5747, lng: 11.6719 },
+  { code: "021027", name: "Dobbiaco",        lat: 46.7356, lng: 12.2206 },
+  { code: "021095", name: "Sluderno",        lat: 46.6547, lng: 10.5814 },
+];
+
 const MT_LOCALITIES = [
   { code: "TRENTO", lat: 46.0667, lng: 11.1167 },
   { code: "ROVERETO", lat: 45.8903, lng: 11.0397 },
@@ -228,6 +250,27 @@ function mtInTrentino(coords) {
   return Number.isFinite(lat) && Number.isFinite(lng)
     && lat >= MT_BBOX.latMin && lat <= MT_BBOX.latMax
     && lng >= MT_BBOX.lngMin && lng <= MT_BBOX.lngMax;
+}
+
+function bzInBolzano(coords) {
+  const lat = Number(coords?.lat), lng = Number(coords?.lng);
+  return Number.isFinite(lat) && Number.isFinite(lng)
+    && lat >= BZ_BBOX.latMin && lat <= BZ_BBOX.latMax
+    && lng >= BZ_BBOX.lngMin && lng <= BZ_BBOX.lngMax
+    && !mtInTrentino(coords); // evita sovrapposizione con Trentino
+}
+
+function bzNearestLocality(coords) {
+  const toRad = (d) => d * Math.PI / 180;
+  let best = null, bestKm = Infinity;
+  for (const loc of BZ_LOCALITIES) {
+    const dLat = toRad(loc.lat - coords.lat);
+    const dLng = toRad(loc.lng - coords.lng);
+    const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(coords.lat)) * Math.cos(toRad(loc.lat)) * Math.sin(dLng / 2) ** 2;
+    const km = 6371 * 2 * Math.asin(Math.sqrt(a));
+    if (km < bestKm) { bestKm = km; best = loc; }
+  }
+  return best;
 }
 
 function mtNearestLocality(coords) {
@@ -261,6 +304,53 @@ function mtWarningsFromDescription(desc) {
   if (/neve|nevicat|nevos/.test(d)) warnings.push("neve prevista");
   if (/vento|raffiche/.test(d)) warnings.push("vento forte");
   return warnings;
+}
+
+// ── Meteo Bolzano (Open Data Hub South Tyrol) ────────────────────────────────
+async function meteoBolzanoForecast(coords, row, scheduledDate) {
+  if (!bzInBolzano(coords)) return null;
+  const loc = bzNearestLocality(coords);
+  if (!loc) return null;
+  // Open Data Hub: GET /v1/Weather?locfilter=mun{ISTAT}&language=it
+  const url = new URL("https://tourism.opendatahub.com/v1/Weather");
+  url.searchParams.set("locfilter", `mun${loc.code}`);
+  url.searchParams.set("language", "it");
+  const response = await fetch(url, {
+    signal: AbortSignal.timeout(WEATHER_FETCH_TIMEOUT_MS),
+    headers: { "Accept": "application/json" }
+  });
+  if (!response.ok) throw new Error(`Meteo Bolzano ODH non riuscito (${response.status})`);
+  const payload = await response.json();
+  // Schema ODH: payload.BezirksForecast[].Zeiten[].date + .WeatherCode + .TempMaxim + .TempMinim
+  // oppure payload[0].BezirksForecast[] a seconda della versione
+  const forecasts = (Array.isArray(payload) ? payload[0] : payload)?.BezirksForecast ?? [];
+  if (!forecasts.length) return null;
+  // Cerca il giorno corrispondente tra tutti i distretti (primo che ha il giorno)
+  let dayData = null;
+  for (const district of forecasts) {
+    const zeiten = district?.Zeiten ?? [];
+    const found = zeiten.find((z) => String(z?.date || "").slice(0, 10) === scheduledDate);
+    if (found) { dayData = found; break; }
+  }
+  if (!dayData) return null;
+  const tMin = Number(dayData.TempMinim ?? dayData.tempMinim ?? NaN);
+  const tMax = Number(dayData.TempMaxim ?? dayData.tempMaxim ?? NaN);
+  const desc = String(dayData.WeatherDesc || dayData.weatherDesc || dayData.WeatherCode || "Previsione Alto Adige").trim();
+  const weather = {
+    stopNumber: row.stopNumber,
+    customer: row.customer,
+    location: row.location,
+    scheduledDate,
+    time: row.arrivalTime,
+    temperatureC: mtTempAtHour(tMin, tMax, normalizeHour(row.arrivalTime)),
+    precipitationMm: null,
+    windKmh: null,
+    description: `${desc} (${loc.name})`,
+    source: "meteobz",
+    mode: "forecast"
+  };
+  weather.warnings = mtWarningsFromDescription(desc);
+  return weather;
 }
 
 async function meteoTrentinoForecast(coords, row, scheduledDate) {
@@ -309,6 +399,12 @@ async function weatherForRow(row, scheduledDate, forceHistorical) {
   });
   const mode = forceHistorical || isPastDate(scheduledDate) ? "historical" : "forecast";
   if (mode === "forecast") {
+    try {
+      const bolzano = await meteoBolzanoForecast(coords, row, scheduledDate);
+      if (bolzano) return bolzano;
+    } catch (error) {
+      console.warn("[meteobz]", error.message);
+    }
     try {
       const trentino = await meteoTrentinoForecast(coords, row, scheduledDate);
       if (trentino) return trentino;

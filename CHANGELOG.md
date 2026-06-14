@@ -1,3 +1,6 @@
+## v4.109 — 2026-06-14
+- Feature: meteo tappe in Provincia di Bolzano/Alto Adige usa Open Data Hub South Tyrol (14 comuni, da Bolzano a San Candido); fallback automatico su Open-Meteo se API non disponibile
+
 ## v4.108 — 2026-06-14
 - Fix: centro ricerca ristorante pranzo durante la guida ora calcolato in base al tempo disponibile (LUNCH_CLOSE − durata − partenza), non fisso a 20 min; retry con raggio esteso se il primo candidato è scartato
 
