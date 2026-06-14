@@ -949,9 +949,11 @@ async function insertBreaks(rows, options) {
         if (maxTravelOneWay < 0) continue;
         const gapMaxDetourKm = Math.min(maxDetourKm, maxTravelOneWay / 60 * 50);
         const gapLunchClose = lunchAt + maxTravelOneWay;
-        const prevRow = i > 0 ? rows[i - 1] : null;
+        // Il cliente è GIÀ arrivato alla tappa (row) e qui attende l'apertura: il pranzo
+        // va cercato vicino alla tappa stessa, non lungo la tratta percorsa per arrivarci
+        // (altrimenti finisce a metà strada, es. a Bolzano invece che a Riva del Garda).
         L(`  wait-time pranzo "${row.customer}": attesa=${waitMin}min lunchAt=${formatTime(lunchAt)} travelMax=${maxTravelOneWay}min`);
-        const entry = await makeLunchEntry(i, prevRow, row, lunchAt, gapLunchClose, gapMaxDetourKm);
+        const entry = await makeLunchEntry(i, row, row, lunchAt, gapLunchClose, gapMaxDetourKm);
         if (entry) {
           // Place the lunch at the right time within the drive-to-stop leg:
           // driveOffset = how many minutes after the previous stop's departure the lunch starts

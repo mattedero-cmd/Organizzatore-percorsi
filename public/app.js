@@ -1269,7 +1269,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.119 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.120 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -1279,6 +1279,17 @@ function renderMenuInfo() {
       <ul class="info-list">
         <li>${state.mapApiConfigured ? _svg('<polyline points="20 6 9 17 4 12"/>', 14) + " Google Maps attivo — percorsi reali e ottimizzazione avanzata" : _svg('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>', 14) + " Google Maps non configurato — stime distanze locali"}</li>
         <li>${state.whisperConfigured ? _svg('<polyline points="20 6 9 17 4 12"/>', 14) + " Comandi vocali attivi (Whisper)" : _svg('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>', 14) + " Comandi vocali non configurati"}</li>
+      </ul>
+
+      <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v4.120</p>
+      <ul class="info-list">
+        <li><strong>Pranzo durante attesa apertura:</strong> il ristorante viene ora cercato vicino alla tappa dove si attende (la destinazione), non a metà della tratta percorsa per arrivarci — risolve il pranzo collocato a Bolzano mentre si stava andando a Riva del Garda</li>
+        <li><strong>Avvisi orari:</strong> nuovo avviso quando le soste accumulate spingono un intervento oltre l'orario di chiusura; arrivo nel gap pranzo spostato all'apertura pomeridiana; soglia minima 45 min per il lavoro mattutino prima dello split</li>
+        <li><strong>Tappe con attesa apertura:</strong> orario di servizio ri-ancorato all'apertura effettiva e timeShift ridotto dell'attesa assorbita — le tappe successive non vengono più sovra-spostate</li>
+        <li><strong>Gap chiusura pranzo:</strong> il tempo morto tra mattina e pomeriggio di una tappa spezzata viene usato per pranzo (se raggiungibile) o per una sosta breve</li>
+        <li><strong>Ricalcolo giro:</strong> tappe spezzate trasmettono orari e durata totale corretti; orari recuperati dall'archivio contatti come fallback; ordine tappe preservato</li>
+        <li><strong>Soste automatiche:</strong> soste salvate escluse se troppo lontane dalla posizione corrente; tempi di viaggio sempre visibili su ogni card</li>
+        <li><strong>Meteo:</strong> riga meteo cliccabile (MeteoTrentino/Suedtirol); timeout aumentato a 6s; deduplicazione richieste Open-Meteo per evitare errori 429</li>
       </ul>
 
       <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v4.119</p>

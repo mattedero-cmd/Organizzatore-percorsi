@@ -1,3 +1,6 @@
+## v4.120 — 2026-06-14
+- Fix planner: pranzo durante attesa apertura — il ristorante viene cercato vicino alla tappa di destinazione (dove si attende), non lungo la tratta percorsa per arrivarci. Section 5 ora passa la tappa stessa come from e to in makeLunchEntry, così il centro ricerca è la destinazione (es. Fineco/Riva del Garda) e non un punto a metà strada (es. New Kurdistan a Bolzano)
+
 ## v4.119 — 2026-06-14
 - Fix planner: shiftRowTimes segnala un avviso ("intervento oltre l'orario di chiusura per soste accumulate") quando le soste inserite prima di una tappa con attesa spingono l'inizio del servizio oltre l'apertura e la fine supera l'orario di chiusura — prima la tappa sforava la chiusura senza alcun avviso
 
