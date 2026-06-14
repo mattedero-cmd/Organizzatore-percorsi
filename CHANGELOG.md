@@ -1,3 +1,6 @@
+## v4.102 — 2026-06-14
+- Fix: cache sosta includeva solo lat/lng, quindi la retry con raggio 25km colpiva la stessa chiave e restituiva null senza chiamare l'API; ora la chiave include anche il raggio
+
 ## v4.101 — 2026-06-14
 - Feature: se la ricerca sosta (15km) non trova nulla, retry automatico con raggio esteso 25km e maxDetour ×1.5 — vale per tutte le soste, non solo l'ultima
 

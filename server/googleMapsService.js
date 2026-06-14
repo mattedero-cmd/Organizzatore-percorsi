@@ -180,7 +180,7 @@ export async function findNearbyRestStop(lat, lng, segFromLat, segFromLng, segTo
   const key = API_KEY();
   if (!key) return null;
 
-  const cacheKey = placesCacheKey(lat, lng);
+  const cacheKey = `${placesCacheKey(lat, lng)}_r${radiusM}`;
   if (placesCache.has(cacheKey)) {
     const cached = placesCache.get(cacheKey);
     debugCb?.(`[API cache] → ${cached ? `"${cached.customer}"` : "null"}`);
