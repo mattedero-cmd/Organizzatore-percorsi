@@ -904,7 +904,6 @@ async function insertBreaks(rows, options) {
       L(`  noSpot: cumul→${cumulative}`);
     } else {
       cumulative += remainingDrive;
-      if (cumulative >= REST_MAX) { cumulative = Math.floor(REST_MAX / 2); L(`  REST_MAX → cumul dimezzato a ${cumulative}`); }
     }
 
     cumulative += workMin;
@@ -917,11 +916,8 @@ async function insertBreaks(rows, options) {
       const valid = isValidBreakTime(breakTime);
       L(`  post-work break: breakTime=${formatTime(breakTime)} valid=${valid}`);
       if (valid) {
-        const inserted = await tryInsert(i + 1, row.lat, row.lng, row.lat, row.lng, nextRow?.lat, nextRow?.lng, 0, breakTime);
-        if (inserted && cumulative >= REST_MAX) cumulative = Math.floor(REST_MAX / 2);
+        await tryInsert(i + 1, row.lat, row.lng, row.lat, row.lng, nextRow?.lat, nextRow?.lng, 0, breakTime);
       }
-    } else if (cumulative >= REST_MAX) {
-      cumulative = Math.floor(REST_MAX / 2);
     }
 
     lastLat = row.lat;

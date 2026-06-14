@@ -1,3 +1,6 @@
+## v4.093 — 2026-06-14
+- Fix: rimosso else-if residuo che dimezzava cumulative a REST_MAX/2 anche dopo sosta non trovata; fix precedente (v4.092) era incompleto — il dimezzamento ora avviene SOLO dentro tryInsert al momento dell'inserzione effettiva
+
 ## v4.092 — 2026-06-14
 - Fix: cumulative dimezzato a REST_MAX/2 anche quando la sosta post-lavoro falliva (nessun posto trovato); il dimezzamento ora avviene solo se la sosta viene effettivamente inserita — evita perdita del conteggio ore accumulate
 
