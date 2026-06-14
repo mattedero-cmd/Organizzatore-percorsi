@@ -1,3 +1,6 @@
+## v4.107 — 2026-06-14
+- Fix: retry 25km non scattava quando il posto trovato era oltre maxDetour (ex: Restel De Fer 8.6km > 8.3km); ora il retry avviene anche in questo caso, non solo quando Places API restituisce null
+
 ## v4.106 — 2026-06-14
 - Fix: pausa pranzo durante la guida cercava il ristorante alla tappa di partenza invece che lungo il percorso; ora usa un centro di ricerca ~20 min avanti sul segmento (proporzionale alla distanza); le tappe spezzate (split) restano vicino alla tappa. Cache ristorante include il raggio nella chiave.
 

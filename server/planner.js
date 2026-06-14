@@ -894,8 +894,23 @@ async function insertBreaks(rows, options) {
       if (toLat != null && toLng != null) {
         const { perpKm } = perpDistToSegment(spot.lat, spot.lng, refLat, refLng, toLat, toLng);
         if (perpKm > 2.0) {
-          if (rawKm > maxDetourKm) { L(`    "${spot.customer}" SCARTATO fuori-percorso perp=${perpKm.toFixed(1)}km travel=${rawKm.toFixed(1)}km > max=${maxDetourKm.toFixed(1)}km`); return false; }
-          travelKm = rawKm;
+          if (rawKm > maxDetourKm) {
+            L(`    "${spot.customer}" SCARTATO fuori-percorso perp=${perpKm.toFixed(1)}km travel=${rawKm.toFixed(1)}km > max=${maxDetourKm.toFixed(1)}km`);
+            // Tenta retry con raggio esteso prima di arrendersi
+            if (refLat && refLng) {
+              L(`    → retry raggio esteso 25km dopo scarto per distanza...`);
+              spot = await findNearbyRestStop(refLat, refLng, fromLat, fromLng, toLat, toLng, 25000, breakTimeMin, scheduledDate, maxDetourKm * 1.5, (msg) => L(`    [ext] ${msg}`))
+                .then(r => { L(`    PlacesAPI sosta (ext): ${r ? `"${r.customer}"` : "nessuna"}`); return r; })
+                .catch(() => null);
+            }
+            if (!spot) { L(`    → nessun posto trovato, cumulative preservato`); return false; }
+            // Ricalcola travelKm per il nuovo spot
+            const r2 = haversineKm({ lat: refLat, lng: refLng }, { lat: spot.lat, lng: spot.lng });
+            const { perpKm: p2 } = perpDistToSegment(spot.lat, spot.lng, refLat, refLng, toLat, toLng);
+            travelKm = p2 > 2.0 ? r2 : 0;
+          } else {
+            travelKm = rawKm;
+          }
         }
         // Sul percorso (perp ≤ 2km): travelKm = 0, ci si passa già sopra
       } else {
