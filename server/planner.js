@@ -678,14 +678,30 @@ async function insertBreaks(rows, options) {
       return { spot: candidate, travelMin: tm };
     };
 
+    // Centro di ricerca per Places API:
+    // - Tappa spezzata (fromRow e toRow stessa posizione, distanza < 1km): cerca vicino alla tappa
+    // - Guida (stop distanti): cerca lungo il percorso ~20 min avanti, dove il cliente sarà presto
+    const segDistKm = (fromRow?.lat && toRow?.lat)
+      ? haversineKm({ lat: fromRow.lat, lng: fromRow.lng }, { lat: toRow.lat, lng: toRow.lng })
+      : 0;
+    const isDriving = segDistKm > 1.0;
+    let searchLat = fromRow?.lat, searchLng = fromRow?.lng;
+    if (isDriving && toRow?.lat && toRow?.lng) {
+      const estDriveMin = Math.max(1, segDistKm / 50 * 60);
+      const frac = Math.min(0.6, 20 / estDriveMin);
+      searchLat = fromRow.lat + (toRow.lat - fromRow.lat) * frac;
+      searchLng = fromRow.lng + (toRow.lng - fromRow.lng) * frac;
+      L(`  pranzo (guida): centro ricerca a frac=${frac.toFixed(2)} (${searchLat.toFixed(4)},${searchLng.toFixed(4)})`);
+    }
+
     let spotResult = null;
     if (savedSpot) {
       spotResult = validateSpot(savedSpot, "savedRist");
     }
     // Se il saved restaurant è stato scartato (o non c'è), prova Places API
-    if (!spotResult && fromRow?.lat) {
-      const apiSpot = await findNearbyRestaurant(fromRow.lat, fromRow.lng, fromRow.lat, fromRow.lng, toRow?.lat, toRow?.lng, Math.round(maxDetourKm * 1000 * 1.5), lunchTimeMin, scheduledDate, maxDetourKm)
-        .then(r => { L(`    PlacesAPI ristorante: ${r ? `"${r.customer}" (${r.rating}⭐)` : "nessuno"}`); return r; })
+    if (!spotResult && searchLat) {
+      const apiSpot = await findNearbyRestaurant(searchLat, searchLng, fromRow.lat, fromRow.lng, toRow?.lat, toRow?.lng, Math.round(maxDetourKm * 1000 * 1.5), lunchTimeMin, scheduledDate, maxDetourKm)
+        .then(r => { L(`    PlacesAPI ristorante @ (${searchLat.toFixed(4)},${searchLng.toFixed(4)}): ${r ? `"${r.customer}" (${r.rating}⭐)` : "nessuno"}`); return r; })
         .catch(e => { L(`    PlacesAPI ristorante: errore ${e.message}`); return null; });
       if (apiSpot) spotResult = validateSpot(apiSpot, "PlacesAPI");
     }

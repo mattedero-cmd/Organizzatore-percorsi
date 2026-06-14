@@ -1,3 +1,6 @@
+## v4.106 — 2026-06-14
+- Fix: pausa pranzo durante la guida cercava il ristorante alla tappa di partenza invece che lungo il percorso; ora usa un centro di ricerca ~20 min avanti sul segmento (proporzionale alla distanza); le tappe spezzate (split) restano vicino alla tappa. Cache ristorante include il raggio nella chiave.
+
 ## v4.105 — 2026-06-14
 - Fix: post-work break cercava la sosta esattamente alla tappa appena finita — ora cerca ~20 min lungo il prossimo segmento di guida; stessa logica per la sosta post-loop (tratta verso casa) con coordinate di casa passate a insertBreaks
 

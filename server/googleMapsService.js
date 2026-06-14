@@ -279,7 +279,7 @@ export async function findNearbyRestaurant(lat, lng, segFromLat, segFromLng, seg
   const key = API_KEY();
   if (!key) return null;
 
-  const cacheKey = `restaurant_${placesCacheKey(lat, lng)}`;
+  const cacheKey = `restaurant_${placesCacheKey(lat, lng)}_r${radiusM}`;
   if (placesCache.has(cacheKey)) return placesCache.get(cacheKey);
 
   const EXCLUDE_KEYWORDS = /hotel|alberg|catering|banquet|spa|resort/i;
