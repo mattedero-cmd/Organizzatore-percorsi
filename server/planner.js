@@ -594,6 +594,16 @@ function findNearestRestStop(restStops, fromLat, fromLng, toLat, toLng, maxPerpK
   return null;
 }
 
+// Latest closing minute applicable to a row (user window > afternoon > morning).
+function rowCloseMinutes(row) {
+  if (row.timeTo) { const t = parseTime(row.timeTo); if (t != null) return t; }
+  const ca = parseTime(row.closeAfternoon);
+  if (ca != null) return ca;
+  const cm = parseTime(row.closeMorning);
+  if (cm != null) return cm;
+  return null;
+}
+
 function shiftRowTimes(row, minutes) {
   if (!minutes) return row;
   // dynamicSplit rows are created inside insertBreaks and need full shifting like normal rows.
@@ -615,12 +625,22 @@ function shiftRowTimes(row, minutes) {
   if (origSvc != null && origArr != null && origSvc > origArr) {
     const newArr = origArr + minutes;
     const newSvc = Math.max(newArr, origSvc);
+    const newEnd = newSvc + Number(row.durationMinutes);
+    // Breaks before this stop can push the service start past the opening; if the
+    // pushed-back service now ends after closing, warn instead of silently overrunning.
+    const close = rowCloseMinutes(row);
+    const overrunMsg = "intervento oltre l'orario di chiusura per soste accumulate";
+    let warnings = row.warnings || [];
+    if (close != null && newEnd > close && !warnings.some(w => (w.msg || w) === overrunMsg)) {
+      warnings = [...warnings, { msg: overrunMsg, level: "warn" }];
+    }
     return {
       ...row,
       departureTime: formatTime(parseTime(row.departureTime) + minutes),
       arrivalTime: formatTime(newArr),
       serviceStartTime: formatTime(newSvc),
-      serviceEndTime: formatTime(newSvc + Number(row.durationMinutes))
+      serviceEndTime: formatTime(newEnd),
+      warnings
     };
   }
   return {

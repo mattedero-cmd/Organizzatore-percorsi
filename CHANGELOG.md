@@ -1,3 +1,6 @@
+## v4.119 — 2026-06-14
+- Fix planner: shiftRowTimes segnala un avviso ("intervento oltre l'orario di chiusura per soste accumulate") quando le soste inserite prima di una tappa con attesa spingono l'inizio del servizio oltre l'apertura e la fine supera l'orario di chiusura — prima la tappa sforava la chiusura senza alcun avviso
+
 ## v4.118 — 2026-06-14
 - Fix planner: shiftRowTimes ora ri-ancora l'orario di servizio all'apertura effettiva per le tappe con attesa (es. Fineco arriva 13:24 ma apre alle 14:00 → lavora 14:00-17:00, non 15:10-18:10)
 - Fix planner: dopo una tappa con attesa, il timeShift accumulato viene ridotto dell'attesa assorbita — le tappe successive non vengono più sovra-spostate
