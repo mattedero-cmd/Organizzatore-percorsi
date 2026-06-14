@@ -1,3 +1,6 @@
+## v4.088 — 2026-06-14
+- Feature: pulsante "Log" nel risultato — copia negli appunti il log dettagliato di ogni decisione del planner (trigger soste, posti trovati/scartati con motivo, finestra pranzo, orari bloccati)
+
 ## v4.087 — 2026-06-14
 - Fix: `needed` nel loop mid-leg poteva diventare negativo quando cumulative > REST_MIN → posizione interpolata e orario sosta errati; ora `Math.max(0, ...)`
 - Fix: soglia Fix D (30 min prossima tappa) rimossa — bloccava break post-Bolzano quando la tappa successiva era breve; il check post-work ora è sempre tentato

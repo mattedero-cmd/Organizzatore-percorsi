@@ -617,10 +617,19 @@ async function insertBreaks(rows, options) {
   // ── insertions list ──────────────────────────────────────────────────────────
   const insertions = [];
 
+  // ── debug log ────────────────────────────────────────────────────────────────
+  const debugLog = [];
+  const L = (...parts) => debugLog.push(parts.join(" "));
+  L(`=== PIANO SOSTE ${scheduledDate || "?"} ===`);
+  L(`dayStart=${formatTime(dayStart)} finalArrival=${formatTime(finalArrival)}`);
+  L(`REST_MIN=${REST_MIN}min REST_MAX=${REST_MAX}min maxDetourKm=${maxDetourKm.toFixed(1)}km`);
+  L(`soste salvate=${restStops.length} ristoranti salvati=${restaurantStops.length}`);
+
   // ── 1. Pausa pranzo ──────────────────────────────────────────────────────────
   const makeLunchEntry = async (beforeIndex, refRow, nextRow, lunchTimeMin) => {
     const fromRow = refRow || (beforeIndex > 0 ? rows[beforeIndex - 1] : null);
     const toRow = nextRow || (beforeIndex < rows.length ? rows[beforeIndex] : null);
+    L(`  pranzo: da "${fromRow?.customer||"?"}" (${fromRow?.lat?.toFixed(4)||"?"}) verso "${toRow?.customer||"?"}" ore=${formatTime(lunchTimeMin)}`);
     // Ristoranti salvati: se è "sul percorso" (perpendicolare ≤ 2 km) non c'è limite di distanza
     // lungo la strada (posso guidare 30 min se è sulla mia via). Se è "fuori percorso" si applica
     // il limite maxDetourKm come deviazione massima accettabile.
@@ -630,25 +639,30 @@ async function insertBreaks(rows, options) {
       const { perpKm } = perpDistToSegment(savedSpot.lat, savedSpot.lng, fromRow.lat, fromRow.lng, toRow.lat, toRow.lng);
       const isOnRoute = perpKm <= ON_ROUTE_PERP_KM;
       if (!isOnRoute) {
-        // Fuori percorso: applica limite deviazione haversine
         const directKm = haversineKm({ lat: fromRow.lat, lng: fromRow.lng }, { lat: savedSpot.lat, lng: savedSpot.lng });
-        if (directKm > maxDetourKm) savedSpot = null;
+        if (directKm > maxDetourKm) { L(`    savedRist "${savedSpot.customer}" SCARTATO fuori-percorso perp=${perpKm.toFixed(1)}km direct=${directKm.toFixed(1)}km > max=${maxDetourKm.toFixed(1)}km`); savedSpot = null; }
+        else L(`    savedRist "${savedSpot.customer}" fuori-percorso perp=${perpKm.toFixed(1)}km direct=${directKm.toFixed(1)}km OK`);
+      } else {
+        L(`    savedRist "${savedSpot.customer}" SUL_PERCORSO perp=${perpKm.toFixed(1)}km OK`);
       }
-      // Sul percorso: nessun limite di distanza — è sul mio cammino
+    } else if (!savedSpot) {
+      L(`    savedRist: nessuno entro maxDetourKm=${maxDetourKm.toFixed(1)}km`);
     }
     const spot = savedSpot || (fromRow?.lat
-      ? await findNearbyRestaurant(fromRow.lat, fromRow.lng, fromRow.lat, fromRow.lng, toRow?.lat, toRow?.lng, Math.round(maxDetourKm * 1000 * 1.5), lunchTimeMin, scheduledDate, maxDetourKm).catch(() => null)
+      ? await findNearbyRestaurant(fromRow.lat, fromRow.lng, fromRow.lat, fromRow.lng, toRow?.lat, toRow?.lng, Math.round(maxDetourKm * 1000 * 1.5), lunchTimeMin, scheduledDate, maxDetourKm)
+          .then(r => { L(`    PlacesAPI ristorante: ${r ? `"${r.customer}" (${r.rating}⭐)` : "nessuno"}`); return r; })
+          .catch(e => { L(`    PlacesAPI ristorante: errore ${e.message}`); return null; })
       : null);
-    if (!spot) return { beforeIndex, type: "lunch", duration: lunchBreakMinutes, customer: "Pausa pranzo" };
-    // Stima tempo di viaggio verso il ristorante (haversine / 50 km/h) — nessun cap: se è troppo lontano lo mostriamo reale
+    if (!spot) { L(`    → Pausa pranzo senza luogo`); return { beforeIndex, type: "lunch", duration: lunchBreakMinutes, customer: "Pausa pranzo" }; }
     const travelKm = (fromRow?.lat && fromRow?.lng && spot.lat && spot.lng)
       ? haversineKm({ lat: fromRow.lat, lng: fromRow.lng }, { lat: spot.lat, lng: spot.lng })
       : 0;
     const travelMin = Math.round(travelKm / 50 * 60);
-    // Se l'orario di ARRIVO al ristorante (lunchTimeMin + viaggio) supera la finestra pranzo, scarta
     if (lunchTimeMin + travelMin > LUNCH_CLOSE) {
+      L(`    "${spot.customer}" SCARTATO arrivo=${formatTime(lunchTimeMin + travelMin)} > LUNCH_CLOSE=${formatTime(LUNCH_CLOSE)}`);
       return { beforeIndex, type: "lunch", duration: lunchBreakMinutes, customer: "Pausa pranzo" };
     }
+    L(`    → PRANZO "${spot.customer}" travelMin=${travelMin} arrivo=${formatTime(lunchTimeMin + travelMin)}`);
     const label = spot.rating ? `${spot.customer} · ⭐ ${spot.rating} (${spot.reviewCount})` : spot.customer;
     return { beforeIndex, type: "lunch", duration: lunchBreakMinutes, travelMinutes: travelMin, travelKm,
       customer: label, location: spot.location || "", address: spot.fullAddress || "",
@@ -746,8 +760,10 @@ async function insertBreaks(rows, options) {
 
     // 3. Normal window-based scanning (only if not already placed)
     if (!placed) {
+      L(`--- PRANZO finestra [${formatTime(LUNCH_OPEN)}-${formatTime(LUNCH_CLOSE)}] ---`);
       for (let i = 0; i < rows.length; i++) {
         const dep = parseTime(rows[i].departureTime);
+        L(`  row[${i}] "${rows[i].customer}" dep=${formatTime(dep)} ${dep >= LUNCH_OPEN && dep <= LUNCH_CLOSE ? "IN_FINESTRA ✓" : "fuori"}`);
         if (dep >= LUNCH_OPEN && dep <= LUNCH_CLOSE) {
           insertions.push(await makeLunchEntry(i, rows[i - 1] ?? null, rows[i], dep));
           placed = true;
@@ -756,6 +772,7 @@ async function insertBreaks(rows, options) {
       }
       if (!placed && rows.length > 0) {
         const lastEnd = parseTime(rows[rows.length - 1].serviceEndTime);
+        L(`  fallback: lastEnd=${formatTime(lastEnd)} ${lastEnd >= LUNCH_OPEN && lastEnd <= LUNCH_CLOSE ? "IN_FINESTRA" : "fuori → nessun pranzo"}`);
         if (lastEnd >= LUNCH_OPEN && lastEnd <= LUNCH_CLOSE) {
           insertions.push(await makeLunchEntry(rows.length, rows[rows.length - 1], null, lastEnd));
         }
@@ -803,10 +820,13 @@ async function insertBreaks(rows, options) {
     // Soste salvate: perpendicolare ≤ 2 km = "sul percorso" (nessun limite distanza).
     // Se fuori percorso il limite haversine è maxDetourKm.
     let spot = findNearestRestStop(restStops, refLat, refLng, toLat, toLng, 2.0, breakTimeMin, scheduledDate);
+    if (spot) { L(`    savedSosta "${spot.customer}" trovata`); }
     if (!spot && refLat && refLng) {
-      spot = await findNearbyRestStop(refLat, refLng, fromLat, fromLng, toLat, toLng, 15000, breakTimeMin, scheduledDate, maxDetourKm).catch(() => null);
+      spot = await findNearbyRestStop(refLat, refLng, fromLat, fromLng, toLat, toLng, 15000, breakTimeMin, scheduledDate, maxDetourKm)
+        .then(r => { L(`    PlacesAPI sosta @ (${refLat?.toFixed(4)},${refLng?.toFixed(4)}): ${r ? `"${r.customer}"` : "nessuna"}`); return r; })
+        .catch(e => { L(`    PlacesAPI sosta: errore ${e.message}`); return null; });
     }
-    if (!spot) { return false; } // keep cumulative intact — retry at next opportunity
+    if (!spot) { L(`    → nessun posto trovato, cumulative preservato`); return false; }
     const label = spot.rating
       ? `${spot.customer} · ⭐ ${spot.rating} (${spot.reviewCount})`
       : spot.customer;
@@ -819,7 +839,7 @@ async function insertBreaks(rows, options) {
     // Controlla deviazione solo per posti fuori dal percorso (perpendicolare > 2 km)
     if (travelKm > 0 && refLat != null && refLng != null && toLat != null && toLng != null) {
       const { perpKm } = perpDistToSegment(spot.lat, spot.lng, refLat, refLng, toLat, toLng);
-      if (perpKm > 2.0 && travelKm > maxDetourKm) { return false; }
+      if (perpKm > 2.0 && travelKm > maxDetourKm) { L(`    "${spot.customer}" SCARTATO fuori-percorso perp=${perpKm.toFixed(1)}km travel=${travelKm.toFixed(1)}km > max=${maxDetourKm.toFixed(1)}km`); return false; }
     }
     const travelMin = Math.round(travelKm / 50 * 60);
     insertions.push({
@@ -834,6 +854,7 @@ async function insertBreaks(rows, options) {
       openAtBreak: spot.openAtBreak ?? null,
       warnings
     });
+    L(`    → SOSTA "${spot.customer}" travelMin=${Math.round(travelKm/50*60)} before[${beforeIndex}]`);
     cumulative = 0;
     return true;
   };
@@ -849,45 +870,45 @@ async function insertBreaks(rows, options) {
     const row = rows[i];
     let remainingDrive = row.driveMinutes || 0;
     const workMin = row.durationMinutes || 0;
-    let driveConsumed = 0; // minutes of this leg already accounted for by mid-leg breaks
-    let noSpotFound = false; // true se tryInsert ha fallito per mancanza di posto (non per orario)
+    let driveConsumed = 0;
+    let noSpotFound = false;
+    L(`[i=${i}] "${row.customer}" drive=${remainingDrive}min work=${workMin}min cumul=${cumulative}`);
 
-    // Mid-leg breaks: insert as many as needed while driving toward stop i
+    // Mid-leg breaks
     while (remainingDrive > 0 && cumulative + remainingDrive >= REST_MIN) {
-      const needed = Math.max(0, REST_MIN - cumulative); // non può essere negativo se cumulative > REST_MIN
+      const needed = Math.max(0, REST_MIN - cumulative);
       const fraction = needed / (row.driveMinutes || 1);
-      // Interpolate position along the route at the break point
       const interpLat = (lastLat != null && row.lat != null) ? lastLat + (row.lat - lastLat) * fraction : (row.lat ?? lastLat);
       const interpLng = (lastLng != null && row.lng != null) ? lastLng + (row.lng - lastLng) * fraction : (row.lng ?? lastLng);
       const breakTime = prevServiceEnd + driveConsumed + needed;
-      if (!isValidBreakTime(breakTime)) break;
-      // Pass destination (row.lat/lng) so saved stops are checked against the segment
+      const valid = isValidBreakTime(breakTime);
+      L(`  mid-leg needed=${needed}min breakTime=${formatTime(breakTime)} valid=${valid}`);
+      if (!valid) break;
       const inserted = await tryInsert(i, interpLat, interpLng, lastLat, lastLng, row.lat, row.lng, driveConsumed + needed, breakTime);
       if (!inserted) { noSpotFound = true; break; }
       driveConsumed += needed;
       remainingDrive -= needed;
-      // cumulative was reset to 0 by tryInsert
     }
 
-    // Se tryInsert ha fallito per mancanza di posto, aggiungiamo solo i minuti fino al punto
-    // del tentativo (non tutto il tratto), così la prossima finestra rimane puntuale.
     if (noSpotFound) {
       const minutesTried = Math.max(0, REST_MIN - cumulative);
       cumulative += Math.min(minutesTried, remainingDrive);
-      // Non applichiamo il cap REST_MAX: la sosta era dovuta ma non c'era posto
+      L(`  noSpot: cumul→${cumulative}`);
     } else {
       cumulative += remainingDrive;
-      if (cumulative >= REST_MAX) cumulative = Math.floor(REST_MAX / 2);
+      if (cumulative >= REST_MAX) { cumulative = Math.floor(REST_MAX / 2); L(`  REST_MAX → cumul dimezzato a ${cumulative}`); }
     }
 
-    // Post-work break: after finishing work at this stop
     cumulative += workMin;
     prevServiceEnd = parseTime(row.serviceEndTime) || prevServiceEnd;
+    L(`  post-work: cumul=${cumulative} prevEnd=${formatTime(prevServiceEnd)}`);
 
     if (cumulative >= REST_MIN && i < rows.length - 1) {
       const breakTime = prevServiceEnd;
       const nextRow = rows[i + 1];
-      if (isValidBreakTime(breakTime)) {
+      const valid = isValidBreakTime(breakTime);
+      L(`  post-work break: breakTime=${formatTime(breakTime)} valid=${valid}`);
+      if (valid) {
         await tryInsert(i + 1, row.lat, row.lng, row.lat, row.lng, nextRow?.lat, nextRow?.lng, 0, breakTime);
       }
     }
@@ -955,7 +976,8 @@ async function insertBreaks(rows, options) {
     }
   }
 
-  return { rows: result, addedMinutes: timeShift };
+  L(`=== FINE: ${insertions.length} inserzioni, timeShift=${addedMinutes??timeShift}min ===`);
+  return { rows: result, addedMinutes: timeShift, debugLog };
 }
 
 export async function planRoute(payload, settings, restStops = []) {
@@ -1067,7 +1089,7 @@ export async function planRoute(payload, settings, restStops = []) {
   const activeRestaurantStops = restStops.filter(s => s.addressType === "restaurant");
   const maxReturnTime = settings?.maxReturnTime ? parseTime(settings.maxReturnTime) : null;
   const actualFinalArrival = parseTime(best.finalLeg.arrivalTime);
-  const { rows: enrichedRows, addedMinutes } = await insertBreaks(best.rows, {
+  const { rows: enrichedRows, addedMinutes, debugLog } = await insertBreaks(best.rows, {
     lunchBreakEnabled, lunchBreakMinutes, lunchFixedTime,
     restStops: activeRestStops,
     restaurantStops: activeRestaurantStops,
@@ -1146,6 +1168,7 @@ export async function planRoute(payload, settings, restStops = []) {
     lunchBreakMinutes,
     lunchFixedTime: lunchFixedTime || "",
     maxReturnTime: payload.departureLatest || "",
-    mapMode: [...new Set(best.rows.map((row) => row.legSource).concat(best.finalLeg.source))].join(", ")
+    mapMode: [...new Set(best.rows.map((row) => row.legSource).concat(best.finalLeg.source))].join(", "),
+    debugLog: debugLog || []
   };
 }

@@ -1269,7 +1269,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.087 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.088 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -2902,6 +2902,7 @@ function renderResult() {
           <button class="btn${result.rows?.some(r => r.type === "lunch") ? " primary" : ""}" id="toggle-lunch-break" title="${result.rows?.some(r => r.type === "lunch") ? "Rimuovi pausa pranzo" : "Aggiungi pausa pranzo"}">${I.fork(14)} ${result.rows?.some(r => r.type === "lunch") ? "Togli pranzo" : "Aggiungi pranzo"}</button>
           ${result.id ? `<button class="btn" id="share-route-btn" data-share-route="${result.id}" title="Condividi giro">${I.share(14)} Condividi</button>` : ""}
           <button class="btn" id="print-route-btn" title="Stampa o salva come PDF">${I.print(14)} PDF</button>
+          ${result.debugLog?.length ? `<button class="btn" id="copy-debug-log-btn" title="Copia log di pianificazione negli appunti">${I.copy(14)} Log</button>` : ""}
         </div>
       </div>
 
@@ -5600,6 +5601,14 @@ function bindEvents() {
 
     if (e.target.closest("#print-route-btn")) {
       printRoute();
+      return;
+    }
+
+    if (e.target.closest("#copy-debug-log-btn")) {
+      const log = state.result?.debugLog;
+      if (!log?.length) return;
+      const text = log.join("\n");
+      navigator.clipboard.writeText(text).then(() => showToast("Log copiato negli appunti")).catch(() => showToast("Errore copia log"));
       return;
     }
 
