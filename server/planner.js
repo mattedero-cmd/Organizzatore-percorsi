@@ -687,11 +687,14 @@ async function insertBreaks(rows, options) {
     const isDriving = segDistKm > 1.0;
     let searchLat = fromRow?.lat, searchLng = fromRow?.lng;
     if (isDriving && toRow?.lat && toRow?.lng) {
+      // Cerca nel punto dove il cliente si trova quando dovrebbe fermarsi a pranzo:
+      // l'ultimo momento utile è LUNCH_CLOSE − lunchBreakMinutes minuti dopo la partenza.
       const estDriveMin = Math.max(1, segDistKm / 50 * 60);
-      const frac = Math.min(0.6, 20 / estDriveMin);
+      const availMin = Math.max(0, LUNCH_CLOSE - lunchBreakMinutes - lunchTimeMin);
+      const frac = Math.min(0.7, availMin / estDriveMin);
       searchLat = fromRow.lat + (toRow.lat - fromRow.lat) * frac;
       searchLng = fromRow.lng + (toRow.lng - fromRow.lng) * frac;
-      L(`  pranzo (guida): centro ricerca a frac=${frac.toFixed(2)} (${searchLat.toFixed(4)},${searchLng.toFixed(4)})`);
+      L(`  pranzo (guida): centro ricerca a frac=${frac.toFixed(2)} avail=${availMin}min (${searchLat.toFixed(4)},${searchLng.toFixed(4)})`);
     }
 
     let spotResult = null;
@@ -704,6 +707,15 @@ async function insertBreaks(rows, options) {
         .then(r => { L(`    PlacesAPI ristorante @ (${searchLat.toFixed(4)},${searchLng.toFixed(4)}): ${r ? `"${r.customer}" (${r.rating}⭐)` : "nessuno"}`); return r; })
         .catch(e => { L(`    PlacesAPI ristorante: errore ${e.message}`); return null; });
       if (apiSpot) spotResult = validateSpot(apiSpot, "PlacesAPI");
+    }
+    // Retry ristorante con raggio esteso se non trovato o scartato
+    if (!spotResult && searchLat) {
+      L(`    → retry ristorante raggio esteso...`);
+      const extRadius = Math.round(maxDetourKm * 1000 * 3);
+      const apiSpot2 = await findNearbyRestaurant(searchLat, searchLng, fromRow.lat, fromRow.lng, toRow?.lat, toRow?.lng, extRadius, lunchTimeMin, scheduledDate, maxDetourKm * 1.5)
+        .then(r => { L(`    PlacesAPI ristorante (ext) @ (${searchLat.toFixed(4)},${searchLng.toFixed(4)}): ${r ? `"${r.customer}" (${r.rating}⭐)` : "nessuno"}`); return r; })
+        .catch(e => { L(`    PlacesAPI ristorante (ext): errore ${e.message}`); return null; });
+      if (apiSpot2) spotResult = validateSpot(apiSpot2, "PlacesAPI(ext)");
     }
     if (!spotResult) { L(`    → Pausa pranzo senza luogo`); return { beforeIndex, type: "lunch", duration: lunchBreakMinutes, customer: "Pausa pranzo" }; }
     const { spot, travelMin } = spotResult;

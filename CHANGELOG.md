@@ -1,3 +1,6 @@
+## v4.108 — 2026-06-14
+- Fix: centro ricerca ristorante pranzo durante la guida ora calcolato in base al tempo disponibile (LUNCH_CLOSE − durata − partenza), non fisso a 20 min; retry con raggio esteso se il primo candidato è scartato
+
 ## v4.107 — 2026-06-14
 - Fix: retry 25km non scattava quando il posto trovato era oltre maxDetour (ex: Restel De Fer 8.6km > 8.3km); ora il retry avviene anche in questo caso, non solo quando Places API restituisce null
 
