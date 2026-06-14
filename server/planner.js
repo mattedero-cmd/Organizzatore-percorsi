@@ -612,12 +612,14 @@ function rowCloseMinutes(row) {
 
 function shiftRowTimes(row, minutes) {
   if (!minutes) return row;
+  // Afternoon split parts have absolute service times — anchored to the shop's
+  // afternoon opening (opening-hours split) or to a user fixed window. Any breaks
+  // inserted before them sit inside the midday closure gap and are absorbed by it,
+  // so these rows must NOT shift. (dynamicSplit afternoon parts use relative times.)
+  if (row.stopPart === "afternoon" && !row.dynamicSplit) return row;
   // dynamicSplit rows are created inside insertBreaks and need full shifting like normal rows.
   if (row.fixedWindow && !row.dynamicSplit) {
-    // Fixed-window stops have absolute service times.
-    // Afternoon part: all times anchored to fixed anchors — no shift.
-    if (row.stopPart === "afternoon") return row;
-    // First/only part: shift only the travel leg (dep + arr), keep service times fixed.
+    // First/only part of a fixed-window stop: shift only the travel leg (dep + arr), keep service times fixed.
     return {
       ...row,
       departureTime: formatTime(parseTime(row.departureTime) + minutes),
@@ -1227,15 +1229,21 @@ async function insertBreaks(rows, options) {
     }
     if (i < rows.length) {
       result.push(shiftRowTimes(rows[i], timeShift));
-      // After the last part of a static fixed-window stop, reset timeShift.
-      if (rows[i].fixedWindow && !rows[i].dynamicSplit && (!rows[i].stopPart || rows[i].stopPart === "afternoon")) {
+      const r = rows[i];
+      // An afternoon split part (opening-hours or fixed-window) has absolute service
+      // times, and subsequent stops were planned from its absolute end. Breaks before
+      // it are absorbed by the midday closure gap → reset the shift. Same for a
+      // non-split fixed-window stop.
+      const absoluteAfternoon = r.stopPart === "afternoon" && !r.dynamicSplit;
+      const fixedSingle = r.fixedWindow && !r.dynamicSplit && !r.stopPart;
+      if (absoluteAfternoon || fixedSingle) {
         timeShift = 0;
       }
       // After a stop with opening-hour wait time, the wait absorbs part of the accumulated timeShift.
       // Reduce timeShift by the wait time so subsequent stops aren't over-shifted.
-      else if (!rows[i].fixedWindow) {
-        const origArr = parseTime(rows[i].arrivalTime);
-        const origSvc = parseTime(rows[i].serviceStartTime);
+      else if (!r.fixedWindow) {
+        const origArr = parseTime(r.arrivalTime);
+        const origSvc = parseTime(r.serviceStartTime);
         if (origSvc != null && origArr != null && origSvc > origArr) {
           const waitMin = origSvc - origArr;
           timeShift = Math.max(0, timeShift - waitMin);

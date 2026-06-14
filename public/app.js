@@ -1269,7 +1269,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.121 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.122 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -1279,6 +1279,12 @@ function renderMenuInfo() {
       <ul class="info-list">
         <li>${state.mapApiConfigured ? _svg('<polyline points="20 6 9 17 4 12"/>', 14) + " Google Maps attivo — percorsi reali e ottimizzazione avanzata" : _svg('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>', 14) + " Google Maps non configurato — stime distanze locali"}</li>
         <li>${state.whisperConfigured ? _svg('<polyline points="20 6 9 17 4 12"/>', 14) + " Comandi vocali attivi (Whisper)" : _svg('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>', 14) + " Comandi vocali non configurati"}</li>
+      </ul>
+
+      <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v4.122</p>
+      <ul class="info-list">
+        <li>Ripresa pomeriggio all'orario giusto: dopo la pausa pranzo nel gap di chiusura, la tappa riprende esattamente all'apertura pomeridiana (es. 14:30) e non in ritardo — prima il pranzo spingeva avanti l'orario di ripresa di un'ora abbondante</li>
+        <li>Tempo di guida del pranzo sempre visibile: la card della pausa pranzo mostra ora la deviazione (andata e ritorno) per raggiungere il ristorante, oppure "sul percorso" se non serve deviare</li>
       </ul>
 
       <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v4.121</p>
@@ -3016,7 +3022,9 @@ function renderResult() {
                 ${lunchUrl && lunchName
                   ? `<a class="stop-title break-place-link" href="${lunchUrl}" target="_blank" rel="noopener" style="margin:0">${escapeHtml(lunchName)}${row.location ? ` — ${escapeHtml(row.location)}` : ""}</a>`
                   : `<p class="stop-title" style="margin:0">Pausa pranzo</p>`}
-                ${row.driveMinutes > 0 ? `<div class="rc-drive-row">${I.car(12)} ${minutesLabel(row.driveMinutes)} · ${row.km.toFixed(1)} km</div>` : ""}
+                ${row.driveMinutes > 0
+                  ? `<div class="rc-drive-row">${I.car(12)} ${minutesLabel(row.driveMinutes)} · ${row.km.toFixed(1)} km di deviazione (andata e ritorno ${minutesLabel(row.driveMinutes * 2)})</div>`
+                  : `<div class="rc-drive-row">${I.car(12)} sul percorso, nessuna deviazione</div>`}
                 <div class="stop-meta">${escapeHtml(row.serviceStartTime)} – ${escapeHtml(row.serviceEndTime)} · ${minutesLabel(row.durationMinutes)}</div>
               </div>
             </div>
