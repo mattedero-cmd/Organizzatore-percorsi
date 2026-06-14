@@ -371,6 +371,7 @@ async function meteoBolzanoForecast(coords, row, scheduledDate) {
     mode: "forecast"
   };
   weather.warnings = mtWarningsFromDescription(desc);
+  weather.sourceUrl = "https://www.suedtirol.info/it/informazioni-meteo";
   return weather;
 }
 
@@ -408,6 +409,7 @@ async function meteoTrentinoForecast(coords, row, scheduledDate) {
     mode: "forecast"
   };
   weather.warnings = mtWarningsFromDescription(description);
+  weather.sourceUrl = `https://www.meteotrentino.it/previsioni-meteo/localita/${loc.code.toLowerCase().replace(/ /g, '-')}`;
   return weather;
 }
 

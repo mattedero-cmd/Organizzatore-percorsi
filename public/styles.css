@@ -2917,6 +2917,16 @@ tbody tr:last-child td {
   font-size: 0.82rem;
 }
 
+.weather-source-link {
+  color: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+.weather-source-link:hover {
+  text-decoration: underline;
+  opacity: 0.85;
+}
+
 /* compact weekly hours 3-column: day | am | pm */
 /* Today-only hours row with expand toggle */
 .wh-day-row { margin-top: 4px; }

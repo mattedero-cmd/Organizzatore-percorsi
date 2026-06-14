@@ -1269,7 +1269,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.111 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.112 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -1279,6 +1279,11 @@ function renderMenuInfo() {
       <ul class="info-list">
         <li>${state.mapApiConfigured ? _svg('<polyline points="20 6 9 17 4 12"/>', 14) + " Google Maps attivo — percorsi reali e ottimizzazione avanzata" : _svg('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>', 14) + " Google Maps non configurato — stime distanze locali"}</li>
         <li>${state.whisperConfigured ? _svg('<polyline points="20 6 9 17 4 12"/>', 14) + " Comandi vocali attivi (Whisper)" : _svg('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>', 14) + " Comandi vocali non configurati"}</li>
+      </ul>
+
+      <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v4.112</p>
+      <ul class="info-list">
+        <li>Meteo cliccabile: icona/riga meteo di ogni tappa apre il sito sorgente (MeteoTrentino per Trentino, Suedtirol per Alto Adige)</li>
       </ul>
 
       <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v4.111</p>
@@ -2741,7 +2746,9 @@ function stopDetailExtra(result, row, addr, stopIdx) {
     const humidity = w.humidity != null ? ` ${w.humidity}% umid.` : "";
     const wind = w.windKmh != null ? ` 💨${Math.round(w.windKmh)}km/h` : "";
     const alerts = (w.warnings || []).map(s => `<span class="badge warning">${escapeHtml(s)}</span>`).join(" ");
-    parts.push(`<div class="stop-detail-section"><span class="rc-section-label">Meteo</span><div class="stop-weather-full">${weatherIcon(w)} <strong>${temp}</strong> ${escapeHtml(w.description || "")}${humidity}${wind}${alerts ? " " + alerts : ""}</div></div>`);
+    const wxContent = `${weatherIcon(w)} <strong>${temp}</strong> ${escapeHtml(w.description || "")}${humidity}${wind}${alerts ? " " + alerts : ""}`;
+    const wxInner = w.sourceUrl ? `<a href="${escapeHtml(w.sourceUrl)}" target="_blank" rel="noopener" class="weather-source-link">${wxContent}</a>` : wxContent;
+    parts.push(`<div class="stop-detail-section"><span class="rc-section-label">Meteo</span><div class="stop-weather-full">${wxInner}</div></div>`);
   }
 
   // Hours — show only the scheduled day, expandable to full week
@@ -2847,7 +2854,9 @@ function weatherPill(result, stopNumber) {
   if (!w) return "";
   const temp = w.temperatureC != null ? `${Math.round(w.temperatureC)}°C` : "--";
   const warnings = (w.warnings || []).map(s => `<span class="badge warning">${escapeHtml(s)}</span>`).join(" ");
-  return `<div class="weather-pill">${weatherIcon(w)} <strong>${temp}</strong> <span class="stop-meta">${escapeHtml(w.description || "")}</span>${warnings ? " " + warnings : ""}</div>`;
+  const inner = `${weatherIcon(w)} <strong>${temp}</strong> <span class="stop-meta">${escapeHtml(w.description || "")}</span>${warnings ? " " + warnings : ""}`;
+  if (w.sourceUrl) return `<div class="weather-pill"><a href="${escapeHtml(w.sourceUrl)}" target="_blank" rel="noopener" class="weather-source-link">${inner}</a></div>`;
+  return `<div class="weather-pill">${inner}</div>`;
 }
 
 function weatherCompact(result, stopNumber) {
@@ -2856,7 +2865,9 @@ function weatherCompact(result, stopNumber) {
   const temp = w.temperatureC != null ? `${Math.round(w.temperatureC)}°C` : "";
   const wind = w.windKmh > 20 ? ` · 💨 ${Math.round(w.windKmh)} km/h` : "";
   const alerts = (w.warnings || []).map(s => `<span class="badge warning">${escapeHtml(s)}</span>`).join(" ");
-  return `<div class="stop-weather-line">${weatherIcon(w)} ${temp}${wind}${alerts ? "  " + alerts : ""}</div>`;
+  const inner = `${weatherIcon(w)} ${temp}${wind}${alerts ? "  " + alerts : ""}`;
+  if (w.sourceUrl) return `<div class="stop-weather-line"><a href="${escapeHtml(w.sourceUrl)}" target="_blank" rel="noopener" class="weather-source-link">${inner}</a></div>`;
+  return `<div class="stop-weather-line">${inner}</div>`;
 }
 
 function warningBadges(warnings) {

@@ -1,3 +1,6 @@
+## v4.112 — 2026-06-14
+- Nuovo: icona/riga meteo cliccabile in ogni tappa — apre direttamente MeteoTrentino (per tappe in Trentino) o Suedtirol.info/meteo (per tappe in Alto Adige); link passa il sourceUrl dall'API server
+
 ## v4.111 — 2026-06-14
 - Fix: ricalcolo da vista risultato non preservava l'ordine del giro caricato — aggiunto manualOrder=true in replanFromResult(); l'ordine originale non viene più rimescolato dall'ottimizzatore
 - Fix: timeout fetch meteo aumentato da 2.5s a 6s — MeteoTrentino e Open Data Hub Bolzano non vanno più in timeout e non scatenano il fallback Open-Meteo
