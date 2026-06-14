@@ -1,3 +1,6 @@
+## v4.089 — 2026-06-14
+- Fix: pulsante "Log" sempre visibile nel risultato (non condizionale al debugLog); se il giro non è stato ricalcolato mostra "Ricalcola per generare il log"
+
 ## v4.088 — 2026-06-14
 - Feature: pulsante "Log" nel risultato — copia negli appunti il log dettagliato di ogni decisione del planner (trigger soste, posti trovati/scartati con motivo, finestra pranzo, orari bloccati)
 
