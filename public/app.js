@@ -1269,7 +1269,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.114 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.115 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -1281,8 +1281,10 @@ function renderMenuInfo() {
         <li>${state.whisperConfigured ? _svg('<polyline points="20 6 9 17 4 12"/>', 14) + " Comandi vocali attivi (Whisper)" : _svg('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>', 14) + " Comandi vocali non configurati"}</li>
       </ul>
 
-      <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v4.114</p>
+      <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v4.115</p>
       <ul class="info-list">
+        <li>Ricalcolo giro: le tappe spezzate (es. 09:00–13:00 / 14:00–18:00) ora trasmettono correttamente gli orari e la durata totale al planner — risolve i casi in cui dopo il ricalcolo la durata appariva come "00:06" invece di 3h</li>
+        <li>Soste automatiche: le soste salvate vengono ora scartate se si trovano troppo lontane dalla posizione attuale (anche se tecnicamente "sul percorso" ma vicino alla destinazione finale) — risolve Obber inserita come sosta da Riva del Garda quando in realtà è a 2h di macchina</li>
         <li>Gap chiusura pranzo: se la tappa è spezzata e nel gap c'è tempo sufficiente, cerca automaticamente un ristorante raggiungibile (andata+mangiare+ritorno entro il gap); se il gap è troppo breve o il pranzo è già fatto, inserisce una sosta breve invece di lasciare il tempo morto</li>
       </ul>
 
@@ -3605,9 +3607,15 @@ async function replanFromResult() {
       addressId: r.addressId ?? null,
       customer: r.customer, location: r.location,
       fullAddress: r.address, notes: r.notes,
-      durationMinutes: Number(r.durationMinutes || 45),
+      durationMinutes: r.stopPart === "morning"
+        ? (() => { const af = (result.rows || []).find(x => x.stopPart === "afternoon" && x.addressId === r.addressId); return Number(r.durationMinutes || 0) + Number(af?.durationMinutes || 0) || 45; })()
+        : Number(r.durationMinutes || 45),
       lat: r.lat, lng: r.lng,
       weeklyHours: r.weeklyHours ?? null,
+      openMorning: r.openMorning || "",
+      closeMorning: r.closeMorning || "",
+      openAfternoon: r.openAfternoon || "",
+      closeAfternoon: r.closeAfternoon || "",
       ignoreHours: r.ignoreHours === true,
       fixedFirst: r.fixedFirst === true,
       timeFrom: r.timeFrom || "",

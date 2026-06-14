@@ -529,7 +529,7 @@ function perpDistToSegment(pLat, pLng, aLat, aLng, bLat, bLng) {
 // Find the nearest saved rest stop along the segment [from → to].
 // maxPerpKm = max perpendicular distance from the route line (handles parallel valleys).
 // Falls back to 15 km haversine if no destination is known.
-function findNearestRestStop(restStops, fromLat, fromLng, toLat, toLng, maxPerpKm = 2.0, breakTimeMin = null, scheduledDate = null) {
+function findNearestRestStop(restStops, fromLat, fromLng, toLat, toLng, maxPerpKm = 2.0, breakTimeMin = null, scheduledDate = null, maxDirectKm = null) {
   if (!restStops.length) return null;
   // Senza coordinate correnti non possiamo valutare la distanza → nessuna sosta
   if (!fromLat || !fromLng) return null;
@@ -542,6 +542,11 @@ function findNearestRestStop(restStops, fromLat, fromLng, toLat, toLng, maxPerpK
   const candidates = [];
   for (const s of restStops) {
     if (!s.lat || !s.lng) continue;
+    // Verifica distanza diretta dalla posizione corrente (evita soste troppo avanti nel percorso)
+    if (maxDirectKm != null) {
+      const directKm = haversineKm({ lat: fromLat, lng: fromLng }, { lat: s.lat, lng: s.lng });
+      if (directKm > maxDirectKm) continue;
+    }
     let distKm;
     if (hasSegment) {
       const { perpKm, t } = perpDistToSegment(s.lat, s.lng, fromLat, fromLng, toLat, toLng);
@@ -927,9 +932,8 @@ async function insertBreaks(rows, options) {
     if (rows[beforeIndex]?.fixedWindow && rows[beforeIndex]?.stopPart === "afternoon") {
       return false;
     }
-    // Soste salvate: perpendicolare ≤ 2 km = "sul percorso" (nessun limite distanza).
-    // Se fuori percorso il limite haversine è maxDetourKm.
-    let spot = findNearestRestStop(restStops, refLat, refLng, toLat, toLng, 2.0, breakTimeMin, scheduledDate);
+    // Soste salvate: perpendicolare ≤ 2 km = "sul percorso" ma devono essere entro maxDetourKm dalla posizione corrente.
+    let spot = findNearestRestStop(restStops, refLat, refLng, toLat, toLng, 2.0, breakTimeMin, scheduledDate, maxDetourKm);
     // Non riusare uno spot già inserito in questa sessione (evita doppioni della stessa sosta)
     if (spot && insertions.some(ins => ins.lat === spot.lat && ins.lng === spot.lng)) {
       L(`    savedSosta "${spot.customer}" già usata — skip`);
