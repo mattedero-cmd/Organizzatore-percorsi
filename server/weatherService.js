@@ -9,8 +9,8 @@ const WEATHER_CODES = new Map([
   [81, "Rovesci"], [82, "Rovesci intensi"], [95, "Temporale"]
 ]);
 
-const WEATHER_FETCH_TIMEOUT_MS = Number(process.env.WEATHER_FETCH_TIMEOUT_MS || 2500);
-const WEATHER_ROW_TIMEOUT_MS = Number(process.env.WEATHER_ROW_TIMEOUT_MS || 3000);
+const WEATHER_FETCH_TIMEOUT_MS = Number(process.env.WEATHER_FETCH_TIMEOUT_MS || 6000);
+const WEATHER_ROW_TIMEOUT_MS = Number(process.env.WEATHER_ROW_TIMEOUT_MS || 8000);
 
 function todayIso() {
   return new Date().toISOString().slice(0, 10);
@@ -106,13 +106,17 @@ function fromOpenMeteo(payload, row, scheduledDate, mode, source) {
 
 // Cache in-memory per Open-Meteo: chiave = "lat,lng,date,mode"
 const openMeteoCache = new Map();
+const openMeteoInflight = new Map();
 
 async function openMeteoWeather(coords, row, scheduledDate, mode) {
   const cacheKey = `${Math.round(coords.lat * 100) / 100},${Math.round(coords.lng * 100) / 100},${scheduledDate},${mode}`;
   if (openMeteoCache.has(cacheKey)) {
-    const cached = openMeteoCache.get(cacheKey);
-    // Riusa i dati raw, ricalcola per questo specifico stop
-    return fromOpenMeteo(cached, row, scheduledDate, mode, "open-meteo");
+    return fromOpenMeteo(openMeteoCache.get(cacheKey), row, scheduledDate, mode, "open-meteo");
+  }
+  // Dedup: se stessa chiave è già in volo, aspetta quella promise invece di fare una nuova request
+  if (openMeteoInflight.has(cacheKey)) {
+    const data = await openMeteoInflight.get(cacheKey);
+    return fromOpenMeteo(data, row, scheduledDate, mode, "open-meteo");
   }
   const baseUrl = mode === "historical"
     ? "https://archive-api.open-meteo.com/v1/archive"
@@ -129,10 +133,16 @@ async function openMeteoWeather(coords, row, scheduledDate, mode) {
     url.searchParams.set("forecast_days", "16");
   }
   trackCall("open_meteo", "forecast");
-  const response = await fetch(url, { signal: AbortSignal.timeout(WEATHER_FETCH_TIMEOUT_MS) });
-  if (!response.ok) throw new Error(`Meteo Open-Meteo non riuscito (${response.status})`);
-  const data = await response.json();
-  openMeteoCache.set(cacheKey, data);
+  const fetchPromise = fetch(url, { signal: AbortSignal.timeout(WEATHER_FETCH_TIMEOUT_MS) })
+    .then(async (response) => {
+      if (!response.ok) throw new Error(`Meteo Open-Meteo non riuscito (${response.status})`);
+      const data = await response.json();
+      openMeteoCache.set(cacheKey, data);
+      return data;
+    })
+    .finally(() => openMeteoInflight.delete(cacheKey));
+  openMeteoInflight.set(cacheKey, fetchPromise);
+  const data = await fetchPromise;
   return fromOpenMeteo(data, row, scheduledDate, mode, "open-meteo");
 }
 

@@ -1,3 +1,8 @@
+## v4.111 — 2026-06-14
+- Fix: ricalcolo da vista risultato non preservava l'ordine del giro caricato — aggiunto manualOrder=true in replanFromResult(); l'ordine originale non viene più rimescolato dall'ottimizzatore
+- Fix: timeout fetch meteo aumentato da 2.5s a 6s — MeteoTrentino e Open Data Hub Bolzano non vanno più in timeout e non scatenano il fallback Open-Meteo
+- Fix: Open-Meteo 429 su chiamate parallele — aggiunta deduplicazione in-flight (openMeteoInflight Map): più tappe con stesse coordinate condividono un'unica richiesta HTTP
+
 ## v4.110 — 2026-06-14
 - Fix: Open-Meteo 429 "too many requests" — aggiunta cache in-memory (openMeteoCache) in weatherService.js: stessa combinazione lat/lng/data/mode non ripete la chiamata HTTP
 - Fix: sosta salvata (es. Bar Caffè Obber) inserita due volte allo stesso beforeIndex — tryInsert ora salta le soste già presenti in insertions con stessa lat/lng
