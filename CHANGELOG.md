@@ -1,3 +1,6 @@
+## v4.104 — 2026-06-14
+- Fix: filtro keyword soste rimoveva "ristorante", "pizzeria", "trattoria" — tra Bolzano e Arco tutti i bar hanno "ristorante" nel nome e venivano scartati; ora si escludono solo alloggi puri (hotel, albergo, b&b, hostel, agriturismo, resort, spa)
+
 ## v4.103 — 2026-06-14
 - Info app: sezione "Riepilogo v4.001–v4.100" con 10 punti tematici che riassumono i primi 100 fix; rimossi i blocchi "Novità v4.083" e "v4.090" ora coperti dal riepilogo; da v4.110 in poi riprende il riassunto ogni 10 fix
 

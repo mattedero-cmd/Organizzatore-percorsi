@@ -187,7 +187,7 @@ export async function findNearbyRestStop(lat, lng, segFromLat, segFromLng, segTo
     return cached;
   }
 
-  const EXCLUDE_KEYWORDS = /hotel|alberg|agritur|b&b|bed|hostel|ostello|ristorante|pizzeria|trattoria/i;
+  const EXCLUDE_KEYWORDS = /hotel|alberg|agritur|b&b|bed\s*&?\s*breakfast|hostel|ostello|resort|wellness|spa\b/i;
   const MAX_DETOUR_KM = maxDetourKm;
 
   const hasSegment = segFromLat != null && segToLat != null;
