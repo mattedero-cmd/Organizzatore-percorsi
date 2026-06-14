@@ -1,3 +1,6 @@
+## v4.094 — 2026-06-14
+- Debug: Places API sosta ora logga il motivo di ogni scarto nel log soste (status API, totale risultati, motivo per candidato: no rating, keyword esclusa, distanza > max, tutti chiusi)
+
 ## v4.093 — 2026-06-14
 - Fix: rimosso else-if residuo che dimezzava cumulative a REST_MAX/2 anche dopo sosta non trovata; fix precedente (v4.092) era incompleto — il dimezzamento ora avviene SOLO dentro tryInsert al momento dell'inserzione effettiva
 

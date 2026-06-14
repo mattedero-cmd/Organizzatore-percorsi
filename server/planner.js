@@ -830,7 +830,7 @@ async function insertBreaks(rows, options) {
     let spot = findNearestRestStop(restStops, refLat, refLng, toLat, toLng, 2.0, breakTimeMin, scheduledDate);
     if (spot) { L(`    savedSosta "${spot.customer}" trovata`); }
     if (!spot && refLat && refLng) {
-      spot = await findNearbyRestStop(refLat, refLng, fromLat, fromLng, toLat, toLng, 15000, breakTimeMin, scheduledDate, maxDetourKm)
+      spot = await findNearbyRestStop(refLat, refLng, fromLat, fromLng, toLat, toLng, 15000, breakTimeMin, scheduledDate, maxDetourKm, (msg) => L(`    ${msg}`))
         .then(r => { L(`    PlacesAPI sosta @ (${refLat?.toFixed(4)},${refLng?.toFixed(4)}): ${r ? `"${r.customer}"` : "nessuna"}`); return r; })
         .catch(e => { L(`    PlacesAPI sosta: errore ${e.message}`); return null; });
     }

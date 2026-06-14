@@ -175,13 +175,17 @@ async function fetchPlaceDetails(placeId, key) {
 // MAX_DETOUR_KM: max perpendicular distance from the segment (≈ 2 min at 50 km/h).
 // breakTimeMin: minutes from midnight for the planned break time (optional).
 // scheduledDate: YYYY-MM-DD string (optional, to determine day of week).
-export async function findNearbyRestStop(lat, lng, segFromLat, segFromLng, segToLat, segToLng, radiusM = 15000, breakTimeMin = null, scheduledDate = null, maxDetourKm = 1.7) {
+export async function findNearbyRestStop(lat, lng, segFromLat, segFromLng, segToLat, segToLng, radiusM = 15000, breakTimeMin = null, scheduledDate = null, maxDetourKm = 1.7, debugCb = null) {
   if (!lat || !lng) return null;
   const key = API_KEY();
   if (!key) return null;
 
   const cacheKey = placesCacheKey(lat, lng);
-  if (placesCache.has(cacheKey)) return placesCache.get(cacheKey);
+  if (placesCache.has(cacheKey)) {
+    const cached = placesCache.get(cacheKey);
+    debugCb?.(`[API cache] → ${cached ? `"${cached.customer}"` : "null"}`);
+    return cached;
+  }
 
   const EXCLUDE_KEYWORDS = /hotel|alberg|agritur|b&b|bed|hostel|ostello|ristorante|pizzeria|trattoria/i;
   const MAX_DETOUR_KM = maxDetourKm;
@@ -199,6 +203,7 @@ export async function findNearbyRestStop(lat, lng, segFromLat, segFromLng, segTo
     const res = await fetch(url, { signal: AbortSignal.timeout(6000) });
     const data = await res.json();
     console.log("[Places]", lat.toFixed(4), lng.toFixed(4), "→ status:", data.status, "results:", data.results?.length ?? 0);
+    debugCb?.(`[API] status=${data.status} totale=${data.results?.length ?? 0}`);
     if (data.status !== "OK" || !data.results?.length) {
       placesCache.set(cacheKey, null);
       return null;
@@ -206,13 +211,14 @@ export async function findNearbyRestStop(lat, lng, segFromLat, segFromLng, segTo
 
     const candidates = data.results
       .filter(p => {
-        if (!p.rating || p.user_ratings_total < 5) return false;
-        if (EXCLUDE_KEYWORDS.test(p.name)) return false;
+        if (!p.rating || p.user_ratings_total < 5) { debugCb?.(`  scarto "${p.name}": no rating/reviews`); return false; }
+        if (EXCLUDE_KEYWORDS.test(p.name)) { debugCb?.(`  scarto "${p.name}": keyword esclusa`); return false; }
         const pLat = p.geometry.location.lat, pLng = p.geometry.location.lng;
         const km = hasSegment
           ? perpKmToSegment(pLat, pLng, segFromLat, segFromLng, segToLat, segToLng)
           : haversineKm({ lat, lng }, { lat: pLat, lng: pLng });
-        return km <= MAX_DETOUR_KM;
+        if (km > MAX_DETOUR_KM) { debugCb?.(`  scarto "${p.name}": dist=${km.toFixed(2)}km > max=${MAX_DETOUR_KM.toFixed(1)}km`); return false; }
+        return true;
       })
       .sort((a, b) => placesScore(b) - placesScore(a))
       .slice(0, 5);
@@ -241,6 +247,7 @@ export async function findNearbyRestStop(lat, lng, segFromLat, segFromLng, segTo
         chosenOpenAtBreak = null;
       } else {
         // All candidates definitively closed at break time — skip this location
+        withHours.forEach(x => debugCb?.(`  chiuso "${x.p.name}" alle ${Math.floor(breakTimeMin/60)}:${String(breakTimeMin%60).padStart(2,"0")}`));
         placesCache.set(cacheKey, null);
         return null;
       }
