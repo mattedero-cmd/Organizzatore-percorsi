@@ -230,9 +230,30 @@ function scheduleStop(arrival, stop, opts = {}) {
             warnings
           };
         }
+        // Split not possible (afternoon too short) — wait for next window and do all there
+        if (nextWin.start + stop.durationMinutes <= nextWin.end) {
+          return { split: false, serviceStart: nextWin.start, serviceEnd: nextWin.start + stop.durationMinutes,
+            waitMinutes: nextWin.start - arrival, warnings: [...warnings, { msg: "intervento spostato al pomeriggio", level: "info" }] };
+        }
       }
 
       warnings.push({ msg: `intervento oltre chiusura ${win.label.toLowerCase()}`, level: "error" });
+    }
+  }
+
+  // Safety net: arrival falls in a gap between two windows (e.g. lunch closure after timeShift)
+  for (let i = 0; i < windows.length - 1; i++) {
+    const curr = windows[i];
+    const next = windows[i + 1];
+    if (arrival > curr.end && arrival < next.start) {
+      const waitMin = next.start - arrival;
+      warnings.push({ msg: "arrivo durante chiusura — spostato all'apertura pomeridiana", level: "info" });
+      if (next.start + stop.durationMinutes <= next.end) {
+        return { split: false, serviceStart: next.start, serviceEnd: next.start + stop.durationMinutes, waitMinutes: waitMin, warnings };
+      }
+      // Overflows next window too — schedule from next.start anyway with overflow warning
+      warnings.push({ msg: "intervento supera la chiusura pomeridiana", level: "warn" });
+      return { split: false, serviceStart: next.start, serviceEnd: next.start + stop.durationMinutes, waitMinutes: waitMin, warnings };
     }
   }
 
@@ -965,7 +986,7 @@ async function insertBreaks(rows, options) {
     const workMin = row.durationMinutes || 0;
     let driveConsumed = 0;
     let noSpotFound = false;
-    L(`[i=${i}] "${row.customer}" drive=${remainingDrive}min work=${workMin}min cumul=${cumulative}`);
+    L(`[i=${i}] "${row.customer}" part=${row.stopPart||"-"} hours="${row.openingHours||""}" drive=${remainingDrive}min work=${workMin}min cumul=${cumulative}`);
 
     // Mid-leg breaks
     while (remainingDrive > 0 && cumulative + remainingDrive >= REST_MIN) {

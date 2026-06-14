@@ -1,3 +1,8 @@
+## v4.113 — 2026-06-14
+- Fix: scheduleStop — arrivo nel gap pranzo (es. 13:03 con chiusura 13:00–14:00): l'intervento ora attende l'apertura pomeridiana (14:00) invece di lavorare durante la chiusura
+- Fix: scheduleStop — lavoro supera la chiusura mattutina senza split possibile: l'intervento viene spostato al pomeriggio (14:00) invece di sforare
+- Debug log insertBreaks: aggiunto stopPart e openingHours per riga per diagnostica split
+
 ## v4.112 — 2026-06-14
 - Nuovo: icona/riga meteo cliccabile in ogni tappa — apre direttamente MeteoTrentino (per tappe in Trentino) o Suedtirol.info/meteo (per tappe in Alto Adige); link passa il sourceUrl dall'API server
 
