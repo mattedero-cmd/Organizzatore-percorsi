@@ -1,3 +1,6 @@
+## v4.097 — 2026-06-14
+- Feature: auto-split tappa quando il lavoro sfora la chiusura mattutina senza openAfternoon configurato — il pomeriggio viene inferito da lunchClose (14:00 default), inserendo automaticamente la pausa pranzo
+
 ## v4.096 — 2026-06-14
 - Fix: sosta salvata "sul percorso" (perp ≤ 2km) aveva travelMin calcolato come haversine dall'inizio del segmento (fino a 57 min fittizi) → orario sosta nel display era sbagliato; ora travelMin=0 per soste on-route (stesso fix già applicato ai ristoranti)
 

@@ -135,7 +135,7 @@ function openingLabel(stop) {
 }
 
 function scheduleStop(arrival, stop, opts = {}) {
-  const { lunchEnabled = false, lunchOpen = null, lunchDuration = 45 } = opts;
+  const { lunchEnabled = false, lunchOpen = null, lunchDuration = 45, lunchClose = null } = opts;
   // Fixed time window set by user (timeFrom/timeTo): overrides all opening hours
   if (stop.timeFrom && stop.timeTo) {
     const wStart = parseTime(stop.timeFrom);
@@ -208,7 +208,12 @@ function scheduleStop(arrival, stop, opts = {}) {
       }
 
       // Work overflows this window — try split across next window
-      const nextWin = windows[wi + 1];
+      let nextWin = windows[wi + 1];
+      // If no explicit next window but lunch is enabled, infer afternoon start after lunch
+      if (!nextWin && lunchEnabled && lunchOpen !== null && win.end <= (lunchClose ?? lunchOpen + lunchDuration)) {
+        const inferredAfternoonStart = lunchClose ?? lunchOpen + lunchDuration;
+        nextWin = { start: inferredAfternoonStart, end: inferredAfternoonStart + 240, inferred: true };
+      }
       if (nextWin && serviceStart < win.end) {
         const morningWork = win.end - serviceStart;
         const afternoonWork = stop.durationMinutes - morningWork;
@@ -285,8 +290,8 @@ function readLeg(matrix, from, to) {
 
 function evaluateOrder(order, context) {
   const { nodes, matrix, startMinutes, firstArrivalRequired, rates, timingMode, arrivalLeadMinutes, departureLatestMinutes,
-          lunchEnabled = false, lunchOpen = null, lunchDuration = 45 } = context;
-  const lunchOpts = { lunchEnabled, lunchOpen, lunchDuration };
+          lunchEnabled = false, lunchOpen = null, lunchClose = null, lunchDuration = 45 } = context;
+  const lunchOpts = { lunchEnabled, lunchOpen, lunchClose, lunchDuration };
   const rows = [];
   let currentNodeIndex = 0;
   let currentTime = startMinutes;
