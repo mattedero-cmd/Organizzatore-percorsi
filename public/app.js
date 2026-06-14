@@ -1269,7 +1269,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.102 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.103 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -1281,29 +1281,18 @@ function renderMenuInfo() {
         <li>${state.whisperConfigured ? _svg('<polyline points="20 6 9 17 4 12"/>', 14) + " Comandi vocali attivi (Whisper)" : _svg('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>', 14) + " Comandi vocali non configurati"}</li>
       </ul>
 
-      <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v4.100</p>
+      <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Riepilogo v4.001 – v4.100</p>
       <ul class="info-list">
-        <li>Sosta automatica anche nell'ultima tratta verso casa se cumulative &ge; 115 min e c'è ancora tempo valido</li>
-        <li>Ristorante pranzo: se il salvato è troppo lontano (arrivo &gt; 14:00) viene cercato automaticamente via Places API uno più vicino</li>
-        <li>Tempo di viaggio verso il ristorante proporzionale alla posizione sul segmento (t × distanza), non più sempre 0</li>
-        <li>Auto-split tappa quando il cliente chiude a pranzo e non ha orario pomeridiano configurato</li>
-        <li>Places API soste: usa chiave server senza restrizioni referrer — ora trova bar e caffè correttamente</li>
-      </ul>
-
-      <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v4.090</p>
-      <ul class="info-list">
-        <li>Fix crash "addedMinutes is not defined" che impediva la visualizzazione del log soste</li>
-        <li>Log soste: pulsante nel risultato copia il log dettagliato delle decisioni di pianificazione negli appunti</li>
-        <li>Logica soste riscritta: finestre temporali precise, nessuna sosta nelle prime 2h, nell'ultima ora prima di casa, nell'ora prima del pranzo o nelle 2h dopo</li>
-        <li>Ristorante per pranzo: scartato se arrivo fuori dalla finestra 11:30–14:00, detour max 10 min fuori percorso</li>
-      </ul>
-
-      <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v4.083</p>
-      <ul class="info-list">
-        <li>Ricerca avanzata nei giri salvati: per nome, intervallo di date, tappa (cliente/indirizzo) e stato di condivisione, combinabili tra loro</li>
-        <li>Cartelle per organizzare i giri: crea, rinomina, elimina; sposta un giro in una cartella o toglilo. Eliminando una cartella i giri tornano "senza cartella"</li>
-        <li>Le cartelle sono salvate sul tuo account e si sincronizzano tra tutti i dispositivi</li>
-        <li>Statistiche per cartella: ore di lavoro, km percorsi, ore di guida e costo totale dei giri contenuti</li>
+        <li><strong>Form e layout:</strong> campi Data/Partenza/Rientro sulla stessa riga, durata interventi in HH:MM, picker orario iOS corretto, selettori finestra oraria compatti</li>
+        <li><strong>Finestre orarie tappe:</strong> modalità Disponibilità / Fissa per ogni tappa; modifica inline direttamente dalla card nel risultato senza uscire dal giro</li>
+        <li><strong>Planner:</strong> prima tappa fissa ritarda la partenza; priorità pranzo azzera il contatore soste; ricalcolo aggiorna il giro esistente invece di crearne uno nuovo; auto-split quando il cliente chiude a pranzo senza orario pomeridiano</li>
+        <li><strong>Pausa pranzo:</strong> orario fisso configurabile (es. 12:30); split dinamico della tappa; ristorante su mappa; tempo di viaggio proporzionale alla posizione sul segmento; fallback Places API se il salvato è fuori orario</li>
+        <li><strong>Soste automatiche:</strong> logica riscritta con finestre temporali precise; Places API con chiave server (nessuna restrizione referrer); log debug copiabile; sosta nell'ultima tratta verso casa; retry con raggio 25 km se nulla trovato a 15 km</li>
+        <li><strong>WhatsApp e mail:</strong> messaggi precompilati per conferma appuntamento (data futura) e ETA giornaliera; email con stesso testo; pulsanti telefono/WA/mail sempre visibili su ogni tappa</li>
+        <li><strong>Giri salvati:</strong> cartelle sincronizzate; ricerca avanzata per nome/data/tappa; badge "Condiviso da [nickname]"; note per giro; smart naming automatico; duplica giro</li>
+        <li><strong>Archivio e contatti:</strong> selezione multipla con eliminazione bulk; ricerca per rilevanza; scroll-jump eliminato; calendario visite lazy; visualizzazione sul contatto</li>
+        <li><strong>Temi e costi:</strong> palette Aziendali con colore primario + secondario personalizzabili; costi multi-operatore con toggle visibilità; meteo Trentino con bollettino provinciale</li>
+        <li><strong>Infrastruttura:</strong> tracciamento chiamate API esterne nel pannello admin; fix SQLite id=0; dedup richieste /api/plan; fix login Safari PWA con Face ID; fix bfcache iOS</li>
       </ul>
 
       <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v4.080</p>

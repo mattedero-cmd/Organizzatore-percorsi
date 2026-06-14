@@ -1,3 +1,6 @@
+## v4.103 — 2026-06-14
+- Info app: sezione "Riepilogo v4.001–v4.100" con 10 punti tematici che riassumono i primi 100 fix; rimossi i blocchi "Novità v4.083" e "v4.090" ora coperti dal riepilogo; da v4.110 in poi riprende il riassunto ogni 10 fix
+
 ## v4.102 — 2026-06-14
 - Fix: cache sosta includeva solo lat/lng, quindi la retry con raggio 25km colpiva la stessa chiave e restituiva null senza chiamare l'API; ora la chiave include anche il raggio
 
