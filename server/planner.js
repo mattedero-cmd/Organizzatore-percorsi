@@ -635,6 +635,7 @@ async function insertBreaks(rows, options) {
     // il limite maxDetourKm come deviazione massima accettabile.
     const ON_ROUTE_PERP_KM = 2.0;
     let savedSpot = findNearestRestStop(restaurantStops, fromRow?.lat, fromRow?.lng, toRow?.lat, toRow?.lng, maxDetourKm, lunchTimeMin, scheduledDate);
+    let savedSpotOnRoute = false;
     if (savedSpot && fromRow?.lat && fromRow?.lng && toRow?.lat && toRow?.lng) {
       const { perpKm } = perpDistToSegment(savedSpot.lat, savedSpot.lng, fromRow.lat, fromRow.lng, toRow.lat, toRow.lng);
       const isOnRoute = perpKm <= ON_ROUTE_PERP_KM;
@@ -643,6 +644,7 @@ async function insertBreaks(rows, options) {
         if (directKm > maxDetourKm) { L(`    savedRist "${savedSpot.customer}" SCARTATO fuori-percorso perp=${perpKm.toFixed(1)}km direct=${directKm.toFixed(1)}km > max=${maxDetourKm.toFixed(1)}km`); savedSpot = null; }
         else L(`    savedRist "${savedSpot.customer}" fuori-percorso perp=${perpKm.toFixed(1)}km direct=${directKm.toFixed(1)}km OK`);
       } else {
+        savedSpotOnRoute = true;
         L(`    savedRist "${savedSpot.customer}" SUL_PERCORSO perp=${perpKm.toFixed(1)}km OK`);
       }
     } else if (!savedSpot) {
@@ -654,7 +656,13 @@ async function insertBreaks(rows, options) {
           .catch(e => { L(`    PlacesAPI ristorante: errore ${e.message}`); return null; })
       : null);
     if (!spot) { L(`    → Pausa pranzo senza luogo`); return { beforeIndex, type: "lunch", duration: lunchBreakMinutes, customer: "Pausa pranzo" }; }
-    const travelKm = (fromRow?.lat && fromRow?.lng && spot.lat && spot.lng)
+    // Per ristoranti sul percorso il detour è ~0 (ci si passa sopra); travelKm conta solo per fuori-percorso
+    const spotOnRoute = savedSpotOnRoute || (() => {
+      if (!fromRow?.lat || !fromRow?.lng || !toRow?.lat || !toRow?.lng || !spot.lat || !spot.lng) return false;
+      const { perpKm } = perpDistToSegment(spot.lat, spot.lng, fromRow.lat, fromRow.lng, toRow.lat, toRow.lng);
+      return perpKm <= ON_ROUTE_PERP_KM;
+    })();
+    const travelKm = spotOnRoute ? 0 : (fromRow?.lat && fromRow?.lng && spot.lat && spot.lng)
       ? haversineKm({ lat: fromRow.lat, lng: fromRow.lng }, { lat: spot.lat, lng: spot.lng })
       : 0;
     const travelMin = Math.round(travelKm / 50 * 60);

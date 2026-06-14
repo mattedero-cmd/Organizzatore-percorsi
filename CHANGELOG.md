@@ -1,3 +1,6 @@
+## v4.091 — 2026-06-14
+- Fix: ristorante "sul percorso" (perp ≤ 2km) scartato erroneamente perché travelKm misurato dall'inizio del segmento (potenzialmente 100+ km); ora travelMin=0 per ristoranti sul percorso
+
 ## v4.090 — 2026-06-14
 - Fix: crash "addedMinutes is not defined" nell'ultima riga del log di insertBreaks — variabile corretta è timeShift; il crash impediva il popolamento di debugLog
 
