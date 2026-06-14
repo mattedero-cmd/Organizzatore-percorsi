@@ -597,7 +597,8 @@ async function insertBreaks(rows, options) {
     dayStart = 7 * 60,
     finalArrival = 20 * 60,
     scheduledDate = null,
-    lunchFixedTime = null
+    lunchFixedTime = null,
+    homeLat = null, homeLng = null
   } = options;
 
   // ── constants ────────────────────────────────────────────────────────────────
@@ -952,7 +953,13 @@ async function insertBreaks(rows, options) {
       const valid = isValidBreakTime(breakTime);
       L(`  post-work break: breakTime=${formatTime(breakTime)} valid=${valid}`);
       if (valid) {
-        await tryInsert(i + 1, row.lat, row.lng, row.lat, row.lng, nextRow?.lat, nextRow?.lng, 0, breakTime);
+        // Cerca la sosta lungo il percorso verso la prossima tappa, non al punto di partenza.
+        // Usiamo una frazione proporzionale a ~20 min di guida nel prossimo segmento.
+        const nextDrive = nextRow?.driveMinutes || 60;
+        const frac = Math.min(0.5, 20 / nextDrive);
+        const searchLat = (row.lat != null && nextRow?.lat != null) ? row.lat + (nextRow.lat - row.lat) * frac : row.lat;
+        const searchLng = (row.lng != null && nextRow?.lng != null) ? row.lng + (nextRow.lng - row.lng) * frac : row.lng;
+        await tryInsert(i + 1, searchLat, searchLng, row.lat, row.lng, nextRow?.lat, nextRow?.lng, 0, breakTime);
       }
     }
 
@@ -967,7 +974,12 @@ async function insertBreaks(rows, options) {
     L(`  post-loop (finale): cumul=${cumulative} breakTime=${formatTime(breakTime)} valid=${valid}`);
     if (valid) {
       const lastRow = rows[rows.length - 1];
-      await tryInsert(rows.length, lastRow?.lat, lastRow?.lng, lastRow?.lat, lastRow?.lng, null, null, 0, breakTime);
+      // Cerca lungo la tratta verso casa, non al punto dell'ultima tappa
+      const finalDrive = Math.max(30, finalArrival - prevServiceEnd);
+      const frac = homeLat != null ? Math.min(0.5, 20 / finalDrive) : 0;
+      const searchLat = (lastRow?.lat != null && homeLat != null) ? lastRow.lat + (homeLat - lastRow.lat) * frac : lastRow?.lat;
+      const searchLng = (lastRow?.lng != null && homeLng != null) ? lastRow.lng + (homeLng - lastRow.lng) * frac : lastRow?.lng;
+      await tryInsert(rows.length, searchLat, searchLng, lastRow?.lat, lastRow?.lng, homeLat, homeLng, 0, breakTime);
     }
   }
 
@@ -1159,7 +1171,9 @@ export async function planRoute(payload, settings, restStops = []) {
     noBreakBeforeHomeMin: settings?.noBreakBeforeHomeMin ?? 60,
     noBreakBeforeLunchMin: settings?.noBreakBeforeLunchMin ?? 60,
     noBreakAfterLunchMin: settings?.noBreakAfterLunchMin ?? 120,
-    scheduledDate
+    scheduledDate,
+    homeLat: end?.lat ?? null,
+    homeLng: end?.lng ?? null
   });
   best = {
     ...best,

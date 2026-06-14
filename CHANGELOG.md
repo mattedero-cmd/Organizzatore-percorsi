@@ -1,3 +1,6 @@
+## v4.105 — 2026-06-14
+- Fix: post-work break cercava la sosta esattamente alla tappa appena finita — ora cerca ~20 min lungo il prossimo segmento di guida; stessa logica per la sosta post-loop (tratta verso casa) con coordinate di casa passate a insertBreaks
+
 ## v4.104 — 2026-06-14
 - Fix: filtro keyword soste rimoveva "ristorante", "pizzeria", "trattoria" — tra Bolzano e Arco tutti i bar hanno "ristorante" nel nome e venivano scartati; ora si escludono solo alloggi puri (hotel, albergo, b&b, hostel, agriturismo, resort, spa)
 
