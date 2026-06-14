@@ -1,3 +1,6 @@
+## v4.121 — 2026-06-14
+- Fix planner: tappa lavorata durante la chiusura → split forzato. In scheduleStop, quando l'intervento non sta interamente nel pomeriggio (es. Mediolanum 09:00–13:00/14:30–16:00, arrivo 12:16, durata 120min: mattina solo 44min, pomeriggio 90min < 120min), la tappa veniva lavorata dritta attraverso la chiusura ignorando gli orari. Ora viene spezzata comunque (mattina 12:16–13:00 + pomeriggio 14:30–15:46) anche se la fetta mattutina è < 45min, perché è l'unico modo di rispettare gli orari — e il gap di chiusura 13:00–14:30 diventa la pausa pranzo che prima non veniva mai inserita. Comportamento v4.117 (fetta sottile ma pomeriggio capiente → tutto al pomeriggio) preservato. Verificato con test su 4 scenari
+
 ## v4.120 — 2026-06-14
 - Fix planner: pranzo durante attesa apertura — il ristorante viene cercato vicino alla tappa di destinazione (dove si attende), non lungo la tratta percorsa per arrivarci. Section 5 ora passa la tappa stessa come from e to in makeLunchEntry, così il centro ricerca è la destinazione (es. Fineco/Riva del Garda) e non un punto a metà strada (es. New Kurdistan a Bolzano)
 

@@ -217,25 +217,31 @@ function scheduleStop(arrival, stop, opts = {}) {
       if (nextWin && serviceStart < win.end) {
         const morningWork = win.end - serviceStart;
         const afternoonWork = stop.durationMinutes - morningWork;
-        // Only split if morning slice is worth it (>= 45 min); otherwise wait for next window
-        if (morningWork >= 45 && afternoonWork > 0 && nextWin.start + afternoonWork <= nextWin.end) {
-          return {
-            split: true,
-            morningStart: serviceStart,
-            morningEnd: win.end,
-            morningWork,
-            afternoonStart: nextWin.start,
-            afternoonEnd: nextWin.start + afternoonWork,
-            afternoonWork,
-            waitMinutes,
-            warnings
-          };
-        }
-        // Morning slice too thin or afternoon doesn't fit — wait for next window and do all there
-        if (nextWin.start + stop.durationMinutes <= nextWin.end) {
+        const splitFits = afternoonWork > 0 && nextWin.start + afternoonWork <= nextWin.end;
+        const afternoonOnlyFits = nextWin.start + stop.durationMinutes <= nextWin.end;
+        const buildSplit = () => ({
+          split: true,
+          morningStart: serviceStart,
+          morningEnd: win.end,
+          morningWork,
+          afternoonStart: nextWin.start,
+          afternoonEnd: nextWin.start + afternoonWork,
+          afternoonWork,
+          waitMinutes,
+          warnings
+        });
+        // Substantial morning slice that fits across both windows → split.
+        if (morningWork >= 45 && splitFits) return buildSplit();
+        // Thin morning slice but the whole job fits after the closure → do it all there
+        // (avoids leaving a useless sliver in the morning).
+        if (afternoonOnlyFits) {
           return { split: false, serviceStart: nextWin.start, serviceEnd: nextWin.start + stop.durationMinutes,
             waitMinutes: nextWin.start - arrival, warnings: [...warnings, { msg: "intervento spostato al pomeriggio", level: "info" }] };
         }
+        // The afternoon alone can't hold the whole job → split anyway, even with a thin
+        // morning slice: it's the only way to respect the closing hours, and the closure
+        // gap then becomes the natural lunch break.
+        if (splitFits) return buildSplit();
       }
 
       warnings.push({ msg: `intervento oltre chiusura ${win.label.toLowerCase()}`, level: "error" });
