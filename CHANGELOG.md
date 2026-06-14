@@ -1,3 +1,6 @@
+## v4.123 — 2026-06-14
+- Nuovo: flag isRestStop e isLunchStop su contatti — un cliente può essere contrassegnato come sosta caffè e/o luogo pranzo; il planner lo include nei pool corrispondenti; badge ☕🍽 sulle card archivio
+
 ## v4.122 — 2026-06-14
 - Fix planner: la parte pomeriggio di una tappa spezzata per orari di apertura ha orari assoluti (apertura negozio). shiftRowTimes ora la ancora come per le finestre fisse e azzera il timeShift dopo: la pausa pranzo inserita nel gap di chiusura viene assorbita dal gap invece di spingere avanti la ripresa pomeridiana (es. ripresa 14:30 e non 15:30). Verificato con test su insertBreaks (prima 15:30/fine 16:46 oltre chiusura, dopo 14:30/15:46)
 - UI: la card della pausa pranzo mostra sempre il tempo di guida — deviazione andata/ritorno per il ristorante, oppure "sul percorso, nessuna deviazione" se è sul tragitto (driveMinutes=0)

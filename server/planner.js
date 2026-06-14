@@ -1361,8 +1361,8 @@ export async function planRoute(payload, settings, restStops = []) {
   }
 
   // Insert lunch break and rest stops into the timeline
-  const activeRestStops = restStops.filter(s => s.addressType === "rest");
-  const activeRestaurantStops = restStops.filter(s => s.addressType === "restaurant");
+  const activeRestStops = restStops.filter(s => s.addressType === "rest" || s.isRestStop);
+  const activeRestaurantStops = restStops.filter(s => s.addressType === "restaurant" || s.isLunchStop);
   const maxReturnTime = settings?.maxReturnTime ? parseTime(settings.maxReturnTime) : null;
   const actualFinalArrival = parseTime(best.finalLeg.arrivalTime);
   const { rows: enrichedRows, addedMinutes, debugLog } = await insertBreaks(best.rows, {

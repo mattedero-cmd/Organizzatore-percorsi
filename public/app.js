@@ -211,7 +211,8 @@ const emptyForm = {
   openMorning: "08:30", closeMorning: "12:30",
   openAfternoon: "14:30", closeAfternoon: "18:00",
   weeklyHours: null,
-  defaultDuration: 45, lat: "", lng: ""
+  defaultDuration: 45, lat: "", lng: "",
+  isRestStop: false, isLunchStop: false
 };
 
 // Pre-load theme from localStorage so applyTheme() uses correct values before settings load
@@ -1269,7 +1270,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.122 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.123 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -1279,6 +1280,11 @@ function renderMenuInfo() {
       <ul class="info-list">
         <li>${state.mapApiConfigured ? _svg('<polyline points="20 6 9 17 4 12"/>', 14) + " Google Maps attivo — percorsi reali e ottimizzazione avanzata" : _svg('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>', 14) + " Google Maps non configurato — stime distanze locali"}</li>
         <li>${state.whisperConfigured ? _svg('<polyline points="20 6 9 17 4 12"/>', 14) + " Comandi vocali attivi (Whisper)" : _svg('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>', 14) + " Comandi vocali non configurati"}</li>
+      </ul>
+
+      <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v4.123</p>
+      <ul class="info-list">
+        <li>I clienti possono essere contrassegnati come sosta caffè ☕ e/o luogo pranzo 🍽 — nella scheda contatto due nuove caselle attivano l'inclusione automatica nei percorsi; le icone appaiono anche sulle card dell'archivio</li>
       </ul>
 
       <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v4.122</p>
@@ -2628,7 +2634,7 @@ function buildArchiveListHTML() {
     return `
       <article class="card archive-card${isSel ? " archive-card--selected" : ""}" ${sel ? `data-select-address="${a.id}" style="cursor:pointer;"` : ""}>
         ${sel ? `<span class="archive-check-dot${isSel ? " archive-check-dot--on" : ""}">${isSel ? _svg('<polyline points="20 6 9 17 4 12"/>',13) : ""}</span>` : ""}
-        <p class="stop-title">${a.addressType === "rest" ? "☕ " : a.addressType === "restaurant" ? "🍽 " : a.addressType === "favorite" ? "⭐ " : ""}${escapeHtml(a.activity || a.customer)}</p>
+        <p class="stop-title">${a.addressType === "rest" ? "☕ " : a.addressType === "restaurant" ? "🍽 " : a.addressType === "favorite" ? "⭐ " : ""}${escapeHtml(a.activity || a.customer)}${(a.isRestStop && a.addressType !== "rest") || (a.isLunchStop && a.addressType !== "restaurant") ? ` <span class="stop-meta" style="font-size:0.8em">${a.isRestStop && a.addressType !== "rest" ? "☕" : ""}${a.isLunchStop && a.addressType !== "restaurant" ? "🍽" : ""}</span>` : ""}</p>
         ${a.activity ? `<div class="stop-meta" style="font-weight:600">👤 ${escapeHtml(a.customer)}</div>` : ""}
         <div class="stop-meta">${escapeHtml(a.fullAddress)}</div>
         ${a.phone ? `<div class="stop-meta">${phoneIcon(a.phoneType)} ${escapeHtml(a.phone)}${a.phoneName ? ` <span class="phone-name-badge">${escapeHtml(a.phoneName)}</span>` : ""}${a.phonePreferred === "phone" && a.phone2 ? " ★" : ""}</div>` : ""}
@@ -2739,6 +2745,8 @@ function renderArchive() {
             <option value="restaurant" ${form.addressType === "restaurant" ? "selected" : ""}>Ristorante (pranzo)</option>
             <option value="favorite" ${form.addressType === "favorite" ? "selected" : ""}>Preferito (casa, ecc.)</option>
           </select></label>
+          <label class="field" style="flex-direction:row;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" name="isRestStop" ${form.isRestStop ? "checked" : ""} /> Usabile come sosta caffè ☕</label>
+          <label class="field" style="flex-direction:row;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" name="isLunchStop" ${form.isLunchStop ? "checked" : ""} /> Usabile come luogo pranzo 🍽</label>
           <label class="field">Email<input name="email" type="email" value="${escapeHtml(form.email)}" /></label>
           <label class="field full">Note<textarea name="notes" id="contact-notes">${escapeHtml(form.notes)}</textarea></label>
           ${renderWeeklyHoursSection(form.weeklyHours)}
@@ -4551,7 +4559,9 @@ async function saveAddressForm(form) {
     // Derive legacy fields from Mon or first working day for backward compat
     ...deriveHoursFromWeekly(readWeeklyHours()),
     defaultDuration: hhmmToMins(v.defaultDuration) || 45,
-    lat: v.lat ? Number(v.lat) : null, lng: v.lng ? Number(v.lng) : null
+    lat: v.lat ? Number(v.lat) : null, lng: v.lng ? Number(v.lng) : null,
+    isRestStop: form.elements.isRestStop?.checked ?? false,
+    isLunchStop: form.elements.isLunchStop?.checked ?? false
   };
   if (state.addressForm.id) {
     await api(`/api/addresses/${state.addressForm.id}`, { method: "PUT", body: JSON.stringify(payload) });
