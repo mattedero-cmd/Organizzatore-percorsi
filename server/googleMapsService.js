@@ -1,6 +1,6 @@
 import { trackCall } from "./apiStats.js";
 
-const API_KEY = () => process.env.GOOGLE_MAPS_API_KEY || "";
+const API_KEY = () => process.env.GOOGLE_MAPS_SERVER_KEY || process.env.GOOGLE_MAPS_API_KEY || "";
 const BASE = "https://maps.googleapis.com/maps/api";
 
 function toRad(deg) { return deg * Math.PI / 180; }

@@ -1,3 +1,6 @@
+## v4.095 — 2026-06-14
+- Fix: backend ora usa GOOGLE_MAPS_SERVER_KEY (senza restrizioni referrer) per Places API e Directions; fallback su GOOGLE_MAPS_API_KEY se non impostata
+
 ## v4.094 — 2026-06-14
 - Debug: Places API sosta ora logga il motivo di ogni scarto nel log soste (status API, totale risultati, motivo per candidato: no rating, keyword esclusa, distanza > max, tutti chiusi)
 
