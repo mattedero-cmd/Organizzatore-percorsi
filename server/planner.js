@@ -661,15 +661,29 @@ async function insertBreaks(rows, options) {
           .catch(e => { L(`    PlacesAPI ristorante: errore ${e.message}`); return null; })
       : null);
     if (!spot) { L(`    → Pausa pranzo senza luogo`); return { beforeIndex, type: "lunch", duration: lunchBreakMinutes, customer: "Pausa pranzo" }; }
-    // Per ristoranti sul percorso il detour è ~0 (ci si passa sopra); travelKm conta solo per fuori-percorso
-    const spotOnRoute = savedSpotOnRoute || (() => {
-      if (!fromRow?.lat || !fromRow?.lng || !toRow?.lat || !toRow?.lng || !spot.lat || !spot.lng) return false;
-      const { perpKm } = perpDistToSegment(spot.lat, spot.lng, fromRow.lat, fromRow.lng, toRow.lat, toRow.lng);
-      return perpKm <= ON_ROUTE_PERP_KM;
-    })();
-    const travelKm = spotOnRoute ? 0 : (fromRow?.lat && fromRow?.lng && spot.lat && spot.lng)
-      ? haversineKm({ lat: fromRow.lat, lng: fromRow.lng }, { lat: spot.lat, lng: spot.lng })
-      : 0;
+    // travelKm = tempo reale per raggiungere il ristorante dalla posizione attuale:
+    // - sul percorso (perp ≤ 2km): t * lunghezza_segmento (frazione del tragitto già previsto)
+    // - fuori percorso: haversine diretto (detour aggiuntivo)
+    let travelKm = 0;
+    if (fromRow?.lat && fromRow?.lng && spot.lat && spot.lng) {
+      if (toRow?.lat && toRow?.lng) {
+        const { perpKm, t } = perpDistToSegment(spot.lat, spot.lng, fromRow.lat, fromRow.lng, toRow.lat, toRow.lng);
+        if (perpKm <= ON_ROUTE_PERP_KM) {
+          // Sul percorso: il ristorante si raggiunge dopo t * segmento di guida
+          const segKm = haversineKm({ lat: fromRow.lat, lng: fromRow.lng }, { lat: toRow.lat, lng: toRow.lng });
+          travelKm = t * segKm;
+        } else {
+          const rawKm = haversineKm({ lat: fromRow.lat, lng: fromRow.lng }, { lat: spot.lat, lng: spot.lng });
+          if (rawKm > maxDetourKm) {
+            L(`    "${spot.customer}" SCARTATO fuori-percorso perp=${perpKm.toFixed(1)}km direct=${rawKm.toFixed(1)}km > max=${maxDetourKm.toFixed(1)}km`);
+            return { beforeIndex, type: "lunch", duration: lunchBreakMinutes, customer: "Pausa pranzo" };
+          }
+          travelKm = rawKm;
+        }
+      } else {
+        travelKm = haversineKm({ lat: fromRow.lat, lng: fromRow.lng }, { lat: spot.lat, lng: spot.lng });
+      }
+    }
     const travelMin = Math.round(travelKm / 50 * 60);
     if (lunchTimeMin + travelMin > LUNCH_CLOSE) {
       L(`    "${spot.customer}" SCARTATO arrivo=${formatTime(lunchTimeMin + travelMin)} > LUNCH_CLOSE=${formatTime(LUNCH_CLOSE)}`);

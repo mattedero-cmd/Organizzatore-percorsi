@@ -1,3 +1,6 @@
+## v4.098 — 2026-06-14
+- Fix: pausa pranzo su ristorante "sul percorso" calcolava travelKm=0 anche quando il ristorante era vicino alla fine di un lungo segmento (es. Bolzano dopo 1h19min di guida da San Candido) → orario pranzo irrealistico; ora travelKm = t × segKm dove t è la proiezione del ristorante lungo il segmento (0=inizio, 1=fine)
+
 ## v4.097 — 2026-06-14
 - Feature: auto-split tappa quando il lavoro sfora la chiusura mattutina senza openAfternoon configurato — il pomeriggio viene inferito da lunchClose (14:00 default), inserendo automaticamente la pausa pranzo
 
