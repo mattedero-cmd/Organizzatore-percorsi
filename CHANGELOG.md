@@ -1,3 +1,6 @@
+## v4.100 — 2026-06-14
+- Fix: nessuna sosta veniva tentata nell'ultima tratta verso casa anche con cumulative >= REST_MIN; ora dopo il loop principale si tenta un'ultima sosta se l'orario è valido (non nell'ultima ora prima di arrivare)
+
 ## v4.099 — 2026-06-14
 - Fix: quando il ristorante salvato viene scartato perché l'arrivo supera LUNCH_CLOSE, ora si tenta comunque la Places API per trovare un ristorante più vicino alla posizione attuale
 

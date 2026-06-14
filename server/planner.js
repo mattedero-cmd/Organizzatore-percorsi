@@ -953,6 +953,17 @@ async function insertBreaks(rows, options) {
     lastLng = row.lng;
   }
 
+  // Ultima tratta verso casa: se cumulative >= REST_MIN e il momento è valido, prova una sosta
+  if (cumulative >= REST_MIN) {
+    const breakTime = prevServiceEnd;
+    const valid = isValidBreakTime(breakTime);
+    L(`  post-loop (finale): cumul=${cumulative} breakTime=${formatTime(breakTime)} valid=${valid}`);
+    if (valid) {
+      const lastRow = rows[rows.length - 1];
+      await tryInsert(rows.length, lastRow?.lat, lastRow?.lng, lastRow?.lat, lastRow?.lng, null, null, 0, breakTime);
+    }
+  }
+
   // ── 3. Applica inserzioni ────────────────────────────────────────────────────
   insertions.sort((a, b) => a.beforeIndex - b.beforeIndex || (a.driveOffset || 0) - (b.driveOffset || 0));
 
