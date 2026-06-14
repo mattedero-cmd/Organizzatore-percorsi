@@ -1,3 +1,6 @@
+## v4.096 — 2026-06-14
+- Fix: sosta salvata "sul percorso" (perp ≤ 2km) aveva travelMin calcolato come haversine dall'inizio del segmento (fino a 57 min fittizi) → orario sosta nel display era sbagliato; ora travelMin=0 per soste on-route (stesso fix già applicato ai ristoranti)
+
 ## v4.095 — 2026-06-14
 - Fix: backend ora usa GOOGLE_MAPS_SERVER_KEY (senza restrizioni referrer) per Places API e Directions; fallback su GOOGLE_MAPS_API_KEY se non impostata
 

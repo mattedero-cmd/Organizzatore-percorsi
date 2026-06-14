@@ -841,13 +841,20 @@ async function insertBreaks(rows, options) {
     const warnings = spot.openAtBreak === false
       ? [{ msg: `La sosta "${spot.customer}" potrebbe essere chiusa all'orario previsto`, level: "warn" }]
       : [];
-    const travelKm = (refLat != null && refLng != null && spot.lat != null && spot.lng != null)
-      ? haversineKm({ lat: refLat, lng: refLng }, { lat: spot.lat, lng: spot.lng })
-      : 0;
-    // Controlla deviazione solo per posti fuori dal percorso (perpendicolare > 2 km)
-    if (travelKm > 0 && refLat != null && refLng != null && toLat != null && toLng != null) {
-      const { perpKm } = perpDistToSegment(spot.lat, spot.lng, refLat, refLng, toLat, toLng);
-      if (perpKm > 2.0 && travelKm > maxDetourKm) { L(`    "${spot.customer}" SCARTATO fuori-percorso perp=${perpKm.toFixed(1)}km travel=${travelKm.toFixed(1)}km > max=${maxDetourKm.toFixed(1)}km`); return false; }
+    // Per soste sul percorso (perp ≤ 2km) il detour è ~0; travelKm conta solo fuori-percorso
+    let travelKm = 0;
+    if (refLat != null && refLng != null && spot.lat != null && spot.lng != null) {
+      const rawKm = haversineKm({ lat: refLat, lng: refLng }, { lat: spot.lat, lng: spot.lng });
+      if (toLat != null && toLng != null) {
+        const { perpKm } = perpDistToSegment(spot.lat, spot.lng, refLat, refLng, toLat, toLng);
+        if (perpKm > 2.0) {
+          if (rawKm > maxDetourKm) { L(`    "${spot.customer}" SCARTATO fuori-percorso perp=${perpKm.toFixed(1)}km travel=${rawKm.toFixed(1)}km > max=${maxDetourKm.toFixed(1)}km`); return false; }
+          travelKm = rawKm;
+        }
+        // Sul percorso (perp ≤ 2km): travelKm = 0, ci si passa già sopra
+      } else {
+        travelKm = rawKm;
+      }
     }
     const travelMin = Math.round(travelKm / 50 * 60);
     insertions.push({
