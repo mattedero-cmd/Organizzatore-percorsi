@@ -1,3 +1,6 @@
+## v4.092 — 2026-06-14
+- Fix: cumulative dimezzato a REST_MAX/2 anche quando la sosta post-lavoro falliva (nessun posto trovato); il dimezzamento ora avviene solo se la sosta viene effettivamente inserita — evita perdita del conteggio ore accumulate
+
 ## v4.091 — 2026-06-14
 - Fix: ristorante "sul percorso" (perp ≤ 2km) scartato erroneamente perché travelKm misurato dall'inizio del segmento (potenzialmente 100+ km); ora travelMin=0 per ristoranti sul percorso
 

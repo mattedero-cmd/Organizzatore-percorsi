@@ -917,10 +917,12 @@ async function insertBreaks(rows, options) {
       const valid = isValidBreakTime(breakTime);
       L(`  post-work break: breakTime=${formatTime(breakTime)} valid=${valid}`);
       if (valid) {
-        await tryInsert(i + 1, row.lat, row.lng, row.lat, row.lng, nextRow?.lat, nextRow?.lng, 0, breakTime);
+        const inserted = await tryInsert(i + 1, row.lat, row.lng, row.lat, row.lng, nextRow?.lat, nextRow?.lng, 0, breakTime);
+        if (inserted && cumulative >= REST_MAX) cumulative = Math.floor(REST_MAX / 2);
       }
+    } else if (cumulative >= REST_MAX) {
+      cumulative = Math.floor(REST_MAX / 2);
     }
-    if (cumulative >= REST_MAX) cumulative = Math.floor(REST_MAX / 2);
 
     lastLat = row.lat;
     lastLng = row.lng;
