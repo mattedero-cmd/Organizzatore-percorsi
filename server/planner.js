@@ -608,6 +608,21 @@ function shiftRowTimes(row, minutes) {
       arrivalTime: formatTime(parseTime(row.arrivalTime) + minutes)
     };
   }
+  // Stops with opening-hour wait time: shift arrival but re-anchor service start to max(newArrival, origServiceStart).
+  // This prevents breaks inserted before the stop from pushing the service into closed hours.
+  const origArr = parseTime(row.arrivalTime);
+  const origSvc = parseTime(row.serviceStartTime);
+  if (origSvc != null && origArr != null && origSvc > origArr) {
+    const newArr = origArr + minutes;
+    const newSvc = Math.max(newArr, origSvc);
+    return {
+      ...row,
+      departureTime: formatTime(parseTime(row.departureTime) + minutes),
+      arrivalTime: formatTime(newArr),
+      serviceStartTime: formatTime(newSvc),
+      serviceEndTime: formatTime(newSvc + Number(row.durationMinutes))
+    };
+  }
   return {
     ...row,
     departureTime: formatTime(parseTime(row.departureTime) + minutes),
@@ -917,7 +932,13 @@ async function insertBreaks(rows, options) {
         const prevRow = i > 0 ? rows[i - 1] : null;
         L(`  wait-time pranzo "${row.customer}": attesa=${waitMin}min lunchAt=${formatTime(lunchAt)} travelMax=${maxTravelOneWay}min`);
         const entry = await makeLunchEntry(i, prevRow, row, lunchAt, gapLunchClose, gapMaxDetourKm);
-        if (entry) { insertions.push(entry); placed = true; }
+        if (entry) {
+          // Place the lunch at the right time within the drive-to-stop leg:
+          // driveOffset = how many minutes after the previous stop's departure the lunch starts
+          entry.driveOffset = lunchAt - parseTime(row.departureTime);
+          insertions.push(entry);
+          placed = true;
+        }
         break;
       }
     }
@@ -1179,11 +1200,18 @@ async function insertBreaks(rows, options) {
     if (i < rows.length) {
       result.push(shiftRowTimes(rows[i], timeShift));
       // After the last part of a static fixed-window stop, reset timeShift.
-      // Subsequent stops were planned from the fixed window's serviceEndTime (absolute),
-      // so they must not be shifted by breaks inserted before the fixed window.
-      // dynamicSplit rows are NOT static — their times are relative and should keep the shift.
       if (rows[i].fixedWindow && !rows[i].dynamicSplit && (!rows[i].stopPart || rows[i].stopPart === "afternoon")) {
         timeShift = 0;
+      }
+      // After a stop with opening-hour wait time, the wait absorbs part of the accumulated timeShift.
+      // Reduce timeShift by the wait time so subsequent stops aren't over-shifted.
+      else if (!rows[i].fixedWindow) {
+        const origArr = parseTime(rows[i].arrivalTime);
+        const origSvc = parseTime(rows[i].serviceStartTime);
+        if (origSvc != null && origArr != null && origSvc > origArr) {
+          const waitMin = origSvc - origArr;
+          timeShift = Math.max(0, timeShift - waitMin);
+        }
       }
     }
   }

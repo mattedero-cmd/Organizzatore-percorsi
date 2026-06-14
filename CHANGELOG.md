@@ -1,3 +1,8 @@
+## v4.118 — 2026-06-14
+- Fix planner: shiftRowTimes ora ri-ancora l'orario di servizio all'apertura effettiva per le tappe con attesa (es. Fineco arriva 13:24 ma apre alle 14:00 → lavora 14:00-17:00, non 15:10-18:10)
+- Fix planner: dopo una tappa con attesa, il timeShift accumulato viene ridotto dell'attesa assorbita — le tappe successive non vengono più sovra-spostate
+- Fix planner: il pranzo "durante attesa" ora usa driveOffset corretto, collocandolo all'orario di arrivo alla tappa (non alla partenza dalla tappa precedente)
+
 ## v4.117 — 2026-06-14
 - Fix planner: soglia minima 45 min per il lavoro mattutino — se il tempo prima della chiusura è inferiore, l'intervento viene spostato interamente al pomeriggio (risolve Fineco 13:03 che faceva 36min di lavoro durante la chiusura)
 - Nuovo planner: pranzo durante attesa apertura — se si arriva vicino a una tappa chiusa con tempo sufficiente nella finestra pranzo, cerca un ristorante in zona
