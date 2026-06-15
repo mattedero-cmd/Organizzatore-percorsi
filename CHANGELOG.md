@@ -1,3 +1,6 @@
+## v4.128 — 2026-06-15
+- Fix planner: avviso "arrivo prima dell'apertura" mancante quando le pause spostano l'arrivo. shiftRowTimes ora, se dopo lo spostamento l'arrivo resta prima dell'apertura (attesa residua: newSvc > newArr), aggiunge il warning. Caso: Intesa Riva del Garda, arrivo 14:35 con apertura PM 14:45 — l'attesa di 10min c'era (span arrivo→fine = 40min con 30min di lavoro) ma non era segnalata, perché scheduleStop calcola il warning sull'orario di arrivo precedente alle pause. Verificato con test su shiftRowTimes
+
 ## v4.127 — 2026-06-15
 - Pranzi (findNearbyRestaurant): soglie qualità su richiesta utente — rating ≥ 4.3 (era 3.8), recensioni ≥ 20 (era 10), fascia prezzo ≤ ~25€/persona (price_level ≤ 2, invariato). Aggiunta "pizzeria" alla keyword di ricerca (ora mensa/trattoria/osteria/ristorante/pizzeria)
 

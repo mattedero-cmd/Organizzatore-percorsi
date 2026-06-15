@@ -642,6 +642,13 @@ function shiftRowTimes(row, minutes) {
     if (close != null && newEnd > close && !warnings.some(w => (w.msg || w) === overrunMsg)) {
       warnings = [...warnings, { msg: overrunMsg, level: "warn" }];
     }
+    // Se dopo lo spostamento l'arrivo cade comunque prima dell'apertura (attesa residua),
+    // segnalalo: lo si vede solo qui, perché scheduleStop calcola il warning sull'orario
+    // di arrivo precedente alle pause inserite (che possono averlo posticipato).
+    const preOpenMsg = "arrivo prima dell'apertura";
+    if (newSvc > newArr && !warnings.some(w => (w.msg || w) === preOpenMsg)) {
+      warnings = [...warnings, { msg: preOpenMsg, level: "warn" }];
+    }
     return {
       ...row,
       departureTime: formatTime(parseTime(row.departureTime) + minutes),
