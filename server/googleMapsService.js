@@ -215,9 +215,12 @@ export async function findNearbyRestStop(lat, lng, segFromLat, segFromLng, segTo
     const candidates = data.results
       .filter(p => {
         if (EXCLUDE_KEYWORDS.test(p.name)) { debugCb?.(`  scarto "${p.name}": keyword esclusa`); return false; }
-        // Aspettative basse: per una sosta breve va bene anche un locale modesto.
-        // Scartiamo solo quelli con valutazione esplicitamente pessima.
-        if (p.rating != null && p.rating < 2.5) { debugCb?.(`  scarto "${p.name}": rating ${p.rating} troppo basso`); return false; }
+        // Soglia qualità minima: almeno 4 stelle e 5 recensioni. Tra i locali che la
+        // superano sceglieremo poi il più vicino al percorso (ordinamento più sotto).
+        if (!p.rating || p.rating < 4 || !p.user_ratings_total || p.user_ratings_total < 5) {
+          debugCb?.(`  scarto "${p.name}": qualità sotto soglia (${p.rating ?? "n/d"}★ / ${p.user_ratings_total ?? 0} recensioni)`);
+          return false;
+        }
         const pLat = p.geometry.location.lat, pLng = p.geometry.location.lng;
         const km = hasSegment
           ? perpKmToSegment(pLat, pLng, segFromLat, segFromLng, segToLat, segToLng)

@@ -1,3 +1,6 @@
+## v4.126 — 2026-06-15
+- Soste automatiche (findNearbyRestStop): ripristinata una soglia qualità minima su richiesta utente — si scartano i locali con meno di 4 stelle o meno di 5 recensioni. Resta attiva la ricerca per vicinanza (rankby=distance) e l'ordinamento per distanza dal percorso: tra i locali ≥4★/5 recensioni si sceglie il più vicino al tragitto
+
 ## v4.125 — 2026-06-15
 - Fix soste automatiche (googleMapsService.findNearbyRestStop): la ricerca usava il ranking di prominenza entro un raggio (restituiva le mete più famose, anche lontane dal percorso) e poi ordinava per rating·log(recensioni), scegliendo il locale meglio recensito anche se a km dalla strada (es. Malga Cimana ⭐4.5 a 6.7 km perp). Ora: (1) rankby=distance per ottenere i bar più vicini al punto; (2) filtro qualità abbassato — si scartano solo hotel e locali con rating < 2.5, non più quelli con < 5 recensioni; (3) ordinamento per vicinanza al percorso (bucket 0.5 km) con rating solo come spareggio. Risultato: si preferisce un locale modesto sul tragitto a uno ottimo ma lontano
 
