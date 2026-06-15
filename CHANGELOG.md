@@ -1,3 +1,6 @@
+## v4.127 — 2026-06-15
+- Pranzi (findNearbyRestaurant): soglie qualità su richiesta utente — rating ≥ 4.3 (era 3.8), recensioni ≥ 20 (era 10), fascia prezzo ≤ ~25€/persona (price_level ≤ 2, invariato). Aggiunta "pizzeria" alla keyword di ricerca (ora mensa/trattoria/osteria/ristorante/pizzeria)
+
 ## v4.126 — 2026-06-15
 - Soste automatiche (findNearbyRestStop): ripristinata una soglia qualità minima su richiesta utente — si scartano i locali con meno di 4 stelle o meno di 5 recensioni. Resta attiva la ricerca per vicinanza (rankby=distance) e l'ordinamento per distanza dal percorso: tra i locali ≥4★/5 recensioni si sceglie il più vicino al tragitto
 

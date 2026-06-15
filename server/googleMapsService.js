@@ -309,7 +309,7 @@ export async function findNearbyRestaurant(lat, lng, segFromLat, segFromLng, seg
   })() : null;
 
   try {
-    const url = `${BASE}/place/nearbysearch/json?location=${lat},${lng}&radius=${radiusM}&type=restaurant&language=it&keyword=mensa+trattoria+osteria+ristorante&key=${key}`;
+    const url = `${BASE}/place/nearbysearch/json?location=${lat},${lng}&radius=${radiusM}&type=restaurant&language=it&keyword=mensa+trattoria+osteria+ristorante+pizzeria&key=${key}`;
     trackCall("google_maps", "nearby_search");
     const res = await fetch(url, { signal: AbortSignal.timeout(6000) });
     const data = await res.json();
@@ -321,8 +321,10 @@ export async function findNearbyRestaurant(lat, lng, segFromLat, segFromLng, seg
 
     const candidates = data.results
       .filter(p => {
-        if (!p.rating || p.rating < 3.8 || p.user_ratings_total < 10) return false;
+        // Pranzi: qualità più alta delle soste — almeno 4.3 stelle e 20 recensioni.
+        if (!p.rating || p.rating < 4.3 || p.user_ratings_total < 20) return false;
         if (EXCLUDE_KEYWORDS.test(p.name)) return false;
+        // Fascia prezzo ≤ ~25€/persona: Google price_level 2 = "Moderato"; oltre (3-4) = escluso.
         if (p.price_level != null && p.price_level > 2) return false;
         const pLat = p.geometry.location.lat, pLng = p.geometry.location.lng;
         const km = hasSegment
