@@ -1270,7 +1270,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.129 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.130 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -1280,6 +1280,15 @@ function renderMenuInfo() {
       <ul class="info-list">
         <li>${state.mapApiConfigured ? _svg('<polyline points="20 6 9 17 4 12"/>', 14) + " Google Maps attivo — percorsi reali e ottimizzazione avanzata" : _svg('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>', 14) + " Google Maps non configurato — stime distanze locali"}</li>
         <li>${state.whisperConfigured ? _svg('<polyline points="20 6 9 17 4 12"/>', 14) + " Comandi vocali attivi (Whisper)" : _svg('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>', 14) + " Comandi vocali non configurati"}</li>
+      </ul>
+
+      <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v4.130</p>
+      <ul class="info-list">
+        <li><strong>Pranzo tappe spezzate:</strong> per una tappa spezzata dalla chiusura di mezzogiorno il pranzo va ora sempre nel gap di chiusura (lavori il mattino, mangi durante la chiusura, riparti all'apertura), anche se stai guidando verso la tappa durante la finestra pranzo</li>
+        <li><strong>Pranzo dopo l'intervento:</strong> se concludi una tappa entro la finestra pranzo, prima fai l'intervento e poi mangi vicino — niente più deviazioni per mangiare prima di lavorare, né tappe spinte dentro la propria chiusura</li>
+        <li><strong>Soste e pranzi più sensati:</strong> soste cercate sul percorso (le più vicine alla strada, non le mete famose lontane), con soglia qualità 4★/5 recensioni; pranzi solo in ristoranti/trattorie/mense/pizzerie ≥4.3★, 20 recensioni, entro ~25€; scartate le deviazioni eccessive</li>
+        <li><strong>Orari e avvisi:</strong> il pomeriggio delle tappe spezzate riparte all'orario giusto (la pausa è assorbita dalla chiusura); avviso "arrivo prima dell'apertura" anche quando sono le pause a spostare l'arrivo; avviso quando un intervento sfora la chiusura per soste accumulate</li>
+        <li><strong>Split intelligente:</strong> se l'intervento non sta nel solo pomeriggio la tappa viene spezzata comunque (mattino + pomeriggio) invece di lavorare durante la chiusura; il tempo di guida del pranzo è sempre visibile sulla card</li>
       </ul>
 
       <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v4.129</p>

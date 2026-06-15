@@ -1,3 +1,7 @@
+## v4.130 — 2026-06-15
+- Fix planner: pranzo nel gap di chiusura per le tappe spezzate. Nella scansione finestra (Sezione 3), se la riga in finestra è la parte mattutina di una tappa spezzata (con pomeriggio stessa sede), il pranzo viene inserito nel gap di chiusura (prima della parte pomeridiana, con i limiti del gap come la Sezione 4) invece che prima della tappa. Risolve il caso in cui, guidando verso la tappa spezzata durante la finestra pranzo, il pranzo finiva prima della tappa lasciando vuoto il gap. Verificato con test: mattina 12:29-13:30, pranzo 13:30-14:30 (nel gap), pomeriggio 14:45-16:14
+- Info app: aggiornata la sezione Novità con riepilogo v4.121–v4.130
+
 ## v4.129 — 2026-06-15
 - Fix planner: pranzo collocato DOPO l'intervento quando la tappa si conclude entro la finestra pranzo. La scansione finestra (Sezione 3) ora, se la tappa verso cui si guida finisce entro [LUNCH_OPEN, LUNCH_CLOSE] ed è non-split, inserisce il pranzo dopo la tappa (vicino ad essa) invece che prima sulla guida. Risolve: (1) pranzo a Riva del Garda piazzato prima dell'intervento di Riva — ora si fa prima l'intervento; (2) tappa spinta dentro la propria chiusura di mezzogiorno dallo spostamento del pranzo (Riva lavorava 13:47-14:17 durante chiusura 13:30-14:45) — ora resta nel mattino 12:29-12:59 e si mangia dopo. Tappe lunghe (fine oltre 14:00) usano ancora il pranzo in guida. Verificato con test su insertBreaks (caso corto e caso lungo)
 

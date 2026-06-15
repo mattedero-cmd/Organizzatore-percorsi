@@ -903,15 +903,30 @@ async function insertBreaks(rows, options) {
         L(`  row[${i}] "${rows[i].customer}" dep=${formatTime(dep)} ${dep >= LUNCH_OPEN && dep <= LUNCH_CLOSE ? "IN_FINESTRA ✓" : "fuori"}`);
         if (dep >= LUNCH_OPEN && dep <= LUNCH_CLOSE) {
           const svcEnd = parseTime(rows[i].serviceEndTime);
-          // Se arrivi alla tappa e la concludi entro la finestra pranzo, fai PRIMA
-          // l'intervento e mangia DOPO (vicino alla tappa): evita di deviare a mangiare
-          // per poi tornare a lavorare, e soprattutto evita che le pause spingano la
-          // tappa dentro la sua chiusura di mezzogiorno. Le tappe lunghe che finiscono
-          // dopo la finestra continuano a usare il pranzo "in guida" (ramo else).
-          if (!rows[i].stopPart && svcEnd != null && svcEnd >= LUNCH_OPEN && svcEnd <= LUNCH_CLOSE) {
+          const nextRow = rows[i + 1];
+          const isSplitPair = rows[i].stopPart === "morning"
+            && nextRow?.stopPart === "afternoon" && nextRow.addressId === rows[i].addressId;
+          const gapStart = isSplitPair ? parseTime(rows[i].serviceEndTime) : null;
+          const gapEnd   = isSplitPair ? parseTime(nextRow.arrivalTime) : null;
+          const gapMin   = (gapStart != null && gapEnd != null) ? gapEnd - gapStart : 0;
+          if (isSplitPair && gapMin >= lunchBreakMinutes) {
+            // Tappa spezzata per chiusura: il pranzo va nel GAP di chiusura (fra mattina e
+            // pomeriggio), non prima della tappa — così si lavora il mattino, si mangia
+            // durante la chiusura, e il pomeriggio riparte all'apertura. Limiti del gap
+            // come nella Sezione 4 (andata+pranzo+ritorno devono stare nel gap).
+            const maxTravelOneWay = Math.max(0, Math.floor((gapMin - lunchBreakMinutes) / 2));
+            const gapMaxDetourKm  = Math.min(maxDetourKm, maxTravelOneWay / 60 * 50);
+            const gapLunchClose   = gapStart + maxTravelOneWay;
+            L(`  → tappa spezzata "${rows[i].customer}": pranzo nel gap chiusura ${formatTime(gapStart)}-${formatTime(gapEnd)} (${gapMin}min)`);
+            insertions.push(await makeLunchEntry(i + 1, rows[i], nextRow, gapStart, gapLunchClose, gapMaxDetourKm));
+          } else if (!rows[i].stopPart && svcEnd != null && svcEnd >= LUNCH_OPEN && svcEnd <= LUNCH_CLOSE) {
+            // Tappa non spezzata che finisce in finestra: fai PRIMA l'intervento e mangia
+            // DOPO (vicino alla tappa). Evita di deviare a mangiare per poi tornare a
+            // lavorare e che le pause spingano la tappa nella sua chiusura.
             L(`  → pranzo DOPO "${rows[i].customer}" (fine intervento ${formatTime(svcEnd)} in finestra)`);
             insertions.push(await makeLunchEntry(i + 1, rows[i], rows[i], svcEnd));
           } else {
+            // Tappa lunga (fine oltre la finestra) o caso generico: pranzo "in guida".
             insertions.push(await makeLunchEntry(i, rows[i - 1] ?? null, rows[i], dep));
           }
           placed = true;
