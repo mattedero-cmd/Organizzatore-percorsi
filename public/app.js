@@ -1270,7 +1270,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.000 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.001 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -1280,6 +1280,11 @@ function renderMenuInfo() {
       <ul class="info-list">
         <li>${state.mapApiConfigured ? _svg('<polyline points="20 6 9 17 4 12"/>', 14) + " Google Maps attivo — percorsi reali e ottimizzazione avanzata" : _svg('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>', 14) + " Google Maps non configurato — stime distanze locali"}</li>
         <li>${state.whisperConfigured ? _svg('<polyline points="20 6 9 17 4 12"/>', 14) + " Comandi vocali attivi (Whisper)" : _svg('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>', 14) + " Comandi vocali non configurati"}</li>
+      </ul>
+
+      <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v5.001</p>
+      <ul class="info-list">
+        <li>Interfaccia multi-giorno: nel form percorso c'è ora il pulsante "Pianifica su più giorni". Calcola la suddivisione automatica delle tappe in più giornate (rientro a casa ogni sera, meno km possibili) e la mostra nel tab Risultato con un riepilogo e l'elenco delle giornate</li>
       </ul>
 
       <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v5.000</p>
@@ -2082,6 +2087,7 @@ function renderRoute() {
       <!-- Pulsante sticky -->
       <div class="rp-plan-sticky">
         <button type="button" class="btn primary" id="plan-route" style="width:100%">${state.planning ? "Calcolo in corso…" : `${I.navigate(14)} Ottimizza e salva`}</button>
+        <button type="button" class="btn" id="plan-multiday" style="width:100%;margin-top:8px">${I.list(14)} Pianifica su più giorni</button>
       </div>
 
       <!-- Comando vocale (in fondo, non prominente) -->
@@ -3006,7 +3012,64 @@ function renderManualOrder(result) {
     </details>`;
 }
 
+// Vista risultato multi-giorno (V5): elenco delle giornate con riepilogo e tappe.
+function renderResultMultiDay() {
+  const res = state.resultMultiDay;
+  if (!res || !Array.isArray(res.days)) {
+    app.innerHTML = `<section class="panel"><h2>Più giorni</h2><div class="empty">Nessuna pianificazione multi-giorno.</div></section>`;
+    return;
+  }
+  const s = res.summary || {};
+  const fmtDate = (iso) => { try { return new Date(iso + "T12:00:00").toLocaleDateString("it-IT", { weekday: "short", day: "numeric", month: "short" }); } catch { return iso || ""; } };
+  const daysHtml = res.days.map(d => {
+    const ds = d.plan?.summary || {};
+    const stops = (d.plan?.rows || []).filter(r => !r.type && r.stopPart !== "afternoon");
+    const stopsHtml = stops.map(st => `
+        <div class="row" style="gap:8px;align-items:baseline;padding:3px 0;border-top:1px solid var(--line);">
+          <span class="stop-meta" style="min-width:46px;font-variant-numeric:tabular-nums;">${escapeHtml(st.serviceStartTime || st.arrivalTime || "")}</span>
+          <span style="flex:1;min-width:0;">${escapeHtml(st.customer || "")}${st.location ? ` <span class="stop-meta">— ${escapeHtml(st.location)}</span>` : ""}</span>
+        </div>`).join("");
+    return `
+      <article class="card" style="padding:12px;">
+        <div class="row" style="justify-content:space-between;align-items:center;gap:8px;">
+          <div class="row" style="gap:8px;align-items:center;">
+            <span class="badge" style="font-weight:700;">Giorno ${d.dayNumber}</span>
+            <span class="stop-meta" style="text-transform:capitalize;">${escapeHtml(fmtDate(d.scheduledDate))}</span>
+          </div>
+          <span class="stop-meta">${escapeHtml(ds.dayStart || "")}–${escapeHtml(ds.dayEnd || "")}</span>
+        </div>
+        <div class="stop-meta" style="margin:6px 0 4px;">${d.stopCount} tappe · ${Number(ds.totalKm || 0).toFixed(1)} km · ${minutesLabel(ds.totalDriveMinutes)} guida${d.overBudget ? ` · <span class="badge badge-warn">oltre l'orario</span>` : ""}</div>
+        <div style="margin-top:4px;">${stopsHtml}</div>
+      </article>`;
+  }).join("");
+  const unassigned = s.unassignedNoCoords || [];
+  app.innerHTML = `
+    <section>
+      <div class="section-head" style="margin-bottom:10px;">
+        <div>
+          <h2 style="margin:0;">Pianificazione su ${s.totalDays || res.days.length} giorni</h2>
+          <div class="stop-meta" style="margin-top:4px;">${s.totalStops || multiDayTotalStops(res)} tappe · finestra ${escapeHtml(s.window || "")} · rientro a casa ogni sera</div>
+        </div>
+      </div>
+      <div class="summary-grid">
+        <div class="metric"><div class="metric-label">Giornate</div><div class="metric-value">${s.totalDays || res.days.length}</div></div>
+        <div class="metric"><div class="metric-label">Km totali</div><div class="metric-value">${Number(s.totalKm || 0).toFixed(1)}</div></div>
+        <div class="metric"><div class="metric-label">Ore guida</div><div class="metric-value">${minutesLabel(s.totalDriveMinutes)}</div></div>
+        <div class="metric"><div class="metric-label">Ore lavoro</div><div class="metric-value">${minutesLabel(s.totalWorkMinutes)}</div></div>
+      </div>
+      ${unassigned.length ? `<div class="badge badge-warn" style="display:block;margin:10px 0;padding:8px;">${unassigned.length} tappe senza indirizzo valido, non pianificate: ${escapeHtml(unassigned.join(", "))}</div>` : ""}
+      <div style="margin-top:12px;display:flex;flex-direction:column;gap:12px;">
+        ${daysHtml}
+      </div>
+    </section>`;
+}
+
+function multiDayTotalStops(res) {
+  return (res.days || []).reduce((n, d) => n + (d.stopCount || 0), 0);
+}
+
 function renderResult() {
+  if (state.resultMultiDay) { renderResultMultiDay(); return; }
   if (!state.result) {
     app.innerHTML = `<section class="panel"><h2>Percorso</h2><div class="empty">Nessun percorso calcolato. Vai su "Nuovo percorso" e premi Ottimizza.</div></section>`;
     return;
@@ -3942,6 +4005,7 @@ async function planCurrentRoute() {
         departureLatest: r.departureLatest || ""
       })
     });
+    state.resultMultiDay = null;
     state.manualOrderRows = null;
     state.expandedStops = new Set();
     state.expandedPanels = new Set();
@@ -3954,6 +4018,47 @@ async function planCurrentRoute() {
     await refreshSavedRoutes();
     setActiveTab("result");
     showToast("Percorso calcolato e salvato");
+  } catch (e) {
+    showToast(e.message);
+  } finally {
+    hideSpinner();
+    state.planning = false;
+    if (state.activeTab === "route") render();
+  }
+}
+
+// Pianificazione multi-giorno (V5): suddivide le tappe in più giornate (base unica
+// casa, finestra oraria, km minimi, n. giorni auto) e mostra l'elenco nel tab Risultato.
+// Non svuota le tappe del form e non salva: il piano è una panoramica ricalcolabile.
+async function planMultiDayAction() {
+  if (state.planning) return;
+  updateRouteFromForm();
+  if (!state.route.stops.length) { showToast("Aggiungi almeno una tappa"); return; }
+  state.planning = true;
+  showSpinner("Calcolo su più giorni…");
+  render();
+  try {
+    const r = state.route;
+    const res = await api("/api/plan-multiday", {
+      method: "POST",
+      body: JSON.stringify({
+        scheduledDate: r.scheduledDate,
+        start: { label: r.startLabel, address: r.startAddress },
+        end: { sameAsStart: r.endSameAsStart, label: r.endLabel, address: r.endAddress },
+        startTime: r.startTime,
+        timingMode: r.timingMode,
+        arrivalLeadMinutes: r.arrivalLeadMinutes,
+        firstArrivalTime: r.firstArrivalTime,
+        firstArrivalRequired: r.firstArrivalRequired,
+        stops: r.stops, rates: state.settings,
+        lunchBreak: r.lunchBreak, lunchBreakMinutes: r.lunchBreakMinutes,
+        lunchFixedTime: r.lunchFixedTime || "",
+        departureLatest: r.departureLatest || ""
+      })
+    });
+    state.resultMultiDay = res;
+    setActiveTab("result");
+    showToast(`Pianificate ${res.summary?.totalDays || res.days?.length || 0} giornate`);
   } catch (e) {
     showToast(e.message);
   } finally {
@@ -6304,6 +6409,7 @@ function bindEvents() {
     }
 
     if (e.target.closest("#plan-route")) { await planCurrentRoute(); return; }
+    if (e.target.closest("#plan-multiday")) { await planMultiDayAction(); return; }
     if (e.target.closest("#listen-command")) { toggleVoiceRecording(); return; }
     if (e.target.closest("#apply-command")) {
       try { await applyVoiceCommand(); } catch (err) { showToast(err.message); }

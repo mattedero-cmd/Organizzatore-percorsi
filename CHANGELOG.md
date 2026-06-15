@@ -1,3 +1,6 @@
+## v5.001 — 2026-06-15
+- UI multi-giorno: pulsante "Pianifica su più giorni" nel form percorso (#plan-multiday) → POST /api/plan-multiday; nuova vista renderResultMultiDay nel tab Risultato (riepilogo totali + elenco giornate con orari, km e tappe). Risultato in state.resultMultiDay (separato da state.result per non interferire col mono-giorno). Stili nativi (.card/.metric/.summary-grid/.badge + inline), nessuna nuova classe CSS
+
 ## v5.000 — 2026-06-15
 - Nuova versione maggiore: avvio della pianificazione multi-giorno.
 - Nuovo modulo server/multiDayPlanner.js: estimateDayMinutes (stima durata giornata), buildDayClusters (clustering farthest-seed + nearest-accretion con budget orario, + improveClusters ricerca locale per ridurre i km), planMultiDay (geocodifica → clustering → planRoute per ogni giornata su date consecutive, base unica casa/ufficio, n. giorni automatico, ottimizzazione km totali). Scelte concordate: rientro a casa ogni sera, capienza = finestra startTime→maxReturnTime, giornate automatiche, meno km totali.
