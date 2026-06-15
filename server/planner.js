@@ -1059,6 +1059,14 @@ async function insertBreaks(rows, options) {
             const r2 = haversineKm({ lat: refLat, lng: refLng }, { lat: spot.lat, lng: spot.lng });
             const { perpKm: p2 } = perpDistToSegment(spot.lat, spot.lng, refLat, refLng, toLat, toLng);
             travelKm = p2 > 2.0 ? r2 : 0;
+            // Rivalida la deviazione: il retry esteso (raggio 25km) può restituire uno spot
+            // oltre il limite accettabile perché la misura interna di findNearbyRestStop
+            // differisce dalla distanza diretta. Una sosta breve non giustifica una grande
+            // deviazione (peggio se in direzione opposta alla tappa successiva): meglio nessuna sosta.
+            if (travelKm > maxDetourKm * 1.5) {
+              L(`    "${spot.customer}" SCARTATO anche dopo retry: deviazione=${travelKm.toFixed(1)}km > max=${(maxDetourKm * 1.5).toFixed(1)}km — nessuna sosta`);
+              return false;
+            }
           } else {
             travelKm = rawKm;
           }

@@ -1,3 +1,6 @@
+## v4.124 — 2026-06-14
+- Fix planner: soste automatiche fuori portata. Nel retry esteso (raggio 25km) dopo lo scarto per distanza, il travelKm del nuovo spot veniva ricalcolato ma non rivalidato, così una sosta a ~14km/17min (oltre il limite 8.3km×1.5=12.5km, a volte in direzione opposta alla tappa successiva) veniva inserita per una pausa di 10-15min. Ora se la deviazione supera maxDetourKm×1.5 la sosta viene scartata e non inserita
+
 ## v4.123 — 2026-06-14
 - Nuovo: flag isRestStop e isLunchStop su contatti — un cliente può essere contrassegnato come sosta caffè e/o luogo pranzo; il planner lo include nei pool corrispondenti; badge ☕🍽 sulle card archivio
 
