@@ -1,3 +1,6 @@
+## v4.129 — 2026-06-15
+- Fix planner: pranzo collocato DOPO l'intervento quando la tappa si conclude entro la finestra pranzo. La scansione finestra (Sezione 3) ora, se la tappa verso cui si guida finisce entro [LUNCH_OPEN, LUNCH_CLOSE] ed è non-split, inserisce il pranzo dopo la tappa (vicino ad essa) invece che prima sulla guida. Risolve: (1) pranzo a Riva del Garda piazzato prima dell'intervento di Riva — ora si fa prima l'intervento; (2) tappa spinta dentro la propria chiusura di mezzogiorno dallo spostamento del pranzo (Riva lavorava 13:47-14:17 durante chiusura 13:30-14:45) — ora resta nel mattino 12:29-12:59 e si mangia dopo. Tappe lunghe (fine oltre 14:00) usano ancora il pranzo in guida. Verificato con test su insertBreaks (caso corto e caso lungo)
+
 ## v4.128 — 2026-06-15
 - Fix planner: avviso "arrivo prima dell'apertura" mancante quando le pause spostano l'arrivo. shiftRowTimes ora, se dopo lo spostamento l'arrivo resta prima dell'apertura (attesa residua: newSvc > newArr), aggiunge il warning. Caso: Intesa Riva del Garda, arrivo 14:35 con apertura PM 14:45 — l'attesa di 10min c'era (span arrivo→fine = 40min con 30min di lavoro) ma non era segnalata, perché scheduleStop calcola il warning sull'orario di arrivo precedente alle pause. Verificato con test su shiftRowTimes
 

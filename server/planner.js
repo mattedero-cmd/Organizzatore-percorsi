@@ -902,7 +902,18 @@ async function insertBreaks(rows, options) {
         const dep = parseTime(rows[i].departureTime);
         L(`  row[${i}] "${rows[i].customer}" dep=${formatTime(dep)} ${dep >= LUNCH_OPEN && dep <= LUNCH_CLOSE ? "IN_FINESTRA ✓" : "fuori"}`);
         if (dep >= LUNCH_OPEN && dep <= LUNCH_CLOSE) {
-          insertions.push(await makeLunchEntry(i, rows[i - 1] ?? null, rows[i], dep));
+          const svcEnd = parseTime(rows[i].serviceEndTime);
+          // Se arrivi alla tappa e la concludi entro la finestra pranzo, fai PRIMA
+          // l'intervento e mangia DOPO (vicino alla tappa): evita di deviare a mangiare
+          // per poi tornare a lavorare, e soprattutto evita che le pause spingano la
+          // tappa dentro la sua chiusura di mezzogiorno. Le tappe lunghe che finiscono
+          // dopo la finestra continuano a usare il pranzo "in guida" (ramo else).
+          if (!rows[i].stopPart && svcEnd != null && svcEnd >= LUNCH_OPEN && svcEnd <= LUNCH_CLOSE) {
+            L(`  → pranzo DOPO "${rows[i].customer}" (fine intervento ${formatTime(svcEnd)} in finestra)`);
+            insertions.push(await makeLunchEntry(i + 1, rows[i], rows[i], svcEnd));
+          } else {
+            insertions.push(await makeLunchEntry(i, rows[i - 1] ?? null, rows[i], dep));
+          }
           placed = true;
           break;
         }
