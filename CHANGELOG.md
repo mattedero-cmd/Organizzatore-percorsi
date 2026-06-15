@@ -1,3 +1,10 @@
+## v5.000 — 2026-06-15
+- Nuova versione maggiore: avvio della pianificazione multi-giorno.
+- Nuovo modulo server/multiDayPlanner.js: estimateDayMinutes (stima durata giornata), buildDayClusters (clustering farthest-seed + nearest-accretion con budget orario, + improveClusters ricerca locale per ridurre i km), planMultiDay (geocodifica → clustering → planRoute per ogni giornata su date consecutive, base unica casa/ufficio, n. giorni automatico, ottimizzazione km totali). Scelte concordate: rientro a casa ogni sera, capienza = finestra startTime→maxReturnTime, giornate automatiche, meno km totali.
+- Nuovo endpoint POST /api/plan-multiday (autenticato, riusa settings + rubrica).
+- Verificato con test deterministici (clustering: 12 tappe → 3 giornate coerenti entro budget; end-to-end con planRoute offline: date consecutive, ogni giornata entro la finestra oraria).
+- UI, salvataggio del piano e meteo per giornata: prossimi passi (vedi ROADMAP).
+
 ## v4.130 — 2026-06-15
 - Fix planner: pranzo nel gap di chiusura per le tappe spezzate. Nella scansione finestra (Sezione 3), se la riga in finestra è la parte mattutina di una tappa spezzata (con pomeriggio stessa sede), il pranzo viene inserito nel gap di chiusura (prima della parte pomeridiana, con i limiti del gap come la Sezione 4) invece che prima della tappa. Risolve il caso in cui, guidando verso la tappa spezzata durante la finestra pranzo, il pranzo finiva prima della tappa lasciando vuoto il gap. Verificato con test: mattina 12:29-13:30, pranzo 13:30-14:30 (nel gap), pomeriggio 14:45-16:14
 - Info app: aggiornata la sezione Novità con riepilogo v4.121–v4.130

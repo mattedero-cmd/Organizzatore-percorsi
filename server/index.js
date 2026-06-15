@@ -53,6 +53,7 @@ import { hashPassword, verifyPassword, generateToken } from "./auth.js";
 import { loadEnv } from "./env.js";
 import { isOpenAtTime } from "./googleMapsService.js";
 import { planRoute } from "./planner.js";
+import { planMultiDay } from "./multiDayPlanner.js";
 import { routeShape } from "./googleMapsService.js";
 import { parseVoiceCommand } from "./voiceParser.js";
 import { attachWeather, shouldRefreshWeather } from "./weatherService.js";
@@ -690,6 +691,15 @@ async function handleApi(request, response) {
         recentPlanRequests.delete(dedupKey);
         throw err;
       }
+    }
+
+    if (method === "POST" && url.pathname === "/api/plan-multiday") {
+      // Pianificazione multi-giorno (V5): raggruppa molte tappe in più giornate
+      // (base unica casa/ufficio, finestra startTime→maxReturnTime, km minimi, n. giorni auto).
+      const body = await parseBody(request);
+      const settings = await getSettings(userId);
+      const allAddresses = await listAddresses("", userId);
+      return sendJson(response, 200, await planMultiDay(body, settings, allAddresses));
     }
 
     if (method === "POST" && url.pathname === "/api/route-shape") {

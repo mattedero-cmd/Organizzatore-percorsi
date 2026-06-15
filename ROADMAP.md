@@ -1,5 +1,36 @@
 # ROADMAP
 
+## V5 - Pianificazione multi-giorno (in corso)
+
+Obiettivo: dato un insieme di tappe troppo grande per una sola giornata, suddividerle
+automaticamente in più giornate e organizzarle per fare meno chilometri possibile.
+
+Scelte di progetto (decise con l'utente il 2026-06-15):
+- Base unica: ogni giornata parte e rientra a casa/ufficio (nessun pernottamento).
+- Capienza giornata: finestra oraria esistente (startTime -> maxReturnTime), pranzo e soste inclusi.
+- Numero di giornate: automatico.
+- Ottimizzazione: minimizzare i chilometri totali (giornate anche sbilanciate).
+
+Architettura (v5.000):
+- `server/multiDayPlanner.js`:
+  - `estimateDayMinutes(dayStops, home, opts)` - stima leggera della durata giornata
+    (guida nearest-neighbor casa->tappe->casa con roadFactor 1.35 + buffer, lavoro, pranzo, soste).
+  - `buildDayClusters(stops, home, budgetMin, opts)` - clustering "farthest seed + nearest
+    accretion" rispettando il budget, seguito da `improveClusters` (ricerca locale che sposta
+    tappe tra giornate per ridurre i km e svuotare le giornate scarne). Funzioni pure, testate.
+  - `planMultiDay(payload, settings, restStops)` - geocodifica, clusterizza, poi lancia il
+    `planRoute` esistente per ogni giornata (date consecutive) e aggrega km/ore.
+- API: `POST /api/plan-multiday` (autenticata, riusa getSettings + listAddresses).
+
+Stato: motore server + API + test fatti (v5.000). Da fare:
+- [ ] UI: pulsante "Pianifica su piu giorni" nel form percorso; vista risultato con elenco
+      giornate (riusare la card risultato per giornata), riepilogo totali, badge "Giorno N".
+- [ ] Salvataggio del piano multi-giorno (modello storage + apertura/condivisione).
+- [ ] Meteo per giornata (ora saltato nell'endpoint multiday per velocita).
+- [ ] Raffinamenti algoritmo: bilanciamento opzionale, 2-opt sui giri giornalieri,
+      gestione tappe con finestre orarie fisse vincolanti su un giorno preciso.
+- [ ] Avviso quando una tappa singola non sta in nessuna giornata (troppo lontana).
+
 ## Fase 0 - Ordine progetto
 
 Stato: in corso.
