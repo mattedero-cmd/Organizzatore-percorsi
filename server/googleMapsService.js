@@ -198,7 +198,10 @@ export async function findNearbyRestStop(lat, lng, segFromLat, segFromLng, segTo
   })() : null;
 
   try {
-    const url = `${BASE}/place/nearbysearch/json?location=${lat},${lng}&radius=${radiusM}&type=bar&language=it&key=${key}`;
+    // rankby=distance restituisce i bar PIÙ VICINI al punto (ordinati per distanza)
+    // invece dei più "prominenti" entro un raggio — così troviamo locali sul percorso
+    // e non mete turistiche lontane. (radius è incompatibile con rankby=distance.)
+    const url = `${BASE}/place/nearbysearch/json?location=${lat},${lng}&rankby=distance&type=bar&language=it&key=${key}`;
     trackCall("google_maps", "nearby_search");
     const res = await fetch(url, { signal: AbortSignal.timeout(6000) });
     const data = await res.json();
@@ -211,16 +214,26 @@ export async function findNearbyRestStop(lat, lng, segFromLat, segFromLng, segTo
 
     const candidates = data.results
       .filter(p => {
-        if (!p.rating || p.user_ratings_total < 5) { debugCb?.(`  scarto "${p.name}": no rating/reviews`); return false; }
         if (EXCLUDE_KEYWORDS.test(p.name)) { debugCb?.(`  scarto "${p.name}": keyword esclusa`); return false; }
+        // Aspettative basse: per una sosta breve va bene anche un locale modesto.
+        // Scartiamo solo quelli con valutazione esplicitamente pessima.
+        if (p.rating != null && p.rating < 2.5) { debugCb?.(`  scarto "${p.name}": rating ${p.rating} troppo basso`); return false; }
         const pLat = p.geometry.location.lat, pLng = p.geometry.location.lng;
         const km = hasSegment
           ? perpKmToSegment(pLat, pLng, segFromLat, segFromLng, segToLat, segToLng)
           : haversineKm({ lat, lng }, { lat: pLat, lng: pLng });
         if (km > MAX_DETOUR_KM) { debugCb?.(`  scarto "${p.name}": dist=${km.toFixed(2)}km > max=${MAX_DETOUR_KM.toFixed(1)}km`); return false; }
+        p._detourKm = km;
         return true;
       })
-      .sort((a, b) => placesScore(b) - placesScore(a))
+      // Preferisci i locali SUL percorso: ordina per distanza dal tragitto (a bucket di
+      // 0.5km per evitare oscillazioni), usando il punteggio rating·log(recensioni) solo
+      // come spareggio. Meglio un bar modesto sulla strada che un locale ottimo lontano.
+      .sort((a, b) => {
+        const da = Math.round(a._detourKm * 2) / 2, db = Math.round(b._detourKm * 2) / 2;
+        if (da !== db) return da - db;
+        return placesScore(b) - placesScore(a);
+      })
       .slice(0, 5);
 
     if (!candidates.length) { placesCache.set(cacheKey, null); return null; }

@@ -1,3 +1,6 @@
+## v4.125 — 2026-06-15
+- Fix soste automatiche (googleMapsService.findNearbyRestStop): la ricerca usava il ranking di prominenza entro un raggio (restituiva le mete più famose, anche lontane dal percorso) e poi ordinava per rating·log(recensioni), scegliendo il locale meglio recensito anche se a km dalla strada (es. Malga Cimana ⭐4.5 a 6.7 km perp). Ora: (1) rankby=distance per ottenere i bar più vicini al punto; (2) filtro qualità abbassato — si scartano solo hotel e locali con rating < 2.5, non più quelli con < 5 recensioni; (3) ordinamento per vicinanza al percorso (bucket 0.5 km) con rating solo come spareggio. Risultato: si preferisce un locale modesto sul tragitto a uno ottimo ma lontano
+
 ## v4.124 — 2026-06-14
 - Fix planner: soste automatiche fuori portata. Nel retry esteso (raggio 25km) dopo lo scarto per distanza, il travelKm del nuovo spot veniva ricalcolato ma non rivalidato, così una sosta a ~14km/17min (oltre il limite 8.3km×1.5=12.5km, a volte in direzione opposta alla tappa successiva) veniva inserita per una pausa di 10-15min. Ora se la deviazione supera maxDetourKm×1.5 la sosta viene scartata e non inserita
 
