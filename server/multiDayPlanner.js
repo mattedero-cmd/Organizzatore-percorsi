@@ -217,21 +217,24 @@ export function buildDayClusters(stops, home, budgetMin, opts = {}) {
     const day = [unassigned.splice(seedI, 1)[0]];
     const dow = dowForCluster(opts, days.length);
 
-    // Accrescimento: aggiunge la tappa col MINIMO costo di percorso (quelle "sulla via di
-    // casa" verso il seme), rispettando budget e orari. Le tappe nello stesso luogo hanno
-    // costo ~0 e vengono quindi prese insieme. Niente ri-ottimizzazione globale: la
-    // costruzione far-first è già coerente con il modo di ragionare dell'utente.
+    // Accrescimento: aggiunge la tappa più VICINA al gruppo del giorno (minor tempo di
+    // strada da una tappa già nel giorno), così la giornata cresce come una zona compatta
+    // attorno al punto lontano (es. tutto il nord), incluse le deviazioni di zona (Merano,
+    // Ortisei). Le tappe vicine a casa restano lontane dal gruppo e quindi vengono rimandate
+    // ai giorni successivi, non infilate nel giro lontano "perché sulla via". Le tappe nello
+    // stesso luogo hanno distanza ~0 e vengono prese insieme. Vincoli: budget e orari.
     let added = true;
     while (added && unassigned.length) {
       added = false;
-      const baseKm = dayTourMin(day, home, opts);
-      let best = -1, bestCost = Infinity;
+      let best = -1, bestDist = Infinity;
       for (let i = 0; i < unassigned.length; i++) {
-        const tentative = [...day, unassigned[i]];
+        const cand = unassigned[i];
+        const tentative = [...day, cand];
         if (estimateDayMinutes(tentative, home, opts).total > budgetMin) continue;
         if (!dayHoursFeasible(tentative, home, opts, dow)) continue;
-        const cost = dayTourMin(tentative, home, opts) - baseKm;
-        if (cost < bestCost - 1e-6) { bestCost = cost; best = i; }
+        let d = Infinity;
+        for (const ds of day) { const t = legMin(ds, cand, opts); if (t < d) d = t; }
+        if (d < bestDist - 1e-6) { bestDist = d; best = i; }
       }
       if (best >= 0) { day.push(unassigned.splice(best, 1)[0]); added = true; }
     }
