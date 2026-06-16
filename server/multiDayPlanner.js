@@ -16,7 +16,7 @@
 // solo a decidere la capienza delle giornate; gli orari definitivi vengono da planRoute.
 
 import { planRoute, parseTime, formatTime } from "./planner.js";
-import { resolvePlace } from "./googleMapsService.js";
+import { resolvePlace, routeBetween } from "./googleMapsService.js";
 
 function haversineKm(a, b) {
   if (a?.lat == null || a?.lng == null || b?.lat == null || b?.lng == null) return 0;
@@ -35,15 +35,33 @@ function addDaysISO(isoDate, n) {
   return `${dt.getFullYear()}-${mm}-${dd}`;
 }
 
-// Ordine nearest-neighbor da un punto di partenza (solo per la stima di guida).
-function nearestNeighborOrder(points, start) {
+function stopDuration(stop) {
+  return Number(stop.durationMinutes || stop.defaultDuration || 45);
+}
+
+// Tempo di guida (min) tra due punti. Se opts.distMin è disponibile (matrice tempi reali
+// su strada da Google), lo usa — essenziale in montagna dove la linea d'aria è fuorviante
+// (es. la Val di Fassa sembra "sulla strada" Trento→San Candido, ma su strada è un vallone
+// laterale). Altrimenti fallback alla stima haversine × roadFactor / velocità.
+function legMin(a, b, opts = {}) {
+  const buffer = 1 + (opts.bufferPerHour ?? 10) / 60;
+  if (opts.distMin) {
+    const raw = opts.distMin(a, b);
+    if (raw != null) return raw * buffer;
+  }
+  const km = haversineKm(a, b) * (opts.roadFactor ?? 1.35);
+  return (km / (opts.speedKmh ?? 50) * 60) * buffer;
+}
+
+// Ordine nearest-neighbor da un punto di partenza, in base ai tempi di guida (legMin).
+function nearestNeighborOrder(points, start, opts = {}) {
   const remaining = [...points];
   const order = [];
   let cur = start;
   while (remaining.length) {
     let bestI = 0, bestD = Infinity;
     for (let i = 0; i < remaining.length; i++) {
-      const d = haversineKm(cur, remaining[i]);
+      const d = legMin(cur, remaining[i], opts);
       if (d < bestD) { bestD = d; bestI = i; }
     }
     cur = remaining[bestI];
@@ -53,35 +71,17 @@ function nearestNeighborOrder(points, start) {
   return order;
 }
 
-function stopDuration(stop) {
-  return Number(stop.durationMinutes || stop.defaultDuration || 45);
-}
-
-// Stima leggera della durata di una giornata (minuti): guida casa→tappe→casa
-// (nearest-neighbor, distanza stradale ≈ haversine × roadFactor, + buffer traffico)
-// + lavoro + pranzo + soste stimate.
+// Stima della durata di una giornata (minuti): guida casa→tappe→casa (nearest-neighbor
+// sui tempi reali) + lavoro + pranzo + soste stimate.
 export function estimateDayMinutes(dayStops, home, opts = {}) {
-  const {
-    roadFactor = 1.35,
-    speedKmh = 50,
-    bufferPerHour = 10,
-    lunchMin = 0,
-    restIntervalMin = 120,
-    restDurationMin = 15,
-  } = opts;
-
-  const order = nearestNeighborOrder(dayStops, home);
+  const { lunchMin = 0, restIntervalMin = 120, restDurationMin = 15 } = opts;
+  const order = nearestNeighborOrder(dayStops, home, opts);
   const path = [home, ...order, home];
-  let straightKm = 0;
-  for (let i = 1; i < path.length; i++) straightKm += haversineKm(path[i - 1], path[i]);
-
-  const roadKm = straightKm * roadFactor;
-  const driveMin = (roadKm / speedKmh * 60) * (1 + bufferPerHour / 60);
+  let driveMin = 0;
+  for (let i = 1; i < path.length; i++) driveMin += legMin(path[i - 1], path[i], opts);
   const workMin = dayStops.reduce((s, st) => s + stopDuration(st), 0);
   const restMin = restIntervalMin > 0 ? Math.floor(driveMin / restIntervalMin) * restDurationMin : 0;
-
   return {
-    roadKm: Number(roadKm.toFixed(1)),
     driveMin: Math.round(driveMin),
     workMin,
     lunchMin,
@@ -90,11 +90,37 @@ export function estimateDayMinutes(dayStops, home, opts = {}) {
   };
 }
 
-// Tempo di guida stimato (min) tra due punti, coerente con estimateDayMinutes.
-function roadTimeMin(a, b, opts = {}) {
-  const { roadFactor = 1.35, speedKmh = 50, bufferPerHour = 10 } = opts;
-  const km = haversineKm(a, b) * roadFactor;
-  return (km / speedKmh * 60) * (1 + bufferPerHour / 60);
+// Tempo di guida stimato (min) tra due punti (alias di legMin per leggibilità).
+function roadTimeMin(a, b, opts = {}) { return legMin(a, b, opts); }
+
+// Matrice dei tempi di guida reali (min) tra casa e tutte le tappe, via routeBetween.
+// Assegna un indice _mi a ogni nodo e restituisce distMin(a,b) → minuti (o null se ignoto,
+// così legMin ricade sul fallback haversine). I tempi sono quelli "grezzi" di Google; il
+// buffer traffico viene applicato in legMin.
+async function buildLegTimeMatrix(home, stops) {
+  const nodes = [home, ...stops];
+  nodes.forEach((n, i) => { n._mi = i; });
+  const time = new Map();
+  const pairs = [];
+  for (let i = 0; i < nodes.length; i++) for (let j = i + 1; j < nodes.length; j++) pairs.push([i, j]);
+  let cursor = 0;
+  const worker = async () => {
+    while (cursor < pairs.length) {
+      const [i, j] = pairs[cursor++];
+      try {
+        const leg = await routeBetween(nodes[i], nodes[j]);
+        if (leg && Number.isFinite(leg.driveMinutes)) time.set(`${i}_${j}`, leg.driveMinutes);
+      } catch { /* gestito dal fallback in distMin */ }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(8, pairs.length) }, () => worker()));
+  return (a, b) => {
+    const i = a?._mi, j = b?._mi;
+    if (i == null || j == null) return null;
+    if (i === j) return 0;
+    const v = time.get(i < j ? `${i}_${j}` : `${j}_${i}`);
+    return v == null ? null : v;
+  };
 }
 
 // Risolve le finestre di apertura di una tappa per uno specifico giorno della settimana
@@ -185,7 +211,7 @@ export function buildDayClusters(stops, home, budgetMin, opts = {}) {
     // torna mai più lontano di dove si è già stati.
     let seedI = 0, seedD = -1;
     for (let i = 0; i < unassigned.length; i++) {
-      const d = haversineKm(home, unassigned[i]);
+      const d = legMin(home, unassigned[i], opts);
       if (d > seedD) { seedD = d; seedI = i; }
     }
     const day = [unassigned.splice(seedI, 1)[0]];
@@ -198,13 +224,13 @@ export function buildDayClusters(stops, home, budgetMin, opts = {}) {
     let added = true;
     while (added && unassigned.length) {
       added = false;
-      const baseKm = dayRoadKm(day, home, opts);
+      const baseKm = dayTourMin(day, home, opts);
       let best = -1, bestCost = Infinity;
       for (let i = 0; i < unassigned.length; i++) {
         const tentative = [...day, unassigned[i]];
         if (estimateDayMinutes(tentative, home, opts).total > budgetMin) continue;
         if (!dayHoursFeasible(tentative, home, opts, dow)) continue;
-        const cost = dayRoadKm(tentative, home, opts) - baseKm;
+        const cost = dayTourMin(tentative, home, opts) - baseKm;
         if (cost < bestCost - 1e-6) { bestCost = cost; best = i; }
       }
       if (best >= 0) { day.push(unassigned.splice(best, 1)[0]); added = true; }
@@ -215,10 +241,10 @@ export function buildDayClusters(stops, home, budgetMin, opts = {}) {
   return days;
 }
 
-// Stima dei km stradali di una giornata (casa→tappe→casa, nearest-neighbor).
-function dayRoadKm(dayStops, home, opts) {
+// Stima dei minuti di guida di una giornata (casa→tappe→casa, nearest-neighbor sui tempi).
+function dayTourMin(dayStops, home, opts) {
   if (!dayStops.length) return 0;
-  return estimateDayMinutes(dayStops, home, opts).roadKm;
+  return estimateDayMinutes(dayStops, home, opts).driveMin;
 }
 
 // Ricerca locale: sposta una tappa in un'altra giornata se riduce i km totali e la
@@ -231,8 +257,8 @@ export function improveClusters(days, home, budgetMin, opts = {}, rounds = 6) {
     for (let a = 0; a < clusters.length; a++) {
       for (let si = clusters[a].length - 1; si >= 0; si--) {
         const stop = clusters[a][si];
-        const aBefore = dayRoadKm(clusters[a], home, opts);
-        const aAfter = dayRoadKm(clusters[a].filter((_, k) => k !== si), home, opts);
+        const aBefore = dayTourMin(clusters[a], home, opts);
+        const aAfter = dayTourMin(clusters[a].filter((_, k) => k !== si), home, opts);
         let bestB = -1, bestDelta = -0.5; // soglia minima di guadagno (km)
         for (let b = 0; b < clusters.length; b++) {
           if (b === a) continue;
@@ -240,7 +266,7 @@ export function improveClusters(days, home, budgetMin, opts = {}, rounds = 6) {
           if (estimateDayMinutes(tentativeB, home, opts).total > budgetMin) continue;
           // Non spostare in una giornata dove la tappa (o le altre) sforerebbero gli orari.
           if (!dayHoursFeasible(tentativeB, home, opts, dowForCluster(opts, b))) continue;
-          const delta = (aAfter - aBefore) + (dayRoadKm(tentativeB, home, opts) - dayRoadKm(clusters[b], home, opts));
+          const delta = (aAfter - aBefore) + (dayTourMin(tentativeB, home, opts) - dayTourMin(clusters[b], home, opts));
           if (delta < bestDelta) { bestDelta = delta; bestB = b; }
         }
         if (bestB >= 0) {
@@ -311,6 +337,10 @@ export async function planMultiDay(payload, settings = {}, restStops = []) {
     const stops = await Promise.all(rawStops.map(ensureCoords));
     noCoords.push(...stops.filter(s => !s.lat || !s.lng));
     const withCoords = stops.filter(s => s.lat && s.lng);
+    // Matrice dei tempi di guida reali su strada (casa + tappe): essenziale in montagna,
+    // dove la linea d'aria raggrupperebbe male. Calcolata una volta e usata dal clustering.
+    try { opts.distMin = await buildLegTimeMatrix(home, withCoords); }
+    catch { opts.distMin = null; }
     clusters = buildDayClusters(withCoords, home, budgetMin, opts);
   }
   if (!clusters.length) throw new Error("Aggiungi almeno una tappa con indirizzo valido.");
