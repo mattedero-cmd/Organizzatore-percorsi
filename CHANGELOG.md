@@ -1,3 +1,6 @@
+## v5.002 — 2026-06-16
+- Multi-giorno: vincolo orari di apertura nel clustering. buildDayClusters/improveClusters ora accettano/spostano una tappa in una giornata solo se è hours-feasible: nuovo dayHoursFeasible simula la giornata in ordine earliest-deadline-first e rifiuta se una tappa arriva dopo la chiusura o finisce oltre la chiusura + 10 min (tolleranza). resolveStopWindows gestisce weeklyHours per giorno della settimana, orario continuato, finestra utente, ignoreHours, closedToday. Le tappe con orari incompatibili finiscono su giornate diverse invece di essere servite oltre l'orario. Verificato con test (due tappe 08-10 lontane → 2 giornate; tappe senza orari → raggruppate)
+
 ## v5.001 — 2026-06-15
 - UI multi-giorno: pulsante "Pianifica su più giorni" nel form percorso (#plan-multiday) → POST /api/plan-multiday; nuova vista renderResultMultiDay nel tab Risultato (riepilogo totali + elenco giornate con orari, km e tappe). Risultato in state.resultMultiDay (separato da state.result per non interferire col mono-giorno). Stili nativi (.card/.metric/.summary-grid/.badge + inline), nessuna nuova classe CSS
 
