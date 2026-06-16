@@ -22,10 +22,16 @@ Architettura (v5.000):
     `planRoute` esistente per ogni giornata (date consecutive) e aggrega km/ore.
 - API: `POST /api/plan-multiday` (autenticata, riusa getSettings + listAddresses).
 
-Stato: motore server + API + test fatti (v5.000). Da fare:
-- [ ] UI: pulsante "Pianifica su piu giorni" nel form percorso; vista risultato con elenco
-      giornate (riusare la card risultato per giornata), riepilogo totali, badge "Giorno N".
-- [ ] Salvataggio del piano multi-giorno (modello storage + apertura/condivisione).
+Stato: motore server + API + test fatti (v5.000); UI elenco giornate (v5.001); vincolo orari
+di apertura nel clustering (v5.002); riorganizzazione manuale con drag + frecce e ricalcolo
+ad assegnazione bloccata (v5.003). Da fare:
+- [x] UI: pulsante "Pianifica su piu giorni" + vista risultato con elenco giornate (v5.001).
+- [x] Vincolo orari: niente tappe servite dopo la chiusura, tolleranza 10 min (v5.002).
+- [x] Riorganizzazione manuale (drag tra giornate + frecce su/giu) + "Ricalcola giornate"
+      con manualDays (ordine bloccato per giornata) (v5.003).
+- [ ] "Crea i giri": salvare ogni giornata come giro dentro una cartella unica con nome
+      scelto in questa schermata (campo nome cartella + pulsante).
+- [ ] Salvataggio/ripristino del piano multi-giorno tra sessioni.
 - [ ] Meteo per giornata (ora saltato nell'endpoint multiday per velocita).
 - [ ] Raffinamenti algoritmo: bilanciamento opzionale, 2-opt sui giri giornalieri,
       gestione tappe con finestre orarie fisse vincolanti su un giorno preciso.

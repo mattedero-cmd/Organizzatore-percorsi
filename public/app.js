@@ -1270,7 +1270,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.002 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.003 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -1280,6 +1280,11 @@ function renderMenuInfo() {
       <ul class="info-list">
         <li>${state.mapApiConfigured ? _svg('<polyline points="20 6 9 17 4 12"/>', 14) + " Google Maps attivo — percorsi reali e ottimizzazione avanzata" : _svg('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>', 14) + " Google Maps non configurato — stime distanze locali"}</li>
         <li>${state.whisperConfigured ? _svg('<polyline points="20 6 9 17 4 12"/>', 14) + " Comandi vocali attivi (Whisper)" : _svg('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>', 14) + " Comandi vocali non configurati"}</li>
+      </ul>
+
+      <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v5.003</p>
+      <ul class="info-list">
+        <li>Riorganizzazione manuale del piano multi-giorno: nella schermata delle giornate puoi trascinare una tappa per spostarla tra i giorni, e usare le frecce su/giù per le regolazioni fini (spostandola oltre l'ultima giornata crei un nuovo giorno). Premi "Ricalcola giornate" per aggiornare ordine, orari e km rispettando la tua organizzazione</li>
       </ul>
 
       <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v5.002</p>
@@ -3024,53 +3029,67 @@ function renderResultMultiDay() {
     app.innerHTML = `<section class="panel"><h2>Più giorni</h2><div class="empty">Nessuna pianificazione multi-giorno.</div></section>`;
     return;
   }
+  if (!state.mdEdit) initMdEdit(res);
+  const edit = state.mdEdit;
+  const dirty = !!state.mdDirty;
   const s = res.summary || {};
+  const baseDate = res.baseDate || res.days[0]?.scheduledDate || "";
+  const totalStops = edit.reduce((n, d) => n + d.length, 0);
   const fmtDate = (iso) => { try { return new Date(iso + "T12:00:00").toLocaleDateString("it-IT", { weekday: "short", day: "numeric", month: "short" }); } catch { return iso || ""; } };
-  const daysHtml = res.days.map(d => {
-    const ds = d.plan?.summary || {};
-    const stops = (d.plan?.rows || []).filter(r => !r.type && r.stopPart !== "afternoon");
-    const stopsHtml = stops.map(st => `
-        <div class="row" style="gap:8px;align-items:baseline;padding:3px 0;border-top:1px solid var(--line);">
-          <span class="stop-meta" style="min-width:46px;font-variant-numeric:tabular-nums;">${escapeHtml(st.serviceStartTime || st.arrivalTime || "")}</span>
+  const grip = _svg('<circle cx="9" cy="6" r="1.2"/><circle cx="15" cy="6" r="1.2"/><circle cx="9" cy="12" r="1.2"/><circle cx="15" cy="12" r="1.2"/><circle cx="9" cy="18" r="1.2"/><circle cx="15" cy="18" r="1.2"/>', 16);
+
+  const daysHtml = edit.map((dayStops, i) => {
+    const planned = (!dirty && res.days[i]) ? (res.days[i].plan?.summary || {}) : null;
+    const overBudget = !dirty && res.days[i]?.overBudget;
+    const date = fmtDate(mdAddDaysISO(baseDate, i));
+    const rowsHtml = dayStops.map((st, j) => `
+        <div class="row md-stop-row" data-md-row="${i}:${j}" style="gap:6px;align-items:center;padding:5px 0;border-top:1px solid var(--line);">
+          <span class="md-grip" data-md-handle="${i}:${j}" style="touch-action:none;cursor:grab;color:var(--muted);flex-shrink:0;display:flex;">${grip}</span>
+          ${st._time && !dirty ? `<span class="stop-meta" style="min-width:44px;font-variant-numeric:tabular-nums;">${escapeHtml(st._time)}</span>` : ""}
           <span style="flex:1;min-width:0;">${escapeHtml(st.customer || "")}${st.location ? ` <span class="stop-meta">— ${escapeHtml(st.location)}</span>` : ""}</span>
+          <button type="button" class="btn icon-btn" data-md-up="${i}:${j}" title="Su">${I.arrowUp(13)}</button>
+          <button type="button" class="btn icon-btn" data-md-down="${i}:${j}" title="Giù">${I.arrowDown(13)}</button>
         </div>`).join("");
     return `
-      <article class="card" style="padding:12px;">
+      <article class="card" data-md-day="${i}" style="padding:12px;">
         <div class="row" style="justify-content:space-between;align-items:center;gap:8px;">
           <div class="row" style="gap:8px;align-items:center;">
-            <span class="badge" style="font-weight:700;">Giorno ${d.dayNumber}</span>
-            <span class="stop-meta" style="text-transform:capitalize;">${escapeHtml(fmtDate(d.scheduledDate))}</span>
+            <span class="badge" style="font-weight:700;">Giorno ${i + 1}</span>
+            <span class="stop-meta" style="text-transform:capitalize;">${escapeHtml(date)}</span>
           </div>
-          <span class="stop-meta">${escapeHtml(ds.dayStart || "")}–${escapeHtml(ds.dayEnd || "")}</span>
+          <span class="stop-meta">${planned ? `${escapeHtml(planned.dayStart || "")}–${escapeHtml(planned.dayEnd || "")}` : "da ricalcolare"}</span>
         </div>
-        <div class="stop-meta" style="margin:6px 0 4px;">${d.stopCount} tappe · ${Number(ds.totalKm || 0).toFixed(1)} km · ${minutesLabel(ds.totalDriveMinutes)} guida${d.overBudget ? ` · <span class="badge badge-warn">oltre l'orario</span>` : ""}</div>
-        <div style="margin-top:4px;">${stopsHtml}</div>
+        <div class="stop-meta" style="margin:6px 0 2px;">${dayStops.length} tappe${planned ? ` · ${Number(planned.totalKm || 0).toFixed(1)} km · ${minutesLabel(planned.totalDriveMinutes)} guida` : ""}${overBudget ? ` · <span class="badge badge-warn">oltre l'orario</span>` : ""}</div>
+        <div style="margin-top:2px;">${rowsHtml}</div>
       </article>`;
   }).join("");
+
   const unassigned = s.unassignedNoCoords || [];
   app.innerHTML = `
     <section>
       <div class="section-head" style="margin-bottom:10px;">
         <div>
-          <h2 style="margin:0;">Pianificazione su ${s.totalDays || res.days.length} giorni</h2>
-          <div class="stop-meta" style="margin-top:4px;">${s.totalStops || multiDayTotalStops(res)} tappe · finestra ${escapeHtml(s.window || "")} · rientro a casa ogni sera</div>
+          <h2 style="margin:0;">Pianificazione su ${edit.length} giorni</h2>
+          <div class="stop-meta" style="margin-top:4px;">${totalStops} tappe · finestra ${escapeHtml(s.window || "")} · rientro a casa ogni sera</div>
         </div>
       </div>
-      <div class="summary-grid">
-        <div class="metric"><div class="metric-label">Giornate</div><div class="metric-value">${s.totalDays || res.days.length}</div></div>
-        <div class="metric"><div class="metric-label">Km totali</div><div class="metric-value">${Number(s.totalKm || 0).toFixed(1)}</div></div>
-        <div class="metric"><div class="metric-label">Ore guida</div><div class="metric-value">${minutesLabel(s.totalDriveMinutes)}</div></div>
-        <div class="metric"><div class="metric-label">Ore lavoro</div><div class="metric-value">${minutesLabel(s.totalWorkMinutes)}</div></div>
-      </div>
+      ${dirty
+        ? `<div class="card" style="padding:10px;border-color:var(--primary);display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
+             <span class="stop-meta">Hai riorganizzato le tappe. Premi Ricalcola per aggiornare orari, km e ordine.</span>
+             <button type="button" class="btn primary" id="md-recalc">${I.refresh(14)} Ricalcola giornate</button>
+           </div>`
+        : `<div class="summary-grid">
+             <div class="metric"><div class="metric-label">Giornate</div><div class="metric-value">${edit.length}</div></div>
+             <div class="metric"><div class="metric-label">Km totali</div><div class="metric-value">${Number(s.totalKm || 0).toFixed(1)}</div></div>
+             <div class="metric"><div class="metric-label">Ore guida</div><div class="metric-value">${minutesLabel(s.totalDriveMinutes)}</div></div>
+             <div class="metric"><div class="metric-label">Ore lavoro</div><div class="metric-value">${minutesLabel(s.totalWorkMinutes)}</div></div>
+           </div>`}
       ${unassigned.length ? `<div class="badge badge-warn" style="display:block;margin:10px 0;padding:8px;">${unassigned.length} tappe senza indirizzo valido, non pianificate: ${escapeHtml(unassigned.join(", "))}</div>` : ""}
-      <div style="margin-top:12px;display:flex;flex-direction:column;gap:12px;">
+      <p class="stop-meta" style="margin:10px 0 6px;">Trascina la maniglia per spostare una tappa tra le giornate; usa le frecce per le regolazioni fini. Spostare una tappa oltre l'ultima giornata crea un nuovo giorno.</p>
+      <div style="display:flex;flex-direction:column;gap:12px;">
         ${daysHtml}
       </div>
     </section>`;
-}
-
-function multiDayTotalStops(res) {
-  return (res.days || []).reduce((n, d) => n + (d.stopCount || 0), 0);
 }
 
 function renderResult() {
@@ -4044,24 +4063,28 @@ async function planMultiDayAction() {
   render();
   try {
     const r = state.route;
+    // Parametri base riusati anche dal ricalcolo dopo riorganizzazione manuale.
+    const baseReq = {
+      scheduledDate: r.scheduledDate,
+      start: { label: r.startLabel, address: r.startAddress },
+      end: { sameAsStart: r.endSameAsStart, label: r.endLabel, address: r.endAddress },
+      startTime: r.startTime,
+      timingMode: r.timingMode,
+      arrivalLeadMinutes: r.arrivalLeadMinutes,
+      firstArrivalTime: r.firstArrivalTime,
+      firstArrivalRequired: r.firstArrivalRequired,
+      rates: state.settings,
+      lunchBreak: r.lunchBreak, lunchBreakMinutes: r.lunchBreakMinutes,
+      lunchFixedTime: r.lunchFixedTime || "",
+      departureLatest: r.departureLatest || ""
+    };
+    state.mdBaseReq = baseReq;
     const res = await api("/api/plan-multiday", {
       method: "POST",
-      body: JSON.stringify({
-        scheduledDate: r.scheduledDate,
-        start: { label: r.startLabel, address: r.startAddress },
-        end: { sameAsStart: r.endSameAsStart, label: r.endLabel, address: r.endAddress },
-        startTime: r.startTime,
-        timingMode: r.timingMode,
-        arrivalLeadMinutes: r.arrivalLeadMinutes,
-        firstArrivalTime: r.firstArrivalTime,
-        firstArrivalRequired: r.firstArrivalRequired,
-        stops: r.stops, rates: state.settings,
-        lunchBreak: r.lunchBreak, lunchBreakMinutes: r.lunchBreakMinutes,
-        lunchFixedTime: r.lunchFixedTime || "",
-        departureLatest: r.departureLatest || ""
-      })
+      body: JSON.stringify({ ...baseReq, stops: r.stops })
     });
     state.resultMultiDay = res;
+    initMdEdit(res);
     setActiveTab("result");
     showToast(`Pianificate ${res.summary?.totalDays || res.days?.length || 0} giornate`);
   } catch (e) {
@@ -4071,6 +4094,157 @@ async function planMultiDayAction() {
     state.planning = false;
     if (state.activeTab === "route") render();
   }
+}
+
+// ── multi-giorno: riorganizzazione manuale ────────────────────────────────────
+// state.mdEdit: array (per giornata) di array di tappe modificabili (con _time cache).
+// state.mdDirty: true quando l'assegnazione è cambiata e va ricalcolata.
+
+function mdAddDaysISO(iso, n) {
+  try { const [y, m, d] = iso.split("-").map(Number); const dt = new Date(y, m - 1, d); dt.setDate(dt.getDate() + n);
+    return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`; }
+  catch { return iso || ""; }
+}
+
+function initMdEdit(res) {
+  state.mdEdit = (res.days || []).map(d => {
+    const orig = d.stops || [];
+    const rows = (d.plan?.rows || []).filter(r => !r.type && r.stopPart !== "afternoon");
+    const used = new Set();
+    const ordered = [];
+    for (const row of rows) {
+      const idx = orig.findIndex((s, k) => !used.has(k) && (
+        (s.uid && row.stopUid && s.uid === row.stopUid) ||
+        (s.addressId != null && row.addressId != null && String(s.addressId) === String(row.addressId)) ||
+        ((s.customer || "") === (row.customer || "") && (s.fullAddress || s.address || "") === (row.address || row.fullAddress || ""))
+      ));
+      if (idx < 0) continue;
+      used.add(idx);
+      ordered.push({ ...orig[idx], _time: row.serviceStartTime || row.arrivalTime || "" });
+    }
+    orig.forEach((s, k) => { if (!used.has(k)) ordered.push({ ...s, _time: "" }); });
+    return ordered;
+  });
+  state.mdDirty = false;
+}
+
+function mdMove(key, dir) {
+  const [i, j] = String(key).split(":").map(Number);
+  const days = state.mdEdit;
+  if (!days || !days[i] || days[i][j] == null) return;
+  const stop = days[i][j];
+  if (dir === "up") {
+    if (j > 0) { days[i].splice(j, 1); days[i].splice(j - 1, 0, stop); }
+    else if (i > 0) { days[i].splice(j, 1); days[i - 1].push(stop); }
+    else { days[i].splice(j, 1); days.unshift([stop]); }
+  } else {
+    if (j < days[i].length - 1) { days[i].splice(j, 1); days[i].splice(j + 1, 0, stop); }
+    else if (i < days.length - 1) { days[i].splice(j, 1); days[i + 1].unshift(stop); }
+    else { days[i].splice(j, 1); days.push([stop]); }
+  }
+  state.mdEdit = days.filter(d => d.length > 0);
+  state.mdDirty = true;
+  render();
+}
+
+async function planMultiDayRecalc() {
+  if (state.planning || !state.mdEdit) return;
+  const manualDays = state.mdEdit.map(day => day.map(s => { const c = { ...s }; delete c._time; return c; }));
+  state.planning = true;
+  showSpinner("Ricalcolo giornate…");
+  render();
+  try {
+    const res = await api("/api/plan-multiday", {
+      method: "POST",
+      body: JSON.stringify({ ...(state.mdBaseReq || {}), manualDays })
+    });
+    state.resultMultiDay = res;
+    initMdEdit(res);
+    showToast(`Ricalcolate ${res.summary?.totalDays || res.days?.length || 0} giornate`);
+  } catch (e) {
+    showToast(e.message);
+  } finally {
+    hideSpinner();
+    state.planning = false;
+    render();
+  }
+}
+
+// Trascinamento tappe tra/dentro le giornate (Pointer Events: mouse + touch).
+let mdMarkEl = null;
+function clearMdMark() {
+  if (mdMarkEl) { mdMarkEl.style.boxShadow = ""; mdMarkEl.style.outline = ""; mdMarkEl = null; }
+}
+function mdPointerDown(e) {
+  const handle = e.target.closest("[data-md-handle]");
+  if (!handle) return;
+  if (e.button != null && e.button !== 0) return;
+  if (!state.mdEdit) return;
+  const [si, sj] = String(handle.getAttribute("data-md-handle")).split(":").map(Number);
+  if (!state.mdEdit[si] || state.mdEdit[si][sj] == null) return;
+  const card = handle.closest(".md-stop-row");
+  if (!card) return;
+  e.preventDefault();
+  const drag = { si, sj, clone: null, started: false, startX: e.clientX, startY: e.clientY, targetDay: si, targetIdx: sj };
+
+  const onMove = (ev) => {
+    const dx = ev.clientX - drag.startX, dy = ev.clientY - drag.startY;
+    if (!drag.started) {
+      if (Math.abs(dx) + Math.abs(dy) < 8) return;
+      drag.started = true;
+      const c = card.cloneNode(true);
+      Object.assign(c.style, { position: "fixed", left: "0", top: "0", width: card.offsetWidth + "px",
+        pointerEvents: "none", opacity: "0.92", zIndex: "9999", boxShadow: "0 8px 24px rgba(0,0,0,0.3)" });
+      document.body.appendChild(c);
+      drag.clone = c;
+      card.style.opacity = "0.35";
+    }
+    ev.preventDefault();
+    if (drag.clone) drag.clone.style.transform = `translate(${ev.clientX - drag.clone.offsetWidth / 2}px, ${ev.clientY - 18}px)`;
+    if (drag.clone) drag.clone.style.visibility = "hidden";
+    const under = document.elementFromPoint(ev.clientX, ev.clientY);
+    if (drag.clone) drag.clone.style.visibility = "visible";
+    clearMdMark();
+    const overRow = under?.closest?.(".md-stop-row");
+    const overDay = under?.closest?.("[data-md-day]");
+    if (overRow) {
+      const [di, dj] = String(overRow.getAttribute("data-md-row")).split(":").map(Number);
+      const r = overRow.getBoundingClientRect();
+      const after = ev.clientY > r.top + r.height / 2;
+      drag.targetDay = di; drag.targetIdx = dj + (after ? 1 : 0);
+      overRow.style.boxShadow = after ? "inset 0 -3px 0 var(--primary)" : "inset 0 3px 0 var(--primary)";
+      mdMarkEl = overRow;
+    } else if (overDay) {
+      const di = Number(overDay.getAttribute("data-md-day"));
+      drag.targetDay = di; drag.targetIdx = (state.mdEdit[di] || []).length;
+      overDay.style.outline = "2px dashed var(--primary)";
+      mdMarkEl = overDay;
+    }
+  };
+  const finish = () => {
+    window.removeEventListener("pointermove", onMove);
+    window.removeEventListener("pointerup", finish);
+    window.removeEventListener("pointercancel", finish);
+    clearMdMark();
+    if (drag.clone) drag.clone.remove();
+    card.style.opacity = "";
+    if (!drag.started) return;
+    const days = state.mdEdit;
+    let { targetDay, targetIdx } = drag;
+    if (targetDay == null || !days[targetDay]) { render(); return; }
+    const stop = days[drag.si] && days[drag.si][drag.sj];
+    if (!stop) { render(); return; }
+    days[drag.si].splice(drag.sj, 1);
+    if (targetDay === drag.si && drag.sj < targetIdx) targetIdx--;
+    targetIdx = Math.max(0, Math.min(targetIdx, days[targetDay].length));
+    days[targetDay].splice(targetIdx, 0, stop);
+    state.mdEdit = days.filter(d => d.length > 0);
+    state.mdDirty = true;
+    render();
+  };
+  window.addEventListener("pointermove", onMove, { passive: false });
+  window.addEventListener("pointerup", finish);
+  window.addEventListener("pointercancel", finish);
 }
 
 // ── voice ─────────────────────────────────────────────────────────────────────
@@ -5789,6 +5963,8 @@ function bindEvents() {
     }
   });
 
+  app.addEventListener("pointerdown", mdPointerDown);
+
   app.addEventListener("click", async e => {
     // expand button (⋯) — explicit handler so the button works
     const expandBtn = e.target.closest(".rc-expand-btn");
@@ -6415,6 +6591,11 @@ function bindEvents() {
 
     if (e.target.closest("#plan-route")) { await planCurrentRoute(); return; }
     if (e.target.closest("#plan-multiday")) { await planMultiDayAction(); return; }
+    const mdUpBtn = e.target.closest("[data-md-up]");
+    if (mdUpBtn) { mdMove(mdUpBtn.getAttribute("data-md-up"), "up"); return; }
+    const mdDownBtn = e.target.closest("[data-md-down]");
+    if (mdDownBtn) { mdMove(mdDownBtn.getAttribute("data-md-down"), "down"); return; }
+    if (e.target.closest("#md-recalc")) { await planMultiDayRecalc(); return; }
     if (e.target.closest("#listen-command")) { toggleVoiceRecording(); return; }
     if (e.target.closest("#apply-command")) {
       try { await applyVoiceCommand(); } catch (err) { showToast(err.message); }

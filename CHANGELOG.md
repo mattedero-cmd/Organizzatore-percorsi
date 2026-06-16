@@ -1,3 +1,6 @@
+## v5.003 — 2026-06-16
+- Multi-giorno: riorganizzazione manuale. Backend: planMultiDay accetta payload.manualDays (assegnazione+ordine forniti dall'utente, niente clustering, ordine bloccato per giornata) e include stops[] per giornata nel risultato. Frontend: renderResultMultiDay editabile — trascinamento tappe tra/dentro le giornate (Pointer Events: mouse+touch), frecce su/giù (oltre l'ultima giornata creano un nuovo giorno), banner + "Ricalcola giornate" (#md-recalc) che rilancia /api/plan-multiday con manualDays. Verificato il backend offline (assegnazione manuale rispettata); il drag su touch va verificato su dispositivo.
+
 ## v5.002 — 2026-06-16
 - Multi-giorno: vincolo orari di apertura nel clustering. buildDayClusters/improveClusters ora accettano/spostano una tappa in una giornata solo se è hours-feasible: nuovo dayHoursFeasible simula la giornata in ordine earliest-deadline-first e rifiuta se una tappa arriva dopo la chiusura o finisce oltre la chiusura + 10 min (tolleranza). resolveStopWindows gestisce weeklyHours per giorno della settimana, orario continuato, finestra utente, ignoreHours, closedToday. Le tappe con orari incompatibili finiscono su giornate diverse invece di essere servite oltre l'orario. Verificato con test (due tappe 08-10 lontane → 2 giornate; tappe senza orari → raggruppate)
 

@@ -269,18 +269,6 @@ export async function planMultiDay(payload, settings = {}, restStops = []) {
     throw new Error("Imposta un punto di partenza (casa/ufficio) con indirizzo valido.");
   }
 
-  const rawStops = payload.stops || [];
-  if (!rawStops.length) throw new Error("Aggiungi almeno una tappa.");
-
-  // Geocodifica le tappe senza coordinate.
-  const stops = await Promise.all(rawStops.map(async s => {
-    if (s.lat && s.lng) return { ...s };
-    try { const c = await resolvePlace(s); return { ...s, lat: c.lat, lng: c.lng }; }
-    catch { return { ...s }; }
-  }));
-  const withCoords = stops.filter(s => s.lat && s.lng);
-  const noCoords = stops.filter(s => !s.lat || !s.lng);
-
   const startMin = parseTime(payload.startTime || settings.startTime || "08:00") ?? parseTime("08:00");
   const endMin = parseTime(settings.maxReturnTime || payload.departureLatest || "18:30") ?? parseTime("18:30");
   const budgetMin = Math.max(60, endMin - startMin);
@@ -300,7 +288,34 @@ export async function planMultiDay(payload, settings = {}, restStops = []) {
     baseDow,
   };
 
-  const clusters = buildDayClusters(withCoords, home, budgetMin, opts);
+  const ensureCoords = async (s) => {
+    if (s.lat && s.lng) return { ...s };
+    try { const c = await resolvePlace(s); return { ...s, lat: c.lat, lng: c.lng }; }
+    catch { return { ...s }; }
+  };
+
+  // Modalità manuale: l'utente ha riorganizzato le giornate sullo schermo. Rispettiamo
+  // l'assegnazione e l'ordine forniti (niente clustering, ordine bloccato per giornata).
+  const manualMode = Array.isArray(payload.manualDays) && payload.manualDays.length > 0;
+  let clusters = [];
+  const noCoords = [];
+  if (manualMode) {
+    for (const dayStops of payload.manualDays) {
+      const geo = await Promise.all((dayStops || []).map(ensureCoords));
+      noCoords.push(...geo.filter(s => !s.lat || !s.lng));
+      const withC = geo.filter(s => s.lat && s.lng);
+      if (withC.length) clusters.push(withC);
+    }
+  } else {
+    const rawStops = payload.stops || [];
+    if (!rawStops.length) throw new Error("Aggiungi almeno una tappa.");
+    const stops = await Promise.all(rawStops.map(ensureCoords));
+    noCoords.push(...stops.filter(s => !s.lat || !s.lng));
+    const withCoords = stops.filter(s => s.lat && s.lng);
+    clusters = buildDayClusters(withCoords, home, budgetMin, opts);
+  }
+  if (!clusters.length) throw new Error("Aggiungi almeno una tappa con indirizzo valido.");
+  const totalStopsCount = clusters.reduce((n, d) => n + d.length, 0);
 
   const days = [];
   for (let i = 0; i < clusters.length; i++) {
@@ -312,8 +327,8 @@ export async function planMultiDay(payload, settings = {}, restStops = []) {
       scheduledDate: dayDate,
       start: home,
       end: { sameAsStart: true },
-      manualOrder: false,
-      lockOrder: false,
+      manualOrder: manualMode,
+      lockOrder: manualMode,
     };
     const plan = await planRoute(dayPayload, settings, restStops);
     const dayEndMin = parseTime(plan.summary?.dayEnd);
@@ -321,6 +336,7 @@ export async function planMultiDay(payload, settings = {}, restStops = []) {
       dayNumber: i + 1,
       scheduledDate: dayDate,
       stopCount: clusters[i].length,
+      stops: clusters[i],
       overBudget: dayEndMin != null && dayEndMin > endMin,
       plan,
     });
@@ -340,7 +356,7 @@ export async function planMultiDay(payload, settings = {}, restStops = []) {
       totalKm: Number(totalKm.toFixed(1)),
       totalDriveMinutes,
       totalWorkMinutes,
-      totalStops: withCoords.length,
+      totalStops: totalStopsCount,
       window: `${formatTime(startMin)}–${formatTime(endMin)}`,
       budgetMinutes: budgetMin,
       unassignedNoCoords: noCoords.map(s => s.customer || s.label || s.fullAddress || "tappa senza indirizzo"),
