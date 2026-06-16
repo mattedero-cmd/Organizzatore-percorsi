@@ -180,40 +180,39 @@ export function buildDayClusters(stops, home, budgetMin, opts = {}) {
   let guard = 0;
 
   while (unassigned.length && guard++ < 5000) {
-    // Seme: tappa più lontana da casa tra quelle ancora libere.
+    // Seme: tappa più LONTANA da casa tra quelle ancora libere. Così le zone lontane
+    // vengono consumate per prime e il "fronte" massimo si accorcia ogni giorno: non si
+    // torna mai più lontano di dove si è già stati.
     let seedI = 0, seedD = -1;
     for (let i = 0; i < unassigned.length; i++) {
       const d = haversineKm(home, unassigned[i]);
       if (d > seedD) { seedD = d; seedI = i; }
     }
     const day = [unassigned.splice(seedI, 1)[0]];
+    const dow = dowForCluster(opts, days.length);
 
+    // Accrescimento: aggiunge la tappa col MINIMO costo di percorso (quelle "sulla via di
+    // casa" verso il seme), rispettando budget e orari. Le tappe nello stesso luogo hanno
+    // costo ~0 e vengono quindi prese insieme. Niente ri-ottimizzazione globale: la
+    // costruzione far-first è già coerente con il modo di ragionare dell'utente.
     let added = true;
     while (added && unassigned.length) {
       added = false;
-      // Candidati ordinati per vicinanza al cluster (distanza minima da una tappa del giorno).
-      const ranked = unassigned
-        .map((s, i) => ({ i, d: Math.min(...day.map(ds => haversineKm(ds, s))) }))
-        .sort((a, b) => a.d - b.d);
-      const dow = dowForCluster(opts, days.length);
-      for (const { i } of ranked) {
-        const cand = unassigned[i];
-        const tentative = [...day, cand];
-        const est = estimateDayMinutes(tentative, home, opts);
-        // Entra nella giornata solo se sta nel budget orario E può essere servita
-        // entro gli orari di apertura (nessun arrivo/fine dopo la chiusura).
-        if (est.total <= budgetMin && dayHoursFeasible(tentative, home, opts, dow)) {
-          day.push(cand);
-          unassigned.splice(i, 1);
-          added = true;
-          break;
-        }
+      const baseKm = dayRoadKm(day, home, opts);
+      let best = -1, bestCost = Infinity;
+      for (let i = 0; i < unassigned.length; i++) {
+        const tentative = [...day, unassigned[i]];
+        if (estimateDayMinutes(tentative, home, opts).total > budgetMin) continue;
+        if (!dayHoursFeasible(tentative, home, opts, dow)) continue;
+        const cost = dayRoadKm(tentative, home, opts) - baseKm;
+        if (cost < bestCost - 1e-6) { bestCost = cost; best = i; }
       }
+      if (best >= 0) { day.push(unassigned.splice(best, 1)[0]); added = true; }
     }
     days.push(day);
   }
 
-  return improveClusters(days, home, budgetMin, opts);
+  return days;
 }
 
 // Stima dei km stradali di una giornata (casa→tappe→casa, nearest-neighbor).
