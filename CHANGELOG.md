@@ -1,3 +1,6 @@
+## v5.010 — 2026-06-16
+- Multi-giorno: la verifica di fattibilità oraria (dayHoursFeasible) ora conteggia il tempo delle soste durante i tragitti lunghi, come fa il planner reale. Prima la stima era troppo ottimista e poteva assegnare a una giornata una tappa che nella realtà veniva servita dopo la chiusura (caso reale: Giorno 3 con tappa FUORI CHIUSURA e rientro 18:35 > 18:30). Ora quelle tappe vengono rimandate a un altro giorno. Conseguenza: giornate un po' meno piene (per rispettare gli orari, come da regola utente). Aggiornata la sezione Novità (riepilogo v5.001–v5.010).
+
 ## v5.009 — 2026-06-16
 - Diagnostica multi-giorno: per ogni giornata logga la 1ª tappa con orari risolti (openingHours), orario di arrivo e se è scattato il calcolo a ritroso (targetArrivalTime) o si è partiti all'orario fisso. Serve a diagnosticare le tappe lontane che "partono tardi" (es. San Candido arrivo 9:50 invece di 8:30 = orari non risolti per quel giorno della settimana → nessun back-calc). Reso realRows riutilizzabile nel log.
 

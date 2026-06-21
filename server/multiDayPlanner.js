@@ -195,9 +195,15 @@ export function dayHoursFeasible(dayStops, home, opts = {}, dayOfWeek = null) {
   if (dayStops.some(s => resolveStopWindows(s, dayOfWeek).closedToday)) return false;
   const ordered = orderDayFarFirst(dayStops, home, opts);
   const startMin = opts.startMin ?? parseTime("08:00");
-  let t = startMin, prev = home;
+  const restInt = opts.restIntervalMin || 0, restDur = opts.restDurationMin || 0;
+  let t = startMin, prev = home, driveAccum = 0;
   for (const s of ordered) {
-    const arrival = t + legMin(prev, s, opts);
+    const leg = legMin(prev, s, opts);
+    let arrival = t + leg;
+    // Sosta durante i tragitti lunghi: ritarda gli arrivi successivi (come nel planner reale),
+    // così non si assegnano tappe che finirebbero dopo la chiusura.
+    driveAccum += leg;
+    if (restInt > 0 && driveAccum >= restInt) { arrival += restDur; driveAccum -= restInt; }
     const work = stopDuration(s);
     const wins = resolveStopWindows(s, dayOfWeek).wins;
     if (wins.length === 0) {
