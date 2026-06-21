@@ -251,11 +251,31 @@ function groupColocated(stops, opts = {}) {
   return groups;
 }
 
+// Frazione del tempo casa→estremo entro cui una tappa è considerata "sul corridoio".
+// Tarabile sul giro reale tramite la Diagnostica (vedi docs/MULTI_GIORNO.md).
+const ON_CORRIDOR_FRACTION = 0.4;
+
+// Deviazione (min) di una tappa B rispetto al corridoio F→casa:
+//   detour(B) = tempo(F→B) + tempo(B→casa) − tempo(F→casa)
+// ≈0 → B è esattamente sulla via; piccolo → diramazione breve (Ortisei, Merano);
+// grande → B è in un'altra valle (Cavalese rispetto a Bressanone). Per un GRUPPO co-locato
+// si prende il detour minimo tra i suoi membri.
+function groupDetour(group, F, home, fHome, opts) {
+  let best = Infinity;
+  for (const cs of group) {
+    const d = legMin(F, cs, opts) + legMin(cs, home, opts) - fHome;
+    if (d < best) best = d;
+  }
+  return best;
+}
+
 // Raggruppa le tappe in giornate (ognuna parte/torna a casa) rispettando budget e orari.
-// Lavora su GRUPPI co-locati (atomici) e costruisce ogni giornata come zona compatta attorno
-// al punto più lontano. Funzione pura e testabile.
+// Lavora su GRUPPI co-locati (atomici) e costruisce ogni giornata come zona/corridoio coerente:
+// dal punto più lontano (estremo) verso casa, aggiungendo solo le tappe "sulla via". Funzione
+// pura e testabile.
 export function buildDayClusters(stops, home, budgetMin, opts = {}) {
   const unassigned = groupColocated(stops.map(s => ({ ...s })), opts); // array di gruppi
+  const fraction = opts.onCorridorFraction ?? ON_CORRIDOR_FRACTION;
   const days = [];
   let guard = 0;
   const flat = arr => arr.flat();
@@ -271,71 +291,54 @@ export function buildDayClusters(stops, home, budgetMin, opts = {}) {
     const dayGroups = [unassigned.splice(seedI, 1)[0]];
     const dow = dowForCluster(opts, days.length);
 
-    // Accrescimento: aggiunge il gruppo più VICINO alla zona del giorno (minor tempo di strada),
-    // finché ci sta (budget) e gli orari reggono (verifica far-first, prima tappa all'apertura).
-    // La giornata cresce compatta attorno al punto lontano; le tappe vicine a casa restano
-    // lontane dal gruppo → rimandate ai giorni successivi.
+    // Accrescimento "sul corridoio": l'estremo F (la tappa più lontana da casa della giornata)
+    // definisce il corridoio F→casa. Si aggiunge il gruppo col detour MINORE — cioè il più
+    // allineato alla via di rientro — purché entro la soglia (un'altra valle ha detour grande),
+    // entro budget e con orari ok. Così la giornata resta una valle/corridoio coerente e non
+    // mescola direzioni diverse.
     let added = true;
     while (added && unassigned.length) {
       added = false;
       const dayStops = flat(dayGroups);
-      let best = -1, bestDist = Infinity;
+      // F = estremo del giorno (àncora del corridoio).
+      let F = dayStops[0], fd = -1;
+      for (const s of dayStops) { const d = legMin(home, s, opts); if (d > fd) { fd = d; F = s; } }
+      const fHome = legMin(F, home, opts);
+      const detourMax = fraction * fHome;
+      let best = -1, bestDetour = Infinity;
       for (let i = 0; i < unassigned.length; i++) {
+        const detour = groupDetour(unassigned[i], F, home, fHome, opts);
+        if (detour > detourMax) continue; // in un'altra valle → non sul corridoio
         const tentative = [...dayStops, ...unassigned[i]];
         if (estimateDayMinutes(tentative, home, opts).total > budgetMin) continue;
         if (!dayHoursFeasible(tentative, home, opts, dow)) continue;
-        let d = Infinity;
-        for (const cs of unassigned[i]) for (const ds of dayStops) { const t = legMin(ds, cs, opts); if (t < d) d = t; }
-        if (d < bestDist - 1e-6) { bestDist = d; best = i; }
+        if (detour < bestDetour - 1e-6) { bestDetour = detour; best = i; }
       }
       if (best >= 0) { dayGroups.push(unassigned.splice(best, 1)[0]); added = true; }
-    }
-
-    // Swap "pass-through vs terminale": se resta un gruppo NON aggiunto che è più LONTANO da
-    // casa di una tappa già nel giorno (cioè è di passaggio, non terminale), prova a scambiarlo
-    // con la tappa più VICINA a casa del giorno, se la giornata resta valida. Così le tappe di
-    // passaggio (es. Bressanone) entrano e a uscire è quella vicino a casa (facile altro giorno).
-    let swapped = true;
-    while (swapped) {
-      swapped = false;
-      const dayStops = flat(dayGroups);
-      // tappa del giorno più vicina a casa
-      let ni = -1, nd = Infinity;
-      dayGroups.forEach((g, i) => { const d = Math.min(...g.map(s => legMin(home, s, opts))); if (d < nd) { nd = d; ni = i; } });
-      if (ni < 0 || dayGroups.length <= 1) break;
-      const nearGroup = dayGroups[ni];
-      // candidato esterno più vicino al giorno, ma più lontano da casa del nearGroup
-      for (let i = 0; i < unassigned.length; i++) {
-        const cand = unassigned[i];
-        const candHome = Math.min(...cand.map(s => legMin(home, s, opts)));
-        if (candHome <= nd) continue; // non è "di passaggio" (più vicino o uguale a casa)
-        const without = dayGroups.filter((_, k) => k !== ni);
-        const tentative = [...without.flat(), ...cand];
-        if (estimateDayMinutes(tentative, home, opts).total > budgetMin) continue;
-        if (!dayHoursFeasible(tentative, home, opts, dow)) continue;
-        // scambia
-        unassigned.splice(i, 1);
-        dayGroups.splice(ni, 1);
-        dayGroups.push(cand);
-        unassigned.push(nearGroup);
-        swapped = true;
-        break;
-      }
     }
 
     const dayStops = flat(dayGroups);
     days.push(dayStops);
 
     if (opts.log) {
-      let ni = 0, nd = Infinity;
-      unassigned.forEach((g, i) => { for (const cs of g) for (const ds of dayStops) { const t = legMin(ds, cs, opts); if (t < nd) { nd = t; ni = i; } } });
+      let F = dayStops[0], fd = -1;
+      for (const s of dayStops) { const d = legMin(home, s, opts); if (d > fd) { fd = d; F = s; } }
+      const fHome = legMin(F, home, opts);
+      const detourMax = fraction * fHome;
       if (unassigned.length) {
-        const cand = unassigned[ni];
-        const est = estimateDayMinutes([...dayStops, ...cand], home, opts);
-        const hoursOk = dayHoursFeasible([...dayStops, ...cand], home, opts, dow);
+        // Mostra i candidati scartati con il loro detour: serve a tarare ON_CORRIDOR_FRACTION.
+        const cands = unassigned.map(g => {
+          const detour = Math.round(groupDetour(g, F, home, fHome, opts));
+          const est = estimateDayMinutes([...dayStops, ...g], home, opts).total;
+          const hoursOk = dayHoursFeasible([...dayStops, ...g], home, opts, dow);
+          return { name: g[0].customer, detour, est, hoursOk };
+        }).sort((a, b) => a.detour - b.detour).slice(0, 4);
         opts.log(`Giorno ${days.length} chiuso: ${dayStops.length} tappe [${dayStops.map(s => s.customer).join(", ")}]. ` +
-          `Prossima vicina "${cand[0].customer}" (+${Math.round(nd)}min): stima ${est.total}/budget ${budgetMin} → ` +
-          `${est.total > budgetMin ? "OLTRE BUDGET" : "ok budget"}, orari ${hoursOk ? "ok" : "NON ok"}`);
+          `Corridoio da "${F.customer}" (casa ${Math.round(fHome)}min, detour max ${Math.round(detourMax)}min). Scartati: ` +
+          cands.map(c => `${c.name} detour ${c.detour}min` +
+            (c.detour > detourMax ? " [FUORI CORRIDOIO]"
+              : c.est > budgetMin ? ` [OLTRE BUDGET ${c.est}/${budgetMin}]`
+              : !c.hoursOk ? " [ORARI NON ok]" : " [?]")).join("; "));
       } else {
         opts.log(`Giorno ${days.length}: ${dayStops.length} tappe [${dayStops.map(s => s.customer).join(", ")}]`);
       }

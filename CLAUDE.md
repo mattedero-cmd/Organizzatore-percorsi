@@ -82,7 +82,13 @@ server/
   db.js               # Accesso DB: SQLite (locale) / PostgreSQL (Vercel)
   auth.js             # hashPassword, verifyPassword, generateToken
   planner.js          # Logica pianificazione percorso e soste
+  multiDayPlanner.js  # Pianificazione multi-giorno (V5) — vedi sotto
 ```
+
+> **Multi-giorno (V5):** prima di toccare `server/multiDayPlanner.js`, l'endpoint
+> `/api/plan-multiday` o la UI `renderResultMultiDay`, **leggi SEMPRE `docs/MULTI_GIORNO.md`**
+> (fonte di verità: modello mentale dell'utente, vincolo sui test offline, criterio "sul corridoio",
+> approcci già falliti da non ripetere) e **aggiornalo** dopo ogni modifica.
 
 ---
 
