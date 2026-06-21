@@ -297,6 +297,7 @@ export async function buildDayClusters(stops, home, budgetMin, opts = {}, dayFea
     }
     const dayGroups = [unassigned.splice(seedI, 1)[0]];
     const dow = dowForCluster(opts, days.length);
+    if (opts.log) opts.log(`Giorno ${days.length + 1} — seme "${nameOf(dayGroups[0][0])}" (da casa ${Math.round(seedD)}min)`);
 
     // Accrescimento: aggiunge il gruppo più VICINO alla zona del giorno (minor tempo di strada),
     // finché la giornata resta FATTIBILE secondo il motore reale (orari, chiusure, pranzo, soste,
@@ -324,22 +325,22 @@ export async function buildDayClusters(stops, home, budgetMin, opts = {}, dayFea
     days.push(dayStops);
 
     if (opts.log) {
-      // Candidato più vicino non aggiunto + verdetto del motore reale (spiega la chiusura giornata).
-      let ni = -1, nd = Infinity;
-      unassigned.forEach((g, i) => { for (const cs of g) for (const ds of dayStops) { const t = legMin(ds, cs, opts); if (t < nd) { nd = t; ni = i; } } });
-      if (ni >= 0) {
-        const cand = unassigned[ni];
-        const ordered = orderDayFarFirst([...dayStops, ...cand], home, opts);
-        let verdict = "non valida";
-        if (dayFeasible) {
+      opts.log(`Giorno ${days.length} chiuso: ${dayStops.length} tappe [${dayStops.map(nameOf).join(" → ")}]`);
+      // Perché ogni tappa NON è entrata: i candidati più vicini al giorno (per tempo-strada) col
+      // verdetto del motore reale. Distingue "fuori chiusura" / "oltre orario" da "altra direzione".
+      if (unassigned.length && dayFeasible) {
+        const ranked = unassigned.map(g => {
+          let d = Infinity;
+          for (const cs of g) for (const ds of dayStops) { const t = legMin(ds, cs, opts); if (t < d) d = t; }
+          return { g, d };
+        }).sort((a, b) => a.d - b.d).slice(0, 6);
+        for (const { g, d } of ranked) {
+          const ordered = orderDayFarFirst([...dayStops, ...g], home, opts);
           const f = await dayFeasible(ordered, dow);
-          verdict = f.ok ? "valida (ma chiusa per altro)"
-            : `${f.dayEndWithBreaks != null ? `rientro ${formatTime(f.dayEndWithBreaks)}` : "orari"}${f.lateStops?.length ? `, FUORI CHIUSURA: ${f.lateStops.join(", ")}` : ""}`;
+          const why = f.ok ? "VALIDA ma non aggiunta (?)"
+            : `${f.dayEndWithBreaks != null ? `rientro ${formatTime(f.dayEndWithBreaks)}${opts.endMin != null && f.dayEndWithBreaks > opts.endMin ? " OLTRE ORARIO" : ""}` : "orari non ok"}${f.lateStops?.length ? `, FUORI CHIUSURA: ${f.lateStops.join(", ")}` : ""}`;
+          opts.log(`   ✗ "${nameOf(g[0])}" (+${Math.round(d)}min dal giorno, da casa ${Math.round(legMin(home, g[0], opts))}min): ${why}`);
         }
-        opts.log(`Giorno ${days.length} chiuso: ${dayStops.length} tappe [${dayStops.map(nameOf).join(", ")}]. ` +
-          `Prossima vicina "${nameOf(cand[0])}" (+${Math.round(nd)}min) NON entra: ${verdict}`);
-      } else {
-        opts.log(`Giorno ${days.length}: ${dayStops.length} tappe [${dayStops.map(nameOf).join(", ")}]`);
       }
     }
   }
@@ -419,6 +420,7 @@ export async function planMultiDay(payload, settings = {}, restStops = []) {
     restIntervalMin: Number(settings.restIntervalMin ?? 120),
     restDurationMin: Number(settings.restDurationMin ?? 15),
     startMin,
+    endMin,
     baseDow,
     log,
   };
@@ -458,6 +460,18 @@ export async function planMultiDay(payload, settings = {}, restStops = []) {
       log(`MATRICE tempi reali: ${mtx.realPairs}/${mtx.totalPairs} coppie (${pct}%)` +
         (pct < 90 ? ` — ATTENZIONE: ${100 - pct}% in linea d'aria (Google non ha risposto): raggruppamenti meno precisi` : ""));
     } catch (e) { opts.distMin = null; log(`MATRICE tempi reali: ERRORE (${e.message}) → tutto in linea d'aria`); }
+
+    // GEOMETRIA reale (per diagnosticare i corridoi senza ricalcolarli): tempo-strada da casa a
+    // ogni paese (estremi → vicini) e, per ogni paese, il vicino più prossimo su strada.
+    const byHome = withCoords.map(s => ({ s, h: legMin(home, s, opts) })).sort((a, b) => b.h - a.h);
+    log(`GEOMETRIA da casa (lontano→vicino): ${byHome.map(({ s, h }) => `${nameOf(s)} ${Math.round(h)}'`).join(", ")}`);
+    const nnLines = withCoords.map(s => {
+      let nn = null, nd = Infinity;
+      for (const o of withCoords) { if (o === s) continue; const t = legMin(s, o, opts); if (t < nd) { nd = t; nn = o; } }
+      return `${nameOf(s)}→${nn ? nameOf(nn) : "?"} ${Math.round(nd)}'`;
+    });
+    log(`VICINI più prossimi su strada: ${nnLines.join(", ")}`);
+
     // Oracolo di fattibilità = motore reale della giornata singola (evaluateDayTiming): stessa
     // logica di orari/chiusure/pranzo/soste/spezzare interventi. Il dow serve a risolvere gli orari
     // di apertura per quel giorno della settimana (data fittizia con lo stesso weekday).
@@ -503,6 +517,12 @@ export async function planMultiDay(payload, settings = {}, restStops = []) {
       .map(nameOf);
     log(`Giorno ${i + 1} (${dayDate}): ${orderedStops.length} tappe [${orderedStops.map(nameOf).join(" → ")}], ${plan.summary?.dayStart}–${plan.summary?.dayEnd}, ${Number(plan.summary?.totalKm || 0).toFixed(0)}km` +
       `${overBudget ? " · OLTRE ORARIO" : ""}${lateStops.length ? ` · FUORI CHIUSURA: ${[...new Set(lateStops)].join(", ")}` : ""}`);
+    // Margine/attese/pranzo: distingue "giornata corta perché i clienti chiudono presto" da buchi.
+    const waitMin = realRows.reduce((s, r) => s + (Number(r.waitMinutes) || 0), 0);
+    const lunchRow = (plan.rows || []).find(r => r.type === "lunch");
+    const slack = dayEndMin != null ? endMin - dayEndMin : null;
+    log(`  → margine fino a max ${slack != null ? slack + "min" : "?"}, attesa totale ${Math.round(waitMin)}min` +
+      `${lunchRow ? `, pranzo ~${lunchRow.arrivalTime || lunchRow.serviceStartTime || "?"}` : ", nessun pranzo inserito"}`);
     // Diagnostica timing 1ª tappa: spiega le partenze "tardi" (es. San Candido alle 9:50).
     const f = realRows[0];
     if (f) {
