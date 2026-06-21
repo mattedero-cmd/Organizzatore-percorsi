@@ -196,24 +196,32 @@ export function dayHoursFeasible(dayStops, home, opts = {}, dayOfWeek = null) {
   const ordered = orderDayFarFirst(dayStops, home, opts);
   const startMin = opts.startMin ?? parseTime("08:00");
   const restInt = opts.restIntervalMin || 0, restDur = opts.restDurationMin || 0;
-  let t = startMin, prev = home, driveAccum = 0;
-  for (const s of ordered) {
-    const leg = legMin(prev, s, opts);
-    let arrival = t + leg;
-    // Sosta durante i tragitti lunghi: ritarda gli arrivi successivi (come nel planner reale),
-    // così non si assegnano tappe che finirebbero dopo la chiusura.
-    driveAccum += leg;
-    if (restInt > 0 && driveAccum >= restInt) { arrival += restDur; driveAccum -= restInt; }
+  let t = 0, prev = home, driveAccum = 0;
+  for (let k = 0; k < ordered.length; k++) {
+    const s = ordered[k];
     const work = stopDuration(s);
     const wins = resolveStopWindows(s, dayOfWeek).wins;
-    if (wins.length === 0) {
-      t = arrival + work;
+    if (k === 0) {
+      // Prima tappa (la più lontana): nel far-first si parte presto per arrivare all'apertura
+      // (calcolo a ritroso). Quindi inizia il servizio all'apertura, non a startMin + guida.
+      t = (wins.length ? Math.max(wins[0].start, startMin) : startMin + legMin(home, s, opts)) + work;
     } else {
-      const w = wins.find(win => arrival <= win.end);
-      if (!w) return false;                                              // arrivo dopo la chiusura
-      const serviceStart = Math.max(arrival, w.start);
-      if (serviceStart + work > w.end + CLOSURE_TOLERANCE_MIN) return false; // finisce troppo tardi
-      t = serviceStart + work;
+      const leg = legMin(prev, s, opts);
+      let arrival = t + leg;
+      driveAccum += leg;
+      if (restInt > 0 && driveAccum >= restInt) { arrival += restDur; driveAccum -= restInt; }
+      if (wins.length === 0) {
+        t = arrival + work;
+      } else {
+        // Prima finestra in cui il lavoro CI STA davvero (se l'arrivo è a ridosso della
+        // chiusura mattutina, si passa al pomeriggio — come fa il planner reale).
+        let placed = false;
+        for (const w of wins) {
+          const serviceStart = Math.max(arrival, w.start);
+          if (serviceStart + work <= w.end + CLOSURE_TOLERANCE_MIN) { t = serviceStart + work; placed = true; break; }
+        }
+        if (!placed) return false; // nessuna finestra utile → dopo la chiusura
+      }
     }
     prev = s;
   }
@@ -263,41 +271,74 @@ export function buildDayClusters(stops, home, budgetMin, opts = {}) {
     const dayGroups = [unassigned.splice(seedI, 1)[0]];
     const dow = dowForCluster(opts, days.length);
 
-    // Accrescimento: aggiunge il gruppo più VICINO alla zona del giorno (minor tempo di strada
-    // tra i membri), così la giornata cresce compatta attorno al punto lontano (incluse le
-    // deviazioni di zona tipo Merano/Ortisei). Le tappe vicine a casa restano lontane dal
-    // gruppo → rimandate ai giorni successivi. Vincoli: budget e orari (su ordine far-first).
+    // Accrescimento: aggiunge il gruppo più VICINO alla zona del giorno (minor tempo di strada),
+    // finché ci sta (budget) e gli orari reggono (verifica far-first, prima tappa all'apertura).
+    // La giornata cresce compatta attorno al punto lontano; le tappe vicine a casa restano
+    // lontane dal gruppo → rimandate ai giorni successivi.
     let added = true;
     while (added && unassigned.length) {
       added = false;
       const dayStops = flat(dayGroups);
       let best = -1, bestDist = Infinity;
       for (let i = 0; i < unassigned.length; i++) {
-        const candStops = unassigned[i];
-        const tentative = [...dayStops, ...candStops];
+        const tentative = [...dayStops, ...unassigned[i]];
         if (estimateDayMinutes(tentative, home, opts).total > budgetMin) continue;
         if (!dayHoursFeasible(tentative, home, opts, dow)) continue;
         let d = Infinity;
-        for (const cs of candStops) for (const ds of dayStops) { const t = legMin(ds, cs, opts); if (t < d) d = t; }
+        for (const cs of unassigned[i]) for (const ds of dayStops) { const t = legMin(ds, cs, opts); if (t < d) d = t; }
         if (d < bestDist - 1e-6) { bestDist = d; best = i; }
       }
       if (best >= 0) { dayGroups.push(unassigned.splice(best, 1)[0]); added = true; }
     }
+
+    // Swap "pass-through vs terminale": se resta un gruppo NON aggiunto che è più LONTANO da
+    // casa di una tappa già nel giorno (cioè è di passaggio, non terminale), prova a scambiarlo
+    // con la tappa più VICINA a casa del giorno, se la giornata resta valida. Così le tappe di
+    // passaggio (es. Bressanone) entrano e a uscire è quella vicino a casa (facile altro giorno).
+    let swapped = true;
+    while (swapped) {
+      swapped = false;
+      const dayStops = flat(dayGroups);
+      // tappa del giorno più vicina a casa
+      let ni = -1, nd = Infinity;
+      dayGroups.forEach((g, i) => { const d = Math.min(...g.map(s => legMin(home, s, opts))); if (d < nd) { nd = d; ni = i; } });
+      if (ni < 0 || dayGroups.length <= 1) break;
+      const nearGroup = dayGroups[ni];
+      // candidato esterno più vicino al giorno, ma più lontano da casa del nearGroup
+      for (let i = 0; i < unassigned.length; i++) {
+        const cand = unassigned[i];
+        const candHome = Math.min(...cand.map(s => legMin(home, s, opts)));
+        if (candHome <= nd) continue; // non è "di passaggio" (più vicino o uguale a casa)
+        const without = dayGroups.filter((_, k) => k !== ni);
+        const tentative = [...without.flat(), ...cand];
+        if (estimateDayMinutes(tentative, home, opts).total > budgetMin) continue;
+        if (!dayHoursFeasible(tentative, home, opts, dow)) continue;
+        // scambia
+        unassigned.splice(i, 1);
+        dayGroups.splice(ni, 1);
+        dayGroups.push(cand);
+        unassigned.push(nearGroup);
+        swapped = true;
+        break;
+      }
+    }
+
     const dayStops = flat(dayGroups);
     days.push(dayStops);
 
-    // Diagnostica: perché la giornata si è chiusa? (per capire i giorni con poche tappe)
-    if (opts.log && unassigned.length) {
+    if (opts.log) {
       let ni = 0, nd = Infinity;
       unassigned.forEach((g, i) => { for (const cs of g) for (const ds of dayStops) { const t = legMin(ds, cs, opts); if (t < nd) { nd = t; ni = i; } } });
-      const cand = unassigned[ni];
-      const tentative = [...dayStops, ...cand];
-      const est = estimateDayMinutes(tentative, home, opts);
-      const overBudget = est.total > budgetMin;
-      const hoursOk = dayHoursFeasible(tentative, home, opts, dow);
-      opts.log(`Giorno ${days.length} chiuso: ${dayStops.length} tappe [${dayStops.map(s => s.customer).join(", ")}]. ` +
-        `Prossima vicina "${cand[0].customer}" (+${Math.round(nd)}min): aggiungendola stima ${est.total}min/budget ${budgetMin} → ` +
-        `${overBudget ? "OLTRE BUDGET" : "ok budget"}, orari ${hoursOk ? "ok" : "NON ok"}`);
+      if (unassigned.length) {
+        const cand = unassigned[ni];
+        const est = estimateDayMinutes([...dayStops, ...cand], home, opts);
+        const hoursOk = dayHoursFeasible([...dayStops, ...cand], home, opts, dow);
+        opts.log(`Giorno ${days.length} chiuso: ${dayStops.length} tappe [${dayStops.map(s => s.customer).join(", ")}]. ` +
+          `Prossima vicina "${cand[0].customer}" (+${Math.round(nd)}min): stima ${est.total}/budget ${budgetMin} → ` +
+          `${est.total > budgetMin ? "OLTRE BUDGET" : "ok budget"}, orari ${hoursOk ? "ok" : "NON ok"}`);
+      } else {
+        opts.log(`Giorno ${days.length}: ${dayStops.length} tappe [${dayStops.map(s => s.customer).join(", ")}]`);
+      }
     }
   }
 
