@@ -90,6 +90,13 @@ Lo **swap pass-through/terminale è stato RIMOSSO** (era la causa principale del
   casa" senza guardare la direzione (Giorno 1 finiva con Cavalese; Tione+Riva+Bolzano insieme). RIMOSSO.
 - **Insertion-cost + soglia 1.2×distHome** [v5.012]: nei test offline non mescolava, ma l'utente l'ha trovato
   peggiore in produzione (probabile soglia mal tarata sui tempi reali). REVERT in v5.013.
+- **Accrescimento "sul corridoio" / detour** [v5.014]: B entra solo se `detour(B) ≤ 0.4×tempo(F→casa)`.
+  Sul giro reale FRAMMENTA: con seme = tappa più lontana, ogni valle lontana di direzione diversa
+  (Bressanone N, Cles NO, Primiero E) diventa un seme isolato in una giornata dedicata (9 giornate).
+  È il fallimento OPPOSTO allo swap (corridoio troppo restrittivo / swap troppo permissivo). REVERT in v5.015.
+  Lezione: il solo criterio geometrico seme→casa non basta; manca la nozione di **valli adiacenti
+  collegate da un passo** (CSV H/G/F dell'utente) per accorpare estremi vicini che NON sono sullo stesso
+  raggio da casa. Da introdurre PRIMA di ritentare un criterio direzionale, e solo con dati reali.
 
 ## Correzioni alla verifica oraria (queste sono buone, tenerle)
 - `dayHoursFeasible` simula l'ordine far-first reale; la **1ª tappa inizia all'apertura** (riproduce il

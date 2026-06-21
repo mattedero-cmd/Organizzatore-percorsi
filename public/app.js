@@ -1270,7 +1270,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.014 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.015 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -1282,9 +1282,9 @@ function renderMenuInfo() {
         <li>${state.whisperConfigured ? _svg('<polyline points="20 6 9 17 4 12"/>', 14) + " Comandi vocali attivi (Whisper)" : _svg('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>', 14) + " Comandi vocali non configurati"}</li>
       </ul>
 
-      <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v5.014</p>
+      <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v5.015</p>
       <ul class="info-list">
-        <li>Multi-giorno, nuovo criterio "sul corridoio" per non mescolare valli diverse nella stessa giornata: una tappa entra nel giorno solo se è davvero <em>sulla via</em> di rientro dal punto più lontano verso casa (es. Ortisei è una breve diramazione del Nord ed entra; Cavalese è un'altra valle e non segue Bressanone). La Diagnostica ora mostra il "detour" di ogni tappa scartata, così la soglia è regolabile sul giro reale.</li>
+        <li>Multi-giorno: annullato il criterio "sul corridoio" della v5.014, che sul giro reale spezzava il piano in troppe giornate (valli lontane come Bressanone, Cles e Primiero finivano in giornate dedicate). Ripristinata la logica precedente, che riempiva meglio le giornate.</li>
       </ul>
 
       <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v5.011</p>
