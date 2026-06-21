@@ -1270,7 +1270,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.020 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.021 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -1282,10 +1282,10 @@ function renderMenuInfo() {
         <li>${state.whisperConfigured ? _svg('<polyline points="20 6 9 17 4 12"/>', 14) + " Comandi vocali attivi (Whisper)" : _svg('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>', 14) + " Comandi vocali non configurati"}</li>
       </ul>
 
-      <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v5.020 — vincolo direzionale + riepilogo multi-giorno</p>
+      <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v5.021 — riepilogo multi-giorno</p>
       <ul class="info-list">
-        <li><strong>Nuovo vincolo direzionale:</strong> una tappa entra in una giornata solo se è più vicina al gruppo di quanto lo sia a casa. Le tappe vicino casa (es. Pergine, Trento, Levico) non vengono più "appese" ai giorni lontani — dove inquinavano gli orari e spingevano fuori le tappe di corridoio come Ortisei — ma raggruppate in una giornata vicino-casa dedicata. Risolve "perché salta Ortisei".</li>
-        <li><strong>Come funziona ora il multi-giorno (v5.011→v5.020):</strong> ogni giornata parte dalla tappa più lontana e rientra verso casa; la fattibilità (orari, chiusure, pranzo, soste, interventi spezzati) è calcolata dallo stesso motore della giornata singola; le tappe restano nello stesso paese unite; le tappe vicino casa fanno giornata a parte. La Diagnostica mostra geometria, semi, tappe scartate col motivo e margini.</li>
+        <li><strong>Annullato il vincolo direzionale della v5.020:</strong> frammentava il piano in troppe giornate, spingendo le ultime tappe nel weekend (banche chiuse) e creando giornate da una tappa sola. Tornati alla logica della v5.019.</li>
+        <li><strong>Come funziona ora il multi-giorno:</strong> ogni giornata parte dalla tappa più lontana e rientra verso casa; la fattibilità (orari, chiusure, pranzo, soste, interventi spezzati) è calcolata dallo stesso motore della giornata singola; le tappe nello stesso paese restano unite. La Diagnostica mostra geometria, semi, tappe scartate col motivo e margini. Ancora da migliorare: scelta del giorno della settimana (evitare i giorni di chiusura) e coerenza delle valli.</li>
       </ul>
 
       <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v5.019</p>

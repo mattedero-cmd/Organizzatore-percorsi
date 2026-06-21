@@ -59,14 +59,8 @@ lontana alla più vicina; i resti vicini si accorpano alla fine.**
 2. `groupColocated` → tappe stesso paese (località) o entro ~6 min = gruppo atomico (mai divise).
 3. `buildDayClusters` (async, una giornata alla volta):
    - **Seme** = gruppo col membro più LONTANO da casa.
-   - **Vincolo direzionale (v5.020)** = un candidato entra solo se la distanza-strada dal GRUPPO è
-     ≤ `NEAR_HOME_FACTOR` (1.3) × la sua distanza da CASA. Risolve la "rete a stella": le tappe vicino
-     casa (Pergine, Trento, Levico) sono comode da appendere a qualsiasi giornata (vicine al rientro)
-     ma sono in altre direzioni — inquinano gli orari e spingono fuori le tappe di corridoio (Ortisei).
-     Rimandate a un giorno vicino-casa dove si raggruppano tra loro. **Soglia tarabile sulla Diagnostica.**
-   - **Accrescimento** = tra i candidati ammessi dal vincolo direzionale, aggiunge il più VICINO al
-     giorno **purché la giornata resti FATTIBILE secondo il MOTORE REALE** (`dayFeasible` →
-     `evaluateDayTiming`), non più approssimazioni.
+   - **Accrescimento** = aggiunge il gruppo più VICINO al giorno **purché la giornata resti FATTIBILE
+     secondo il MOTORE REALE** (`dayFeasible` → `evaluateDayTiming`), non più approssimazioni.
    - **Fattibile** = rientro entro maxReturnTime (pause incluse) E nessuna tappa servita oltre la chiusura.
    - Quando nessun candidato ammesso mantiene la giornata fattibile → chiude la giornata.
 4. Per ogni giornata: ordine **far-first** bloccato (`orderDayFarFirst`) → `planRoute` (orari/soste/pranzo reali).
@@ -109,6 +103,12 @@ Lo **swap pass-through/terminale è stato RIMOSSO** (era la causa principale del
   casa" senza guardare la direzione (Giorno 1 finiva con Cavalese; Tione+Riva+Bolzano insieme). RIMOSSO.
 - **Insertion-cost + soglia 1.2×distHome** [v5.012]: nei test offline non mescolava, ma l'utente l'ha trovato
   peggiore in produzione (probabile soglia mal tarata sui tempi reali). REVERT in v5.013.
+- **Vincolo direzionale `NEAR_HOME_FACTOR` (entra se distGruppo ≤ 1.3×distCasa)** [v5.020]: sul giro reale
+  FRAMMENTAVA in 8 giornate. Le tappe vicino casa restavano senza giorno valido quando il partner naturale
+  era già preso (Mezzolombardo nel Nord → Cles orfana) o cadevano in giorni di chiusura; le 8 giornate
+  sconfinavano nel WEEKEND (banche chiuse) → giornate da 1 tappa servita FUORI CHIUSURA. REVERT in v5.021.
+  Lezione: i due problemi VERI sono la scelta del giorno della settimana (chiusure) e il partner-eating,
+  non un'altra soglia direzionale.
 - **Accrescimento "sul corridoio" / detour** [v5.014]: B entra solo se `detour(B) ≤ 0.4×tempo(F→casa)`.
   Sul giro reale FRAMMENTA: con seme = tappa più lontana, ogni valle lontana di direzione diversa
   (Bressanone N, Cles NO, Primiero E) diventa un seme isolato in una giornata dedicata (9 giornate).

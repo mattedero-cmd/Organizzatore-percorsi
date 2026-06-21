@@ -270,12 +270,6 @@ function groupColocated(stops, opts = {}) {
 // produzione; lo swap (≤v5.015) MESCOLAVA. Entrambi usavano gate approssimati. La vera causa era la
 // divergenza dell'approssimazione dal motore reale (es. Bressanone esiliato per l'interazione col
 // pranzo): ora il gate è il motore reale.
-// Una tappa entra in una giornata solo se la sua distanza-strada dal gruppo è ≤ NEAR_HOME_FACTOR ×
-// la sua distanza da casa. Sopra questa soglia è "molto più vicina a casa che al gruppo" → è una
-// tappa di un'altra direzione, comoda solo perché vicina al rientro: va rimandata a un giorno
-// vicino-casa. Tarabile sulla Diagnostica (geometria reale). Vedi docs/MULTI_GIORNO.md.
-const NEAR_HOME_FACTOR = 1.3;
-
 export async function buildDayClusters(stops, home, budgetMin, opts = {}, dayFeasible = null) {
   const unassigned = groupColocated(stops.map(s => ({ ...s })), opts); // array di gruppi
   const days = [];
@@ -320,14 +314,6 @@ export async function buildDayClusters(stops, home, budgetMin, opts = {}, dayFea
         let d = Infinity;
         for (const cs of unassigned[i]) for (const ds of dayStops) { const t = legMin(ds, cs, opts); if (t < d) d = t; }
         if (d >= bestDist - 1e-6) continue; // non migliora il migliore già trovato
-        // Vincolo direzionale (rete a stella): una tappa vicino casa è "comoda" da appendere a
-        // qualsiasi giornata perché è vicina al rientro, anche se è in un'altra valle (es. Pergine
-        // 22' da casa finiva nel giorno di San Candido e spingeva fuori Ortisei). Una tappa entra
-        // solo se è più vicina al GRUPPO che a CASA (con margine NEAR_HOME_FACTOR): le tappe
-        // vicino casa restano per un giorno vicino-casa dedicato, dove si raggruppano tra loro.
-        let homeT = Infinity;
-        for (const cs of unassigned[i]) { const t = legMin(home, cs, opts); if (t < homeT) homeT = t; }
-        if (d > NEAR_HOME_FACTOR * homeT) continue;
         const tentative = [...dayStops, ...unassigned[i]];
         if (!(await feasible(tentative, dow))) continue;
         bestDist = d; best = i;
@@ -349,17 +335,10 @@ export async function buildDayClusters(stops, home, budgetMin, opts = {}, dayFea
           return { g, d };
         }).sort((a, b) => a.d - b.d).slice(0, 6);
         for (const { g, d } of ranked) {
-          let homeT = Infinity;
-          for (const cs of g) { const t = legMin(home, cs, opts); if (t < homeT) homeT = t; }
-          let why;
-          if (d > NEAR_HOME_FACTOR * homeT) {
-            why = `ALTRA DIREZIONE (gruppo ${Math.round(d)}min > ${NEAR_HOME_FACTOR}×casa ${Math.round(homeT)}min) → giorno vicino-casa`;
-          } else {
-            const ordered = orderDayFarFirst([...dayStops, ...g], home, opts);
-            const f = await dayFeasible(ordered, dow);
-            why = f.ok ? "VALIDA ma non aggiunta (?)"
-              : `${f.dayEndWithBreaks != null ? `rientro ${formatTime(f.dayEndWithBreaks)}${opts.endMin != null && f.dayEndWithBreaks > opts.endMin ? " OLTRE ORARIO" : ""}` : "orari non ok"}${f.lateStops?.length ? `, FUORI CHIUSURA: ${f.lateStops.join(", ")}` : ""}`;
-          }
+          const ordered = orderDayFarFirst([...dayStops, ...g], home, opts);
+          const f = await dayFeasible(ordered, dow);
+          const why = f.ok ? "VALIDA ma non aggiunta (?)"
+            : `${f.dayEndWithBreaks != null ? `rientro ${formatTime(f.dayEndWithBreaks)}${opts.endMin != null && f.dayEndWithBreaks > opts.endMin ? " OLTRE ORARIO" : ""}` : "orari non ok"}${f.lateStops?.length ? `, FUORI CHIUSURA: ${f.lateStops.join(", ")}` : ""}`;
           opts.log(`   ✗ "${nameOf(g[0])}" (+${Math.round(d)}min dal giorno, da casa ${Math.round(legMin(home, g[0], opts))}min): ${why}`);
         }
       }
