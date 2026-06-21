@@ -59,10 +59,16 @@ lontana alla più vicina; i resti vicini si accorpano alla fine.**
 2. `groupColocated` → tappe stesso paese (località) o entro ~6 min = gruppo atomico (mai divise).
 3. `buildDayClusters` (async, una giornata alla volta):
    - **Seme** = gruppo col membro più LONTANO da casa.
-   - **Accrescimento** = aggiunge il gruppo più VICINO al giorno **purché la giornata resti FATTIBILE
-     secondo il MOTORE REALE** (`dayFeasible` → `evaluateDayTiming`), non più approssimazioni.
+   - **Vincolo direzionale (v5.020)** = un candidato entra solo se la distanza-strada dal GRUPPO è
+     ≤ `NEAR_HOME_FACTOR` (1.3) × la sua distanza da CASA. Risolve la "rete a stella": le tappe vicino
+     casa (Pergine, Trento, Levico) sono comode da appendere a qualsiasi giornata (vicine al rientro)
+     ma sono in altre direzioni — inquinano gli orari e spingono fuori le tappe di corridoio (Ortisei).
+     Rimandate a un giorno vicino-casa dove si raggruppano tra loro. **Soglia tarabile sulla Diagnostica.**
+   - **Accrescimento** = tra i candidati ammessi dal vincolo direzionale, aggiunge il più VICINO al
+     giorno **purché la giornata resti FATTIBILE secondo il MOTORE REALE** (`dayFeasible` →
+     `evaluateDayTiming`), non più approssimazioni.
    - **Fattibile** = rientro entro maxReturnTime (pause incluse) E nessuna tappa servita oltre la chiusura.
-   - Quando nessun candidato vicino mantiene la giornata fattibile → chiude la giornata.
+   - Quando nessun candidato ammesso mantiene la giornata fattibile → chiude la giornata.
 4. Per ogni giornata: ordine **far-first** bloccato (`orderDayFarFirst`) → `planRoute` (orari/soste/pranzo reali).
 5. Date consecutive da `scheduledDate`.
 
