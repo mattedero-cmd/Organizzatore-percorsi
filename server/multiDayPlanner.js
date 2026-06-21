@@ -164,31 +164,48 @@ function resolveStopWindows(stop, dayOfWeek) {
 // Tolleranza: va bene finire fino a 10 min dopo la chiusura se si sta già lavorando.
 export const CLOSURE_TOLERANCE_MIN = 10;
 
-// Una giornata è fattibile rispetto agli orari se, visitando le tappe in ordine
-// "earliest deadline first" (chi chiude prima viene servito prima), nessuna viene
-// raggiunta dopo la chiusura né finisce oltre la chiusura + tolleranza. Stima leggera
-// (tempi haversine): non sostituisce il planner, ma evita di assegnare a una giornata
-// tappe che lì non potrebbero essere servite in orario.
+// Ordina le tappe di una giornata "far-first": prima il punto più lontano da casa, poi via
+// via il più vicino al precedente (rientro verso casa). Così il lungo viaggio si fa presto,
+// quando i negozi sono ancora chiusi, e si arriva alle tappe quando aprono — più tempo utile
+// al lavoro. È l'ordine che verrà bloccato nel giro della giornata.
+function orderDayFarFirst(dayStops, home, opts = {}) {
+  if (dayStops.length <= 1) return [...dayStops];
+  let fi = 0, fd = -1;
+  dayStops.forEach((s, i) => { const d = legMin(home, s, opts); if (d > fd) { fd = d; fi = i; } });
+  const order = [dayStops[fi]];
+  const rest = dayStops.filter((_, i) => i !== fi);
+  let cur = order[0];
+  while (rest.length) {
+    let bi = 0, bd = Infinity;
+    rest.forEach((s, i) => { const d = legMin(cur, s, opts); if (d < bd) { bd = d; bi = i; } });
+    cur = rest[bi]; order.push(cur); rest.splice(bi, 1);
+  }
+  return order;
+}
+
+// Fattibilità oraria della giornata, simulata NELL'ORDINE REALE far-first (lo stesso che verrà
+// bloccato nel giro): nessuna tappa deve essere raggiunta dopo la chiusura né finire oltre la
+// chiusura + tolleranza. Così una tappa che cadrebbe dopo la chiusura pomeridiana non viene
+// assegnata a quella giornata (finirà in un altro giorno).
 export function dayHoursFeasible(dayStops, home, opts = {}, dayOfWeek = null) {
-  const items = dayStops.map(s => ({ s, ...resolveStopWindows(s, dayOfWeek) }));
-  if (items.some(it => it.closedToday)) return false; // chiusa quel giorno → non servibile
-  const lastClose = it => it.wins.length ? Math.max(...it.wins.map(w => w.end)) : Infinity;
-  items.sort((a, b) => lastClose(a) - lastClose(b));
+  if (dayStops.some(s => resolveStopWindows(s, dayOfWeek).closedToday)) return false;
+  const ordered = orderDayFarFirst(dayStops, home, opts);
   const startMin = opts.startMin ?? parseTime("08:00");
   let t = startMin, prev = home;
-  for (const it of items) {
-    const arrival = t + roadTimeMin(prev, it.s, opts);
-    const work = stopDuration(it.s);
-    if (it.wins.length === 0) {
+  for (const s of ordered) {
+    const arrival = t + legMin(prev, s, opts);
+    const work = stopDuration(s);
+    const wins = resolveStopWindows(s, dayOfWeek).wins;
+    if (wins.length === 0) {
       t = arrival + work;
     } else {
-      const w = it.wins.find(win => arrival <= win.end);
+      const w = wins.find(win => arrival <= win.end);
       if (!w) return false;                                              // arrivo dopo la chiusura
       const serviceStart = Math.max(arrival, w.start);
       if (serviceStart + work > w.end + CLOSURE_TOLERANCE_MIN) return false; // finisce troppo tardi
       t = serviceStart + work;
     }
-    prev = it.s;
+    prev = s;
   }
   return true;
 }
@@ -198,47 +215,60 @@ function dowForCluster(opts, idx) {
   return opts.baseDow == null ? null : (((opts.baseDow + idx) % 7) + 7) % 7;
 }
 
-// Raggruppa le tappe in giornate (ognuna parte/torna a casa) rispettando il budget
-// di minuti. Funzione pura e testabile: usa solo le coordinate e la stima.
+// Raggruppa in gruppi atomici le tappe co-locate (stesso paese / molto vicine per strada):
+// non verranno mai divise tra giornate diverse. Single-link: una tappa entra in un gruppo se
+// è entro CO_LOCATION_MIN minuti da almeno un suo membro.
+const CO_LOCATION_MIN = 6;
+function groupColocated(stops, opts = {}) {
+  const groups = [];
+  for (const s of stops) {
+    let g = groups.find(grp => grp.some(t => legMin(t, s, opts) <= CO_LOCATION_MIN));
+    if (g) g.push(s); else groups.push([s]);
+  }
+  return groups;
+}
+
+// Raggruppa le tappe in giornate (ognuna parte/torna a casa) rispettando budget e orari.
+// Lavora su GRUPPI co-locati (atomici) e costruisce ogni giornata come zona compatta attorno
+// al punto più lontano. Funzione pura e testabile.
 export function buildDayClusters(stops, home, budgetMin, opts = {}) {
-  const unassigned = stops.map(s => ({ ...s }));
+  const unassigned = groupColocated(stops.map(s => ({ ...s })), opts); // array di gruppi
   const days = [];
   let guard = 0;
+  const flat = arr => arr.flat();
 
   while (unassigned.length && guard++ < 5000) {
-    // Seme: tappa più LONTANA da casa tra quelle ancora libere. Così le zone lontane
-    // vengono consumate per prime e il "fronte" massimo si accorcia ogni giorno: non si
-    // torna mai più lontano di dove si è già stati.
+    // Seme: gruppo col membro più LONTANO da casa. Le zone lontane vengono consumate per
+    // prime e il "fronte" massimo si accorcia ogni giorno.
     let seedI = 0, seedD = -1;
     for (let i = 0; i < unassigned.length; i++) {
-      const d = legMin(home, unassigned[i], opts);
+      const d = legMin(home, unassigned[i][0], opts);
       if (d > seedD) { seedD = d; seedI = i; }
     }
-    const day = [unassigned.splice(seedI, 1)[0]];
+    const dayGroups = [unassigned.splice(seedI, 1)[0]];
     const dow = dowForCluster(opts, days.length);
 
-    // Accrescimento: aggiunge la tappa più VICINA al gruppo del giorno (minor tempo di
-    // strada da una tappa già nel giorno), così la giornata cresce come una zona compatta
-    // attorno al punto lontano (es. tutto il nord), incluse le deviazioni di zona (Merano,
-    // Ortisei). Le tappe vicine a casa restano lontane dal gruppo e quindi vengono rimandate
-    // ai giorni successivi, non infilate nel giro lontano "perché sulla via". Le tappe nello
-    // stesso luogo hanno distanza ~0 e vengono prese insieme. Vincoli: budget e orari.
+    // Accrescimento: aggiunge il gruppo più VICINO alla zona del giorno (minor tempo di strada
+    // tra i membri), così la giornata cresce compatta attorno al punto lontano (incluse le
+    // deviazioni di zona tipo Merano/Ortisei). Le tappe vicine a casa restano lontane dal
+    // gruppo → rimandate ai giorni successivi. Vincoli: budget e orari (su ordine far-first).
     let added = true;
     while (added && unassigned.length) {
       added = false;
+      const dayStops = flat(dayGroups);
       let best = -1, bestDist = Infinity;
       for (let i = 0; i < unassigned.length; i++) {
-        const cand = unassigned[i];
-        const tentative = [...day, cand];
+        const candStops = unassigned[i];
+        const tentative = [...dayStops, ...candStops];
         if (estimateDayMinutes(tentative, home, opts).total > budgetMin) continue;
         if (!dayHoursFeasible(tentative, home, opts, dow)) continue;
         let d = Infinity;
-        for (const ds of day) { const t = legMin(ds, cand, opts); if (t < d) d = t; }
+        for (const cs of candStops) for (const ds of dayStops) { const t = legMin(ds, cs, opts); if (t < d) d = t; }
         if (d < bestDist - 1e-6) { bestDist = d; best = i; }
       }
-      if (best >= 0) { day.push(unassigned.splice(best, 1)[0]); added = true; }
+      if (best >= 0) { dayGroups.push(unassigned.splice(best, 1)[0]); added = true; }
     }
-    days.push(day);
+    days.push(flat(dayGroups));
   }
 
   return days;
@@ -352,23 +382,26 @@ export async function planMultiDay(payload, settings = {}, restStops = []) {
   const days = [];
   for (let i = 0; i < clusters.length; i++) {
     const dayDate = addDaysISO(baseDate, i);
+    // Auto: ordine far-first bloccato (parti dal punto più lontano, rientra verso casa).
+    // Manuale: rispetta l'ordine dato dall'utente. In entrambi i casi l'ordine è bloccato.
+    const orderedStops = manualMode ? clusters[i] : orderDayFarFirst(clusters[i], home, opts);
     const dayPayload = {
       ...payload,
       id: null,
-      stops: clusters[i],
+      stops: orderedStops,
       scheduledDate: dayDate,
       start: home,
       end: { sameAsStart: true },
-      manualOrder: manualMode,
-      lockOrder: manualMode,
+      manualOrder: true,
+      lockOrder: true,
     };
     const plan = await planRoute(dayPayload, settings, restStops);
     const dayEndMin = parseTime(plan.summary?.dayEnd);
     days.push({
       dayNumber: i + 1,
       scheduledDate: dayDate,
-      stopCount: clusters[i].length,
-      stops: clusters[i],
+      stopCount: orderedStops.length,
+      stops: orderedStops,
       overBudget: dayEndMin != null && dayEndMin > endMin,
       plan,
     });
