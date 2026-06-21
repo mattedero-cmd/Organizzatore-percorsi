@@ -39,6 +39,23 @@ function addDaysISO(isoDate, n) {
   return `${dt.getFullYear()}-${mm}-${dd}`;
 }
 
+function isWeekendISO(isoDate) {
+  const [y, m, d] = isoDate.split("-").map(Number);
+  const g = new Date(y, m - 1, d).getDay();
+  return g === 0 || g === 6; // 0=Dom, 6=Sab
+}
+
+// Data dell'n-esimo GIORNO LAVORATIVO (n=0 → primo giorno lavorativo a partire da isoDate),
+// saltando sabato e domenica. Le banche/clienti sono chiusi nel weekend: senza questo, i piani
+// lunghi sconfinavano nel weekend con tappe servite a sede chiusa.
+function addWorkdaysISO(isoDate, n) {
+  let d = isoDate;
+  while (isWeekendISO(d)) d = addDaysISO(d, 1);
+  let added = 0;
+  while (added < n) { d = addDaysISO(d, 1); if (!isWeekendISO(d)) added++; }
+  return d;
+}
+
 function stopDuration(stop) {
   return Number(stop.durationMinutes || stop.defaultDuration || 45);
 }
@@ -255,6 +272,43 @@ function groupColocated(stops, opts = {}) {
   return groups;
 }
 
+// Partiziona i GRUPPI co-locati in ZONE (valli/corridoi). Modello dell'utente: prima si individuano
+// gli ESTREMI delle varie zone, poi ogni tappa va nella zona del suo estremo. Un gruppo apre una
+// NUOVA zona se è più vicino a CASA che a qualunque seme (estremo) già scelto — cioè è in una sua
+// direzione, non "dietro" un estremo esistente sulla via di casa; altrimenti entra nella zona del
+// seme più vicino su strada. Evita il partner-eating (Cles+Mezzolombardo restano una zona, non
+// vengono assorbiti dal Nord) e tiene separate le valli. I semi si trovano dal più lontano da casa.
+// Raggio (min di strada da casa) entro cui le tappe sono considerate "vicino casa" e accorpate in
+// un'unica zona/giornata (hop brevi attorno a casa). Tarabile sulla Diagnostica.
+const NEAR_HOME_RADIUS = 35;
+export function assignZones(groups, home, opts = {}) {
+  const homeT = g => Math.min(...g.map(s => legMin(home, s, opts)));
+  const between = (g, k) => {
+    let m = Infinity;
+    for (const a of g) for (const b of k) { const t = legMin(a, b, opts); if (t < m) m = t; }
+    return m;
+  };
+  const sorted = [...groups].sort((a, b) => homeT(b) - homeT(a));
+  const zones = []; // { seed, members: [groups], seedHome }
+  for (const g of sorted) {
+    const gh = homeT(g);
+    let bestK = -1, bestD = Infinity;
+    zones.forEach((z, i) => { const d = between(g, z.seed); if (d < bestD) { bestD = d; bestK = i; } });
+    if (bestK < 0 || bestD > gh) zones.push({ seed: g, members: [g], seedHome: gh });
+    else zones[bestK].members.push(g);
+  }
+  // Le tappe VICINO CASA (entro NEAR_HOME_RADIUS) sono tutte raggiungibili in una giornata sola con
+  // hop brevi attorno a casa: senza questo accorpamento ognuna diventerebbe una zona/giornata a sé
+  // (Rovereto, Trento, Levico, Pergine...). Le uniamo in un'unica zona vicino-casa.
+  const far = zones.filter(z => z.seedHome > NEAR_HOME_RADIUS);
+  const near = zones.filter(z => z.seedHome <= NEAR_HOME_RADIUS);
+  if (near.length) {
+    const merged = { seed: near[0].seed, members: near.flatMap(z => z.members), seedHome: near[0].seedHome };
+    far.push(merged);
+  }
+  return far; // zone lontane (estremi prima) + un'unica zona vicino-casa in coda
+}
+
 // Raggruppa le tappe in giornate (ognuna parte/torna a casa). Lavora su GRUPPI co-locati (atomici)
 // e costruisce ogni giornata come zona compatta attorno al punto più lontano (seme), aggiungendo i
 // gruppi più vicini finché la giornata RESTA FATTIBILE.
@@ -271,75 +325,82 @@ function groupColocated(stops, opts = {}) {
 // divergenza dell'approssimazione dal motore reale (es. Bressanone esiliato per l'interazione col
 // pranzo): ora il gate è il motore reale.
 export async function buildDayClusters(stops, home, budgetMin, opts = {}, dayFeasible = null) {
-  const unassigned = groupColocated(stops.map(s => ({ ...s })), opts); // array di gruppi
+  const allGroups = groupColocated(stops.map(s => ({ ...s })), opts); // array di gruppi
+  const zones = assignZones(allGroups, home, opts);
   const days = [];
-  let guard = 0;
   const flat = arr => arr.flat();
 
+  if (opts.log) {
+    opts.log(`ZONE (${zones.length}, estremi prima): ` + zones.map((z, i) =>
+      `Z${i + 1}[${nameOf(z.seed[0])} ${Math.round(z.seedHome)}']={${z.members.flat().map(nameOf).join(", ")}}`).join("  ·  "));
+  }
+
   // Oracolo di fattibilità: motore reale se disponibile, altrimenti approssimazione (offline).
-  const feasible = async (dayStops, dow) => {
+  // `dayIndex` = indice progressivo della giornata (per risolvere il giorno della settimana,
+  // saltando i weekend, lato planMultiDay).
+  const feasible = async (dayStops, dayIndex) => {
     if (dayFeasible) {
       const ordered = orderDayFarFirst(dayStops, home, opts);
-      const f = await dayFeasible(ordered, dow);
+      const f = await dayFeasible(ordered, dayIndex);
       return !!f.ok;
     }
     return estimateDayMinutes(dayStops, home, opts).total <= budgetMin
-      && dayHoursFeasible(dayStops, home, opts, dow);
+      && dayHoursFeasible(dayStops, home, opts, dowForCluster(opts, dayIndex));
   };
 
-  while (unassigned.length && guard++ < 5000) {
-    // Seme: gruppo col membro più LONTANO da casa. Le zone lontane vengono consumate per
-    // prime e il "fronte" massimo si accorcia ogni giorno.
-    let seedI = 0, seedD = -1;
-    for (let i = 0; i < unassigned.length; i++) {
-      const d = legMin(home, unassigned[i][0], opts);
-      if (d > seedD) { seedD = d; seedI = i; }
-    }
-    const dayGroups = [unassigned.splice(seedI, 1)[0]];
-    const dow = dowForCluster(opts, days.length);
-    if (opts.log) opts.log(`Giorno ${days.length + 1} — seme "${nameOf(dayGroups[0][0])}" (da casa ${Math.round(seedD)}min)`);
-
-    // Accrescimento: aggiunge il gruppo più VICINO alla zona del giorno (minor tempo di strada),
-    // finché la giornata resta FATTIBILE secondo il motore reale (orari, chiusure, pranzo, soste,
-    // spezzare interventi). La giornata cresce compatta attorno al punto lontano; le tappe vicine
-    // a casa restano lontane dal gruppo → rimandate ai giorni successivi.
-    let added = true;
-    while (added && unassigned.length) {
-      added = false;
-      const dayStops = flat(dayGroups);
-      let best = -1, bestDist = Infinity;
+  // Costruisce le giornate DENTRO ogni zona (niente mescolanze tra valli). Una zona troppo grande
+  // si spezza in più giornate (estremo prima, poi verso casa), come da modello dell'utente.
+  for (let zi = 0; zi < zones.length; zi++) {
+    const unassigned = [...zones[zi].members];
+    let guard = 0;
+    while (unassigned.length && guard++ < 5000) {
+      const dayIndex = days.length;
+      // Seme: gruppo col membro più LONTANO da casa NELLA ZONA.
+      let seedI = 0, seedD = -1;
       for (let i = 0; i < unassigned.length; i++) {
-        // Pre-filtro veloce per distanza (evita chiamate inutili all'oracolo): considera solo i
-        // candidati ragionevolmente vicini al gruppo, poi valida col motore reale.
-        let d = Infinity;
-        for (const cs of unassigned[i]) for (const ds of dayStops) { const t = legMin(ds, cs, opts); if (t < d) d = t; }
-        if (d >= bestDist - 1e-6) continue; // non migliora il migliore già trovato
-        const tentative = [...dayStops, ...unassigned[i]];
-        if (!(await feasible(tentative, dow))) continue;
-        bestDist = d; best = i;
+        const d = legMin(home, unassigned[i][0], opts);
+        if (d > seedD) { seedD = d; seedI = i; }
       }
-      if (best >= 0) { dayGroups.push(unassigned.splice(best, 1)[0]); added = true; }
-    }
+      const dayGroups = [unassigned.splice(seedI, 1)[0]];
+      if (opts.log) opts.log(`Giorno ${dayIndex + 1} (Z${zi + 1}) — seme "${nameOf(dayGroups[0][0])}" (da casa ${Math.round(seedD)}min)`);
 
-    const dayStops = flat(dayGroups);
-    days.push(dayStops);
-
-    if (opts.log) {
-      opts.log(`Giorno ${days.length} chiuso: ${dayStops.length} tappe [${dayStops.map(nameOf).join(" → ")}]`);
-      // Perché ogni tappa NON è entrata: i candidati più vicini al giorno (per tempo-strada) col
-      // verdetto del motore reale. Distingue "fuori chiusura" / "oltre orario" da "altra direzione".
-      if (unassigned.length && dayFeasible) {
-        const ranked = unassigned.map(g => {
+      // Accrescimento: il gruppo più VICINO alla zona del giorno, finché la giornata resta FATTIBILE
+      // secondo il motore reale (orari, chiusure, pranzo, soste, spezzare interventi).
+      let added = true;
+      while (added && unassigned.length) {
+        added = false;
+        const dayStops = flat(dayGroups);
+        let best = -1, bestDist = Infinity;
+        for (let i = 0; i < unassigned.length; i++) {
           let d = Infinity;
-          for (const cs of g) for (const ds of dayStops) { const t = legMin(ds, cs, opts); if (t < d) d = t; }
-          return { g, d };
-        }).sort((a, b) => a.d - b.d).slice(0, 6);
-        for (const { g, d } of ranked) {
-          const ordered = orderDayFarFirst([...dayStops, ...g], home, opts);
-          const f = await dayFeasible(ordered, dow);
-          const why = f.ok ? "VALIDA ma non aggiunta (?)"
-            : `${f.dayEndWithBreaks != null ? `rientro ${formatTime(f.dayEndWithBreaks)}${opts.endMin != null && f.dayEndWithBreaks > opts.endMin ? " OLTRE ORARIO" : ""}` : "orari non ok"}${f.lateStops?.length ? `, FUORI CHIUSURA: ${f.lateStops.join(", ")}` : ""}`;
-          opts.log(`   ✗ "${nameOf(g[0])}" (+${Math.round(d)}min dal giorno, da casa ${Math.round(legMin(home, g[0], opts))}min): ${why}`);
+          for (const cs of unassigned[i]) for (const ds of dayStops) { const t = legMin(ds, cs, opts); if (t < d) d = t; }
+          if (d >= bestDist - 1e-6) continue;
+          const tentative = [...dayStops, ...unassigned[i]];
+          if (!(await feasible(tentative, dayIndex))) continue;
+          bestDist = d; best = i;
+        }
+        if (best >= 0) { dayGroups.push(unassigned.splice(best, 1)[0]); added = true; }
+      }
+
+      const dayStops = flat(dayGroups);
+      days.push(dayStops);
+
+      if (opts.log) {
+        opts.log(`Giorno ${days.length} chiuso: ${dayStops.length} tappe [${dayStops.map(nameOf).join(" → ")}]`);
+        // Perché le tappe rimaste nella zona NON sono entrate (verdetto reale): spiega lo split.
+        if (unassigned.length && dayFeasible) {
+          const ranked = unassigned.map(g => {
+            let d = Infinity;
+            for (const cs of g) for (const ds of dayStops) { const t = legMin(ds, cs, opts); if (t < d) d = t; }
+            return { g, d };
+          }).sort((a, b) => a.d - b.d).slice(0, 6);
+          for (const { g, d } of ranked) {
+            const ordered = orderDayFarFirst([...dayStops, ...g], home, opts);
+            const f = await dayFeasible(ordered, dayIndex);
+            const why = f.ok ? "VALIDA ma non aggiunta (?)"
+              : `${f.dayEndWithBreaks != null ? `rientro ${formatTime(f.dayEndWithBreaks)}${opts.endMin != null && f.dayEndWithBreaks > opts.endMin ? " OLTRE ORARIO" : ""}` : "orari non ok"}${f.lateStops?.length ? `, FUORI CHIUSURA: ${f.lateStops.join(", ")}` : ""}`;
+            opts.log(`   ✗ "${nameOf(g[0])}" (+${Math.round(d)}min dal giorno, da casa ${Math.round(legMin(home, g[0], opts))}min): ${why}`);
+          }
         }
       }
     }
@@ -473,13 +534,11 @@ export async function planMultiDay(payload, settings = {}, restStops = []) {
     log(`VICINI più prossimi su strada: ${nnLines.join(", ")}`);
 
     // Oracolo di fattibilità = motore reale della giornata singola (evaluateDayTiming): stessa
-    // logica di orari/chiusure/pranzo/soste/spezzare interventi. Il dow serve a risolvere gli orari
-    // di apertura per quel giorno della settimana (data fittizia con lo stesso weekday).
-    const dateForDow = (dow) => (dow == null || baseDow == null)
-      ? baseDate : addDaysISO(baseDate, ((dow - baseDow) % 7 + 7) % 7);
-    const dayFeasible = async (orderedStops, dow) => {
+    // logica di orari/chiusure/pranzo/soste/spezzare interventi. `dayIndex` → data dell'n-esimo
+    // giorno lavorativo (salta i weekend), per risolvere correttamente gli orari di apertura.
+    const dayFeasible = async (orderedStops, dayIndex) => {
       const t = await evaluateDayTiming({
-        ...payload, id: null, stops: orderedStops, scheduledDate: dateForDow(dow),
+        ...payload, id: null, stops: orderedStops, scheduledDate: addWorkdaysISO(baseDate, dayIndex),
         start: home, end: { sameAsStart: true }, manualOrder: true, lockOrder: true,
         departureLatest: formatTime(endMin),
       }, settings);
@@ -493,7 +552,8 @@ export async function planMultiDay(payload, settings = {}, restStops = []) {
 
   const days = [];
   for (let i = 0; i < clusters.length; i++) {
-    const dayDate = addDaysISO(baseDate, i);
+    // Date dei giorni lavorativi consecutivi (salta sabato/domenica) — anche in modalità manuale.
+    const dayDate = addWorkdaysISO(baseDate, i);
     // Auto: ordine far-first bloccato (parti dal punto più lontano, rientra verso casa).
     // Manuale: rispetta l'ordine dato dall'utente. In entrambi i casi l'ordine è bloccato.
     const orderedStops = manualMode ? clusters[i] : orderDayFarFirst(clusters[i], home, opts);

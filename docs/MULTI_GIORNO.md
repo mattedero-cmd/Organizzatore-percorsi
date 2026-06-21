@@ -54,17 +54,28 @@ lontana alla più vicina; i resti vicini si accorpano alla fine.**
   CHIUSURA, e timing della 1ª tappa (orari risolti + se è scattato il calcolo a ritroso).
 - **Chiedere SEMPRE all'utente di incollare questo log** prima di toccare i raggruppamenti.
 
-## Algoritmo attuale (passi) — v5.017
+## Algoritmo attuale (passi) — v5.022 (per ZONE)
 1. `buildLegTimeMatrix(home, stops)` → matrice tempi reali; `legMin(a,b)` usa la matrice (+buffer) o fallback.
 2. `groupColocated` → tappe stesso paese (località) o entro ~6 min = gruppo atomico (mai divise).
-3. `buildDayClusters` (async, una giornata alla volta):
-   - **Seme** = gruppo col membro più LONTANO da casa.
-   - **Accrescimento** = aggiunge il gruppo più VICINO al giorno **purché la giornata resti FATTIBILE
-     secondo il MOTORE REALE** (`dayFeasible` → `evaluateDayTiming`), non più approssimazioni.
+3. `assignZones(groups, home)` → partiziona in ZONE (valli). Prima gli ESTREMI: ordina i gruppi per
+   distanza da casa; un gruppo apre una nuova zona se è più vicino a CASA che a qualunque seme/estremo
+   già scelto (direzione propria), altrimenti entra nella zona del seme più vicino su strada. Le tappe
+   entro `NEAR_HOME_RADIUS` (35') sono accorpate in UN'unica zona vicino-casa (altrimenti ognuna farebbe
+   giornata a sé). Modello dell'utente: «prima gli estremi delle varie zone, poi ogni tappa va nella sua».
+4. `buildDayClusters` costruisce le giornate DENTRO ogni zona (niente mescolanze tra valli):
+   - **Seme** = gruppo più LONTANO da casa NELLA ZONA.
+   - **Accrescimento** = il gruppo più VICINO al giorno **purché la giornata resti FATTIBILE secondo il
+     MOTORE REALE** (`dayFeasible(orderedStops, dayIndex)` → `evaluateDayTiming`).
    - **Fattibile** = rientro entro maxReturnTime (pause incluse) E nessuna tappa servita oltre la chiusura.
-   - Quando nessun candidato ammesso mantiene la giornata fattibile → chiude la giornata.
-4. Per ogni giornata: ordine **far-first** bloccato (`orderDayFarFirst`) → `planRoute` (orari/soste/pranzo reali).
-5. Date consecutive da `scheduledDate`.
+   - Una zona troppo grande → più giornate (estremo→casa). Quando il giorno non cresce più → chiude.
+5. Per ogni giornata: ordine **far-first** bloccato (`orderDayFarFirst`) → `planRoute` (orari/soste/pranzo reali).
+6. **Date solo feriali**: `addWorkdaysISO` salta sabato/domenica (banche chiuse). `dayIndex` → data del
+   giorno lavorativo, usata anche per risolvere gli orari di apertura nella fattibilità.
+
+### Tarature (sulla Diagnostica, coi tempi reali)
+- `NEAR_HOME_RADIUS` (35') — raggio "vicino casa" accorpato in un'unica zona/giornata.
+- La QUALITÀ delle zone lontane dipende dai tempi reali di Google: **offline (linea d'aria) le mescola**
+  (la "ZONA 2" Merano/Ortisei/Fassa/Cles è un artefatto haversine). Validare SEMPRE sul giro reale.
 
 ### L'oracolo di fattibilità = motore della giornata singola (il cuore, v5.017)
 `evaluateDayTiming(payload, settings)` in `planner.js` riusa la STESSA pipeline del planner reale
