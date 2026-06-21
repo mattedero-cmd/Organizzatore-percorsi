@@ -67,9 +67,22 @@ export async function resolvePlace(place) {
   return { lat: 46.004, lng: 11.196, source: "local-estimate" };
 }
 
+// Cache dei tragitti (coppia di coordinate → leg). routeBetween viene chiamata molte volte
+// sulle stesse coppie (matrice multi-giorno + planRoute per ogni giornata che ricostruisce le
+// stesse tratte). Senza cache ogni chiamata colpisce l'API Directions: questo rende troppo
+// costoso usare il motore reale (planRoute) come oracolo di fattibilità nel multi-giorno.
+// Chiave: coordinate arrotondate a ~11m, direzionale (origine→destinazione).
+const routeCache = new Map();
+function routeCacheKey(a, b) {
+  const r = v => Math.round(Number(v) * 1e4) / 1e4;
+  return `${r(a.lat)},${r(a.lng)}->${r(b.lat)},${r(b.lng)}`;
+}
+
 export async function routeBetween(a, b) {
   const coordA = await resolvePlace(a);
   const coordB = await resolvePlace(b);
+  const cacheKey = routeCacheKey(coordA, coordB);
+  if (routeCache.has(cacheKey)) return routeCache.get(cacheKey);
   const key = API_KEY();
   if (key) {
     try {
@@ -81,17 +94,21 @@ export async function routeBetween(a, b) {
       const data = await res.json();
       if (data.status === "OK" && data.routes?.[0]) {
         const leg = data.routes[0].legs[0];
-        return {
+        const result = {
           km: Math.round(leg.distance.value / 100) / 10,
           driveMinutes: Math.ceil(leg.duration.value / 60),
           source: "google"
         };
+        routeCache.set(cacheKey, result);
+        return result;
       }
     } catch {
       // fallthrough
     }
   }
-  return localFallback(coordA, coordB);
+  const fallback = localFallback(coordA, coordB);
+  routeCache.set(cacheKey, fallback);
+  return fallback;
 }
 
 function decodePolyline(encoded) {
