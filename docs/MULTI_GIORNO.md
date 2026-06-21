@@ -62,12 +62,16 @@ lontana alla più vicina; i resti vicini si accorpano alla fine.**
    già scelto (direzione propria), altrimenti entra nella zona del seme più vicino su strada. Le tappe
    entro `NEAR_HOME_RADIUS` (35') sono accorpate in UN'unica zona vicino-casa (altrimenti ognuna farebbe
    giornata a sé). Modello dell'utente: «prima gli estremi delle varie zone, poi ogni tappa va nella sua».
-4. `buildDayClusters` costruisce le giornate DENTRO ogni zona (niente mescolanze tra valli):
+4. `buildDayClusters` costruisce le giornate DENTRO ogni zona (niente mescolanze tra valli),
+   processando le zone dalla più VICINA a casa alla più lontana (`orderedZones` per seedHome crescente —
+   richiesta dell'utente: «parti dall'estremo più vicino a casa e allontanati»):
    - **Seme** = gruppo più LONTANO da casa NELLA ZONA.
    - **Accrescimento** = il gruppo più VICINO al giorno **purché la giornata resti FATTIBILE secondo il
      MOTORE REALE** (`dayFeasible(orderedStops, dayIndex)` → `evaluateDayTiming`).
    - **Fattibile** = rientro entro maxReturnTime (pause incluse) E nessuna tappa servita oltre la chiusura.
    - Una zona troppo grande → più giornate (estremo→casa). Quando il giorno non cresce più → chiude.
+   - **Resti accorpati**: le giornate da UNA sola tappa ("rimaste indietro") vengono unite in un gruppo
+     e ri-clusterizzate insieme alla fine (se ≥2; una tappa davvero isolata resta sola).
 5. Per ogni giornata: ordine **far-first** bloccato (`orderDayFarFirst`) → `planRoute` (orari/soste/pranzo reali).
 6. **Date solo feriali**: `addWorkdaysISO` salta sabato/domenica (banche chiuse). `dayIndex` → data del
    giorno lavorativo, usata anche per risolvere gli orari di apertura nella fattibilità.

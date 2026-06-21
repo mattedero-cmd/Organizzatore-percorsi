@@ -327,11 +327,13 @@ export function assignZones(groups, home, opts = {}) {
 export async function buildDayClusters(stops, home, budgetMin, opts = {}, dayFeasible = null) {
   const allGroups = groupColocated(stops.map(s => ({ ...s })), opts); // array di gruppi
   const zones = assignZones(allGroups, home, opts);
+  // Ordine dei giri: dall'estremo PIÙ VICINO a casa, allontanandosi (richiesta dell'utente).
+  const orderedZones = [...zones].sort((a, b) => a.seedHome - b.seedHome);
   const days = [];
   const flat = arr => arr.flat();
 
   if (opts.log) {
-    opts.log(`ZONE (${zones.length}, estremi prima): ` + zones.map((z, i) =>
+    opts.log(`ZONE (${orderedZones.length}, dal più vicino a casa): ` + orderedZones.map((z, i) =>
       `Z${i + 1}[${nameOf(z.seed[0])} ${Math.round(z.seedHome)}']={${z.members.flat().map(nameOf).join(", ")}}`).join("  ·  "));
   }
 
@@ -348,24 +350,23 @@ export async function buildDayClusters(stops, home, budgetMin, opts = {}, dayFea
       && dayHoursFeasible(dayStops, home, opts, dowForCluster(opts, dayIndex));
   };
 
-  // Costruisce le giornate DENTRO ogni zona (niente mescolanze tra valli). Una zona troppo grande
-  // si spezza in più giornate (estremo prima, poi verso casa), come da modello dell'utente.
-  for (let zi = 0; zi < zones.length; zi++) {
-    const unassigned = [...zones[zi].members];
+  // Costruisce le giornate da una lista di GRUPPI: seme = gruppo più LONTANO da casa, poi accresce
+  // il più VICINO finché la giornata resta FATTIBILE (motore reale). Una lista troppo grande si
+  // spezza in più giornate (estremo → casa). Aggiunge a `days`. Niente mescolanze: la lista è
+  // già una zona/corridoio coerente (o i resti accorpati).
+  const growDays = async (groupList, label) => {
+    const unassigned = [...groupList];
     let guard = 0;
     while (unassigned.length && guard++ < 5000) {
       const dayIndex = days.length;
-      // Seme: gruppo col membro più LONTANO da casa NELLA ZONA.
       let seedI = 0, seedD = -1;
       for (let i = 0; i < unassigned.length; i++) {
         const d = legMin(home, unassigned[i][0], opts);
         if (d > seedD) { seedD = d; seedI = i; }
       }
       const dayGroups = [unassigned.splice(seedI, 1)[0]];
-      if (opts.log) opts.log(`Giorno ${dayIndex + 1} (Z${zi + 1}) — seme "${nameOf(dayGroups[0][0])}" (da casa ${Math.round(seedD)}min)`);
+      if (opts.log) opts.log(`Giorno ${dayIndex + 1} (${label}) — seme "${nameOf(dayGroups[0][0])}" (da casa ${Math.round(seedD)}min)`);
 
-      // Accrescimento: il gruppo più VICINO alla zona del giorno, finché la giornata resta FATTIBILE
-      // secondo il motore reale (orari, chiusure, pranzo, soste, spezzare interventi).
       let added = true;
       while (added && unassigned.length) {
         added = false;
@@ -387,7 +388,6 @@ export async function buildDayClusters(stops, home, budgetMin, opts = {}, dayFea
 
       if (opts.log) {
         opts.log(`Giorno ${days.length} chiuso: ${dayStops.length} tappe [${dayStops.map(nameOf).join(" → ")}]`);
-        // Perché le tappe rimaste nella zona NON sono entrate (verdetto reale): spiega lo split.
         if (unassigned.length && dayFeasible) {
           const ranked = unassigned.map(g => {
             let d = Infinity;
@@ -404,6 +404,22 @@ export async function buildDayClusters(stops, home, budgetMin, opts = {}, dayFea
         }
       }
     }
+  };
+
+  // Una zona alla volta (niente mescolanze tra valli), dalla più vicina a casa alla più lontana.
+  for (let zi = 0; zi < orderedZones.length; zi++) {
+    await growDays(orderedZones[zi].members, `Z${zi + 1} ${nameOf(orderedZones[zi].seed[0])}`);
+  }
+
+  // "Tappe rimaste indietro": le giornate da UNA sola tappa vengono accorpate in un unico gruppo e
+  // ri-clusterizzate insieme (richiesta dell'utente). Una tappa davvero isolata resta sola.
+  const singles = days.filter(d => d.length <= 1);
+  if (singles.length > 1) {
+    const solid = days.filter(d => d.length > 1);
+    days.length = 0;
+    for (const d of solid) days.push(d);
+    if (opts.log) opts.log(`RESTI: accorpo ${singles.length} tappe rimaste indietro [${singles.flat().map(nameOf).join(", ")}]`);
+    await growDays(groupColocated(singles.flat(), opts), "resti accorpati");
   }
 
   return days;
