@@ -54,16 +54,29 @@ lontana alla più vicina; i resti vicini si accorpano alla fine.**
   CHIUSURA, e timing della 1ª tappa (orari risolti + se è scattato il calcolo a ritroso).
 - **Chiedere SEMPRE all'utente di incollare questo log** prima di toccare i raggruppamenti.
 
-## Algoritmo attuale (passi)
+## Algoritmo attuale (passi) — v5.017
 1. `buildLegTimeMatrix(home, stops)` → matrice tempi reali; `legMin(a,b)` usa la matrice (+buffer) o fallback.
 2. `groupColocated` → tappe stesso paese (località) o entro ~6 min = gruppo atomico (mai divise).
-3. `buildDayClusters` (una giornata alla volta):
+3. `buildDayClusters` (async, una giornata alla volta):
    - **Seme** = gruppo col membro più LONTANO da casa.
-   - **Accrescimento** = aggiunge i gruppi che sono **"sul corridoio" seme→casa** (vedi criterio sotto),
-     rispettando budget e orari (`dayHoursFeasible` simula l'ordine far-first reale, 1ª tappa all'apertura).
-   - Quando non c'è più nulla "sul corridoio" o non si rientra negli orari → chiude la giornata.
+   - **Accrescimento** = aggiunge il gruppo più VICINO al giorno **purché la giornata resti FATTIBILE
+     secondo il MOTORE REALE** (`dayFeasible` → `evaluateDayTiming`), non più approssimazioni.
+   - **Fattibile** = rientro entro maxReturnTime (pause incluse) E nessuna tappa servita oltre la chiusura.
+   - Quando nessun candidato vicino mantiene la giornata fattibile → chiude la giornata.
 4. Per ogni giornata: ordine **far-first** bloccato (`orderDayFarFirst`) → `planRoute` (orari/soste/pranzo reali).
 5. Date consecutive da `scheduledDate`.
+
+### L'oracolo di fattibilità = motore della giornata singola (il cuore, v5.017)
+`evaluateDayTiming(payload, settings)` in `planner.js` riusa la STESSA pipeline del planner reale
+(`normalizeStop` → `buildLegMatrix` con cache → `evaluateOrder`/`scheduleStop`): orari di apertura/
+chiusura, tolleranza 10 min, **spezzare interventi**, finestra fissa, ecc. **Salta `insertBreaks`**
+(niente lookup Places per ristoranti/soste) e conta **pranzo + soste come allowance di tempo** —
+coerente col motore reale, dove le pause spostano in avanti la fine mentre le chiusure sono già
+valutate da `scheduleStop` sul programma pre-pausa. Restituisce `dayEndWithBreaks` e le `lateStops`
+(tappe oltre la chiusura). È economica (grazie alla **cache tragitti** v5.016 in `routeBetween`),
+quindi usabile come gate ad ogni passo di accrescimento. **Così il giorno multi-giorno si comporta
+ESATTAMENTE come la giornata singola** (richiesta esplicita dell'utente: «deve seguire il motore di
+creazione della giornata singola, con tappe, pranzo ecc tutto uguale»).
 
 ### Criterio "sul corridoio" (il cuore — evita di mescolare valli)
 Una tappa B entra nella giornata del seme F solo se è **sulla via da F a casa**:

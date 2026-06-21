@@ -15,7 +15,7 @@
 // La stima di durata (estimateDayMinutes) è volutamente leggera/approssimata e serve
 // solo a decidere la capienza delle giornate; gli orari definitivi vengono da planRoute.
 
-import { planRoute, parseTime, formatTime } from "./planner.js";
+import { planRoute, parseTime, formatTime, evaluateDayTiming } from "./planner.js";
 import { resolvePlace, routeBetween } from "./googleMapsService.js";
 
 function haversineKm(a, b) {
@@ -251,20 +251,37 @@ function groupColocated(stops, opts = {}) {
   return groups;
 }
 
-// Raggruppa le tappe in giornate (ognuna parte/torna a casa) rispettando budget e orari.
-// Lavora su GRUPPI co-locati (atomici) e costruisce ogni giornata come zona compatta attorno
-// al punto più lontano. Funzione pura e testabile.
+// Raggruppa le tappe in giornate (ognuna parte/torna a casa). Lavora su GRUPPI co-locati (atomici)
+// e costruisce ogni giornata come zona compatta attorno al punto più lontano (seme), aggiungendo i
+// gruppi più vicini finché la giornata RESTA FATTIBILE.
 //
-// NB STORICO (vedi docs/MULTI_GIORNO.md): l'accrescimento "sul corridoio/detour" (v5.014) sul
-// giro reale FRAMMENTAVA — ogni valle lontana diventava un seme isolato (Bressanone/Cles/Primiero
-// in giornate dedicate). Ripristinato l'accrescimento "tappa più vicina al gruppo" + swap, che è
-// la versione che l'utente ha valutato come la migliore finora. Non cambiare a tentativi: ogni
-// modifica va validata sul giro reale tramite la Diagnostica.
-export function buildDayClusters(stops, home, budgetMin, opts = {}) {
+// FATTIBILITÀ = lo stesso motore della giornata singola. `dayFeasible(orderedStops, dow)` chiama
+// `evaluateDayTiming` (planner.js): stessa logica di orari/chiusure/spezzare interventi, pranzo e
+// soste come allowance di tempo. Niente più approssimazioni divergenti (estimateDayMinutes /
+// dayHoursFeasible restano solo come fallback offline quando il motore reale non è disponibile).
+// Una giornata è valida se rientra in maxReturnTime (pause incluse) e nessuna tappa è servita oltre
+// la chiusura. Così il giorno multi-giorno si comporta ESATTAMENTE come la giornata singola.
+//
+// NB STORICO (docs/MULTI_GIORNO.md): l'accrescimento "sul corridoio/detour" (v5.014) FRAMMENTAVA in
+// produzione; lo swap (≤v5.015) MESCOLAVA. Entrambi usavano gate approssimati. La vera causa era la
+// divergenza dell'approssimazione dal motore reale (es. Bressanone esiliato per l'interazione col
+// pranzo): ora il gate è il motore reale.
+export async function buildDayClusters(stops, home, budgetMin, opts = {}, dayFeasible = null) {
   const unassigned = groupColocated(stops.map(s => ({ ...s })), opts); // array di gruppi
   const days = [];
   let guard = 0;
   const flat = arr => arr.flat();
+
+  // Oracolo di fattibilità: motore reale se disponibile, altrimenti approssimazione (offline).
+  const feasible = async (dayStops, dow) => {
+    if (dayFeasible) {
+      const ordered = orderDayFarFirst(dayStops, home, opts);
+      const f = await dayFeasible(ordered, dow);
+      return !!f.ok;
+    }
+    return estimateDayMinutes(dayStops, home, opts).total <= budgetMin
+      && dayHoursFeasible(dayStops, home, opts, dow);
+  };
 
   while (unassigned.length && guard++ < 5000) {
     // Seme: gruppo col membro più LONTANO da casa. Le zone lontane vengono consumate per
@@ -278,70 +295,45 @@ export function buildDayClusters(stops, home, budgetMin, opts = {}) {
     const dow = dowForCluster(opts, days.length);
 
     // Accrescimento: aggiunge il gruppo più VICINO alla zona del giorno (minor tempo di strada),
-    // finché ci sta (budget) e gli orari reggono (verifica far-first, prima tappa all'apertura).
-    // La giornata cresce compatta attorno al punto lontano; le tappe vicine a casa restano
-    // lontane dal gruppo → rimandate ai giorni successivi.
+    // finché la giornata resta FATTIBILE secondo il motore reale (orari, chiusure, pranzo, soste,
+    // spezzare interventi). La giornata cresce compatta attorno al punto lontano; le tappe vicine
+    // a casa restano lontane dal gruppo → rimandate ai giorni successivi.
     let added = true;
     while (added && unassigned.length) {
       added = false;
       const dayStops = flat(dayGroups);
       let best = -1, bestDist = Infinity;
       for (let i = 0; i < unassigned.length; i++) {
-        const tentative = [...dayStops, ...unassigned[i]];
-        if (estimateDayMinutes(tentative, home, opts).total > budgetMin) continue;
-        if (!dayHoursFeasible(tentative, home, opts, dow)) continue;
+        // Pre-filtro veloce per distanza (evita chiamate inutili all'oracolo): considera solo i
+        // candidati ragionevolmente vicini al gruppo, poi valida col motore reale.
         let d = Infinity;
         for (const cs of unassigned[i]) for (const ds of dayStops) { const t = legMin(ds, cs, opts); if (t < d) d = t; }
-        if (d < bestDist - 1e-6) { bestDist = d; best = i; }
+        if (d >= bestDist - 1e-6) continue; // non migliora il migliore già trovato
+        const tentative = [...dayStops, ...unassigned[i]];
+        if (!(await feasible(tentative, dow))) continue;
+        bestDist = d; best = i;
       }
       if (best >= 0) { dayGroups.push(unassigned.splice(best, 1)[0]); added = true; }
-    }
-
-    // Swap "pass-through vs terminale": se resta un gruppo NON aggiunto che è più LONTANO da
-    // casa di una tappa già nel giorno (cioè è di passaggio, non terminale), prova a scambiarlo
-    // con la tappa più VICINA a casa del giorno, se la giornata resta valida. Così le tappe di
-    // passaggio (es. Bressanone) entrano e a uscire è quella vicino a casa (facile altro giorno).
-    let swapped = true;
-    while (swapped) {
-      swapped = false;
-      const dayStops = flat(dayGroups);
-      // tappa del giorno più vicina a casa
-      let ni = -1, nd = Infinity;
-      dayGroups.forEach((g, i) => { const d = Math.min(...g.map(s => legMin(home, s, opts))); if (d < nd) { nd = d; ni = i; } });
-      if (ni < 0 || dayGroups.length <= 1) break;
-      const nearGroup = dayGroups[ni];
-      // candidato esterno più vicino al giorno, ma più lontano da casa del nearGroup
-      for (let i = 0; i < unassigned.length; i++) {
-        const cand = unassigned[i];
-        const candHome = Math.min(...cand.map(s => legMin(home, s, opts)));
-        if (candHome <= nd) continue; // non è "di passaggio" (più vicino o uguale a casa)
-        const without = dayGroups.filter((_, k) => k !== ni);
-        const tentative = [...without.flat(), ...cand];
-        if (estimateDayMinutes(tentative, home, opts).total > budgetMin) continue;
-        if (!dayHoursFeasible(tentative, home, opts, dow)) continue;
-        // scambia
-        unassigned.splice(i, 1);
-        dayGroups.splice(ni, 1);
-        dayGroups.push(cand);
-        unassigned.push(nearGroup);
-        swapped = true;
-        break;
-      }
     }
 
     const dayStops = flat(dayGroups);
     days.push(dayStops);
 
     if (opts.log) {
-      let ni = 0, nd = Infinity;
+      // Candidato più vicino non aggiunto + verdetto del motore reale (spiega la chiusura giornata).
+      let ni = -1, nd = Infinity;
       unassigned.forEach((g, i) => { for (const cs of g) for (const ds of dayStops) { const t = legMin(ds, cs, opts); if (t < nd) { nd = t; ni = i; } } });
-      if (unassigned.length) {
+      if (ni >= 0) {
         const cand = unassigned[ni];
-        const est = estimateDayMinutes([...dayStops, ...cand], home, opts);
-        const hoursOk = dayHoursFeasible([...dayStops, ...cand], home, opts, dow);
+        const ordered = orderDayFarFirst([...dayStops, ...cand], home, opts);
+        let verdict = "non valida";
+        if (dayFeasible) {
+          const f = await dayFeasible(ordered, dow);
+          verdict = f.ok ? "valida (ma chiusa per altro)"
+            : `${f.dayEndWithBreaks != null ? `rientro ${formatTime(f.dayEndWithBreaks)}` : "orari"}${f.lateStops?.length ? `, FUORI CHIUSURA: ${f.lateStops.join(", ")}` : ""}`;
+        }
         opts.log(`Giorno ${days.length} chiuso: ${dayStops.length} tappe [${dayStops.map(s => s.customer).join(", ")}]. ` +
-          `Prossima vicina "${cand[0].customer}" (+${Math.round(nd)}min): stima ${est.total}/budget ${budgetMin} → ` +
-          `${est.total > budgetMin ? "OLTRE BUDGET" : "ok budget"}, orari ${hoursOk ? "ok" : "NON ok"}`);
+          `Prossima vicina "${cand[0].customer}" (+${Math.round(nd)}min) NON entra: ${verdict}`);
       } else {
         opts.log(`Giorno ${days.length}: ${dayStops.length} tappe [${dayStops.map(s => s.customer).join(", ")}]`);
       }
@@ -462,7 +454,21 @@ export async function planMultiDay(payload, settings = {}, restStops = []) {
       log(`MATRICE tempi reali: ${mtx.realPairs}/${mtx.totalPairs} coppie (${pct}%)` +
         (pct < 90 ? ` — ATTENZIONE: ${100 - pct}% in linea d'aria (Google non ha risposto): raggruppamenti meno precisi` : ""));
     } catch (e) { opts.distMin = null; log(`MATRICE tempi reali: ERRORE (${e.message}) → tutto in linea d'aria`); }
-    clusters = buildDayClusters(withCoords, home, budgetMin, opts);
+    // Oracolo di fattibilità = motore reale della giornata singola (evaluateDayTiming): stessa
+    // logica di orari/chiusure/pranzo/soste/spezzare interventi. Il dow serve a risolvere gli orari
+    // di apertura per quel giorno della settimana (data fittizia con lo stesso weekday).
+    const dateForDow = (dow) => (dow == null || baseDow == null)
+      ? baseDate : addDaysISO(baseDate, ((dow - baseDow) % 7 + 7) % 7);
+    const dayFeasible = async (orderedStops, dow) => {
+      const t = await evaluateDayTiming({
+        ...payload, id: null, stops: orderedStops, scheduledDate: dateForDow(dow),
+        start: home, end: { sameAsStart: true }, manualOrder: true, lockOrder: true,
+        departureLatest: formatTime(endMin),
+      }, settings);
+      const ok = t.dayEndWithBreaks != null && t.dayEndWithBreaks <= endMin && (t.lateStops?.length || 0) === 0;
+      return { ok, dayEndWithBreaks: t.dayEndWithBreaks, lateStops: t.lateStops || [] };
+    };
+    clusters = await buildDayClusters(withCoords, home, budgetMin, opts, dayFeasible);
   }
   if (!clusters.length) throw new Error("Aggiungi almeno una tappa con indirizzo valido.");
   const totalStopsCount = clusters.reduce((n, d) => n + d.length, 0);

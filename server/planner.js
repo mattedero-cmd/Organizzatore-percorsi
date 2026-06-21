@@ -1491,3 +1491,67 @@ export async function planRoute(payload, settings, restStops = []) {
     debugLog: debugLog || []
   };
 }
+
+// Valutazione "solo tempi" di una giornata con ordine BLOCCATO, per il multi-giorno.
+// Riusa la STESSA logica di scheduling del motore reale (normalizeStop → buildLegMatrix con cache
+// → evaluateOrder → scheduleStop: orari di apertura, chiusure, tolleranza, spezzare interventi)
+// ma SALTA insertBreaks: niente lookup Places per ristoranti/soste, così può essere chiamata molte
+// volte come oracolo di fattibilità senza moltiplicare le chiamate. Pranzo e soste sono conteggiati
+// come ALLOWANCE di tempo — coerente col motore reale, dove le pause spostano in avanti l'orario di
+// fine mentre le chiusure sono già valutate da scheduleStop sul programma pre-pause.
+// Restituisce: dayEndMin (fine pre-pause), dayEndWithBreaks (con allowance pause), driveMin e le
+// tappe servite oltre la chiusura (stesse warning del motore reale). I tempi sono quelli reali (cache).
+export async function evaluateDayTiming(payload, settings = {}) {
+  const scheduledDate = payload.scheduledDate || new Date().toISOString().slice(0, 10);
+  const dayOfWeek = new Date(scheduledDate + "T12:00:00").getDay();
+  const stops = (payload.stops || []).map((s, i) => normalizeStop(s, i, dayOfWeek));
+  if (!stops.length) return { ok: false, dayEndMin: null, dayEndWithBreaks: null, driveMin: 0, lateStops: [] };
+  const start = payload.start || {};
+  const end = payload.end?.sameAsStart ? start : (payload.end?.address || payload.end?.fullAddress ? payload.end : start);
+  const nodes = [
+    { label: "Partenza", fullAddress: start.address || start.fullAddress, lat: start.lat ?? null, lng: start.lng ?? null },
+    ...stops.map((stop) => ({ label: `${stop.customer} ${stop.location}`.trim(), customer: stop.customer, location: stop.location, fullAddress: stop.fullAddress, lat: stop.lat, lng: stop.lng })),
+    { label: "Arrivo", fullAddress: end.address || end.fullAddress, lat: end.lat ?? null, lng: end.lng ?? null }
+  ];
+  const stopsWithNodeIndex = stops.map((stop, index) => ({ ...stop, nodeIndex: index + 1 }));
+  await Promise.all(stopsWithNodeIndex.map(async (stop) => {
+    if (!stop.lat || !stop.lng) { try { const c = await resolvePlace(stop); stop.lat = c.lat; stop.lng = c.lng; } catch { /* leave null */ } }
+  }));
+  const matrix = await buildLegMatrix(nodes, settings?.driveMarkupMinPerHour ?? 10);
+  const context = {
+    nodes, matrix,
+    startMinutes: parseTime(payload.startTime || payload.start?.time || ""),
+    firstArrivalRequired: parseTime(payload.firstArrivalTime || payload.firstArrivalRequired || ""),
+    rates: { kmRate: 0, driveHourRate: 0, workHourRate: 0 },
+    timingMode: payload.timingMode || "first_open_minus",
+    arrivalLeadMinutes: Number(payload.arrivalLeadMinutes ?? 10),
+    departureLatestMinutes: payload.departureLatest ? parseTime(payload.departureLatest) : null,
+    lunchEnabled: false, lunchOpen: 0, lunchClose: 0, lunchDuration: 0
+  };
+  // Ordine BLOCCATO: il multi-giorno passa già le tappe nell'ordine far-first da valutare.
+  const evaluated = evaluateOrder(stopsWithNodeIndex, context);
+  const dayEndMin = parseTime(evaluated.summary.dayEnd);
+
+  // Allowance pause (come il motore reale): pranzo se abilitato + soste sui tragitti lunghi.
+  const lunchEnabled = settings.lunchBreakEnabled !== false && payload.lunchBreak !== false;
+  const lunchMin = lunchEnabled ? Number(payload.lunchBreakMinutes ?? settings.lunchBreakMinutes ?? 45) : 0;
+  const restInterval = Number(settings.restIntervalMin ?? 120);
+  const restDur = Number(settings.restDurationMin ?? 15);
+  const restMin = restInterval > 0 ? Math.floor((evaluated.summary.totalDriveMinutes || 0) / restInterval) * restDur : 0;
+  const breakAllowance = lunchMin + restMin;
+
+  const lateStops = [...new Set(
+    evaluated.rows
+      .filter((r) => !r.type && (r.warnings || []).some((w) => /chius|dopo l'orario|finestra|sede chiusa/.test(w.msg || w)))
+      .map((r) => r.customer)
+  )];
+
+  return {
+    ok: true,
+    dayEndMin,
+    dayEndWithBreaks: dayEndMin != null ? dayEndMin + breakAllowance : null,
+    breakAllowance,
+    driveMin: evaluated.summary.totalDriveMinutes || 0,
+    lateStops
+  };
+}
