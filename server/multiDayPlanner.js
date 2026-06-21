@@ -18,6 +18,10 @@
 import { planRoute, parseTime, formatTime, evaluateDayTiming } from "./planner.js";
 import { resolvePlace, routeBetween } from "./googleMapsService.js";
 
+// Nome leggibile di una tappa per la Diagnostica: la LOCALITÀ (paese) distingue i clienti, mentre
+// il campo customer è spesso identico (es. tutte le filiali "Intesa S. Paolo IOL").
+function nameOf(s) { return s?.location || s?.customer || s?.label || "?"; }
+
 function haversineKm(a, b) {
   if (a?.lat == null || a?.lng == null || b?.lat == null || b?.lng == null) return 0;
   const R = 6371, toRad = d => d * Math.PI / 180;
@@ -332,10 +336,10 @@ export async function buildDayClusters(stops, home, budgetMin, opts = {}, dayFea
           verdict = f.ok ? "valida (ma chiusa per altro)"
             : `${f.dayEndWithBreaks != null ? `rientro ${formatTime(f.dayEndWithBreaks)}` : "orari"}${f.lateStops?.length ? `, FUORI CHIUSURA: ${f.lateStops.join(", ")}` : ""}`;
         }
-        opts.log(`Giorno ${days.length} chiuso: ${dayStops.length} tappe [${dayStops.map(s => s.customer).join(", ")}]. ` +
-          `Prossima vicina "${cand[0].customer}" (+${Math.round(nd)}min) NON entra: ${verdict}`);
+        opts.log(`Giorno ${days.length} chiuso: ${dayStops.length} tappe [${dayStops.map(nameOf).join(", ")}]. ` +
+          `Prossima vicina "${nameOf(cand[0])}" (+${Math.round(nd)}min) NON entra: ${verdict}`);
       } else {
-        opts.log(`Giorno ${days.length}: ${dayStops.length} tappe [${dayStops.map(s => s.customer).join(", ")}]`);
+        opts.log(`Giorno ${days.length}: ${dayStops.length} tappe [${dayStops.map(nameOf).join(", ")}]`);
       }
     }
   }
@@ -496,14 +500,14 @@ export async function planMultiDay(payload, settings = {}, restStops = []) {
     const realRows = (plan.rows || []).filter(r => !r.type);
     const lateStops = realRows
       .filter(r => (r.warnings || []).some(w => /chius|dopo l'orario|finestra|sede chiusa/.test(w.msg || w)))
-      .map(r => r.customer);
-    log(`Giorno ${i + 1} (${dayDate}): ${orderedStops.length} tappe, ${plan.summary?.dayStart}–${plan.summary?.dayEnd}, ${Number(plan.summary?.totalKm || 0).toFixed(0)}km` +
+      .map(nameOf);
+    log(`Giorno ${i + 1} (${dayDate}): ${orderedStops.length} tappe [${orderedStops.map(nameOf).join(" → ")}], ${plan.summary?.dayStart}–${plan.summary?.dayEnd}, ${Number(plan.summary?.totalKm || 0).toFixed(0)}km` +
       `${overBudget ? " · OLTRE ORARIO" : ""}${lateStops.length ? ` · FUORI CHIUSURA: ${[...new Set(lateStops)].join(", ")}` : ""}`);
     // Diagnostica timing 1ª tappa: spiega le partenze "tardi" (es. San Candido alle 9:50).
     const f = realRows[0];
     if (f) {
       const backCalc = f.targetArrivalTime ? `arrivo target ${f.targetArrivalTime}` : "NESSUN calcolo a ritroso (parte all'orario fisso)";
-      log(`  → 1ª tappa "${f.customer}": orari [${f.openingHours || "Non indicato"}], arrivo ${f.arrivalTime}, ${backCalc}`);
+      log(`  → 1ª tappa "${nameOf(f)}": orari [${f.openingHours || "Non indicato"}], arrivo ${f.arrivalTime}, ${backCalc}`);
     }
     days.push({
       dayNumber: i + 1,

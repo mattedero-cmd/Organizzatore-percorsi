@@ -1543,7 +1543,7 @@ export async function evaluateDayTiming(payload, settings = {}) {
   const lateStops = [...new Set(
     evaluated.rows
       .filter((r) => !r.type && (r.warnings || []).some((w) => /chius|dopo l'orario|finestra|sede chiusa/.test(w.msg || w)))
-      .map((r) => r.customer)
+      .map((r) => r.location || r.customer || r.label)
   )];
 
   return {
