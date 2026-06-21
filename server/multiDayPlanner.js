@@ -411,14 +411,17 @@ export async function buildDayClusters(stops, home, budgetMin, opts = {}, dayFea
     await growDays(orderedZones[zi].members, `Z${zi + 1} ${nameOf(orderedZones[zi].seed[0])}`);
   }
 
-  // "Tappe rimaste indietro": le giornate da UNA sola tappa vengono accorpate in un unico gruppo e
-  // ri-clusterizzate insieme (richiesta dell'utente). Una tappa davvero isolata resta sola.
+  // "Tappe rimaste indietro": le giornate da UNA sola tappa vengono accorpate e ri-organizzate
+  // insieme alla fine. Regola dell'utente: si RIEMPIE prima una giornata; se non ci stanno tutte,
+  // se ne usa una seconda (al bisogno); una tappa resta isolata solo se è inevitabile (non si
+  // combina con nessun'altra). `growDays` fa esattamente questo: riempie un giorno (seme + più
+  // vicino fattibile col motore reale), poi sfora su un altro solo quando serve.
   const singles = days.filter(d => d.length <= 1);
   if (singles.length > 1) {
     const solid = days.filter(d => d.length > 1);
     days.length = 0;
     for (const d of solid) days.push(d);
-    if (opts.log) opts.log(`RESTI: accorpo ${singles.length} tappe rimaste indietro [${singles.flat().map(nameOf).join(", ")}]`);
+    if (opts.log) opts.log(`RESTI: ${singles.flat().length} tappe rimaste indietro, le riempio in una giornata (al bisogno due) [${singles.flat().map(nameOf).join(", ")}]`);
     await growDays(groupColocated(singles.flat(), opts), "resti accorpati");
   }
 

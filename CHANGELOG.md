@@ -1,3 +1,6 @@
+## v5.024 — 2026-06-21
+- Multi-giorno, chiarita la regola dei "resti" (su precisazione utente): le tappe rimaste indietro si RIEMPIONO in una giornata; se non ci stanno tutte si usa una seconda (prima si riempie una giornata); una tappa resta isolata solo se inevitabile (non combinabile). Funzionalmente è ciò che già faceva `growDays` in v5.023 (riempie un giorno col motore reale, sfora solo al bisogno): qui solo commento e messaggio Diagnostica più chiari ("le riempio in una giornata, al bisogno due").
+
 ## v5.023 — 2026-06-21
 - Multi-giorno, affinamenti alla logica per zone (su indicazione dell'utente): (1) ordine dei giri dalla zona con l'estremo PIÙ VICINO a casa, allontanandosi (orderedZones per seedHome crescente); (2) le "tappe rimaste indietro" — le giornate da UNA sola tappa — vengono accorpate in un unico gruppo e ri-clusterizzate insieme alla fine (`growDays` estratto come helper; dissolve i singleton se ≥2, una tappa davvero isolata resta sola). Sempre con orari/chiusure pranzo/logica di arrivo dal motore reale. Diagnostica: riga ZONE "dal più vicino a casa", riga RESTI quando accorpa. NB: la qualità delle zone lontane dipende dai tempi reali Google (offline la linea d'aria mescola).
 
