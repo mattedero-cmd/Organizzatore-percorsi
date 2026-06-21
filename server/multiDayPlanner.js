@@ -434,11 +434,18 @@ export async function planMultiDay(payload, settings = {}, restStops = []) {
     const dayEndMin = parseTime(plan.summary?.dayEnd);
     const overBudget = dayEndMin != null && dayEndMin > endMin;
     // Diagnostica: tappe servite fuori orario (warning di chiusura dal planner reale).
-    const lateStops = (plan.rows || [])
-      .filter(r => !r.type && (r.warnings || []).some(w => /chius|dopo l'orario|finestra|sede chiusa/.test(w.msg || w)))
+    const realRows = (plan.rows || []).filter(r => !r.type);
+    const lateStops = realRows
+      .filter(r => (r.warnings || []).some(w => /chius|dopo l'orario|finestra|sede chiusa/.test(w.msg || w)))
       .map(r => r.customer);
     log(`Giorno ${i + 1} (${dayDate}): ${orderedStops.length} tappe, ${plan.summary?.dayStart}–${plan.summary?.dayEnd}, ${Number(plan.summary?.totalKm || 0).toFixed(0)}km` +
       `${overBudget ? " · OLTRE ORARIO" : ""}${lateStops.length ? ` · FUORI CHIUSURA: ${[...new Set(lateStops)].join(", ")}` : ""}`);
+    // Diagnostica timing 1ª tappa: spiega le partenze "tardi" (es. San Candido alle 9:50).
+    const f = realRows[0];
+    if (f) {
+      const backCalc = f.targetArrivalTime ? `arrivo target ${f.targetArrivalTime}` : "NESSUN calcolo a ritroso (parte all'orario fisso)";
+      log(`  → 1ª tappa "${f.customer}": orari [${f.openingHours || "Non indicato"}], arrivo ${f.arrivalTime}, ${backCalc}`);
+    }
     days.push({
       dayNumber: i + 1,
       scheduledDate: dayDate,

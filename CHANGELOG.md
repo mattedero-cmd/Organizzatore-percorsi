@@ -1,3 +1,6 @@
+## v5.009 — 2026-06-16
+- Diagnostica multi-giorno: per ogni giornata logga la 1ª tappa con orari risolti (openingHours), orario di arrivo e se è scattato il calcolo a ritroso (targetArrivalTime) o si è partiti all'orario fisso. Serve a diagnosticare le tappe lontane che "partono tardi" (es. San Candido arrivo 9:50 invece di 8:30 = orari non risolti per quel giorno della settimana → nessun back-calc). Reso realRows riutilizzabile nel log.
+
 ## v5.008 — 2026-06-16
 - Multi-giorno, diagnostica: planMultiDay produce un debug[] (riquadro "Diagnostica" copiabile nella vista) con: copertura matrice tempi reali Google (realPairs = coppie con source "google"; offline/fallback evidenziato), motivo di chiusura di ogni giornata (prossima tappa vicina + se è OLTRE BUDGET o orari NON ok — spiega i giorni con poche tappe tipo "San Candido solitario"), e tappe servite fuori chiusura per giornata. buildLegTimeMatrix ora distingue google vs local-estimate via source.
 - Co-locazione per nome paese: groupColocated raggruppa le tappe con stessa località (oltre che entro ~6 min di strada), così due tappe dello stesso comune (es. Rovereto) non vengono più divise tra giornate.
