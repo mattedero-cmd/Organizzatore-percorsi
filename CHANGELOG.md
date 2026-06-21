@@ -1,3 +1,7 @@
+## v5.008 — 2026-06-16
+- Multi-giorno, diagnostica: planMultiDay produce un debug[] (riquadro "Diagnostica" copiabile nella vista) con: copertura matrice tempi reali Google (realPairs = coppie con source "google"; offline/fallback evidenziato), motivo di chiusura di ogni giornata (prossima tappa vicina + se è OLTRE BUDGET o orari NON ok — spiega i giorni con poche tappe tipo "San Candido solitario"), e tappe servite fuori chiusura per giornata. buildLegTimeMatrix ora distingue google vs local-estimate via source.
+- Co-locazione per nome paese: groupColocated raggruppa le tappe con stessa località (oltre che entro ~6 min di strada), così due tappe dello stesso comune (es. Rovereto) non vengono più divise tra giornate.
+
 ## v5.007 — 2026-06-16
 - Multi-giorno, tre richieste utente: (1) ordine giornaliero "far-first" bloccato — orderDayFarFirst mette la tappa più lontana per prima e poi rientra (nearest-neighbor), il giro viene passato a planRoute con manualOrder/lockOrder; così il viaggio lungo si fa a negozi chiusi e si massimizza il tempo utile. (2) dayHoursFeasible ora simula l'ordine far-first reale (non più EDF): una tappa che cadrebbe dopo la chiusura non viene assegnata a quella giornata (finisce in un altro giorno). (3) groupColocated raggruppa in unità atomiche le tappe entro ~6 min di strada (stesso paese/molto vicine) e il clustering lavora su questi gruppi: tappe co-locate mai divise tra giornate. Verificato offline: Bressanone A+B stesso giorno; giro giorno 1 parte dalla più lontana
 

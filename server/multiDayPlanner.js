@@ -103,24 +103,28 @@ async function buildLegTimeMatrix(home, stops) {
   const time = new Map();
   const pairs = [];
   for (let i = 0; i < nodes.length; i++) for (let j = i + 1; j < nodes.length; j++) pairs.push([i, j]);
-  let cursor = 0;
+  let cursor = 0, googlePairs = 0;
   const worker = async () => {
     while (cursor < pairs.length) {
       const [i, j] = pairs[cursor++];
       try {
         const leg = await routeBetween(nodes[i], nodes[j]);
-        if (leg && Number.isFinite(leg.driveMinutes)) time.set(`${i}_${j}`, leg.driveMinutes);
+        if (leg && Number.isFinite(leg.driveMinutes)) {
+          time.set(`${i}_${j}`, leg.driveMinutes);   // memorizza sempre (google o stima locale)
+          if (leg.source === "google") googlePairs++; // copertura = quanti tempi REALI Google
+        }
       } catch { /* gestito dal fallback in distMin */ }
     }
   };
   await Promise.all(Array.from({ length: Math.min(8, pairs.length) }, () => worker()));
-  return (a, b) => {
+  const distMin = (a, b) => {
     const i = a?._mi, j = b?._mi;
     if (i == null || j == null) return null;
     if (i === j) return 0;
     const v = time.get(i < j ? `${i}_${j}` : `${j}_${i}`);
     return v == null ? null : v;
   };
+  return { distMin, realPairs: googlePairs, totalPairs: pairs.length };
 }
 
 // Risolve le finestre di apertura di una tappa per uno specifico giorno della settimana
@@ -215,14 +219,19 @@ function dowForCluster(opts, idx) {
   return opts.baseDow == null ? null : (((opts.baseDow + idx) % 7) + 7) % 7;
 }
 
-// Raggruppa in gruppi atomici le tappe co-locate (stesso paese / molto vicine per strada):
-// non verranno mai divise tra giornate diverse. Single-link: una tappa entra in un gruppo se
-// è entro CO_LOCATION_MIN minuti da almeno un suo membro.
+// Raggruppa in gruppi atomici le tappe co-locate: stesso paese (stessa località) OPPURE
+// molto vicine per strada (entro CO_LOCATION_MIN minuti). Non verranno mai divise tra
+// giornate diverse. Single-link.
 const CO_LOCATION_MIN = 6;
+function sameTown(a, b) {
+  const la = (a.location || "").trim().toLowerCase();
+  const lb = (b.location || "").trim().toLowerCase();
+  return !!la && la === lb;
+}
 function groupColocated(stops, opts = {}) {
   const groups = [];
   for (const s of stops) {
-    let g = groups.find(grp => grp.some(t => legMin(t, s, opts) <= CO_LOCATION_MIN));
+    const g = groups.find(grp => grp.some(t => sameTown(t, s) || legMin(t, s, opts) <= CO_LOCATION_MIN));
     if (g) g.push(s); else groups.push([s]);
   }
   return groups;
@@ -268,7 +277,22 @@ export function buildDayClusters(stops, home, budgetMin, opts = {}) {
       }
       if (best >= 0) { dayGroups.push(unassigned.splice(best, 1)[0]); added = true; }
     }
-    days.push(flat(dayGroups));
+    const dayStops = flat(dayGroups);
+    days.push(dayStops);
+
+    // Diagnostica: perché la giornata si è chiusa? (per capire i giorni con poche tappe)
+    if (opts.log && unassigned.length) {
+      let ni = 0, nd = Infinity;
+      unassigned.forEach((g, i) => { for (const cs of g) for (const ds of dayStops) { const t = legMin(ds, cs, opts); if (t < nd) { nd = t; ni = i; } } });
+      const cand = unassigned[ni];
+      const tentative = [...dayStops, ...cand];
+      const est = estimateDayMinutes(tentative, home, opts);
+      const overBudget = est.total > budgetMin;
+      const hoursOk = dayHoursFeasible(tentative, home, opts, dow);
+      opts.log(`Giorno ${days.length} chiuso: ${dayStops.length} tappe [${dayStops.map(s => s.customer).join(", ")}]. ` +
+        `Prossima vicina "${cand[0].customer}" (+${Math.round(nd)}min): aggiungendola stima ${est.total}min/budget ${budgetMin} → ` +
+        `${overBudget ? "OLTRE BUDGET" : "ok budget"}, orari ${hoursOk ? "ok" : "NON ok"}`);
+    }
   }
 
   return days;
@@ -335,6 +359,9 @@ export async function planMultiDay(payload, settings = {}, restStops = []) {
   let baseDow = null;
   try { baseDow = new Date(baseDate + "T12:00:00").getDay(); } catch { baseDow = null; }
 
+  const debugLog = [];
+  const log = (m) => debugLog.push(m);
+
   const lunchEnabled = settings.lunchBreakEnabled !== false && payload.lunchBreak !== false;
   const opts = {
     driveMarkupMinPerHour: Number(settings.driveMarkupMinPerHour ?? 10),
@@ -344,7 +371,10 @@ export async function planMultiDay(payload, settings = {}, restStops = []) {
     restDurationMin: Number(settings.restDurationMin ?? 15),
     startMin,
     baseDow,
+    log,
   };
+  log(`=== PIANO MULTI-GIORNO ${baseDate} ===`);
+  log(`finestra ${formatTime(startMin)}–${formatTime(endMin)} (budget ${budgetMin}min) · pranzo ${opts.lunchMin}min`);
 
   const ensureCoords = async (s) => {
     if (s.lat && s.lng) return { ...s };
@@ -372,8 +402,13 @@ export async function planMultiDay(payload, settings = {}, restStops = []) {
     const withCoords = stops.filter(s => s.lat && s.lng);
     // Matrice dei tempi di guida reali su strada (casa + tappe): essenziale in montagna,
     // dove la linea d'aria raggrupperebbe male. Calcolata una volta e usata dal clustering.
-    try { opts.distMin = await buildLegTimeMatrix(home, withCoords); }
-    catch { opts.distMin = null; }
+    try {
+      const mtx = await buildLegTimeMatrix(home, withCoords);
+      opts.distMin = mtx.distMin;
+      const pct = mtx.totalPairs ? Math.round(mtx.realPairs / mtx.totalPairs * 100) : 0;
+      log(`MATRICE tempi reali: ${mtx.realPairs}/${mtx.totalPairs} coppie (${pct}%)` +
+        (pct < 90 ? ` — ATTENZIONE: ${100 - pct}% in linea d'aria (Google non ha risposto): raggruppamenti meno precisi` : ""));
+    } catch (e) { opts.distMin = null; log(`MATRICE tempi reali: ERRORE (${e.message}) → tutto in linea d'aria`); }
     clusters = buildDayClusters(withCoords, home, budgetMin, opts);
   }
   if (!clusters.length) throw new Error("Aggiungi almeno una tappa con indirizzo valido.");
@@ -397,12 +432,20 @@ export async function planMultiDay(payload, settings = {}, restStops = []) {
     };
     const plan = await planRoute(dayPayload, settings, restStops);
     const dayEndMin = parseTime(plan.summary?.dayEnd);
+    const overBudget = dayEndMin != null && dayEndMin > endMin;
+    // Diagnostica: tappe servite fuori orario (warning di chiusura dal planner reale).
+    const lateStops = (plan.rows || [])
+      .filter(r => !r.type && (r.warnings || []).some(w => /chius|dopo l'orario|finestra|sede chiusa/.test(w.msg || w)))
+      .map(r => r.customer);
+    log(`Giorno ${i + 1} (${dayDate}): ${orderedStops.length} tappe, ${plan.summary?.dayStart}–${plan.summary?.dayEnd}, ${Number(plan.summary?.totalKm || 0).toFixed(0)}km` +
+      `${overBudget ? " · OLTRE ORARIO" : ""}${lateStops.length ? ` · FUORI CHIUSURA: ${[...new Set(lateStops)].join(", ")}` : ""}`);
     days.push({
       dayNumber: i + 1,
       scheduledDate: dayDate,
       stopCount: orderedStops.length,
       stops: orderedStops,
-      overBudget: dayEndMin != null && dayEndMin > endMin,
+      overBudget,
+      lateStops: [...new Set(lateStops)],
       plan,
     });
   }
@@ -427,5 +470,6 @@ export async function planMultiDay(payload, settings = {}, restStops = []) {
       unassignedNoCoords: noCoords.map(s => s.customer || s.label || s.fullAddress || "tappa senza indirizzo"),
     },
     days,
+    debug: debugLog,
   };
 }
