@@ -271,31 +271,56 @@ export function buildDayClusters(stops, home, budgetMin, opts = {}) {
     const dayGroups = [unassigned.splice(seedI, 1)[0]];
     const dow = dowForCluster(opts, days.length);
 
-    // Accrescimento: aggiunge la tappa col MINOR COSTO DI INSERIMENTO (minuti di guida che
-    // aggiunge al giro casa→tappe→casa). Una tappa della stessa valle/corridoio costa poco
-    // (è sulla via); una tappa di un'altra valle costa tantissimo (dovresti tornare a casa e
-    // ripartire) → non viene aggiunta. Così la giornata resta in UNA zona. Vincoli: budget e orari.
-    // Soglia "sulla via": una tappa appartiene alla stessa zona se aggiungerla costa MOLTO MENO
-    // che farla a parte (un viaggio a parte costa ~2× la sua distanza da casa). Se il costo di
-    // inserimento supera ON_THE_WAY × distanza-da-casa, è un'altra valle → non si aggiunge, e la
-    // giornata si chiude. Così non si mescolano valli diverse anche quando restano solo quelle.
-    const ON_THE_WAY = 1.2;
+    // Accrescimento: aggiunge il gruppo più VICINO alla zona del giorno (minor tempo di strada),
+    // finché ci sta (budget) e gli orari reggono (verifica far-first, prima tappa all'apertura).
+    // La giornata cresce compatta attorno al punto lontano; le tappe vicine a casa restano
+    // lontane dal gruppo → rimandate ai giorni successivi.
     let added = true;
     while (added && unassigned.length) {
       added = false;
       const dayStops = flat(dayGroups);
-      const baseTour = dayTourMin(dayStops, home, opts);
-      let best = -1, bestCost = Infinity;
+      let best = -1, bestDist = Infinity;
       for (let i = 0; i < unassigned.length; i++) {
         const tentative = [...dayStops, ...unassigned[i]];
         if (estimateDayMinutes(tentative, home, opts).total > budgetMin) continue;
         if (!dayHoursFeasible(tentative, home, opts, dow)) continue;
-        const cost = dayTourMin(tentative, home, opts) - baseTour;
-        const candHome = Math.min(...unassigned[i].map(s => legMin(home, s, opts)));
-        if (cost > ON_THE_WAY * candHome) continue; // tappa di un'altra zona → non aggiungere
-        if (cost < bestCost - 1e-6) { bestCost = cost; best = i; }
+        let d = Infinity;
+        for (const cs of unassigned[i]) for (const ds of dayStops) { const t = legMin(ds, cs, opts); if (t < d) d = t; }
+        if (d < bestDist - 1e-6) { bestDist = d; best = i; }
       }
       if (best >= 0) { dayGroups.push(unassigned.splice(best, 1)[0]); added = true; }
+    }
+
+    // Swap "pass-through vs terminale": se resta un gruppo NON aggiunto che è più LONTANO da
+    // casa di una tappa già nel giorno (cioè è di passaggio, non terminale), prova a scambiarlo
+    // con la tappa più VICINA a casa del giorno, se la giornata resta valida. Così le tappe di
+    // passaggio (es. Bressanone) entrano e a uscire è quella vicino a casa (facile altro giorno).
+    let swapped = true;
+    while (swapped) {
+      swapped = false;
+      const dayStops = flat(dayGroups);
+      // tappa del giorno più vicina a casa
+      let ni = -1, nd = Infinity;
+      dayGroups.forEach((g, i) => { const d = Math.min(...g.map(s => legMin(home, s, opts))); if (d < nd) { nd = d; ni = i; } });
+      if (ni < 0 || dayGroups.length <= 1) break;
+      const nearGroup = dayGroups[ni];
+      // candidato esterno più vicino al giorno, ma più lontano da casa del nearGroup
+      for (let i = 0; i < unassigned.length; i++) {
+        const cand = unassigned[i];
+        const candHome = Math.min(...cand.map(s => legMin(home, s, opts)));
+        if (candHome <= nd) continue; // non è "di passaggio" (più vicino o uguale a casa)
+        const without = dayGroups.filter((_, k) => k !== ni);
+        const tentative = [...without.flat(), ...cand];
+        if (estimateDayMinutes(tentative, home, opts).total > budgetMin) continue;
+        if (!dayHoursFeasible(tentative, home, opts, dow)) continue;
+        // scambia
+        unassigned.splice(i, 1);
+        dayGroups.splice(ni, 1);
+        dayGroups.push(cand);
+        unassigned.push(nearGroup);
+        swapped = true;
+        break;
+      }
     }
 
     const dayStops = flat(dayGroups);
