@@ -313,13 +313,18 @@ export function assignZones(groups, home, opts = {}) {
 // strada dal proprio gruppo: sono le tappe "adiacenti / sulla via", non quelle di un'altra valle.
 // Insieme alla fattibilità reale evita di unire valli opposte. Tarabile sulla Diagnostica.
 const MERGE_MAX_GAP = 60;
+// La giornata deve restare un CORRIDOIO (andata-ritorno), non un serpente tra valli diverse: il
+// tempo di guida totale non deve superare CORRIDOR_FACTOR × (2 × distanza dell'estremo da casa).
+// Un corridoio pulito guida ≈ 2× l'estremo; un percorso che devia in più valli guida molto di più.
+// Evita che, incatenando salti corti, una giornata attraversi 4 valli (es. Ortisei→…→Cles→Pergine).
+const CORRIDOR_FACTOR = 1.4;
 
 // FASE DI RIEMPIMENTO: le giornate vanno sfruttate appieno. Partendo dalla giornata più LONTANA da
 // casa, assorbe le tappe più vicine (entro MERGE_MAX_GAP) dalle altre giornate finché la giornata
-// resta FATTIBILE (motore reale: orari, chiusure, pranzo, logica di arrivo). Così le zone adiacenti
-// si uniscono (es. Tione/Riva + Rovereto) e le giornate non finiscono presto; le valli opposte NON
-// si mescolano (il limite di gap + la fattibilità lo impediscono). Regola utente: «fare prima il
-// seme più lontano e poi unire il più vicino, e se necessario spezzare in altre giornate».
+// resta FATTIBILE (motore reale) E un CORRIDOIO coerente (CORRIDOR_FACTOR). Così le zone adiacenti
+// si uniscono (es. Tione/Riva + Rovereto) e le giornate non finiscono presto, ma NON si incatenano
+// valli diverse. Regola utente: «fare prima il seme più lontano e poi unire il più vicino, e se
+// necessario spezzare in altre giornate».
 async function fillDays(daysIn, home, opts, dayFeasible) {
   const maxHome = d => Math.max(...d.map(s => legMin(home, s, opts)));
   const remaining = [...daysIn];
@@ -340,6 +345,12 @@ async function fillDays(daysIn, home, opts, dayFeasible) {
           const tentative = orderDayFarFirst([...cur, s], home, opts);
           const f = await dayFeasible(tentative, done.length);
           if (!f.ok) continue;
+          // Resta un corridoio? (guida totale ≤ FACTOR × 2 × estremo). Se f.driveMin manca (offline),
+          // salta il controllo corridoio e usa solo gap + fattibilità.
+          if (f.driveMin != null) {
+            const far = Math.max(...tentative.map(x => legMin(home, x, opts)));
+            if (f.driveMin > CORRIDOR_FACTOR * 2 * far) continue;
+          }
           bestD = d; bestJ = j; bestK = k;
         }
       }
@@ -619,7 +630,7 @@ export async function planMultiDay(payload, settings = {}, restStops = []) {
         departureLatest: formatTime(endMin),
       }, settings);
       const ok = t.dayEndWithBreaks != null && t.dayEndWithBreaks <= endMin && (t.lateStops?.length || 0) === 0;
-      return { ok, dayEndWithBreaks: t.dayEndWithBreaks, lateStops: t.lateStops || [] };
+      return { ok, dayEndWithBreaks: t.dayEndWithBreaks, lateStops: t.lateStops || [], driveMin: t.driveMin };
     };
     clusters = await buildDayClusters(withCoords, home, budgetMin, opts, dayFeasible);
   }

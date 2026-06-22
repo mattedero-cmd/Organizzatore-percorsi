@@ -74,10 +74,12 @@ lontana alla più vicina; i resti vicini si accorpano alla fine.**
      e ri-clusterizzate insieme alla fine (se ≥2; una tappa davvero isolata resta sola).
 5. **FASE DI RIEMPIMENTO** (`fillDays`): le giornate per-zona finiscono presto (una valle = poche tappe).
    Si riempiono unendo le adiacenti: partendo dalla giornata col punto più LONTANO da casa, assorbe le
-   tappe più vicine (entro `MERGE_MAX_GAP` 60' di strada) dalle altre giornate finché resta FATTIBILE
-   (motore reale). Le valli opposte non si uniscono (gap + fattibilità → un'unione che sfora gli orari o
-   mescola direzioni viene rifiutata). Regola utente: «fare prima il seme più lontano e poi unire il più
-   vicino, se necessario spezzare». Esempio confermato: Tione/Riva assorbe Rovereto. **`MERGE_MAX_GAP` tarabile.**
+   tappe più vicine (entro `MERGE_MAX_GAP` 60') dalle altre giornate finché resta FATTIBILE (motore reale)
+   E un CORRIDOIO coerente: guida totale ≤ `CORRIDOR_FACTOR` (1.4) × 2 × distanza dell'estremo da casa.
+   Senza il controllo corridoio, sommando salti corti una giornata incatenava 4 valli
+   (Ortisei→…→Cles→Pergine); il corridoio lo impedisce (un corridoio pulito guida ≈ 2× l'estremo, un
+   serpente molto di più). Regola utente: «fare prima il seme più lontano e poi unire il più vicino, se
+   necessario spezzare». Esempio confermato: Tione/Riva assorbe Rovereto. **`MERGE_MAX_GAP` e `CORRIDOR_FACTOR` tarabili.**
 6. Ordine finale delle giornate: dalla più vicina a casa alla più lontana.
 7. Per ogni giornata: ordine **far-first** bloccato (`orderDayFarFirst`) → `planRoute` (orari/soste/pranzo reali).
 8. **Date solo feriali**: `addWorkdaysISO` salta sabato/domenica (banche chiuse). `dayIndex` → data del
