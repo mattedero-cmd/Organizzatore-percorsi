@@ -144,6 +144,14 @@ Lo **swap pass-through/terminale è stato RIMOSSO** (era la causa principale del
   collegate da un passo** (CSV H/G/F dell'utente) per accorpare estremi vicini che NON sono sullo stesso
   raggio da casa. Da introdurre PRIMA di ritentare un criterio direzionale, e solo con dati reali.
 
+## Salva e ricalcola un giro (v5.028)
+- Si salva solo l'INPUT (tappe + `baseReq`), non il risultato: tabella `multiday_plans` (`db.js`),
+  endpoint `GET/POST /api/multiday-plans` + `DELETE /api/multiday-plans/:id` (`index.js`).
+- UI (`app.js`): "Salva giro" in `renderResultMultiDay` (salva `state.mdStops`); elenco "Giri salvati
+  (più giorni)" nel form (`renderMultiDayPlansList`) con **Ricalcola** (`recalcSavedMultiDay`: POST
+  `/api/plan-multiday` con data odierna → vista giornate) ed elimina. `refreshMultiDayPlans` al boot.
+- `state.mdStops` = tappe originali del giro corrente (settate in `planMultiDayAction` e `recalcSavedMultiDay`).
+
 ## Correzioni alla verifica oraria (queste sono buone, tenerle)
 - `dayHoursFeasible` simula l'ordine far-first reale; la **1ª tappa inizia all'apertura** (riproduce il
   calcolo a ritroso) invece che a startMin+guida (prima era pessimista di ore).

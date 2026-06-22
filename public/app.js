@@ -1270,7 +1270,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.027 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.028 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -1280,6 +1280,11 @@ function renderMenuInfo() {
       <ul class="info-list">
         <li>${state.mapApiConfigured ? _svg('<polyline points="20 6 9 17 4 12"/>', 14) + " Google Maps attivo — percorsi reali e ottimizzazione avanzata" : _svg('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>', 14) + " Google Maps non configurato — stime distanze locali"}</li>
         <li>${state.whisperConfigured ? _svg('<polyline points="20 6 9 17 4 12"/>', 14) + " Comandi vocali attivi (Whisper)" : _svg('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>', 14) + " Comandi vocali non configurati"}</li>
+      </ul>
+
+      <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v5.028</p>
+      <ul class="info-list">
+        <li>Ora puoi <strong>salvare un giro multi-giorno</strong> (le sue tappe) e <strong>ricalcolarlo</strong> quando vuoi, senza re-inserire tutto. Dalla schermata della suddivisione in giorni premi "Salva giro"; lo ritrovi nel form percorso sotto "Giri salvati (più giorni)" con il tasto Ricalcola, che ti riporta direttamente alla suddivisione in giornate aggiornata.</li>
       </ul>
 
       <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v5.027</p>
@@ -1663,6 +1668,84 @@ async function refreshSavedRoutes() {
   state.savedRoutes = await api("/api/routes").catch(() => []);
 }
 
+async function refreshMultiDayPlans() {
+  state.multiDayPlans = await api("/api/multiday-plans").catch(() => []);
+}
+
+// Elenco dei giri multi-giorno salvati, con Ricalcola (rifà la suddivisione in giornate) ed elimina.
+function renderMultiDayPlansList() {
+  const plans = state.multiDayPlans || [];
+  if (!plans.length) return "";
+  const rows = plans.map(p => `
+    <div class="row" style="gap:8px;align-items:center;justify-content:space-between;padding:6px 0;border-top:1px solid var(--line);">
+      <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(p.name || "Giro")} <span class="stop-meta">· ${p.stopCount} tappe</span></span>
+      <button type="button" class="btn" data-md-recalc-saved="${p.id}" title="Ricalcola la suddivisione in giornate">${I.refresh(13)} Ricalcola</button>
+      <button type="button" class="btn icon-btn" data-md-del-saved="${p.id}" title="Elimina">${I.trash ? I.trash(13) : "✕"}</button>
+    </div>`).join("");
+  return `
+    <details class="panel-details" style="margin-top:12px;" open>
+      <summary>Giri salvati (più giorni) <span class="stop-meta">· ${plans.length}</span></summary>
+      <div style="margin-top:4px;">${rows}</div>
+    </details>`;
+}
+
+// Salva le tappe del giro multi-giorno corrente (solo input) per ricalcolarle in futuro.
+async function mdSavePlan() {
+  if (!state.mdStops || !state.mdStops.length) { showToast("Nessuna tappa da salvare"); return; }
+  const name = (prompt("Nome del giro da salvare:", state.mdBaseReq?.scheduledDate ? `Giro ${state.mdBaseReq.scheduledDate}` : "Giro multi-giorno") || "").trim();
+  if (!name) return;
+  try {
+    await api("/api/multiday-plans", {
+      method: "POST",
+      body: JSON.stringify({ name, payload: { baseReq: state.mdBaseReq || {}, stops: state.mdStops } })
+    });
+    await refreshMultiDayPlans();
+    showToast("Giro salvato");
+    if (state.activeTab === "route") render();
+  } catch (e) { showToast(e.message); }
+}
+
+// Ricalcola un giro salvato: ricostruisce la suddivisione in giornate dalle tappe salvate,
+// senza re-inserirle. Usa la data odierna come base (le giornate sono comunque solo feriali).
+async function recalcSavedMultiDay(id) {
+  const plan = (state.multiDayPlans || []).find(p => String(p.id) === String(id));
+  if (!plan || !plan.payload) { showToast("Giro non trovato"); return; }
+  if (state.planning) return;
+  const baseReq = { ...(plan.payload.baseReq || {}), scheduledDate: new Date().toISOString().slice(0, 10) };
+  const stops = plan.payload.stops || [];
+  if (!stops.length) { showToast("Il giro salvato non ha tappe"); return; }
+  state.planning = true;
+  showSpinner("Ricalcolo giro salvato…");
+  render();
+  try {
+    const res = await api("/api/plan-multiday", { method: "POST", body: JSON.stringify({ ...baseReq, stops }) });
+    state.mdBaseReq = baseReq;
+    state.mdStops = stops.map(s => ({ ...s }));
+    state.resultMultiDay = res;
+    initMdEdit(res);
+    setActiveTab("result");
+    showToast(`Pianificate ${res.summary?.totalDays || res.days?.length || 0} giornate`);
+  } catch (e) {
+    showToast(e.message);
+  } finally {
+    hideSpinner();
+    state.planning = false;
+    if (state.activeTab === "route") render();
+  }
+}
+
+async function deleteSavedMultiDay(id) {
+  const plan = (state.multiDayPlans || []).find(p => String(p.id) === String(id));
+  if (!plan) return;
+  if (!confirm(`Eliminare il giro salvato "${plan.name}"?`)) return;
+  try {
+    await api(`/api/multiday-plans/${id}`, { method: "DELETE" });
+    await refreshMultiDayPlans();
+    showToast("Giro eliminato");
+    if (state.activeTab === "route") render();
+  } catch (e) { showToast(e.message); }
+}
+
 async function migrateContactNotes() {
   const MIGRATION_KEY = "contactNotesMigrated_v1";
   let done = false;
@@ -1713,7 +1796,7 @@ async function loadInitialData() {
   }
   applyTheme();
   document.querySelector("#map-status").textContent = state.mapApiConfigured ? "Google Maps" : "Stima locale";
-  await Promise.all([refreshAddressesForRoute(), refreshSavedRoutes()]);
+  await Promise.all([refreshAddressesForRoute(), refreshSavedRoutes(), refreshMultiDayPlans()]);
   migrateContactNotes().catch(() => {});
 }
 
@@ -2206,6 +2289,7 @@ function renderRoute() {
         <button type="button" class="btn primary" id="plan-route" style="width:100%">${state.planning ? "Calcolo in corso…" : `${I.navigate(14)} Ottimizza e salva`}</button>
         <button type="button" class="btn" id="plan-multiday" style="width:100%;margin-top:8px">${I.list(14)} Pianifica su più giorni</button>
       </div>
+      ${renderMultiDayPlansList()}
 
       <!-- Comando vocale (in fondo, non prominente) -->
       <div class="rp-section">
@@ -3174,11 +3258,12 @@ function renderResultMultiDay() {
   const unassigned = s.unassignedNoCoords || [];
   app.innerHTML = `
     <section>
-      <div class="section-head" style="margin-bottom:10px;">
+      <div class="section-head" style="margin-bottom:10px;justify-content:space-between;align-items:flex-start;gap:8px;">
         <div>
           <h2 style="margin:0;">Pianificazione su ${edit.length} giorni</h2>
           <div class="stop-meta" style="margin-top:4px;">${totalStops} tappe · finestra ${escapeHtml(s.window || "")} · rientro a casa ogni sera</div>
         </div>
+        ${state.mdStops && state.mdStops.length ? `<button type="button" class="btn" id="md-save" title="Salva queste tappe per ricalcolarle in futuro" style="flex-shrink:0;">${I.save ? I.save(14) : ""} Salva giro</button>` : ""}
       </div>
       ${dirty
         ? `<div class="card" style="padding:10px;border-color:var(--primary);display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
@@ -4193,6 +4278,7 @@ async function planMultiDayAction() {
       departureLatest: r.departureLatest || ""
     };
     state.mdBaseReq = baseReq;
+    state.mdStops = r.stops.map(s => ({ ...s })); // tappe originali (per Salva giro / ricalcolo)
     const res = await api("/api/plan-multiday", {
       method: "POST",
       body: JSON.stringify({ ...baseReq, stops: r.stops })
@@ -6712,6 +6798,11 @@ function bindEvents() {
 
     if (e.target.closest("#plan-route")) { await planCurrentRoute(); return; }
     if (e.target.closest("#plan-multiday")) { await planMultiDayAction(); return; }
+    if (e.target.closest("#md-save")) { await mdSavePlan(); return; }
+    const mdRecalcSaved = e.target.closest("[data-md-recalc-saved]");
+    if (mdRecalcSaved) { await recalcSavedMultiDay(mdRecalcSaved.getAttribute("data-md-recalc-saved")); return; }
+    const mdDelSaved = e.target.closest("[data-md-del-saved]");
+    if (mdDelSaved) { await deleteSavedMultiDay(mdDelSaved.getAttribute("data-md-del-saved")); return; }
     const mdUpBtn = e.target.closest("[data-md-up]");
     if (mdUpBtn) { mdMove(mdUpBtn.getAttribute("data-md-up"), "up"); return; }
     const mdDownBtn = e.target.closest("[data-md-down]");

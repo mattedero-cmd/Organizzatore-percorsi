@@ -19,6 +19,9 @@ import {
   renameRoute,
   routeNameExists,
   deleteRoute,
+  listMultiDayPlans,
+  saveMultiDayPlan,
+  deleteMultiDayPlan,
   listFolders,
   createFolder,
   renameFolder,
@@ -700,6 +703,24 @@ async function handleApi(request, response) {
       const settings = await getSettings(userId);
       const allAddresses = await listAddresses("", userId);
       return sendJson(response, 200, await planMultiDay(body, settings, allAddresses));
+    }
+
+    // Giri multi-giorno salvati (solo input: tappe + parametri base) per ricalcolo rapido.
+    if (method === "GET" && url.pathname === "/api/multiday-plans") {
+      return sendJson(response, 200, await listMultiDayPlans(userId));
+    }
+    if (method === "POST" && url.pathname === "/api/multiday-plans") {
+      const body = await parseBody(request);
+      if (!body.payload || !Array.isArray(body.payload.stops) || !body.payload.stops.length) {
+        return sendJson(response, 400, { error: "Nessuna tappa da salvare" });
+      }
+      const saved = await saveMultiDayPlan(body.name, body.payload, userId);
+      return sendJson(response, 201, saved);
+    }
+    const mdPlanMatch = url.pathname.match(/^\/api\/multiday-plans\/(\d+)$/);
+    if (mdPlanMatch && method === "DELETE") {
+      await deleteMultiDayPlan(mdPlanMatch[1], userId);
+      return sendJson(response, 200, { ok: true });
     }
 
     if (method === "POST" && url.pathname === "/api/route-shape") {
