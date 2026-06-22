@@ -1270,7 +1270,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.124 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.033 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -1282,9 +1282,195 @@ function renderMenuInfo() {
         <li>${state.whisperConfigured ? _svg('<polyline points="20 6 9 17 4 12"/>', 14) + " Comandi vocali attivi (Whisper)" : _svg('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>', 14) + " Comandi vocali non configurati"}</li>
       </ul>
 
+      <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v5.033</p>
+      <ul class="info-list">
+        <li>Meteo cliccabile su tutte le tappe: l'icona meteo apre ora il sito di previsione per la città — MeteoTrentino per Trentino, ilMeteo.it per Alto Adige e resto d'Italia (prima solo le tappe Trentino erano cliccabili)</li>
+      </ul>
+
+      <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v5.030 — pianificazione multi-giorno (riepilogo)</p>
+      <ul class="info-list">
+        <li><strong>Nuovo motore di costruzione delle giornate.</strong> Ora il programma parte dalla tappa più lontana e costruisce la giornata tirando dentro le tappe che sono <em>sulla via di rientro</em> verso casa, finché la giornata è piena; le tappe in eccesso restano disponibili per le giornate successive (unione parziale). Le giornate non finiscono più a metà mattina e non mescolano valli diverse.</li>
+        <li><strong>Come funziona:</strong> ogni giornata rispetta orari, chiusura pranzo, soste e logica di arrivo come un giro singolo; le tappe dello stesso paese restano sempre insieme; le valli vicino casa vengono accorpate in un'unica giornata dedicata; si pianificano solo i giorni feriali; i giri si possono salvare e ricalcolare.</li>
+      </ul>
+
+      <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v5.029</p>
+      <ul class="info-list">
+        <li>Multi-giorno: l'unione delle giornate ora usa la "deviazione per tappa" (quanto allunga il viaggio includere un'altra giornata, per ogni tappa aggiunta). Così si uniscono le giornate davvero sulla via (Tione/Riva + Rovereto, Primiero + Valsugana) e non quelle che richiederebbero una deviazione in un'altra valle (es. Pusteria + Fiemme). Le giornate si riempiono meglio senza mescolare valli.</li>
+      </ul>
+
+      <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v5.028</p>
+      <ul class="info-list">
+        <li>Ora puoi <strong>salvare un giro multi-giorno</strong> (le sue tappe) e <strong>ricalcolarlo</strong> quando vuoi, senza re-inserire tutto. Dalla schermata della suddivisione in giorni premi "Salva giro"; lo ritrovi nel form percorso sotto "Giri salvati (più giorni)" con il tasto Ricalcola, che ti riporta direttamente alla suddivisione in giornate aggiornata.</li>
+      </ul>
+
+      <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v5.027</p>
+      <ul class="info-list">
+        <li>Multi-giorno: l'unione delle giornate ora avviene a <strong>giornate intere</strong>, non più tappa per tappa. Così le tappe dello stesso paese non si separano mai (prima le due di Rovereto finivano in giorni diversi) e le tappe vicino casa non vengono "appese" a giorni di direzione sbagliata (niente più Pergine col giro di Tione/Riva, né tappe servite dopo la chiusura). Si uniscono solo le giornate che insieme restano un corridoio (es. Tione/Riva + Rovereto, oppure Primiero con la Valsugana). Margine di sicurezza sul rientro per non sforare gli orari.</li>
+      </ul>
+
+      <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v5.026</p>
+      <ul class="info-list">
+        <li>Multi-giorno: l'unione delle giornate ora le mantiene un <strong>corridoio</strong> (andata e ritorno), evitando che, sommando tanti tratti brevi, una giornata attraversi più valli (es. la catena Ortisei → Cles → Pergine). Si uniscono solo le tappe davvero sulla via (es. Tione/Riva + Rovereto); le valli diverse restano separate. Giornate piene ma coerenti.</li>
+      </ul>
+
+      <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v5.025</p>
+      <ul class="info-list">
+        <li>Multi-giorno: nuova fase di <strong>riempimento</strong> delle giornate. Dopo aver creato i giri per zona, le giornate vengono sfruttate appieno unendo quelle adiacenti che ci stanno (es. Tione/Riva + Rovereto): si parte dalla giornata più lontana e si assorbono le tappe più vicine finché la giornata regge (orari, chiusure, pranzo). Le valli opposte non si uniscono. Così le giornate non finiscono più a metà mattina.</li>
+      </ul>
+
+      <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v5.024</p>
+      <ul class="info-list">
+        <li>Tappe rimaste indietro: vengono riempite in una sola giornata; se non ci stanno tutte se ne usa una seconda (prima si riempie una giornata), e una tappa resta isolata solo se è inevitabile. Messaggio in Diagnostica più chiaro.</li>
+      </ul>
+
+      <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v5.023</p>
+      <ul class="info-list">
+        <li>Multi-giorno, due affinamenti alla logica delle zone: i giri ora partono dalla zona il cui estremo è <strong>più vicino a casa</strong> e si allontanano via via; le eventuali tappe <strong>rimaste indietro</strong> (giornate da una sola tappa) vengono accorpate in un unico gruppo alla fine, invece di restare giornate isolate. Sempre con orari, chiusure pranzo e logica di arrivo reali.</li>
+      </ul>
+
+      <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v5.022</p>
+      <ul class="info-list">
+        <li><strong>Multi-giorno per zone:</strong> ora prima si individuano gli estremi delle varie zone (valli), poi ogni tappa va nella zona del suo estremo, e i giri si costruiscono dentro ogni zona — niente più valli mescolate nella stessa giornata. Le tappe vicino casa fanno una giornata unica (non più una giornata per tappa). Le tappe nello stesso paese restano sempre insieme.</li>
+        <li><strong>Salta sabato e domenica:</strong> le giornate sono pianificate solo nei giorni feriali, così non capita più di trovare tappe assegnate a un giorno in cui i negozi sono chiusi.</li>
+      </ul>
+
+      <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v5.021 — riepilogo multi-giorno</p>
+      <ul class="info-list">
+        <li><strong>Annullato il vincolo direzionale della v5.020:</strong> frammentava il piano in troppe giornate, spingendo le ultime tappe nel weekend (banche chiuse) e creando giornate da una tappa sola. Tornati alla logica della v5.019.</li>
+        <li><strong>Come funziona ora il multi-giorno:</strong> ogni giornata parte dalla tappa più lontana e rientra verso casa; la fattibilità (orari, chiusure, pranzo, soste, interventi spezzati) è calcolata dallo stesso motore della giornata singola; le tappe nello stesso paese restano unite. La Diagnostica mostra geometria, semi, tappe scartate col motivo e margini. Ancora da migliorare: scelta del giorno della settimana (evitare i giorni di chiusura) e coerenza delle valli.</li>
+      </ul>
+
+      <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v5.019</p>
+      <ul class="info-list">
+        <li>Diagnostica multi-giorno molto più dettagliata, per capire e correggere i raggruppamenti: la geometria reale (tempo da casa a ogni paese, vicino più prossimo di ognuno), il paese che apre ogni giornata, l'elenco di <em>tutte</em> le tappe scartate con il motivo esatto (rientro oltre orario / fuori chiusura / altra direzione), e per ogni giornata il margine rimasto, le attese e l'orario del pranzo.</li>
+      </ul>
+
+      <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v5.018</p>
+      <ul class="info-list">
+        <li>Diagnostica multi-giorno: ora ogni giornata e ogni tappa sono identificate dal <strong>paese</strong> (località) invece che dal nome cliente, che spesso è identico (es. tante filiali con lo stesso nome). Ogni giornata mostra la sequenza dei paesi e il motivo per cui la tappa successiva non è entrata. Serve a capire e correggere i raggruppamenti.</li>
+      </ul>
+
+      <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v5.017</p>
+      <ul class="info-list">
+        <li>La pianificazione multi-giorno ora decide cosa entra in ogni giornata usando <strong>lo stesso motore della giornata singola</strong>: orari di apertura e chiusura, pranzo, soste e interventi spezzati sono valutati esattamente come in un giro normale. Una giornata è valida solo se rientra nell'orario massimo (pause comprese) e nessuna tappa viene servita dopo la chiusura. Risolve i casi in cui una tappa (es. Bressanone) finiva in una giornata dedicata per via dell'interazione con la pausa pranzo. La Diagnostica mostra il vero orario di rientro e le eventuali tappe fuori chiusura.</li>
+      </ul>
+      <ul class="info-list">
+        <li>I tempi di percorrenza calcolati vengono ora riutilizzati (cache): la pianificazione multi-giorno è più veloce e consuma meno chiamate alle mappe. Base tecnica per far seguire alla pianificazione multi-giorno lo stesso motore della giornata singola.</li>
+      </ul>
+
+      <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v5.015</p>
+      <ul class="info-list">
+        <li>Multi-giorno: annullato il criterio "sul corridoio" della v5.014, che sul giro reale spezzava il piano in troppe giornate (valli lontane come Bressanone, Cles e Primiero finivano in giornate dedicate). Ripristinata la logica precedente, che riempiva meglio le giornate.</li>
+      </ul>
+
+      <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v5.011</p>
+      <ul class="info-list">
+        <li>Multi-giorno, due correzioni importanti: (1) quando una giornata è troppo piena, a saltare è la tappa più vicina a casa (terminale, facile da fare un altro giorno), non una tappa di passaggio come Bressanone — che ora resta nella zona lontana col resto del corridoio; (2) la verifica oraria è più precisa: tiene conto che il giro parte presto e arriva all'apertura, e che una tappa a ridosso della chiusura mattutina si fa nel pomeriggio — così le giornate si riempiono correttamente senza sforare gli orari</li>
+      </ul>
+
+      <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v5.010 — riepilogo pianificazione multi-giorno</p>
+      <ul class="info-list">
+        <li><strong>Cosa fa:</strong> dato un insieme di tappe troppo grande per un giorno, le suddivide in più giornate (rientro a casa ogni sera, numero di giorni automatico), partendo dalle zone più lontane.</li>
+        <li><strong>Distanze reali:</strong> usa i tempi di guida effettivi di Google (non la linea d'aria), fondamentale in montagna.</li>
+        <li><strong>Per zona:</strong> ogni giornata cresce compatta attorno al punto più lontano; le tappe nello stesso paese restano sempre insieme; le tappe vicine a casa per ultime.</li>
+        <li><strong>Far-first:</strong> il giro parte dalla tappa più lontana (viaggio lungo a negozi chiusi, più tempo utile) anticipando la partenza per arrivare all'apertura.</li>
+        <li><strong>Orari rispettati:</strong> una tappa che cadrebbe dopo la chiusura va in un altro giorno (tolleranza 10 min).</li>
+        <li><strong>Riorganizzazione manuale:</strong> trascini le tappe tra le giornate e usi le frecce; "Ricalcola" aggiorna orari e km.</li>
+        <li><strong>Diagnostica:</strong> riquadro copiabile con copertura tempi reali, motivo di chiusura di ogni giornata e tappe fuori orario.</li>
+      </ul>
+
+      <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v5.009</p>
+      <ul class="info-list">
+        <li>Diagnostica più dettagliata: per ogni giornata mostra ora gli orari risolti della prima tappa e se la partenza è stata anticipata per arrivare all'apertura — spiega i casi in cui una tappa lontana "parte tardi" e arriva a metà mattina</li>
+      </ul>
+
+      <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v5.008</p>
+      <ul class="info-list">
+        <li>Diagnostica multi-giorno: in fondo al piano c'è ora un riquadro "Diagnostica" (copiabile) che mostra quante coppie casa/tappe hanno usato i tempi di guida reali di Google, perché ogni giornata si è chiusa (budget/orari) e quali tappe risultano fuori chiusura — utile per capire e migliorare i raggruppamenti</li>
+        <li>Tappe nello stesso paese: ora vengono tenute insieme anche per nome località (non solo per distanza), così due tappe dello stesso comune non finiscono più in giornate diverse</li>
+      </ul>
+
+      <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v5.007</p>
+      <ul class="info-list">
+        <li>Multi-giorno, tre migliorie: (1) ogni giornata parte dalla tappa più lontana e rientra verso casa, così il viaggio lungo si fa quando i negozi sono chiusi e resta più tempo utile al lavoro; (2) se una tappa cadrebbe dopo la chiusura, viene messa in un altro giorno; (3) le tappe vicine o nello stesso paese restano sempre nella stessa giornata, mai divise</li>
+      </ul>
+
+      <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v5.006</p>
+      <ul class="info-list">
+        <li>Multi-giorno, giornate per zona: ogni giornata ora cresce come zona compatta attorno al punto più lontano (es. tutto il nord: San Candido, Brunico, Bressanone, Bolzano, Merano, comprese le deviazioni di zona), aggiungendo sempre la tappa più vicina al gruppo. Le tappe vicine a casa restano per gli ultimi giorni invece di essere infilate nel giro lontano "perché sulla via" — niente più zigzag</li>
+      </ul>
+
+      <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v5.005</p>
+      <ul class="info-list">
+        <li>Multi-giorno, distanze reali su strada: l'organizzazione delle giornate ora usa i tempi di guida effettivi (non la linea d'aria), fondamentale in montagna. Risolve i raggruppamenti senza senso (es. da San Candido verso la Val di Fassa ignorando Bolzano/Egna sul percorso): ora le tappe sullo stesso corridoio stradale finiscono nella stessa giornata</li>
+      </ul>
+
+      <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v5.004</p>
+      <ul class="info-list">
+        <li>Multi-giorno, nuova logica di organizzazione: ogni giornata parte dalle tappe più lontane e raccoglie quelle che si incontrano avvicinandosi a casa, così il punto più lontano si accorcia ogni giorno e non si torna mai oltre dove si è già stati. Tappe nello stesso luogo sempre insieme (salvo orari incompatibili); le tappe vicine a casa restano per ultime. Meno ore di guida e meno avanti-e-indietro</li>
+      </ul>
+
+      <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v5.003</p>
+      <ul class="info-list">
+        <li>Riorganizzazione manuale del piano multi-giorno: nella schermata delle giornate puoi trascinare una tappa per spostarla tra i giorni, e usare le frecce su/giù per le regolazioni fini (spostandola oltre l'ultima giornata crei un nuovo giorno). Premi "Ricalcola giornate" per aggiornare ordine, orari e km rispettando la tua organizzazione</li>
+      </ul>
+
+      <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v5.002</p>
+      <ul class="info-list">
+        <li>Multi-giorno e orari di apertura: la suddivisione in giornate ora rispetta gli orari delle tappe — una tappa non viene più messa in una giornata dove verrebbe raggiunta o conclusa dopo la chiusura (tolleranza 10 minuti se l'intervento è già iniziato). Le tappe incompatibili vengono spostate su giornate diverse</li>
+      </ul>
+
+      <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v5.001</p>
+      <ul class="info-list">
+        <li>Interfaccia multi-giorno: nel form percorso c'è ora il pulsante "Pianifica su più giorni". Calcola la suddivisione automatica delle tappe in più giornate (rientro a casa ogni sera, meno km possibili) e la mostra nel tab Risultato con un riepilogo e l'elenco delle giornate</li>
+      </ul>
+
+      <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v5.000</p>
+      <ul class="info-list">
+        <li><strong>Pianificazione multi-giorno (avvio V5):</strong> è attivo il motore che suddivide automaticamente molte tappe in più giornate, ognuna con rientro a casa la sera, rispettando la finestra oraria e cercando di fare meno chilometri possibile. Il numero di giornate è calcolato in automatico. L'interfaccia per usarlo dall'app arriva a breve</li>
+      </ul>
+
+      <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v4.130</p>
+      <ul class="info-list">
+        <li><strong>Pranzo tappe spezzate:</strong> per una tappa spezzata dalla chiusura di mezzogiorno il pranzo va ora sempre nel gap di chiusura (lavori il mattino, mangi durante la chiusura, riparti all'apertura), anche se stai guidando verso la tappa durante la finestra pranzo</li>
+        <li><strong>Pranzo dopo l'intervento:</strong> se concludi una tappa entro la finestra pranzo, prima fai l'intervento e poi mangi vicino — niente più deviazioni per mangiare prima di lavorare, né tappe spinte dentro la propria chiusura</li>
+        <li><strong>Soste e pranzi più sensati:</strong> soste cercate sul percorso (le più vicine alla strada, non le mete famose lontane), con soglia qualità 4★/5 recensioni; pranzi solo in ristoranti/trattorie/mense/pizzerie ≥4.3★, 20 recensioni, entro ~25€; scartate le deviazioni eccessive</li>
+        <li><strong>Orari e avvisi:</strong> il pomeriggio delle tappe spezzate riparte all'orario giusto (la pausa è assorbita dalla chiusura); avviso "arrivo prima dell'apertura" anche quando sono le pause a spostare l'arrivo; avviso quando un intervento sfora la chiusura per soste accumulate</li>
+        <li><strong>Split intelligente:</strong> se l'intervento non sta nel solo pomeriggio la tappa viene spezzata comunque (mattino + pomeriggio) invece di lavorare durante la chiusura; il tempo di guida del pranzo è sempre visibile sulla card</li>
+      </ul>
+
+      <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v4.129</p>
+      <ul class="info-list">
+        <li>Pranzo dopo l'intervento, non prima: se arrivi a una tappa e la concludi entro la finestra pranzo, ora fai prima l'intervento e mangi dopo (vicino alla tappa). Evita di deviare a mangiare per poi tornare a lavorare e, soprattutto, evita che la tappa venga spinta dentro la sua chiusura di mezzogiorno. Le tappe lunghe che finirebbero dopo le 14:00 usano ancora il pranzo durante la guida</li>
+      </ul>
+
+      <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v4.128</p>
+      <ul class="info-list">
+        <li>Avviso "arrivo prima dell'apertura" ora mostrato anche quando le pause (pranzo, soste) spostano l'arrivo prima dell'orario di apertura della tappa — prima in questi casi l'attesa c'era ma non veniva segnalata</li>
+      </ul>
+
+      <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v4.127</p>
+      <ul class="info-list">
+        <li>Criteri pranzo più selettivi: ristoranti, trattorie, mense e pizzerie con almeno 4.3 stelle, 20 recensioni e fascia di prezzo entro ~25€ a persona — esclusi i locali più cari e quelli poco recensiti</li>
+      </ul>
+
+      <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v4.126</p>
+      <ul class="info-list">
+        <li>Soglia qualità soste: vengono considerati solo locali con almeno 4 stelle e 5 recensioni — tra questi si sceglie comunque il più vicino al percorso. Un minimo di qualità garantito, senza allontanarsi dal tragitto</li>
+      </ul>
+
+      <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v4.125</p>
+      <ul class="info-list">
+        <li>Soste sul percorso, non più mete lontane: il sistema cerca ora i bar più vicini alla strada (non i più famosi della zona) e sceglie quello più vicino al tragitto invece del meglio recensito a chilometri di distanza. Aspettative più basse sul locale, ma sul percorso — meglio un bar normale sotto casa che un rifugio a 7 km</li>
+      </ul>
+
       <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v4.124</p>
       <ul class="info-list">
-        <li>Meteo cliccabile su tutte le tappe: l'icona meteo apre ora il sito di previsione per la città della tappa — MeteoTrentino per tappe in Trentino, ilMeteo.it per Alto Adige e resto d'Italia</li>
+        <li>Soste automatiche non più troppo lontane: se l'unico posto trovato richiede una deviazione superiore al limite (anche in direzione opposta alla tappa successiva), la sosta non viene più inserita — prima poteva comparire una sosta a 14 km / 17 min per una pausa di 10 minuti</li>
+      </ul>
+
+      <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v4.123</p>
+      <ul class="info-list">
         <li>I clienti possono essere contrassegnati come sosta caffè ☕ e/o luogo pranzo 🍽 — nella scheda contatto due nuove caselle attivano l'inclusione automatica nei percorsi; le icone appaiono anche sulle card dell'archivio</li>
       </ul>
 
@@ -1498,6 +1684,84 @@ async function refreshSavedRoutes() {
   state.savedRoutes = await api("/api/routes").catch(() => []);
 }
 
+async function refreshMultiDayPlans() {
+  state.multiDayPlans = await api("/api/multiday-plans").catch(() => []);
+}
+
+// Elenco dei giri multi-giorno salvati, con Ricalcola (rifà la suddivisione in giornate) ed elimina.
+function renderMultiDayPlansList() {
+  const plans = state.multiDayPlans || [];
+  if (!plans.length) return "";
+  const rows = plans.map(p => `
+    <div class="row" style="gap:8px;align-items:center;justify-content:space-between;padding:6px 0;border-top:1px solid var(--line);">
+      <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(p.name || "Giro")} <span class="stop-meta">· ${p.stopCount} tappe</span></span>
+      <button type="button" class="btn" data-md-recalc-saved="${p.id}" title="Ricalcola la suddivisione in giornate">${I.refresh(13)} Ricalcola</button>
+      <button type="button" class="btn icon-btn" data-md-del-saved="${p.id}" title="Elimina">${I.trash ? I.trash(13) : "✕"}</button>
+    </div>`).join("");
+  return `
+    <details class="panel-details" style="margin-top:12px;" open>
+      <summary>Giri salvati (più giorni) <span class="stop-meta">· ${plans.length}</span></summary>
+      <div style="margin-top:4px;">${rows}</div>
+    </details>`;
+}
+
+// Salva le tappe del giro multi-giorno corrente (solo input) per ricalcolarle in futuro.
+async function mdSavePlan() {
+  if (!state.mdStops || !state.mdStops.length) { showToast("Nessuna tappa da salvare"); return; }
+  const name = (prompt("Nome del giro da salvare:", state.mdBaseReq?.scheduledDate ? `Giro ${state.mdBaseReq.scheduledDate}` : "Giro multi-giorno") || "").trim();
+  if (!name) return;
+  try {
+    await api("/api/multiday-plans", {
+      method: "POST",
+      body: JSON.stringify({ name, payload: { baseReq: state.mdBaseReq || {}, stops: state.mdStops } })
+    });
+    await refreshMultiDayPlans();
+    showToast("Giro salvato");
+    if (state.activeTab === "route") render();
+  } catch (e) { showToast(e.message); }
+}
+
+// Ricalcola un giro salvato: ricostruisce la suddivisione in giornate dalle tappe salvate,
+// senza re-inserirle. Usa la data odierna come base (le giornate sono comunque solo feriali).
+async function recalcSavedMultiDay(id) {
+  const plan = (state.multiDayPlans || []).find(p => String(p.id) === String(id));
+  if (!plan || !plan.payload) { showToast("Giro non trovato"); return; }
+  if (state.planning) return;
+  const baseReq = { ...(plan.payload.baseReq || {}), scheduledDate: new Date().toISOString().slice(0, 10) };
+  const stops = plan.payload.stops || [];
+  if (!stops.length) { showToast("Il giro salvato non ha tappe"); return; }
+  state.planning = true;
+  showSpinner("Ricalcolo giro salvato…");
+  render();
+  try {
+    const res = await api("/api/plan-multiday", { method: "POST", body: JSON.stringify({ ...baseReq, stops }) });
+    state.mdBaseReq = baseReq;
+    state.mdStops = stops.map(s => ({ ...s }));
+    state.resultMultiDay = res;
+    initMdEdit(res);
+    setActiveTab("result");
+    showToast(`Pianificate ${res.summary?.totalDays || res.days?.length || 0} giornate`);
+  } catch (e) {
+    showToast(e.message);
+  } finally {
+    hideSpinner();
+    state.planning = false;
+    if (state.activeTab === "route") render();
+  }
+}
+
+async function deleteSavedMultiDay(id) {
+  const plan = (state.multiDayPlans || []).find(p => String(p.id) === String(id));
+  if (!plan) return;
+  if (!confirm(`Eliminare il giro salvato "${plan.name}"?`)) return;
+  try {
+    await api(`/api/multiday-plans/${id}`, { method: "DELETE" });
+    await refreshMultiDayPlans();
+    showToast("Giro eliminato");
+    if (state.activeTab === "route") render();
+  } catch (e) { showToast(e.message); }
+}
+
 async function migrateContactNotes() {
   const MIGRATION_KEY = "contactNotesMigrated_v1";
   let done = false;
@@ -1548,7 +1812,7 @@ async function loadInitialData() {
   }
   applyTheme();
   document.querySelector("#map-status").textContent = state.mapApiConfigured ? "Google Maps" : "Stima locale";
-  await Promise.all([refreshAddressesForRoute(), refreshSavedRoutes()]);
+  await Promise.all([refreshAddressesForRoute(), refreshSavedRoutes(), refreshMultiDayPlans()]);
   migrateContactNotes().catch(() => {});
 }
 
@@ -2039,7 +2303,9 @@ function renderRoute() {
       <!-- Pulsante sticky -->
       <div class="rp-plan-sticky">
         <button type="button" class="btn primary" id="plan-route" style="width:100%">${state.planning ? "Calcolo in corso…" : `${I.navigate(14)} Ottimizza e salva`}</button>
+        <button type="button" class="btn" id="plan-multiday" style="width:100%;margin-top:8px">${I.list(14)} Pianifica su più giorni</button>
       </div>
+      ${renderMultiDayPlansList()}
 
       <!-- Comando vocale (in fondo, non prominente) -->
       <div class="rp-section">
@@ -2963,7 +3229,86 @@ function renderManualOrder(result) {
     </details>`;
 }
 
+// Vista risultato multi-giorno (V5): elenco delle giornate con riepilogo e tappe.
+function renderResultMultiDay() {
+  const res = state.resultMultiDay;
+  if (!res || !Array.isArray(res.days)) {
+    app.innerHTML = `<section class="panel"><h2>Più giorni</h2><div class="empty">Nessuna pianificazione multi-giorno.</div></section>`;
+    return;
+  }
+  if (!state.mdEdit) initMdEdit(res);
+  const edit = state.mdEdit;
+  const dirty = !!state.mdDirty;
+  const s = res.summary || {};
+  const baseDate = res.baseDate || res.days[0]?.scheduledDate || "";
+  const totalStops = edit.reduce((n, d) => n + d.length, 0);
+  const fmtDate = (iso) => { try { return new Date(iso + "T12:00:00").toLocaleDateString("it-IT", { weekday: "short", day: "numeric", month: "short" }); } catch { return iso || ""; } };
+  const grip = _svg('<circle cx="9" cy="6" r="1.2"/><circle cx="15" cy="6" r="1.2"/><circle cx="9" cy="12" r="1.2"/><circle cx="15" cy="12" r="1.2"/><circle cx="9" cy="18" r="1.2"/><circle cx="15" cy="18" r="1.2"/>', 16);
+
+  const daysHtml = edit.map((dayStops, i) => {
+    const planned = (!dirty && res.days[i]) ? (res.days[i].plan?.summary || {}) : null;
+    const overBudget = !dirty && res.days[i]?.overBudget;
+    const date = fmtDate(mdAddDaysISO(baseDate, i));
+    const rowsHtml = dayStops.map((st, j) => `
+        <div class="row md-stop-row" data-md-row="${i}:${j}" style="gap:6px;align-items:center;padding:5px 0;border-top:1px solid var(--line);">
+          <span class="md-grip" data-md-handle="${i}:${j}" style="touch-action:none;cursor:grab;color:var(--muted);flex-shrink:0;display:flex;">${grip}</span>
+          ${st._time && !dirty ? `<span class="stop-meta" style="min-width:44px;font-variant-numeric:tabular-nums;">${escapeHtml(st._time)}</span>` : ""}
+          <span style="flex:1;min-width:0;">${escapeHtml(st.customer || "")}${st.location ? ` <span class="stop-meta">— ${escapeHtml(st.location)}</span>` : ""}</span>
+          <button type="button" class="btn icon-btn" data-md-up="${i}:${j}" title="Su">${I.arrowUp(13)}</button>
+          <button type="button" class="btn icon-btn" data-md-down="${i}:${j}" title="Giù">${I.arrowDown(13)}</button>
+        </div>`).join("");
+    return `
+      <article class="card" data-md-day="${i}" style="padding:12px;">
+        <div class="row" style="justify-content:space-between;align-items:center;gap:8px;">
+          <div class="row" style="gap:8px;align-items:center;">
+            <span class="badge" style="font-weight:700;">Giorno ${i + 1}</span>
+            <span class="stop-meta" style="text-transform:capitalize;">${escapeHtml(date)}</span>
+          </div>
+          <span class="stop-meta">${planned ? `${escapeHtml(planned.dayStart || "")}–${escapeHtml(planned.dayEnd || "")}` : "da ricalcolare"}</span>
+        </div>
+        <div class="stop-meta" style="margin:6px 0 2px;">${dayStops.length} tappe${planned ? ` · ${Number(planned.totalKm || 0).toFixed(1)} km · ${minutesLabel(planned.totalDriveMinutes)} guida` : ""}${overBudget ? ` · <span class="badge badge-warn">oltre l'orario</span>` : ""}</div>
+        <div style="margin-top:2px;">${rowsHtml}</div>
+      </article>`;
+  }).join("");
+
+  const unassigned = s.unassignedNoCoords || [];
+  app.innerHTML = `
+    <section>
+      <div class="section-head" style="margin-bottom:10px;justify-content:space-between;align-items:flex-start;gap:8px;">
+        <div>
+          <h2 style="margin:0;">Pianificazione su ${edit.length} giorni</h2>
+          <div class="stop-meta" style="margin-top:4px;">${totalStops} tappe · finestra ${escapeHtml(s.window || "")} · rientro a casa ogni sera</div>
+        </div>
+        ${state.mdStops && state.mdStops.length ? `<button type="button" class="btn" id="md-save" title="Salva queste tappe per ricalcolarle in futuro" style="flex-shrink:0;">${I.save ? I.save(14) : ""} Salva giro</button>` : ""}
+      </div>
+      ${dirty
+        ? `<div class="card" style="padding:10px;border-color:var(--primary);display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
+             <span class="stop-meta">Hai riorganizzato le tappe. Premi Ricalcola per aggiornare orari, km e ordine.</span>
+             <button type="button" class="btn primary" id="md-recalc">${I.refresh(14)} Ricalcola giornate</button>
+           </div>`
+        : `<div class="summary-grid">
+             <div class="metric"><div class="metric-label">Giornate</div><div class="metric-value">${edit.length}</div></div>
+             <div class="metric"><div class="metric-label">Km totali</div><div class="metric-value">${Number(s.totalKm || 0).toFixed(1)}</div></div>
+             <div class="metric"><div class="metric-label">Ore guida</div><div class="metric-value">${minutesLabel(s.totalDriveMinutes)}</div></div>
+             <div class="metric"><div class="metric-label">Ore lavoro</div><div class="metric-value">${minutesLabel(s.totalWorkMinutes)}</div></div>
+           </div>`}
+      ${unassigned.length ? `<div class="badge badge-warn" style="display:block;margin:10px 0;padding:8px;">${unassigned.length} tappe senza indirizzo valido, non pianificate: ${escapeHtml(unassigned.join(", "))}</div>` : ""}
+      <p class="stop-meta" style="margin:10px 0 6px;">Trascina la maniglia per spostare una tappa tra le giornate; usa le frecce per le regolazioni fini. Spostare una tappa oltre l'ultima giornata crea un nuovo giorno.</p>
+      <div style="display:flex;flex-direction:column;gap:12px;">
+        ${daysHtml}
+      </div>
+      ${(res.debug && res.debug.length) ? `
+      <details class="panel-details" style="margin-top:14px;">
+        <summary>Diagnostica
+          <button type="button" class="btn" id="copy-md-debug-btn" title="Copia diagnostica" style="margin-left:8px;">${I.copy(14)} Copia</button>
+        </summary>
+        <pre style="white-space:pre-wrap;font-size:0.72rem;line-height:1.45;margin:8px 0 0;color:var(--muted);">${escapeHtml(res.debug.join("\n"))}</pre>
+      </details>` : ""}
+    </section>`;
+}
+
 function renderResult() {
+  if (state.resultMultiDay) { renderResultMultiDay(); return; }
   if (!state.result) {
     app.innerHTML = `<section class="panel"><h2>Percorso</h2><div class="empty">Nessun percorso calcolato. Vai su "Nuovo percorso" e premi Ottimizza.</div></section>`;
     return;
@@ -3642,43 +3987,55 @@ function _readResultEditForm() {
   return Object.fromEntries(fd.entries());
 }
 
-async function replanFromResult() {
-  const result = normalizeSavedRoute(state.result);
-  const v = _readResultEditForm();
-
-  // Reconstruct stops from current result rows (skip breaks)
-  const stops = (result.rows || [])
-    .filter(r => !r.type)
-    .filter((r, i, arr) => !r.stopPart || r.stopPart === "morning" || arr.findIndex(x => x.addressId === r.addressId && !x.stopPart) === i)
-    .map(r => {
-      // Fall back to address book for hours when result row lacks them (e.g. old saved routes)
-      const addr = r.addressId ? (state.allAddresses || []).find(a => String(a.id) === String(r.addressId)) : null;
-      const wh = r.weeklyHours || addr?.weeklyHours || null;
-      const om = r.openMorning || addr?.openMorning || "";
-      const cm = r.closeMorning || addr?.closeMorning || "";
-      const oa = r.openAfternoon || addr?.openAfternoon || "";
-      const ca = r.closeAfternoon || addr?.closeAfternoon || "";
-      return {
+// Ricostruisce le tappe del giro a partire dalle righe di risultato, riunendo i
+// tronconi delle tappe spezzate (mattina/pomeriggio) in un'unica tappa con la durata
+// TOTALE. La deduplica è per stopUid (non per addressId), così più tappe temporanee
+// — che hanno tutte addressId null — non vengono collassate in una sola.
+// La durata personalizzata viene sempre preservata; il default (45) si applica solo
+// quando una tappa non ha alcuna durata valida.
+function rebuildStopsFromResultRows(rows) {
+  const list = (rows || []).filter(r => !r.type);
+  const stopIdOf = (x, idx) => x.stopUid || x.uid || (x.addressId != null ? `addr-${x.addressId}` : `idx-${idx}`);
+  const seen = new Set();
+  const out = [];
+  list.forEach((r, idx) => {
+    if (r.stopPart === "afternoon") return; // riunito con la sua parte "morning"
+    const key = stopIdOf(r, idx);
+    if (seen.has(key)) return;
+    seen.add(key);
+    // Somma tutte le parti (mattina + pomeriggio) della stessa tappa
+    const sameStop = list.filter((x, j) => stopIdOf(x, j) === key);
+    const totalDuration = sameStop.reduce((t, x) => t + Number(x.durationMinutes || 0), 0);
+    const addr = r.addressId != null ? (state.allAddresses || []).find(a => String(a.id) === String(r.addressId)) : null;
+    out.push({
       uid: crypto.randomUUID(),
       addressId: r.addressId ?? null,
       customer: r.customer, location: r.location,
-      fullAddress: r.address, notes: r.notes,
-      durationMinutes: r.stopPart === "morning"
-        ? (() => { const af = (result.rows || []).find(x => x.stopPart === "afternoon" && x.addressId === r.addressId); return Number(r.durationMinutes || 0) + Number(af?.durationMinutes || 0) || 45; })()
-        : Number(r.durationMinutes || 45),
+      fullAddress: r.address || r.fullAddress, notes: r.notes,
+      durationMinutes: totalDuration || 45,
       lat: r.lat, lng: r.lng,
-      weeklyHours: wh,
-      openMorning: om,
-      closeMorning: cm,
-      openAfternoon: oa,
-      closeAfternoon: ca,
+      weeklyHours: r.weeklyHours || addr?.weeklyHours || null,
+      openMorning: r.openMorning || addr?.openMorning || "",
+      closeMorning: r.closeMorning || addr?.closeMorning || "",
+      openAfternoon: r.openAfternoon || addr?.openAfternoon || "",
+      closeAfternoon: r.closeAfternoon || addr?.closeAfternoon || "",
       ignoreHours: r.ignoreHours === true,
       fixedFirst: r.fixedFirst === true,
       timeFrom: r.timeFrom || "",
       timeTo: r.timeTo || "",
       timeWindowMode: r.timeWindowMode || "available",
       recognized: true
-    };});
+    });
+  });
+  return out;
+}
+
+async function replanFromResult() {
+  const result = normalizeSavedRoute(state.result);
+  const v = _readResultEditForm();
+
+  // Reconstruct stops from current result rows (skip breaks), preserving custom durations
+  const stops = rebuildStopsFromResultRows(result.rows);
 
   // Add any newly queued stops from the result-view add-stop panel
   for (const s of (state.resultPendingStops || [])) stops.push(s);
@@ -3837,6 +4194,7 @@ function renderResultEditPanels(result) {
             ${state.googleMapsKey ? `<div class="field full" style="padding-top:0"><button type="button" class="btn" id="rv-custom-map-btn">${I.map(14)} Scegli sulla mappa</button></div>` : ""}
             <input type="hidden" id="rv-custom-lat" value="" />
             <input type="hidden" id="rv-custom-lng" value="" />
+            <input type="hidden" id="rv-custom-hours" value="" />
             <label class="field">Durata<input id="rv-custom-duration" type="time" step="300" value="00:45" data-duration-hhmm /></label>
           </div>
           <div class="actions" style="margin-top:8px;">
@@ -3849,7 +4207,7 @@ function renderResultEditPanels(result) {
             <p class="rp-label" style="margin-bottom:4px;">In attesa di ricalcolo:</p>
             ${(state.resultPendingStops || []).map((s, i) => `
               <div class="rv-pending-stop">
-                <span>${escapeHtml(s.customer)}${s.location ? ` — ${escapeHtml(s.location)}` : ""}</span>
+                <span>${escapeHtml(s.customer)}${s.location ? ` — ${escapeHtml(s.location)}` : ""}${s.temporary ? ` <span class="stop-window-badge" title="Tappa temporanea, non salvata in archivio">provvisoria</span>` : ""}</span>
                 <button class="btn danger icon-btn" data-rv-remove-pending="${i}">${I.trash(13)}</button>
               </div>`).join("")}
           </div>` : ""}
@@ -3899,6 +4257,7 @@ async function planCurrentRoute() {
         departureLatest: r.departureLatest || ""
       })
     });
+    state.resultMultiDay = null;
     state.manualOrderRows = null;
     state.expandedStops = new Set();
     state.expandedPanels = new Set();
@@ -3918,6 +4277,203 @@ async function planCurrentRoute() {
     state.planning = false;
     if (state.activeTab === "route") render();
   }
+}
+
+// Pianificazione multi-giorno (V5): suddivide le tappe in più giornate (base unica
+// casa, finestra oraria, km minimi, n. giorni auto) e mostra l'elenco nel tab Risultato.
+// Non svuota le tappe del form e non salva: il piano è una panoramica ricalcolabile.
+async function planMultiDayAction() {
+  if (state.planning) return;
+  updateRouteFromForm();
+  if (!state.route.stops.length) { showToast("Aggiungi almeno una tappa"); return; }
+  state.planning = true;
+  showSpinner("Calcolo su più giorni…");
+  render();
+  try {
+    const r = state.route;
+    // Parametri base riusati anche dal ricalcolo dopo riorganizzazione manuale.
+    const baseReq = {
+      scheduledDate: r.scheduledDate,
+      start: { label: r.startLabel, address: r.startAddress },
+      end: { sameAsStart: r.endSameAsStart, label: r.endLabel, address: r.endAddress },
+      startTime: r.startTime,
+      timingMode: r.timingMode,
+      arrivalLeadMinutes: r.arrivalLeadMinutes,
+      firstArrivalTime: r.firstArrivalTime,
+      firstArrivalRequired: r.firstArrivalRequired,
+      rates: state.settings,
+      lunchBreak: r.lunchBreak, lunchBreakMinutes: r.lunchBreakMinutes,
+      lunchFixedTime: r.lunchFixedTime || "",
+      departureLatest: r.departureLatest || ""
+    };
+    state.mdBaseReq = baseReq;
+    state.mdStops = r.stops.map(s => ({ ...s })); // tappe originali (per Salva giro / ricalcolo)
+    const res = await api("/api/plan-multiday", {
+      method: "POST",
+      body: JSON.stringify({ ...baseReq, stops: r.stops })
+    });
+    state.resultMultiDay = res;
+    initMdEdit(res);
+    setActiveTab("result");
+    showToast(`Pianificate ${res.summary?.totalDays || res.days?.length || 0} giornate`);
+  } catch (e) {
+    showToast(e.message);
+  } finally {
+    hideSpinner();
+    state.planning = false;
+    if (state.activeTab === "route") render();
+  }
+}
+
+// ── multi-giorno: riorganizzazione manuale ────────────────────────────────────
+// state.mdEdit: array (per giornata) di array di tappe modificabili (con _time cache).
+// state.mdDirty: true quando l'assegnazione è cambiata e va ricalcolata.
+
+function mdAddDaysISO(iso, n) {
+  try { const [y, m, d] = iso.split("-").map(Number); const dt = new Date(y, m - 1, d); dt.setDate(dt.getDate() + n);
+    return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`; }
+  catch { return iso || ""; }
+}
+
+function initMdEdit(res) {
+  state.mdEdit = (res.days || []).map(d => {
+    const orig = d.stops || [];
+    const rows = (d.plan?.rows || []).filter(r => !r.type && r.stopPart !== "afternoon");
+    const used = new Set();
+    const ordered = [];
+    for (const row of rows) {
+      const idx = orig.findIndex((s, k) => !used.has(k) && (
+        (s.uid && row.stopUid && s.uid === row.stopUid) ||
+        (s.addressId != null && row.addressId != null && String(s.addressId) === String(row.addressId)) ||
+        ((s.customer || "") === (row.customer || "") && (s.fullAddress || s.address || "") === (row.address || row.fullAddress || ""))
+      ));
+      if (idx < 0) continue;
+      used.add(idx);
+      ordered.push({ ...orig[idx], _time: row.serviceStartTime || row.arrivalTime || "" });
+    }
+    orig.forEach((s, k) => { if (!used.has(k)) ordered.push({ ...s, _time: "" }); });
+    return ordered;
+  });
+  state.mdDirty = false;
+}
+
+function mdMove(key, dir) {
+  const [i, j] = String(key).split(":").map(Number);
+  const days = state.mdEdit;
+  if (!days || !days[i] || days[i][j] == null) return;
+  const stop = days[i][j];
+  if (dir === "up") {
+    if (j > 0) { days[i].splice(j, 1); days[i].splice(j - 1, 0, stop); }
+    else if (i > 0) { days[i].splice(j, 1); days[i - 1].push(stop); }
+    else { days[i].splice(j, 1); days.unshift([stop]); }
+  } else {
+    if (j < days[i].length - 1) { days[i].splice(j, 1); days[i].splice(j + 1, 0, stop); }
+    else if (i < days.length - 1) { days[i].splice(j, 1); days[i + 1].unshift(stop); }
+    else { days[i].splice(j, 1); days.push([stop]); }
+  }
+  state.mdEdit = days.filter(d => d.length > 0);
+  state.mdDirty = true;
+  render();
+}
+
+async function planMultiDayRecalc() {
+  if (state.planning || !state.mdEdit) return;
+  const manualDays = state.mdEdit.map(day => day.map(s => { const c = { ...s }; delete c._time; return c; }));
+  state.planning = true;
+  showSpinner("Ricalcolo giornate…");
+  render();
+  try {
+    const res = await api("/api/plan-multiday", {
+      method: "POST",
+      body: JSON.stringify({ ...(state.mdBaseReq || {}), manualDays })
+    });
+    state.resultMultiDay = res;
+    initMdEdit(res);
+    showToast(`Ricalcolate ${res.summary?.totalDays || res.days?.length || 0} giornate`);
+  } catch (e) {
+    showToast(e.message);
+  } finally {
+    hideSpinner();
+    state.planning = false;
+    render();
+  }
+}
+
+// Trascinamento tappe tra/dentro le giornate (Pointer Events: mouse + touch).
+let mdMarkEl = null;
+function clearMdMark() {
+  if (mdMarkEl) { mdMarkEl.style.boxShadow = ""; mdMarkEl.style.outline = ""; mdMarkEl = null; }
+}
+function mdPointerDown(e) {
+  const handle = e.target.closest("[data-md-handle]");
+  if (!handle) return;
+  if (e.button != null && e.button !== 0) return;
+  if (!state.mdEdit) return;
+  const [si, sj] = String(handle.getAttribute("data-md-handle")).split(":").map(Number);
+  if (!state.mdEdit[si] || state.mdEdit[si][sj] == null) return;
+  const card = handle.closest(".md-stop-row");
+  if (!card) return;
+  e.preventDefault();
+  const drag = { si, sj, clone: null, started: false, startX: e.clientX, startY: e.clientY, targetDay: si, targetIdx: sj };
+
+  const onMove = (ev) => {
+    const dx = ev.clientX - drag.startX, dy = ev.clientY - drag.startY;
+    if (!drag.started) {
+      if (Math.abs(dx) + Math.abs(dy) < 8) return;
+      drag.started = true;
+      const c = card.cloneNode(true);
+      Object.assign(c.style, { position: "fixed", left: "0", top: "0", width: card.offsetWidth + "px",
+        pointerEvents: "none", opacity: "0.92", zIndex: "9999", boxShadow: "0 8px 24px rgba(0,0,0,0.3)" });
+      document.body.appendChild(c);
+      drag.clone = c;
+      card.style.opacity = "0.35";
+    }
+    ev.preventDefault();
+    if (drag.clone) drag.clone.style.transform = `translate(${ev.clientX - drag.clone.offsetWidth / 2}px, ${ev.clientY - 18}px)`;
+    if (drag.clone) drag.clone.style.visibility = "hidden";
+    const under = document.elementFromPoint(ev.clientX, ev.clientY);
+    if (drag.clone) drag.clone.style.visibility = "visible";
+    clearMdMark();
+    const overRow = under?.closest?.(".md-stop-row");
+    const overDay = under?.closest?.("[data-md-day]");
+    if (overRow) {
+      const [di, dj] = String(overRow.getAttribute("data-md-row")).split(":").map(Number);
+      const r = overRow.getBoundingClientRect();
+      const after = ev.clientY > r.top + r.height / 2;
+      drag.targetDay = di; drag.targetIdx = dj + (after ? 1 : 0);
+      overRow.style.boxShadow = after ? "inset 0 -3px 0 var(--primary)" : "inset 0 3px 0 var(--primary)";
+      mdMarkEl = overRow;
+    } else if (overDay) {
+      const di = Number(overDay.getAttribute("data-md-day"));
+      drag.targetDay = di; drag.targetIdx = (state.mdEdit[di] || []).length;
+      overDay.style.outline = "2px dashed var(--primary)";
+      mdMarkEl = overDay;
+    }
+  };
+  const finish = () => {
+    window.removeEventListener("pointermove", onMove);
+    window.removeEventListener("pointerup", finish);
+    window.removeEventListener("pointercancel", finish);
+    clearMdMark();
+    if (drag.clone) drag.clone.remove();
+    card.style.opacity = "";
+    if (!drag.started) return;
+    const days = state.mdEdit;
+    let { targetDay, targetIdx } = drag;
+    if (targetDay == null || !days[targetDay]) { render(); return; }
+    const stop = days[drag.si] && days[drag.si][drag.sj];
+    if (!stop) { render(); return; }
+    days[drag.si].splice(drag.sj, 1);
+    if (targetDay === drag.si && drag.sj < targetIdx) targetIdx--;
+    targetIdx = Math.max(0, Math.min(targetIdx, days[targetDay].length));
+    days[targetDay].splice(targetIdx, 0, stop);
+    state.mdEdit = days.filter(d => d.length > 0);
+    state.mdDirty = true;
+    render();
+  };
+  window.addEventListener("pointermove", onMove, { passive: false });
+  window.addEventListener("pointerup", finish);
+  window.addEventListener("pointercancel", finish);
 }
 
 // ── voice ─────────────────────────────────────────────────────────────────────
@@ -5033,42 +5589,8 @@ function openMapPicker() {
         // Opening hours — parse periods into morning/afternoon for each day
         const periods = pickedPlace.opening_hours?.periods;
         const weekdayText = pickedPlace.opening_hours?.weekday_text || [];
-        if (periods && periods.length) {
-          const fmtTime = s => {
-            // s is a string like "0830" or "1730"
-            const str = String(s || "").padStart(4, "0");
-            return `${str.slice(0,2)}:${str.slice(2,4)}`;
-          };
-          // Build per-day hours map (Google day: 0=Sun)
-          const byDay = {};
-          for (const p of periods) {
-            const d = p.open?.day;
-            if (d == null) continue;
-            if (!byDay[d]) byDay[d] = { openMorning:"", closeMorning:"", openAfternoon:"", closeAfternoon:"", closed:false };
-            const openT = p.open?.time ? fmtTime(p.open.time) : "";
-            const closeT = p.close?.time ? fmtTime(p.close.time) : "";
-            const slot = byDay[d];
-            if (!slot.openMorning) {
-              slot.openMorning = openT; slot.closeMorning = closeT; slot._periods = 1;
-            } else {
-              slot.openAfternoon = openT; slot.closeAfternoon = closeT; slot._periods = 2;
-            }
-          }
-          // Mark closed days; detect continuous (single period)
-          for (let d = 0; d < 7; d++) {
-            if (!byDay[d]) { byDay[d] = { closed: true, continuous: false, openMorning:"", closeMorning:"", openAfternoon:"", closeAfternoon:"" }; continue; }
-            const s = byDay[d];
-            if (!s.closed && s._periods === 1) {
-              // Single period — treat as continuous: openMorning→closeMorning becomes open→close
-              s.continuous = true;
-              s.closeAfternoon = s.closeMorning;
-              s.closeMorning = "";
-              s.openAfternoon = "";
-            } else {
-              s.continuous = false;
-            }
-            delete s._periods;
-          }
+        const byDay = googlePeriodsToWeeklyHours(periods);
+        if (byDay) {
           // Update state and re-render weekly hours table
           state.addressForm.weeklyHours = byDay;
 
@@ -5123,7 +5645,42 @@ function openMapPicker() {
 
 // ── openMapPickerForField ─────────────────────────────────────────────────────
 
-function openMapPickerForField({ labelEl, addressEl, latEl, lngEl, onConfirm, onUseDirectly }) {
+// Converte i periodi di apertura di Google Places (opening_hours.periods) nel
+// formato weeklyHours usato dall'app: { 0..6: { closed, continuous, openMorning,
+// closeMorning, openAfternoon, closeAfternoon } } (giorno 0 = domenica, come Google).
+// Restituisce null se non ci sono orari disponibili.
+function googlePeriodsToWeeklyHours(periods) {
+  if (!periods || !periods.length) return null;
+  const fmtTime = s => { const str = String(s || "").padStart(4, "0"); return `${str.slice(0, 2)}:${str.slice(2, 4)}`; };
+  const byDay = {};
+  for (const p of periods) {
+    const d = p.open?.day;
+    if (d == null) continue;
+    if (!byDay[d]) byDay[d] = { openMorning: "", closeMorning: "", openAfternoon: "", closeAfternoon: "", closed: false };
+    const openT = p.open?.time ? fmtTime(p.open.time) : "";
+    const closeT = p.close?.time ? fmtTime(p.close.time) : "";
+    const slot = byDay[d];
+    if (!slot.openMorning) { slot.openMorning = openT; slot.closeMorning = closeT; slot._periods = 1; }
+    else { slot.openAfternoon = openT; slot.closeAfternoon = closeT; slot._periods = 2; }
+  }
+  for (let d = 0; d < 7; d++) {
+    if (!byDay[d]) { byDay[d] = { closed: true, continuous: false, openMorning: "", closeMorning: "", openAfternoon: "", closeAfternoon: "" }; continue; }
+    const s = byDay[d];
+    // Periodo unico → orario continuato (open→close diventa openMorning→closeAfternoon)
+    if (!s.closed && s._periods === 1) { s.continuous = true; s.closeAfternoon = s.closeMorning; s.closeMorning = ""; s.openAfternoon = ""; }
+    else s.continuous = false;
+    delete s._periods;
+  }
+  return byDay;
+}
+
+// Legge gli orari (weeklyHours) stipati in un input nascosto dal map picker.
+function parseHoursField(id) {
+  try { return JSON.parse(document.getElementById(id)?.value || "null"); }
+  catch { return null; }
+}
+
+function openMapPickerForField({ labelEl, addressEl, latEl, lngEl, hoursEl, onConfirm, onUseDirectly }) {
   const startLat = Number(latEl?.value) || 46.07;
   const startLng = Number(lngEl?.value) || 11.12;
   let pickedLat = startLat, pickedLng = startLng;
@@ -5177,7 +5734,7 @@ function openMapPickerForField({ labelEl, addressEl, latEl, lngEl, onConfirm, on
         e.stop();
         new google.maps.places.PlacesService(map).getDetails({
           placeId: e.placeId,
-          fields: ["name", "formatted_address", "geometry"]
+          fields: ["name", "formatted_address", "geometry", "opening_hours"]
         }, (place, status) => {
           if (status === google.maps.places.PlacesServiceStatus.OK && place.geometry) {
             pickedPlace = place;
@@ -5193,7 +5750,7 @@ function openMapPickerForField({ labelEl, addressEl, latEl, lngEl, onConfirm, on
 
     const searchInput = document.getElementById("map-picker-field-search");
     const autocomplete = new google.maps.places.Autocomplete(searchInput, {
-      fields: ["name", "formatted_address", "geometry"],
+      fields: ["name", "formatted_address", "geometry", "opening_hours"],
       componentRestrictions: { country: "it" }
     });
     autocomplete.addListener("place_changed", () => {
@@ -5208,6 +5765,8 @@ function openMapPickerForField({ labelEl, addressEl, latEl, lngEl, onConfirm, on
     const applyPick = async (saveToArchive) => {
       if (latEl) latEl.value = Number(pickedLat).toFixed(6);
       if (lngEl) lngEl.value = Number(pickedLng).toFixed(6);
+      const weeklyHours = googlePeriodsToWeeklyHours(pickedPlace?.opening_hours?.periods);
+      if (hoursEl) hoursEl.value = weeklyHours ? JSON.stringify(weeklyHours) : "";
       let label = "", address = "";
       if (pickedPlace) {
         label = pickedPlace.name || "";
@@ -5224,15 +5783,17 @@ function openMapPickerForField({ labelEl, addressEl, latEl, lngEl, onConfirm, on
         try {
           await api("/api/addresses", {
             method: "POST",
-            body: JSON.stringify({ customer: label || address, fullAddress: address, lat: pickedLat, lng: pickedLng, placeId: pickedPlace?.place_id || null })
+            body: JSON.stringify({ customer: label || address, fullAddress: address, lat: pickedLat, lng: pickedLng, weeklyHours: weeklyHours || null, placeId: pickedPlace?.place_id || null })
           });
           await refreshAllData();
           showToast("Luogo salvato nell'archivio");
         } catch (err) { showToast("Errore nel salvataggio: " + err.message); return; }
+      } else if (address) {
+        showToast(weeklyHours ? "Dati e orari compilati dalla mappa" : "Dati compilati dalla mappa");
       } else {
-        showToast(pickedPlace ? "Dati compilati dalla mappa" : "Coordinate aggiornate");
+        showToast("Solo coordinate impostate — indirizzo non trovato, compila il campo a mano");
       }
-      if (onConfirm) onConfirm(label, address, pickedLat, pickedLng);
+      if (onConfirm) onConfirm(label, address, pickedLat, pickedLng, weeklyHours);
       modal.remove();
     };
 
@@ -5244,7 +5805,8 @@ function openMapPickerForField({ labelEl, addressEl, latEl, lngEl, onConfirm, on
         const label = pickedPlace?.name || "";
         const address = pickedPlace?.formatted_address || pickedAddress || "";
         if (!address) { showToast("Seleziona un luogo sulla mappa"); return; }
-        onUseDirectly(label, address, pickedLat, pickedLng);
+        const weeklyHours = googlePeriodsToWeeklyHours(pickedPlace?.opening_hours?.periods);
+        onUseDirectly(label, address, pickedLat, pickedLng, weeklyHours);
         modal.remove();
       };
     } else {
@@ -5636,6 +6198,8 @@ function bindEvents() {
     }
   });
 
+  app.addEventListener("pointerdown", mdPointerDown);
+
   app.addEventListener("click", async e => {
     // expand button (⋯) — explicit handler so the button works
     const expandBtn = e.target.closest(".rc-expand-btn");
@@ -5722,6 +6286,13 @@ function bindEvents() {
       if (!log?.length) { showToast("Ricalcola il giro per generare il log"); return; }
       const text = log.join("\n");
       navigator.clipboard.writeText(text).then(() => showToast("Log copiato negli appunti")).catch(() => showToast("Errore copia log"));
+      return;
+    }
+
+    if (e.target.closest("#copy-md-debug-btn")) {
+      const log = state.resultMultiDay?.debug;
+      if (!log?.length) { showToast("Nessuna diagnostica disponibile"); return; }
+      navigator.clipboard.writeText(log.join("\n")).then(() => showToast("Diagnostica copiata")).catch(() => showToast("Errore copia"));
       return;
     }
 
@@ -5930,6 +6501,7 @@ function bindEvents() {
       if (!addr) { showToast("Indirizzo obbligatorio"); return; }
       const lat = parseFloat(document.getElementById("rv-custom-lat")?.value) || null;
       const lng = parseFloat(document.getElementById("rv-custom-lng")?.value) || null;
+      const weeklyHours = parseHoursField("rv-custom-hours");
       if (!state.resultPendingStops) state.resultPendingStops = [];
       state.resultPendingStops.push({
         uid: crypto.randomUUID(), addressId: null,
@@ -5937,7 +6509,7 @@ function bindEvents() {
         location: document.getElementById("rv-custom-location")?.value?.trim() || "",
         fullAddress: addr,
         durationMinutes: hhmmToMins(document.getElementById("rv-custom-duration")?.value) || 45,
-        weeklyHours: null, lat, lng, recognized: !!lat, temporary: true
+        weeklyHours, lat, lng, recognized: !!lat, temporary: true
       });
       state.expandedPanels.add("rv-add-stop-panel");
       showToast("Tappa aggiunta — premi Ricalcola");
@@ -5953,10 +6525,11 @@ function bindEvents() {
       const lat = parseFloat(document.getElementById("rv-custom-lat")?.value) || null;
       const lng = parseFloat(document.getElementById("rv-custom-lng")?.value) || null;
       const duration = hhmmToMins(document.getElementById("rv-custom-duration")?.value) || 45;
+      const weeklyHours = parseHoursField("rv-custom-hours");
       try {
         const saved = await api("/api/addresses", { method: "POST", body: JSON.stringify({
           customer, location: document.getElementById("rv-custom-location")?.value?.trim() || "",
-          fullAddress: addr, lat, lng, defaultDuration: duration
+          fullAddress: addr, lat, lng, defaultDuration: duration, weeklyHours: weeklyHours || null
         })});
         state.allAddresses.unshift(saved);
         if (!state.resultPendingStops) state.resultPendingStops = [];
@@ -6016,17 +6589,17 @@ function bindEvents() {
       return;
     }
 
-    // rv-add-stop: map picker
+    // rv-add-stop: map picker — compila i campi della tappa manuale (cliente,
+    // indirizzo, lat, lng). La tappa va poi aggiunta con "Usa senza salvare" o
+    // "Salva e aggiungi". Il toast di conferma lo mostra applyPick solo dopo
+    // aver davvero scritto i valori negli input.
     if (e.target.closest("#rv-custom-map-btn")) {
       openMapPickerForField({
-        onPick: ({ lat, lng, address }) => {
-          const el = document.getElementById("rv-custom-address");
-          const latEl = document.getElementById("rv-custom-lat");
-          const lngEl = document.getElementById("rv-custom-lng");
-          if (el) el.value = address;
-          if (latEl) latEl.value = lat;
-          if (lngEl) lngEl.value = lng;
-        }
+        labelEl: document.getElementById("rv-custom-customer"),
+        addressEl: document.getElementById("rv-custom-address"),
+        latEl: document.getElementById("rv-custom-lat"),
+        lngEl: document.getElementById("rv-custom-lng"),
+        hoursEl: document.getElementById("rv-custom-hours")
       });
       return;
     }
@@ -6261,6 +6834,17 @@ function bindEvents() {
     }
 
     if (e.target.closest("#plan-route")) { await planCurrentRoute(); return; }
+    if (e.target.closest("#plan-multiday")) { await planMultiDayAction(); return; }
+    if (e.target.closest("#md-save")) { await mdSavePlan(); return; }
+    const mdRecalcSaved = e.target.closest("[data-md-recalc-saved]");
+    if (mdRecalcSaved) { await recalcSavedMultiDay(mdRecalcSaved.getAttribute("data-md-recalc-saved")); return; }
+    const mdDelSaved = e.target.closest("[data-md-del-saved]");
+    if (mdDelSaved) { await deleteSavedMultiDay(mdDelSaved.getAttribute("data-md-del-saved")); return; }
+    const mdUpBtn = e.target.closest("[data-md-up]");
+    if (mdUpBtn) { mdMove(mdUpBtn.getAttribute("data-md-up"), "up"); return; }
+    const mdDownBtn = e.target.closest("[data-md-down]");
+    if (mdDownBtn) { mdMove(mdDownBtn.getAttribute("data-md-down"), "down"); return; }
+    if (e.target.closest("#md-recalc")) { await planMultiDayRecalc(); return; }
     if (e.target.closest("#listen-command")) { toggleVoiceRecording(); return; }
     if (e.target.closest("#apply-command")) {
       try { await applyVoiceCommand(); } catch (err) { showToast(err.message); }
@@ -6449,7 +7033,7 @@ function bindEvents() {
         addressEl: document.querySelector("#rp-custom-address"),
         latEl: document.querySelector("#rp-custom-lat"),
         lngEl: document.querySelector("#rp-custom-lng"),
-        onUseDirectly: (label, address, lat, lng) => {
+        onUseDirectly: (label, address, lat, lng, weeklyHours) => {
           state.route.stops.push({
             uid: crypto.randomUUID(),
             addressId: null,
@@ -6457,14 +7041,14 @@ function bindEvents() {
             location: "",
             fullAddress: address,
             durationMinutes: state.route.customDuration || 45,
-            weeklyHours: null,
+            weeklyHours: weeklyHours || null,
             lat, lng,
             recognized: true,
             temporary: true
           });
           Object.assign(state.route, { customCustomer: "", customLocation: "", customAddress: "", customDuration: 45 });
           render();
-          showToast("Tappa aggiunta (non salvata in archivio)");
+          showToast(weeklyHours ? "Tappa aggiunta con orari da Maps (non salvata in archivio)" : "Tappa aggiunta (non salvata in archivio)");
         }
       });
       return;
@@ -6634,21 +7218,9 @@ function bindEvents() {
         try {
           showToast("Ricalcolo in corso…");
           const res = state.result;
-          // Extract stops from result rows (regular stops have no type field)
-          const stopsFromRows = (res?.rows || [])
-            .filter(r => !r.type)
-            .map(r => ({
-              uid: r.uid || crypto.randomUUID(),
-              addressId: r.addressId || null,
-              customer: r.customer, location: r.location,
-              fullAddress: r.fullAddress || r.address || "",
-              lat: r.lat, lng: r.lng,
-              durationMinutes: r.durationMinutes,
-              weeklyHours: r.weeklyHours || null,
-              openMorning: r.openMorning, closeMorning: r.closeMorning,
-              openAfternoon: r.openAfternoon, closeAfternoon: r.closeAfternoon,
-              notes: r.notes || ""
-            }));
+          // Ricostruisce le tappe riunendo i tronconi delle tappe spezzate e
+          // preservando la durata personalizzata (vedi rebuildStopsFromResultRows).
+          const stopsFromRows = rebuildStopsFromResultRows(res?.rows);
           const stops = stopsFromRows.length ? stopsFromRows
             : (res?.plannedStops || []).map(s => ({ ...s, uid: s.uid || crypto.randomUUID() }));
           if (!stops.length) { showToast("Nessuna tappa da ricalcolare"); return; }

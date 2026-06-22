@@ -178,6 +178,8 @@ async function openWeatherForecast(coords, row, scheduledDate) {
     mode: "forecast"
   };
   weather.warnings = weatherWarnings(weather);
+  const owCity = encodeURIComponent(row.location || row.customer || "");
+  weather.sourceUrl = owCity ? `https://www.ilmeteo.it/meteo/${owCity}` : "https://www.ilmeteo.it/";
   return weather;
 }
 
@@ -211,8 +213,8 @@ async function weatherbitForecast(coords, row, scheduledDate) {
     mode: "forecast"
   };
   weather.warnings = weatherWarnings(weather);
-  const city = encodeURIComponent(row.location || row.customer || "");
-  weather.sourceUrl = city ? `https://www.ilmeteo.it/meteo/${city}` : "https://www.ilmeteo.it/";
+  const wbCity = encodeURIComponent(row.location || row.customer || "");
+  weather.sourceUrl = wbCity ? `https://www.ilmeteo.it/meteo/${wbCity}` : "https://www.ilmeteo.it/";
   return weather;
 }
 

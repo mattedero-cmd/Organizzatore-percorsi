@@ -642,6 +642,13 @@ function shiftRowTimes(row, minutes) {
     if (close != null && newEnd > close && !warnings.some(w => (w.msg || w) === overrunMsg)) {
       warnings = [...warnings, { msg: overrunMsg, level: "warn" }];
     }
+    // Se dopo lo spostamento l'arrivo cade comunque prima dell'apertura (attesa residua),
+    // segnalalo: lo si vede solo qui, perché scheduleStop calcola il warning sull'orario
+    // di arrivo precedente alle pause inserite (che possono averlo posticipato).
+    const preOpenMsg = "arrivo prima dell'apertura";
+    if (newSvc > newArr && !warnings.some(w => (w.msg || w) === preOpenMsg)) {
+      warnings = [...warnings, { msg: preOpenMsg, level: "warn" }];
+    }
     return {
       ...row,
       departureTime: formatTime(parseTime(row.departureTime) + minutes),
@@ -895,7 +902,33 @@ async function insertBreaks(rows, options) {
         const dep = parseTime(rows[i].departureTime);
         L(`  row[${i}] "${rows[i].customer}" dep=${formatTime(dep)} ${dep >= LUNCH_OPEN && dep <= LUNCH_CLOSE ? "IN_FINESTRA ✓" : "fuori"}`);
         if (dep >= LUNCH_OPEN && dep <= LUNCH_CLOSE) {
-          insertions.push(await makeLunchEntry(i, rows[i - 1] ?? null, rows[i], dep));
+          const svcEnd = parseTime(rows[i].serviceEndTime);
+          const nextRow = rows[i + 1];
+          const isSplitPair = rows[i].stopPart === "morning"
+            && nextRow?.stopPart === "afternoon" && nextRow.addressId === rows[i].addressId;
+          const gapStart = isSplitPair ? parseTime(rows[i].serviceEndTime) : null;
+          const gapEnd   = isSplitPair ? parseTime(nextRow.arrivalTime) : null;
+          const gapMin   = (gapStart != null && gapEnd != null) ? gapEnd - gapStart : 0;
+          if (isSplitPair && gapMin >= lunchBreakMinutes) {
+            // Tappa spezzata per chiusura: il pranzo va nel GAP di chiusura (fra mattina e
+            // pomeriggio), non prima della tappa — così si lavora il mattino, si mangia
+            // durante la chiusura, e il pomeriggio riparte all'apertura. Limiti del gap
+            // come nella Sezione 4 (andata+pranzo+ritorno devono stare nel gap).
+            const maxTravelOneWay = Math.max(0, Math.floor((gapMin - lunchBreakMinutes) / 2));
+            const gapMaxDetourKm  = Math.min(maxDetourKm, maxTravelOneWay / 60 * 50);
+            const gapLunchClose   = gapStart + maxTravelOneWay;
+            L(`  → tappa spezzata "${rows[i].customer}": pranzo nel gap chiusura ${formatTime(gapStart)}-${formatTime(gapEnd)} (${gapMin}min)`);
+            insertions.push(await makeLunchEntry(i + 1, rows[i], nextRow, gapStart, gapLunchClose, gapMaxDetourKm));
+          } else if (!rows[i].stopPart && svcEnd != null && svcEnd >= LUNCH_OPEN && svcEnd <= LUNCH_CLOSE) {
+            // Tappa non spezzata che finisce in finestra: fai PRIMA l'intervento e mangia
+            // DOPO (vicino alla tappa). Evita di deviare a mangiare per poi tornare a
+            // lavorare e che le pause spingano la tappa nella sua chiusura.
+            L(`  → pranzo DOPO "${rows[i].customer}" (fine intervento ${formatTime(svcEnd)} in finestra)`);
+            insertions.push(await makeLunchEntry(i + 1, rows[i], rows[i], svcEnd));
+          } else {
+            // Tappa lunga (fine oltre la finestra) o caso generico: pranzo "in guida".
+            insertions.push(await makeLunchEntry(i, rows[i - 1] ?? null, rows[i], dep));
+          }
           placed = true;
           break;
         }
@@ -1059,6 +1092,14 @@ async function insertBreaks(rows, options) {
             const r2 = haversineKm({ lat: refLat, lng: refLng }, { lat: spot.lat, lng: spot.lng });
             const { perpKm: p2 } = perpDistToSegment(spot.lat, spot.lng, refLat, refLng, toLat, toLng);
             travelKm = p2 > 2.0 ? r2 : 0;
+            // Rivalida la deviazione: il retry esteso (raggio 25km) può restituire uno spot
+            // oltre il limite accettabile perché la misura interna di findNearbyRestStop
+            // differisce dalla distanza diretta. Una sosta breve non giustifica una grande
+            // deviazione (peggio se in direzione opposta alla tappa successiva): meglio nessuna sosta.
+            if (travelKm > maxDetourKm * 1.5) {
+              L(`    "${spot.customer}" SCARTATO anche dopo retry: deviazione=${travelKm.toFixed(1)}km > max=${(maxDetourKm * 1.5).toFixed(1)}km — nessuna sosta`);
+              return false;
+            }
           } else {
             travelKm = rawKm;
           }
@@ -1315,7 +1356,13 @@ export async function planRoute(payload, settings, restStops = []) {
   const startMinutes = parseTime(payload.startTime || payload.start?.time || "");
   const timingMode = payload.timingMode || "first_open_minus";
   const arrivalLeadMinutes = Number(payload.arrivalLeadMinutes ?? 10);
-  const firstArrivalRequired = parseTime(payload.firstArrivalTime || payload.firstArrivalRequired || "");
+  // In "partenza a orario fisso" non c'è orario di arrivo target: ignora un eventuale
+  // firstArrivalTime residuo nel payload (es. giro nato in "arrivo a orario fisso"),
+  // altrimenti comparirebbe l'avviso "arrivo oltre l'orario target" e la prima tappa
+  // verrebbe bloccata nell'ottimizzazione dell'ordine.
+  const firstArrivalRequired = timingMode === "depart_at"
+    ? null
+    : parseTime(payload.firstArrivalTime || payload.firstArrivalRequired || "");
   const rates = {
     kmRate: Number(payload.rates?.kmRate ?? settings.kmRate),
     driveHourRate: Number(payload.rates?.driveHourRate ?? settings.driveHourRate),
@@ -1422,23 +1469,45 @@ export async function planRoute(payload, settings, restStops = []) {
     firstArrivalRequired: payload.firstArrivalRequired || "",
     manualOrder,
     rows: best.rows,
-    plannedStops: best.rows.map((row) => ({
-      uid: row.stopUid,
-      addressId: row.addressId,
-      customer: row.customer,
-      location: row.location,
-      fullAddress: row.address,
-      notes: row.notes,
-      durationMinutes: row.durationMinutes,
-      openMorning: row.openMorning,
-      closeMorning: row.closeMorning,
-      openAfternoon: row.openAfternoon,
-      closeAfternoon: row.closeAfternoon,
-      weeklyHours: row.weeklyHours || null,
-      lat: row.lat,
-      lng: row.lng,
-      recognized: Boolean(row.addressId)
-    })),
+    // plannedStops rappresenta le tappe ORIGINALI del giro (una per tappa), non le
+    // righe interne del programma: le tappe spezzate mattina/pomeriggio vanno riunite
+    // in una sola voce con la durata TOTALE, altrimenti i percorsi che ricostruiscono
+    // il giro da plannedStops (riprogramma data, cambio data) perderebbero la durata
+    // personalizzata trattando i due tronconi come tappe separate.
+    plannedStops: (() => {
+      const byStop = new Map();
+      const order = [];
+      for (const row of best.rows) {
+        if (row.type) continue; // salta pause/soste
+        const key = row.stopUid || `idx-${order.length}`;
+        if (!byStop.has(key)) {
+          byStop.set(key, {
+            uid: row.stopUid,
+            addressId: row.addressId,
+            customer: row.customer,
+            location: row.location,
+            fullAddress: row.address,
+            notes: row.notes,
+            durationMinutes: 0,
+            openMorning: row.openMorning,
+            closeMorning: row.closeMorning,
+            openAfternoon: row.openAfternoon,
+            closeAfternoon: row.closeAfternoon,
+            weeklyHours: row.weeklyHours || null,
+            lat: row.lat,
+            lng: row.lng,
+            recognized: Boolean(row.addressId)
+          });
+          order.push(key);
+        }
+        byStop.get(key).durationMinutes += Number(row.durationMinutes || 0);
+      }
+      return order.map((k) => {
+        const s = byStop.get(k);
+        if (!s.durationMinutes) s.durationMinutes = 45;
+        return s;
+      });
+    })(),
     finalLeg: best.finalLeg,
     summary: best.summary,
     rates,
@@ -1448,5 +1517,69 @@ export async function planRoute(payload, settings, restStops = []) {
     maxReturnTime: payload.departureLatest || "",
     mapMode: [...new Set(best.rows.map((row) => row.legSource).concat(best.finalLeg.source))].join(", "),
     debugLog: debugLog || []
+  };
+}
+
+// Valutazione "solo tempi" di una giornata con ordine BLOCCATO, per il multi-giorno.
+// Riusa la STESSA logica di scheduling del motore reale (normalizeStop → buildLegMatrix con cache
+// → evaluateOrder → scheduleStop: orari di apertura, chiusure, tolleranza, spezzare interventi)
+// ma SALTA insertBreaks: niente lookup Places per ristoranti/soste, così può essere chiamata molte
+// volte come oracolo di fattibilità senza moltiplicare le chiamate. Pranzo e soste sono conteggiati
+// come ALLOWANCE di tempo — coerente col motore reale, dove le pause spostano in avanti l'orario di
+// fine mentre le chiusure sono già valutate da scheduleStop sul programma pre-pause.
+// Restituisce: dayEndMin (fine pre-pause), dayEndWithBreaks (con allowance pause), driveMin e le
+// tappe servite oltre la chiusura (stesse warning del motore reale). I tempi sono quelli reali (cache).
+export async function evaluateDayTiming(payload, settings = {}) {
+  const scheduledDate = payload.scheduledDate || new Date().toISOString().slice(0, 10);
+  const dayOfWeek = new Date(scheduledDate + "T12:00:00").getDay();
+  const stops = (payload.stops || []).map((s, i) => normalizeStop(s, i, dayOfWeek));
+  if (!stops.length) return { ok: false, dayEndMin: null, dayEndWithBreaks: null, driveMin: 0, lateStops: [] };
+  const start = payload.start || {};
+  const end = payload.end?.sameAsStart ? start : (payload.end?.address || payload.end?.fullAddress ? payload.end : start);
+  const nodes = [
+    { label: "Partenza", fullAddress: start.address || start.fullAddress, lat: start.lat ?? null, lng: start.lng ?? null },
+    ...stops.map((stop) => ({ label: `${stop.customer} ${stop.location}`.trim(), customer: stop.customer, location: stop.location, fullAddress: stop.fullAddress, lat: stop.lat, lng: stop.lng })),
+    { label: "Arrivo", fullAddress: end.address || end.fullAddress, lat: end.lat ?? null, lng: end.lng ?? null }
+  ];
+  const stopsWithNodeIndex = stops.map((stop, index) => ({ ...stop, nodeIndex: index + 1 }));
+  await Promise.all(stopsWithNodeIndex.map(async (stop) => {
+    if (!stop.lat || !stop.lng) { try { const c = await resolvePlace(stop); stop.lat = c.lat; stop.lng = c.lng; } catch { /* leave null */ } }
+  }));
+  const matrix = await buildLegMatrix(nodes, settings?.driveMarkupMinPerHour ?? 10);
+  const context = {
+    nodes, matrix,
+    startMinutes: parseTime(payload.startTime || payload.start?.time || ""),
+    firstArrivalRequired: parseTime(payload.firstArrivalTime || payload.firstArrivalRequired || ""),
+    rates: { kmRate: 0, driveHourRate: 0, workHourRate: 0 },
+    timingMode: payload.timingMode || "first_open_minus",
+    arrivalLeadMinutes: Number(payload.arrivalLeadMinutes ?? 10),
+    departureLatestMinutes: payload.departureLatest ? parseTime(payload.departureLatest) : null,
+    lunchEnabled: false, lunchOpen: 0, lunchClose: 0, lunchDuration: 0
+  };
+  // Ordine BLOCCATO: il multi-giorno passa già le tappe nell'ordine far-first da valutare.
+  const evaluated = evaluateOrder(stopsWithNodeIndex, context);
+  const dayEndMin = parseTime(evaluated.summary.dayEnd);
+
+  // Allowance pause (come il motore reale): pranzo se abilitato + soste sui tragitti lunghi.
+  const lunchEnabled = settings.lunchBreakEnabled !== false && payload.lunchBreak !== false;
+  const lunchMin = lunchEnabled ? Number(payload.lunchBreakMinutes ?? settings.lunchBreakMinutes ?? 45) : 0;
+  const restInterval = Number(settings.restIntervalMin ?? 120);
+  const restDur = Number(settings.restDurationMin ?? 15);
+  const restMin = restInterval > 0 ? Math.floor((evaluated.summary.totalDriveMinutes || 0) / restInterval) * restDur : 0;
+  const breakAllowance = lunchMin + restMin;
+
+  const lateStops = [...new Set(
+    evaluated.rows
+      .filter((r) => !r.type && (r.warnings || []).some((w) => /chius|dopo l'orario|finestra|sede chiusa/.test(w.msg || w)))
+      .map((r) => r.location || r.customer || r.label)
+  )];
+
+  return {
+    ok: true,
+    dayEndMin,
+    dayEndWithBreaks: dayEndMin != null ? dayEndMin + breakAllowance : null,
+    breakAllowance,
+    driveMin: evaluated.summary.totalDriveMinutes || 0,
+    lateStops
   };
 }

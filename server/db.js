@@ -502,6 +502,59 @@ async function migrateAuth() {
   }
   await initFoldersTable();
   await initSharedRoutesTable();
+  await initMultiDayPlansTable();
+}
+
+// Giri multi-giorno salvati: solo l'INPUT (tappe + parametri base), per ricalcolare la suddivisione
+// in giornate senza re-inserire tutto. payload_json = { baseReq, stops }.
+async function initMultiDayPlansTable() {
+  if (dbMode === "postgres") {
+    await runSql(`CREATE TABLE IF NOT EXISTS multiday_plans (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER,
+      name TEXT NOT NULL DEFAULT '',
+      payload_json TEXT NOT NULL DEFAULT '{}',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );`);
+  } else {
+    await runSql(`CREATE TABLE IF NOT EXISTS multiday_plans (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER,
+      name TEXT NOT NULL DEFAULT '',
+      payload_json TEXT NOT NULL DEFAULT '{}',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );`);
+  }
+}
+
+export async function listMultiDayPlans(userId = null) {
+  const userFilter = userId != null ? `WHERE user_id = ${sqlValue(Number(userId))}` : "";
+  const rows = await runSql(`SELECT id, name, payload_json, created_at FROM multiday_plans ${userFilter} ORDER BY lower(name), id;`, true);
+  return rows.map(r => {
+    let payload = {};
+    try { payload = JSON.parse(r.payload_json || "{}"); } catch { payload = {}; }
+    const stops = Array.isArray(payload.stops) ? payload.stops : [];
+    return { id: r.id, name: r.name || "", stopCount: stops.length, createdAt: r.created_at, payload };
+  });
+}
+
+export async function saveMultiDayPlan(name, payload, userId = null) {
+  const userIdVal = userId != null ? sqlValue(Number(userId)) : "NULL";
+  const nameVal = sqlValue(String(name || "").trim() || "Giro");
+  const json = sqlValue(JSON.stringify(payload || {}));
+  if (dbMode === "postgres") {
+    const rows = await runSql(`INSERT INTO multiday_plans (user_id, name, payload_json) VALUES (${userIdVal}, ${nameVal}, ${json}) RETURNING id;`, true);
+    return { id: rows[0]?.id };
+  }
+  const rows = await runSql(`INSERT INTO multiday_plans (user_id, name, payload_json) VALUES (${userIdVal}, ${nameVal}, ${json});
+    SELECT last_insert_rowid() AS id;`, true);
+  return { id: rows[0]?.id };
+}
+
+export async function deleteMultiDayPlan(id, userId = null) {
+  const userFilter = userId != null ? ` AND user_id = ${sqlValue(Number(userId))}` : "";
+  await runSql(`DELETE FROM multiday_plans WHERE id = ${sqlValue(Number(id))}${userFilter};`);
+  return { ok: true };
 }
 
 async function initFoldersTable() {
