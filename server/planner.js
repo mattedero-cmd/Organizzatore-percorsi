@@ -1463,23 +1463,45 @@ export async function planRoute(payload, settings, restStops = []) {
     firstArrivalRequired: payload.firstArrivalRequired || "",
     manualOrder,
     rows: best.rows,
-    plannedStops: best.rows.map((row) => ({
-      uid: row.stopUid,
-      addressId: row.addressId,
-      customer: row.customer,
-      location: row.location,
-      fullAddress: row.address,
-      notes: row.notes,
-      durationMinutes: row.durationMinutes,
-      openMorning: row.openMorning,
-      closeMorning: row.closeMorning,
-      openAfternoon: row.openAfternoon,
-      closeAfternoon: row.closeAfternoon,
-      weeklyHours: row.weeklyHours || null,
-      lat: row.lat,
-      lng: row.lng,
-      recognized: Boolean(row.addressId)
-    })),
+    // plannedStops rappresenta le tappe ORIGINALI del giro (una per tappa), non le
+    // righe interne del programma: le tappe spezzate mattina/pomeriggio vanno riunite
+    // in una sola voce con la durata TOTALE, altrimenti i percorsi che ricostruiscono
+    // il giro da plannedStops (riprogramma data, cambio data) perderebbero la durata
+    // personalizzata trattando i due tronconi come tappe separate.
+    plannedStops: (() => {
+      const byStop = new Map();
+      const order = [];
+      for (const row of best.rows) {
+        if (row.type) continue; // salta pause/soste
+        const key = row.stopUid || `idx-${order.length}`;
+        if (!byStop.has(key)) {
+          byStop.set(key, {
+            uid: row.stopUid,
+            addressId: row.addressId,
+            customer: row.customer,
+            location: row.location,
+            fullAddress: row.address,
+            notes: row.notes,
+            durationMinutes: 0,
+            openMorning: row.openMorning,
+            closeMorning: row.closeMorning,
+            openAfternoon: row.openAfternoon,
+            closeAfternoon: row.closeAfternoon,
+            weeklyHours: row.weeklyHours || null,
+            lat: row.lat,
+            lng: row.lng,
+            recognized: Boolean(row.addressId)
+          });
+          order.push(key);
+        }
+        byStop.get(key).durationMinutes += Number(row.durationMinutes || 0);
+      }
+      return order.map((k) => {
+        const s = byStop.get(k);
+        if (!s.durationMinutes) s.durationMinutes = 45;
+        return s;
+      });
+    })(),
     finalLeg: best.finalLeg,
     summary: best.summary,
     rates,
