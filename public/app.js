@@ -1270,7 +1270,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.123 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 4.124 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -1282,8 +1282,9 @@ function renderMenuInfo() {
         <li>${state.whisperConfigured ? _svg('<polyline points="20 6 9 17 4 12"/>', 14) + " Comandi vocali attivi (Whisper)" : _svg('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>', 14) + " Comandi vocali non configurati"}</li>
       </ul>
 
-      <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v4.123</p>
+      <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v4.124</p>
       <ul class="info-list">
+        <li>Meteo cliccabile su tutte le tappe: l'icona meteo apre ora il sito di previsione per la città della tappa — MeteoTrentino per tappe in Trentino, ilMeteo.it per Alto Adige e resto d'Italia</li>
         <li>I clienti possono essere contrassegnati come sosta caffè ☕ e/o luogo pranzo 🍽 — nella scheda contatto due nuove caselle attivano l'inclusione automatica nei percorsi; le icone appaiono anche sulle card dell'archivio</li>
       </ul>
 

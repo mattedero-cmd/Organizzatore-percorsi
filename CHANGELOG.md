@@ -1,3 +1,6 @@
+## v4.124 — 2026-06-22
+- Meteo cliccabile su tutte le tappe: le soste fuori Trentino/Alto Adige ora aprono ilMeteo.it per la città della tappa (prima non erano cliccabili perché mancava sourceUrl); Alto Adige punta a ilMeteo.it per comune specifico invece di suedtirol.info generico
+
 ## v4.123 — 2026-06-14
 - Nuovo: flag isRestStop e isLunchStop su contatti — un cliente può essere contrassegnato come sosta caffè e/o luogo pranzo; il planner lo include nei pool corrispondenti; badge ☕🍽 sulle card archivio
 
