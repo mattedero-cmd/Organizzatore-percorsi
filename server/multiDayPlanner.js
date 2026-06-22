@@ -309,10 +309,12 @@ export function assignZones(groups, home, opts = {}) {
   return far; // zone lontane (estremi prima) + un'unica zona vicino-casa in coda
 }
 
-// La giornata deve restare un CORRIDOIO (andata-ritorno), non un serpente tra valli diverse: il
-// tempo di guida totale non deve superare CORRIDOR_FACTOR × (2 × distanza dell'estremo da casa).
-// Un corridoio pulito guida ≈ 2× l'estremo; un percorso che devia in più valli guida molto di più.
-const CORRIDOR_FACTOR = 1.4;
+// Un'unione è ammessa se la DEVIAZIONE IN PIÙ PER TAPPA aggiunta è piccola: cioè quanto allunga il
+// viaggio includere l'altra giornata, diviso il numero di tappe aggiunte. È scale-free (non scala con
+// la distanza, a differenza di "2× estremo"): distingue le unioni "sulla via" (Tione/Riva+Rovereto
+// ~7'/tappa, Primiero+Valsugana ~18'/tappa) dalle deviazioni in un'altra valle (San Candido+Cavalese
+// ~27'/tappa, Sen Jan+Merano ~71'/tappa). Tarabile sulla Diagnostica.
+const MERGE_DETOUR_PER_STOP = 22;
 // Margine di sicurezza (min) sul rientro quando si UNISCONO due giornate: l'oracolo dei tempi è una
 // stima (pranzo/soste come allowance), quindi per le unioni restiamo sotto il limite massimo, così
 // nel piano reale non si finisce per servire una tappa dopo la chiusura.
@@ -320,11 +322,11 @@ const MERGE_RETURN_MARGIN = 15;
 
 // FASE DI RIEMPIMENTO: le giornate per-zona finiscono presto (una valle = poche tappe). Si UNISCONO
 // le GIORNATE INTERE adiacenti (mai singole tappe → le tappe dello stesso paese non si separano e le
-// valli non si mescolano), purché l'unione resti FATTIBILE (motore reale, con margine) E un CORRIDOIO
-// (CORRIDOR_FACTOR). Si procede dalla giornata più lontana, unendo la più vicina compatibile; se non
-// è un corridoio o sfora gli orari, non si unisce. Regola utente: «fare prima il seme più lontano e
-// poi unire il più vicino; se necessario spezzare». Esempi: Tione/Riva+Rovereto sì, Primiero+Valsugana
-// sì (corridoio pulito), Tione/Riva+Pergine no (direzioni opposte), Merano+Valsugana no.
+// valli non si mescolano), purché l'unione resti FATTIBILE (motore reale, con margine) E la deviazione
+// in più PER TAPPA aggiunta sia piccola (sulla via, non un'altra valle). Si procede dalla giornata più
+// lontana, unendo la più vicina compatibile. Regola utente: «fare prima il seme più lontano e poi unire
+// il più vicino; se necessario spezzare». Esempi: Tione/Riva+Rovereto sì, Primiero+Valsugana sì,
+// San Candido+Cavalese no, Sen Jan+Merano no.
 async function fillDays(daysIn, home, opts, dayFeasible, endMin) {
   const maxHome = d => Math.max(...d.map(s => legMin(home, s, opts)));
   let days = [...daysIn];
@@ -333,6 +335,9 @@ async function fillDays(daysIn, home, opts, dayFeasible, endMin) {
     changed = false;
     days.sort((a, b) => maxHome(b) - maxHome(a)); // dalla più lontana
     for (let i = 0; i < days.length && !changed; i++) {
+      // guida del giorno i DA SOLO (per la deviazione marginale per tappa)
+      const fCur = await dayFeasible(orderDayFarFirst(days[i], home, opts), i);
+      const curDrive = fCur.driveMin;
       let bestJ = -1, bestGap = Infinity;
       for (let j = 0; j < days.length; j++) {
         if (j === i) continue;
@@ -345,10 +350,10 @@ async function fillDays(daysIn, home, opts, dayFeasible, endMin) {
         if (!f.ok) continue;
         // margine di sicurezza sul rientro (l'oracolo è una stima)
         if (endMin != null && f.dayEndWithBreaks != null && f.dayEndWithBreaks > endMin - MERGE_RETURN_MARGIN) continue;
-        // resta un corridoio? (guida ≤ FACTOR × 2 × estremo)
-        if (f.driveMin != null) {
-          const far = Math.max(...combined.map(x => legMin(home, x, opts)));
-          if (f.driveMin > CORRIDOR_FACTOR * 2 * far) continue;
+        // deviazione in più PER TAPPA aggiunta: piccola ⇒ l'altra giornata è "sulla via"
+        if (f.driveMin != null && curDrive != null && days[j].length > 0) {
+          const perStop = (f.driveMin - curDrive) / days[j].length;
+          if (perStop > MERGE_DETOUR_PER_STOP) continue;
         }
         bestGap = gap; bestJ = j;
       }
