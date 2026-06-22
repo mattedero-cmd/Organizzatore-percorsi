@@ -1270,7 +1270,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.030 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.031 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -3982,43 +3982,55 @@ function _readResultEditForm() {
   return Object.fromEntries(fd.entries());
 }
 
-async function replanFromResult() {
-  const result = normalizeSavedRoute(state.result);
-  const v = _readResultEditForm();
-
-  // Reconstruct stops from current result rows (skip breaks)
-  const stops = (result.rows || [])
-    .filter(r => !r.type)
-    .filter((r, i, arr) => !r.stopPart || r.stopPart === "morning" || arr.findIndex(x => x.addressId === r.addressId && !x.stopPart) === i)
-    .map(r => {
-      // Fall back to address book for hours when result row lacks them (e.g. old saved routes)
-      const addr = r.addressId ? (state.allAddresses || []).find(a => String(a.id) === String(r.addressId)) : null;
-      const wh = r.weeklyHours || addr?.weeklyHours || null;
-      const om = r.openMorning || addr?.openMorning || "";
-      const cm = r.closeMorning || addr?.closeMorning || "";
-      const oa = r.openAfternoon || addr?.openAfternoon || "";
-      const ca = r.closeAfternoon || addr?.closeAfternoon || "";
-      return {
+// Ricostruisce le tappe del giro a partire dalle righe di risultato, riunendo i
+// tronconi delle tappe spezzate (mattina/pomeriggio) in un'unica tappa con la durata
+// TOTALE. La deduplica è per stopUid (non per addressId), così più tappe temporanee
+// — che hanno tutte addressId null — non vengono collassate in una sola.
+// La durata personalizzata viene sempre preservata; il default (45) si applica solo
+// quando una tappa non ha alcuna durata valida.
+function rebuildStopsFromResultRows(rows) {
+  const list = (rows || []).filter(r => !r.type);
+  const stopIdOf = (x, idx) => x.stopUid || x.uid || (x.addressId != null ? `addr-${x.addressId}` : `idx-${idx}`);
+  const seen = new Set();
+  const out = [];
+  list.forEach((r, idx) => {
+    if (r.stopPart === "afternoon") return; // riunito con la sua parte "morning"
+    const key = stopIdOf(r, idx);
+    if (seen.has(key)) return;
+    seen.add(key);
+    // Somma tutte le parti (mattina + pomeriggio) della stessa tappa
+    const sameStop = list.filter((x, j) => stopIdOf(x, j) === key);
+    const totalDuration = sameStop.reduce((t, x) => t + Number(x.durationMinutes || 0), 0);
+    const addr = r.addressId != null ? (state.allAddresses || []).find(a => String(a.id) === String(r.addressId)) : null;
+    out.push({
       uid: crypto.randomUUID(),
       addressId: r.addressId ?? null,
       customer: r.customer, location: r.location,
-      fullAddress: r.address, notes: r.notes,
-      durationMinutes: r.stopPart === "morning"
-        ? (() => { const af = (result.rows || []).find(x => x.stopPart === "afternoon" && x.addressId === r.addressId); return Number(r.durationMinutes || 0) + Number(af?.durationMinutes || 0) || 45; })()
-        : Number(r.durationMinutes || 45),
+      fullAddress: r.address || r.fullAddress, notes: r.notes,
+      durationMinutes: totalDuration || 45,
       lat: r.lat, lng: r.lng,
-      weeklyHours: wh,
-      openMorning: om,
-      closeMorning: cm,
-      openAfternoon: oa,
-      closeAfternoon: ca,
+      weeklyHours: r.weeklyHours || addr?.weeklyHours || null,
+      openMorning: r.openMorning || addr?.openMorning || "",
+      closeMorning: r.closeMorning || addr?.closeMorning || "",
+      openAfternoon: r.openAfternoon || addr?.openAfternoon || "",
+      closeAfternoon: r.closeAfternoon || addr?.closeAfternoon || "",
       ignoreHours: r.ignoreHours === true,
       fixedFirst: r.fixedFirst === true,
       timeFrom: r.timeFrom || "",
       timeTo: r.timeTo || "",
       timeWindowMode: r.timeWindowMode || "available",
       recognized: true
-    };});
+    });
+  });
+  return out;
+}
+
+async function replanFromResult() {
+  const result = normalizeSavedRoute(state.result);
+  const v = _readResultEditForm();
+
+  // Reconstruct stops from current result rows (skip breaks), preserving custom durations
+  const stops = rebuildStopsFromResultRows(result.rows);
 
   // Add any newly queued stops from the result-view add-stop panel
   for (const s of (state.resultPendingStops || [])) stops.push(s);
@@ -4189,7 +4201,7 @@ function renderResultEditPanels(result) {
             <p class="rp-label" style="margin-bottom:4px;">In attesa di ricalcolo:</p>
             ${(state.resultPendingStops || []).map((s, i) => `
               <div class="rv-pending-stop">
-                <span>${escapeHtml(s.customer)}${s.location ? ` — ${escapeHtml(s.location)}` : ""}</span>
+                <span>${escapeHtml(s.customer)}${s.location ? ` — ${escapeHtml(s.location)}` : ""}${s.temporary ? ` <span class="stop-window-badge" title="Tappa temporanea, non salvata in archivio">provvisoria</span>` : ""}</span>
                 <button class="btn danger icon-btn" data-rv-remove-pending="${i}">${I.trash(13)}</button>
               </div>`).join("")}
           </div>` : ""}
@@ -5767,8 +5779,10 @@ function openMapPickerForField({ labelEl, addressEl, latEl, lngEl, onConfirm, on
           await refreshAllData();
           showToast("Luogo salvato nell'archivio");
         } catch (err) { showToast("Errore nel salvataggio: " + err.message); return; }
+      } else if (address) {
+        showToast("Dati compilati dalla mappa");
       } else {
-        showToast(pickedPlace ? "Dati compilati dalla mappa" : "Coordinate aggiornate");
+        showToast("Solo coordinate impostate — indirizzo non trovato, compila il campo a mano");
       }
       if (onConfirm) onConfirm(label, address, pickedLat, pickedLng);
       modal.remove();
@@ -6563,17 +6577,16 @@ function bindEvents() {
       return;
     }
 
-    // rv-add-stop: map picker
+    // rv-add-stop: map picker — compila i campi della tappa manuale (cliente,
+    // indirizzo, lat, lng). La tappa va poi aggiunta con "Usa senza salvare" o
+    // "Salva e aggiungi". Il toast di conferma lo mostra applyPick solo dopo
+    // aver davvero scritto i valori negli input.
     if (e.target.closest("#rv-custom-map-btn")) {
       openMapPickerForField({
-        onPick: ({ lat, lng, address }) => {
-          const el = document.getElementById("rv-custom-address");
-          const latEl = document.getElementById("rv-custom-lat");
-          const lngEl = document.getElementById("rv-custom-lng");
-          if (el) el.value = address;
-          if (latEl) latEl.value = lat;
-          if (lngEl) lngEl.value = lng;
-        }
+        labelEl: document.getElementById("rv-custom-customer"),
+        addressEl: document.getElementById("rv-custom-address"),
+        latEl: document.getElementById("rv-custom-lat"),
+        lngEl: document.getElementById("rv-custom-lng")
       });
       return;
     }
@@ -7192,21 +7205,9 @@ function bindEvents() {
         try {
           showToast("Ricalcolo in corso…");
           const res = state.result;
-          // Extract stops from result rows (regular stops have no type field)
-          const stopsFromRows = (res?.rows || [])
-            .filter(r => !r.type)
-            .map(r => ({
-              uid: r.uid || crypto.randomUUID(),
-              addressId: r.addressId || null,
-              customer: r.customer, location: r.location,
-              fullAddress: r.fullAddress || r.address || "",
-              lat: r.lat, lng: r.lng,
-              durationMinutes: r.durationMinutes,
-              weeklyHours: r.weeklyHours || null,
-              openMorning: r.openMorning, closeMorning: r.closeMorning,
-              openAfternoon: r.openAfternoon, closeAfternoon: r.closeAfternoon,
-              notes: r.notes || ""
-            }));
+          // Ricostruisce le tappe riunendo i tronconi delle tappe spezzate e
+          // preservando la durata personalizzata (vedi rebuildStopsFromResultRows).
+          const stopsFromRows = rebuildStopsFromResultRows(res?.rows);
           const stops = stopsFromRows.length ? stopsFromRows
             : (res?.plannedStops || []).map(s => ({ ...s, uid: s.uid || crypto.randomUUID() }));
           if (!stops.length) { showToast("Nessuna tappa da ricalcolare"); return; }

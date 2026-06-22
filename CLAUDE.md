@@ -175,6 +175,9 @@ Non usare `stopPropagation()` sui container dei pulsanti — rompe tutto. È pre
 | Pranzo non prioritario sulle soste | `cumulative` non si azzerava al punto pranzo — fix: reset a 0 e avanzamento `prevServiceEnd` quando `lunchIns.beforeIndex === i` |
 | Finestra fissa prima tappa non ritarda partenza | Planner non back-calcolava da `timeFrom` — fix: se prima tappa ha `timeWindowMode="fixed"`, impostare `targetArrival = parseTime(timeFrom)` |
 | Ricalcolo crea nuovo giro invece di aggiornare | `/api/plan` con `body.id` ora chiama `updateRoutePayload` se il giro esiste già |
+| Durata personalizzata tappa torna al default | Le tappe spezzate mattina/pomeriggio venivano ricostruite come 2 tappe con durate parziali. Fix: `plannedStops` (planner.js) riunisce i tronconi in 1 voce con durata totale; helper frontend `rebuildStopsFromResultRows` riunisce per `stopUid` e preserva la durata. **Per ricostruire tappe da `result.rows`/`plannedStops` usare SEMPRE questo helper** |
+| Tappe temporanee scartate al ricalcolo | `replanFromResult` deduplicava per `addressId`; le tappe temporanee (addressId null) collassavano in una. Fix: dedup per `stopUid` |
+| "Scegli sulla mappa" non compila la tappa (giro esistente) | `#rv-custom-map-btn` chiamava `openMapPickerForField` con parametro inesistente `onPick`. Fix: passare `labelEl/addressEl/latEl/lngEl`. Il toast di `applyPick` conferma solo se l'indirizzo è stato risolto |
 
 ---
 
