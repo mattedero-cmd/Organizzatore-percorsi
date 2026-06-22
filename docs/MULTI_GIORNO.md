@@ -73,13 +73,16 @@ lontana alla più vicina; i resti vicini si accorpano alla fine.**
    - **Resti accorpati**: le giornate da UNA sola tappa ("rimaste indietro") vengono unite in un gruppo
      e ri-clusterizzate insieme alla fine (se ≥2; una tappa davvero isolata resta sola).
 5. **FASE DI RIEMPIMENTO** (`fillDays`): le giornate per-zona finiscono presto (una valle = poche tappe).
-   Si riempiono unendo le adiacenti: partendo dalla giornata col punto più LONTANO da casa, assorbe le
-   tappe più vicine (entro `MERGE_MAX_GAP` 60') dalle altre giornate finché resta FATTIBILE (motore reale)
-   E un CORRIDOIO coerente: guida totale ≤ `CORRIDOR_FACTOR` (1.4) × 2 × distanza dell'estremo da casa.
-   Senza il controllo corridoio, sommando salti corti una giornata incatenava 4 valli
-   (Ortisei→…→Cles→Pergine); il corridoio lo impedisce (un corridoio pulito guida ≈ 2× l'estremo, un
-   serpente molto di più). Regola utente: «fare prima il seme più lontano e poi unire il più vicino, se
-   necessario spezzare». Esempio confermato: Tione/Riva assorbe Rovereto. **`MERGE_MAX_GAP` e `CORRIDOR_FACTOR` tarabili.**
+   Si UNISCONO le GIORNATE INTERE adiacenti (mai singole tappe: così le tappe dello stesso paese non si
+   separano e le tappe vicino casa non vengono appese a giorni di direzione sbagliata), procedendo dalla
+   giornata più LONTANA e unendo la più vicina compatibile, purché l'unione resti FATTIBILE (motore reale,
+   con margine `MERGE_RETURN_MARGIN` 15' sul rientro) E un CORRIDOIO: guida totale ≤ `CORRIDOR_FACTOR`
+   (1.4) × 2 × distanza dell'estremo. Niente limite di gap fisso (corridoio + fattibilità sono i veri
+   vincoli; così Primiero+Valsugana, gap 84' ma corridoio pulito, si unisce). Regola utente: «fare prima
+   il seme più lontano e poi unire il più vicino, se necessario spezzare». Esempi: Tione/Riva+Rovereto sì,
+   Primiero+Valsugana sì, Tione/Riva+Pergine no, Merano+Valsugana no. **`CORRIDOR_FACTOR`/`MERGE_RETURN_MARGIN` tarabili.**
+   - STORICO: il riempimento tappa-per-tappa (≤v5.026) separava le co-locate (due Rovereto), appendeva le
+     tappe vicino casa a giorni sbagliati (Trento→Merano = FUORI CHIUSURA) e col gap 60' lasciava Primiero solo.
 6. Ordine finale delle giornate: dalla più vicina a casa alla più lontana.
 7. Per ogni giornata: ordine **far-first** bloccato (`orderDayFarFirst`) → `planRoute` (orari/soste/pranzo reali).
 8. **Date solo feriali**: `addWorkdaysISO` salta sabato/domenica (banche chiuse). `dayIndex` → data del

@@ -1270,7 +1270,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.026 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.027 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -1280,6 +1280,11 @@ function renderMenuInfo() {
       <ul class="info-list">
         <li>${state.mapApiConfigured ? _svg('<polyline points="20 6 9 17 4 12"/>', 14) + " Google Maps attivo — percorsi reali e ottimizzazione avanzata" : _svg('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>', 14) + " Google Maps non configurato — stime distanze locali"}</li>
         <li>${state.whisperConfigured ? _svg('<polyline points="20 6 9 17 4 12"/>', 14) + " Comandi vocali attivi (Whisper)" : _svg('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>', 14) + " Comandi vocali non configurati"}</li>
+      </ul>
+
+      <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v5.027</p>
+      <ul class="info-list">
+        <li>Multi-giorno: l'unione delle giornate ora avviene a <strong>giornate intere</strong>, non più tappa per tappa. Così le tappe dello stesso paese non si separano mai (prima le due di Rovereto finivano in giorni diversi) e le tappe vicino casa non vengono "appese" a giorni di direzione sbagliata (niente più Pergine col giro di Tione/Riva, né tappe servite dopo la chiusura). Si uniscono solo le giornate che insieme restano un corridoio (es. Tione/Riva + Rovereto, oppure Primiero con la Valsugana). Margine di sicurezza sul rientro per non sforare gli orari.</li>
       </ul>
 
       <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v5.026</p>

@@ -309,61 +309,57 @@ export function assignZones(groups, home, opts = {}) {
   return far; // zone lontane (estremi prima) + un'unica zona vicino-casa in coda
 }
 
-// Una giornata può assorbire (in fase di riempimento) solo tappe entro ~MERGE_MAX_GAP minuti di
-// strada dal proprio gruppo: sono le tappe "adiacenti / sulla via", non quelle di un'altra valle.
-// Insieme alla fattibilità reale evita di unire valli opposte. Tarabile sulla Diagnostica.
-const MERGE_MAX_GAP = 60;
 // La giornata deve restare un CORRIDOIO (andata-ritorno), non un serpente tra valli diverse: il
 // tempo di guida totale non deve superare CORRIDOR_FACTOR × (2 × distanza dell'estremo da casa).
 // Un corridoio pulito guida ≈ 2× l'estremo; un percorso che devia in più valli guida molto di più.
-// Evita che, incatenando salti corti, una giornata attraversi 4 valli (es. Ortisei→…→Cles→Pergine).
 const CORRIDOR_FACTOR = 1.4;
+// Margine di sicurezza (min) sul rientro quando si UNISCONO due giornate: l'oracolo dei tempi è una
+// stima (pranzo/soste come allowance), quindi per le unioni restiamo sotto il limite massimo, così
+// nel piano reale non si finisce per servire una tappa dopo la chiusura.
+const MERGE_RETURN_MARGIN = 15;
 
-// FASE DI RIEMPIMENTO: le giornate vanno sfruttate appieno. Partendo dalla giornata più LONTANA da
-// casa, assorbe le tappe più vicine (entro MERGE_MAX_GAP) dalle altre giornate finché la giornata
-// resta FATTIBILE (motore reale) E un CORRIDOIO coerente (CORRIDOR_FACTOR). Così le zone adiacenti
-// si uniscono (es. Tione/Riva + Rovereto) e le giornate non finiscono presto, ma NON si incatenano
-// valli diverse. Regola utente: «fare prima il seme più lontano e poi unire il più vicino, e se
-// necessario spezzare in altre giornate».
-async function fillDays(daysIn, home, opts, dayFeasible) {
+// FASE DI RIEMPIMENTO: le giornate per-zona finiscono presto (una valle = poche tappe). Si UNISCONO
+// le GIORNATE INTERE adiacenti (mai singole tappe → le tappe dello stesso paese non si separano e le
+// valli non si mescolano), purché l'unione resti FATTIBILE (motore reale, con margine) E un CORRIDOIO
+// (CORRIDOR_FACTOR). Si procede dalla giornata più lontana, unendo la più vicina compatibile; se non
+// è un corridoio o sfora gli orari, non si unisce. Regola utente: «fare prima il seme più lontano e
+// poi unire il più vicino; se necessario spezzare». Esempi: Tione/Riva+Rovereto sì, Primiero+Valsugana
+// sì (corridoio pulito), Tione/Riva+Pergine no (direzioni opposte), Merano+Valsugana no.
+async function fillDays(daysIn, home, opts, dayFeasible, endMin) {
   const maxHome = d => Math.max(...d.map(s => legMin(home, s, opts)));
-  const remaining = [...daysIn];
-  const done = [];
-  while (remaining.length) {
-    remaining.sort((a, b) => maxHome(b) - maxHome(a));
-    const cur = remaining.shift(); // giornata col punto più lontano da casa
-    let improved = true;
-    while (improved && remaining.length) {
-      improved = false;
-      let bestJ = -1, bestK = -1, bestD = Infinity;
-      for (let j = 0; j < remaining.length; j++) {
-        for (let k = 0; k < remaining[j].length; k++) {
-          const s = remaining[j][k];
-          let d = Infinity;
-          for (const ds of cur) { const t = legMin(ds, s, opts); if (t < d) d = t; }
-          if (d > MERGE_MAX_GAP || d >= bestD) continue;
-          const tentative = orderDayFarFirst([...cur, s], home, opts);
-          const f = await dayFeasible(tentative, done.length);
-          if (!f.ok) continue;
-          // Resta un corridoio? (guida totale ≤ FACTOR × 2 × estremo). Se f.driveMin manca (offline),
-          // salta il controllo corridoio e usa solo gap + fattibilità.
-          if (f.driveMin != null) {
-            const far = Math.max(...tentative.map(x => legMin(home, x, opts)));
-            if (f.driveMin > CORRIDOR_FACTOR * 2 * far) continue;
-          }
-          bestD = d; bestJ = j; bestK = k;
+  let days = [...daysIn];
+  let changed = true;
+  while (changed) {
+    changed = false;
+    days.sort((a, b) => maxHome(b) - maxHome(a)); // dalla più lontana
+    for (let i = 0; i < days.length && !changed; i++) {
+      let bestJ = -1, bestGap = Infinity;
+      for (let j = 0; j < days.length; j++) {
+        if (j === i) continue;
+        // gap (tempo-strada minimo) tra le due giornate: si preferisce unire la più vicina
+        let gap = Infinity;
+        for (const a of days[i]) for (const b of days[j]) { const t = legMin(a, b, opts); if (t < gap) gap = t; }
+        if (gap >= bestGap) continue;
+        const combined = orderDayFarFirst([...days[i], ...days[j]], home, opts);
+        const f = await dayFeasible(combined, i);
+        if (!f.ok) continue;
+        // margine di sicurezza sul rientro (l'oracolo è una stima)
+        if (endMin != null && f.dayEndWithBreaks != null && f.dayEndWithBreaks > endMin - MERGE_RETURN_MARGIN) continue;
+        // resta un corridoio? (guida ≤ FACTOR × 2 × estremo)
+        if (f.driveMin != null) {
+          const far = Math.max(...combined.map(x => legMin(home, x, opts)));
+          if (f.driveMin > CORRIDOR_FACTOR * 2 * far) continue;
         }
+        bestGap = gap; bestJ = j;
       }
       if (bestJ >= 0) {
-        const [s] = remaining[bestJ].splice(bestK, 1);
-        cur.push(s);
-        if (remaining[bestJ].length === 0) remaining.splice(bestJ, 1);
-        improved = true;
+        days[i] = [...days[i], ...days[bestJ]];
+        days.splice(bestJ, 1);
+        changed = true;
       }
     }
-    done.push(cur);
   }
-  return done;
+  return days;
 }
 
 
@@ -469,7 +465,7 @@ export async function buildDayClusters(stops, home, budgetMin, opts = {}, dayFea
   // FASE DI RIEMPIMENTO: unisci le giornate adiacenti per sfruttarle appieno (dal seme più lontano,
   // assorbendo le più vicine, finché fattibile). Le valli opposte non si uniscono (gap + fattibilità).
   if (dayFeasible) {
-    const filled = await fillDays(days, home, opts, dayFeasible);
+    const filled = await fillDays(days, home, opts, dayFeasible, opts.endMin);
     days.length = 0;
     for (const d of filled) days.push(d);
     if (opts.log) {
