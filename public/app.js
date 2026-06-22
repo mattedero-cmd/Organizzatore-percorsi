@@ -1270,7 +1270,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.031 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.032 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -4189,6 +4189,7 @@ function renderResultEditPanels(result) {
             ${state.googleMapsKey ? `<div class="field full" style="padding-top:0"><button type="button" class="btn" id="rv-custom-map-btn">${I.map(14)} Scegli sulla mappa</button></div>` : ""}
             <input type="hidden" id="rv-custom-lat" value="" />
             <input type="hidden" id="rv-custom-lng" value="" />
+            <input type="hidden" id="rv-custom-hours" value="" />
             <label class="field">Durata<input id="rv-custom-duration" type="time" step="300" value="00:45" data-duration-hhmm /></label>
           </div>
           <div class="actions" style="margin-top:8px;">
@@ -5583,42 +5584,8 @@ function openMapPicker() {
         // Opening hours — parse periods into morning/afternoon for each day
         const periods = pickedPlace.opening_hours?.periods;
         const weekdayText = pickedPlace.opening_hours?.weekday_text || [];
-        if (periods && periods.length) {
-          const fmtTime = s => {
-            // s is a string like "0830" or "1730"
-            const str = String(s || "").padStart(4, "0");
-            return `${str.slice(0,2)}:${str.slice(2,4)}`;
-          };
-          // Build per-day hours map (Google day: 0=Sun)
-          const byDay = {};
-          for (const p of periods) {
-            const d = p.open?.day;
-            if (d == null) continue;
-            if (!byDay[d]) byDay[d] = { openMorning:"", closeMorning:"", openAfternoon:"", closeAfternoon:"", closed:false };
-            const openT = p.open?.time ? fmtTime(p.open.time) : "";
-            const closeT = p.close?.time ? fmtTime(p.close.time) : "";
-            const slot = byDay[d];
-            if (!slot.openMorning) {
-              slot.openMorning = openT; slot.closeMorning = closeT; slot._periods = 1;
-            } else {
-              slot.openAfternoon = openT; slot.closeAfternoon = closeT; slot._periods = 2;
-            }
-          }
-          // Mark closed days; detect continuous (single period)
-          for (let d = 0; d < 7; d++) {
-            if (!byDay[d]) { byDay[d] = { closed: true, continuous: false, openMorning:"", closeMorning:"", openAfternoon:"", closeAfternoon:"" }; continue; }
-            const s = byDay[d];
-            if (!s.closed && s._periods === 1) {
-              // Single period — treat as continuous: openMorning→closeMorning becomes open→close
-              s.continuous = true;
-              s.closeAfternoon = s.closeMorning;
-              s.closeMorning = "";
-              s.openAfternoon = "";
-            } else {
-              s.continuous = false;
-            }
-            delete s._periods;
-          }
+        const byDay = googlePeriodsToWeeklyHours(periods);
+        if (byDay) {
           // Update state and re-render weekly hours table
           state.addressForm.weeklyHours = byDay;
 
@@ -5673,7 +5640,42 @@ function openMapPicker() {
 
 // ── openMapPickerForField ─────────────────────────────────────────────────────
 
-function openMapPickerForField({ labelEl, addressEl, latEl, lngEl, onConfirm, onUseDirectly }) {
+// Converte i periodi di apertura di Google Places (opening_hours.periods) nel
+// formato weeklyHours usato dall'app: { 0..6: { closed, continuous, openMorning,
+// closeMorning, openAfternoon, closeAfternoon } } (giorno 0 = domenica, come Google).
+// Restituisce null se non ci sono orari disponibili.
+function googlePeriodsToWeeklyHours(periods) {
+  if (!periods || !periods.length) return null;
+  const fmtTime = s => { const str = String(s || "").padStart(4, "0"); return `${str.slice(0, 2)}:${str.slice(2, 4)}`; };
+  const byDay = {};
+  for (const p of periods) {
+    const d = p.open?.day;
+    if (d == null) continue;
+    if (!byDay[d]) byDay[d] = { openMorning: "", closeMorning: "", openAfternoon: "", closeAfternoon: "", closed: false };
+    const openT = p.open?.time ? fmtTime(p.open.time) : "";
+    const closeT = p.close?.time ? fmtTime(p.close.time) : "";
+    const slot = byDay[d];
+    if (!slot.openMorning) { slot.openMorning = openT; slot.closeMorning = closeT; slot._periods = 1; }
+    else { slot.openAfternoon = openT; slot.closeAfternoon = closeT; slot._periods = 2; }
+  }
+  for (let d = 0; d < 7; d++) {
+    if (!byDay[d]) { byDay[d] = { closed: true, continuous: false, openMorning: "", closeMorning: "", openAfternoon: "", closeAfternoon: "" }; continue; }
+    const s = byDay[d];
+    // Periodo unico → orario continuato (open→close diventa openMorning→closeAfternoon)
+    if (!s.closed && s._periods === 1) { s.continuous = true; s.closeAfternoon = s.closeMorning; s.closeMorning = ""; s.openAfternoon = ""; }
+    else s.continuous = false;
+    delete s._periods;
+  }
+  return byDay;
+}
+
+// Legge gli orari (weeklyHours) stipati in un input nascosto dal map picker.
+function parseHoursField(id) {
+  try { return JSON.parse(document.getElementById(id)?.value || "null"); }
+  catch { return null; }
+}
+
+function openMapPickerForField({ labelEl, addressEl, latEl, lngEl, hoursEl, onConfirm, onUseDirectly }) {
   const startLat = Number(latEl?.value) || 46.07;
   const startLng = Number(lngEl?.value) || 11.12;
   let pickedLat = startLat, pickedLng = startLng;
@@ -5727,7 +5729,7 @@ function openMapPickerForField({ labelEl, addressEl, latEl, lngEl, onConfirm, on
         e.stop();
         new google.maps.places.PlacesService(map).getDetails({
           placeId: e.placeId,
-          fields: ["name", "formatted_address", "geometry"]
+          fields: ["name", "formatted_address", "geometry", "opening_hours"]
         }, (place, status) => {
           if (status === google.maps.places.PlacesServiceStatus.OK && place.geometry) {
             pickedPlace = place;
@@ -5743,7 +5745,7 @@ function openMapPickerForField({ labelEl, addressEl, latEl, lngEl, onConfirm, on
 
     const searchInput = document.getElementById("map-picker-field-search");
     const autocomplete = new google.maps.places.Autocomplete(searchInput, {
-      fields: ["name", "formatted_address", "geometry"],
+      fields: ["name", "formatted_address", "geometry", "opening_hours"],
       componentRestrictions: { country: "it" }
     });
     autocomplete.addListener("place_changed", () => {
@@ -5758,6 +5760,8 @@ function openMapPickerForField({ labelEl, addressEl, latEl, lngEl, onConfirm, on
     const applyPick = async (saveToArchive) => {
       if (latEl) latEl.value = Number(pickedLat).toFixed(6);
       if (lngEl) lngEl.value = Number(pickedLng).toFixed(6);
+      const weeklyHours = googlePeriodsToWeeklyHours(pickedPlace?.opening_hours?.periods);
+      if (hoursEl) hoursEl.value = weeklyHours ? JSON.stringify(weeklyHours) : "";
       let label = "", address = "";
       if (pickedPlace) {
         label = pickedPlace.name || "";
@@ -5774,17 +5778,17 @@ function openMapPickerForField({ labelEl, addressEl, latEl, lngEl, onConfirm, on
         try {
           await api("/api/addresses", {
             method: "POST",
-            body: JSON.stringify({ customer: label || address, fullAddress: address, lat: pickedLat, lng: pickedLng, placeId: pickedPlace?.place_id || null })
+            body: JSON.stringify({ customer: label || address, fullAddress: address, lat: pickedLat, lng: pickedLng, weeklyHours: weeklyHours || null, placeId: pickedPlace?.place_id || null })
           });
           await refreshAllData();
           showToast("Luogo salvato nell'archivio");
         } catch (err) { showToast("Errore nel salvataggio: " + err.message); return; }
       } else if (address) {
-        showToast("Dati compilati dalla mappa");
+        showToast(weeklyHours ? "Dati e orari compilati dalla mappa" : "Dati compilati dalla mappa");
       } else {
         showToast("Solo coordinate impostate — indirizzo non trovato, compila il campo a mano");
       }
-      if (onConfirm) onConfirm(label, address, pickedLat, pickedLng);
+      if (onConfirm) onConfirm(label, address, pickedLat, pickedLng, weeklyHours);
       modal.remove();
     };
 
@@ -5796,7 +5800,8 @@ function openMapPickerForField({ labelEl, addressEl, latEl, lngEl, onConfirm, on
         const label = pickedPlace?.name || "";
         const address = pickedPlace?.formatted_address || pickedAddress || "";
         if (!address) { showToast("Seleziona un luogo sulla mappa"); return; }
-        onUseDirectly(label, address, pickedLat, pickedLng);
+        const weeklyHours = googlePeriodsToWeeklyHours(pickedPlace?.opening_hours?.periods);
+        onUseDirectly(label, address, pickedLat, pickedLng, weeklyHours);
         modal.remove();
       };
     } else {
@@ -6491,6 +6496,7 @@ function bindEvents() {
       if (!addr) { showToast("Indirizzo obbligatorio"); return; }
       const lat = parseFloat(document.getElementById("rv-custom-lat")?.value) || null;
       const lng = parseFloat(document.getElementById("rv-custom-lng")?.value) || null;
+      const weeklyHours = parseHoursField("rv-custom-hours");
       if (!state.resultPendingStops) state.resultPendingStops = [];
       state.resultPendingStops.push({
         uid: crypto.randomUUID(), addressId: null,
@@ -6498,7 +6504,7 @@ function bindEvents() {
         location: document.getElementById("rv-custom-location")?.value?.trim() || "",
         fullAddress: addr,
         durationMinutes: hhmmToMins(document.getElementById("rv-custom-duration")?.value) || 45,
-        weeklyHours: null, lat, lng, recognized: !!lat, temporary: true
+        weeklyHours, lat, lng, recognized: !!lat, temporary: true
       });
       state.expandedPanels.add("rv-add-stop-panel");
       showToast("Tappa aggiunta — premi Ricalcola");
@@ -6514,10 +6520,11 @@ function bindEvents() {
       const lat = parseFloat(document.getElementById("rv-custom-lat")?.value) || null;
       const lng = parseFloat(document.getElementById("rv-custom-lng")?.value) || null;
       const duration = hhmmToMins(document.getElementById("rv-custom-duration")?.value) || 45;
+      const weeklyHours = parseHoursField("rv-custom-hours");
       try {
         const saved = await api("/api/addresses", { method: "POST", body: JSON.stringify({
           customer, location: document.getElementById("rv-custom-location")?.value?.trim() || "",
-          fullAddress: addr, lat, lng, defaultDuration: duration
+          fullAddress: addr, lat, lng, defaultDuration: duration, weeklyHours: weeklyHours || null
         })});
         state.allAddresses.unshift(saved);
         if (!state.resultPendingStops) state.resultPendingStops = [];
@@ -6586,7 +6593,8 @@ function bindEvents() {
         labelEl: document.getElementById("rv-custom-customer"),
         addressEl: document.getElementById("rv-custom-address"),
         latEl: document.getElementById("rv-custom-lat"),
-        lngEl: document.getElementById("rv-custom-lng")
+        lngEl: document.getElementById("rv-custom-lng"),
+        hoursEl: document.getElementById("rv-custom-hours")
       });
       return;
     }
@@ -7020,7 +7028,7 @@ function bindEvents() {
         addressEl: document.querySelector("#rp-custom-address"),
         latEl: document.querySelector("#rp-custom-lat"),
         lngEl: document.querySelector("#rp-custom-lng"),
-        onUseDirectly: (label, address, lat, lng) => {
+        onUseDirectly: (label, address, lat, lng, weeklyHours) => {
           state.route.stops.push({
             uid: crypto.randomUUID(),
             addressId: null,
@@ -7028,14 +7036,14 @@ function bindEvents() {
             location: "",
             fullAddress: address,
             durationMinutes: state.route.customDuration || 45,
-            weeklyHours: null,
+            weeklyHours: weeklyHours || null,
             lat, lng,
             recognized: true,
             temporary: true
           });
           Object.assign(state.route, { customCustomer: "", customLocation: "", customAddress: "", customDuration: 45 });
           render();
-          showToast("Tappa aggiunta (non salvata in archivio)");
+          showToast(weeklyHours ? "Tappa aggiunta con orari da Maps (non salvata in archivio)" : "Tappa aggiunta (non salvata in archivio)");
         }
       });
       return;

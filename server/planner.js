@@ -1356,7 +1356,13 @@ export async function planRoute(payload, settings, restStops = []) {
   const startMinutes = parseTime(payload.startTime || payload.start?.time || "");
   const timingMode = payload.timingMode || "first_open_minus";
   const arrivalLeadMinutes = Number(payload.arrivalLeadMinutes ?? 10);
-  const firstArrivalRequired = parseTime(payload.firstArrivalTime || payload.firstArrivalRequired || "");
+  // In "partenza a orario fisso" non c'è orario di arrivo target: ignora un eventuale
+  // firstArrivalTime residuo nel payload (es. giro nato in "arrivo a orario fisso"),
+  // altrimenti comparirebbe l'avviso "arrivo oltre l'orario target" e la prima tappa
+  // verrebbe bloccata nell'ottimizzazione dell'ordine.
+  const firstArrivalRequired = timingMode === "depart_at"
+    ? null
+    : parseTime(payload.firstArrivalTime || payload.firstArrivalRequired || "");
   const rates = {
     kmRate: Number(payload.rates?.kmRate ?? settings.kmRate),
     driveHourRate: Number(payload.rates?.driveHourRate ?? settings.driveHourRate),
