@@ -309,9 +309,53 @@ export function assignZones(groups, home, opts = {}) {
   return far; // zone lontane (estremi prima) + un'unica zona vicino-casa in coda
 }
 
-// Raggruppa le tappe in giornate (ognuna parte/torna a casa). Lavora su GRUPPI co-locati (atomici)
-// e costruisce ogni giornata come zona compatta attorno al punto più lontano (seme), aggiungendo i
-// gruppi più vicini finché la giornata RESTA FATTIBILE.
+// Una giornata può assorbire (in fase di riempimento) solo tappe entro ~MERGE_MAX_GAP minuti di
+// strada dal proprio gruppo: sono le tappe "adiacenti / sulla via", non quelle di un'altra valle.
+// Insieme alla fattibilità reale evita di unire valli opposte. Tarabile sulla Diagnostica.
+const MERGE_MAX_GAP = 60;
+
+// FASE DI RIEMPIMENTO: le giornate vanno sfruttate appieno. Partendo dalla giornata più LONTANA da
+// casa, assorbe le tappe più vicine (entro MERGE_MAX_GAP) dalle altre giornate finché la giornata
+// resta FATTIBILE (motore reale: orari, chiusure, pranzo, logica di arrivo). Così le zone adiacenti
+// si uniscono (es. Tione/Riva + Rovereto) e le giornate non finiscono presto; le valli opposte NON
+// si mescolano (il limite di gap + la fattibilità lo impediscono). Regola utente: «fare prima il
+// seme più lontano e poi unire il più vicino, e se necessario spezzare in altre giornate».
+async function fillDays(daysIn, home, opts, dayFeasible) {
+  const maxHome = d => Math.max(...d.map(s => legMin(home, s, opts)));
+  const remaining = [...daysIn];
+  const done = [];
+  while (remaining.length) {
+    remaining.sort((a, b) => maxHome(b) - maxHome(a));
+    const cur = remaining.shift(); // giornata col punto più lontano da casa
+    let improved = true;
+    while (improved && remaining.length) {
+      improved = false;
+      let bestJ = -1, bestK = -1, bestD = Infinity;
+      for (let j = 0; j < remaining.length; j++) {
+        for (let k = 0; k < remaining[j].length; k++) {
+          const s = remaining[j][k];
+          let d = Infinity;
+          for (const ds of cur) { const t = legMin(ds, s, opts); if (t < d) d = t; }
+          if (d > MERGE_MAX_GAP || d >= bestD) continue;
+          const tentative = orderDayFarFirst([...cur, s], home, opts);
+          const f = await dayFeasible(tentative, done.length);
+          if (!f.ok) continue;
+          bestD = d; bestJ = j; bestK = k;
+        }
+      }
+      if (bestJ >= 0) {
+        const [s] = remaining[bestJ].splice(bestK, 1);
+        cur.push(s);
+        if (remaining[bestJ].length === 0) remaining.splice(bestJ, 1);
+        improved = true;
+      }
+    }
+    done.push(cur);
+  }
+  return done;
+}
+
+
 //
 // FATTIBILITÀ = lo stesso motore della giornata singola. `dayFeasible(orderedStops, dow)` chiama
 // `evaluateDayTiming` (planner.js): stessa logica di orari/chiusure/spezzare interventi, pranzo e
@@ -411,11 +455,21 @@ export async function buildDayClusters(stops, home, budgetMin, opts = {}, dayFea
     await growDays(orderedZones[zi].members, `Z${zi + 1} ${nameOf(orderedZones[zi].seed[0])}`);
   }
 
-  // "Tappe rimaste indietro": le giornate da UNA sola tappa vengono accorpate e ri-organizzate
-  // insieme alla fine. Regola dell'utente: si RIEMPIE prima una giornata; se non ci stanno tutte,
-  // se ne usa una seconda (al bisogno); una tappa resta isolata solo se è inevitabile (non si
-  // combina con nessun'altra). `growDays` fa esattamente questo: riempie un giorno (seme + più
-  // vicino fattibile col motore reale), poi sfora su un altro solo quando serve.
+  // FASE DI RIEMPIMENTO: unisci le giornate adiacenti per sfruttarle appieno (dal seme più lontano,
+  // assorbendo le più vicine, finché fattibile). Le valli opposte non si uniscono (gap + fattibilità).
+  if (dayFeasible) {
+    const filled = await fillDays(days, home, opts, dayFeasible);
+    days.length = 0;
+    for (const d of filled) days.push(d);
+    if (opts.log) {
+      opts.log(`DOPO RIEMPIMENTO (${days.length} giornate): ` +
+        days.map((d, i) => `G${i + 1}[${d.map(nameOf).join(", ")}]`).join("  ·  "));
+    }
+  }
+
+  // "Tappe rimaste indietro": le giornate da UNA sola tappa che NON si sono unite a nessuna (sono
+  // isolate). Se ne restano ≥2 le riempio insieme in una giornata (al bisogno due); una tappa
+  // davvero sola resta isolata (inevitabile). `growDays` riempie un giorno e sfora solo al bisogno.
   const singles = days.filter(d => d.length <= 1);
   if (singles.length > 1) {
     const solid = days.filter(d => d.length > 1);
@@ -424,6 +478,9 @@ export async function buildDayClusters(stops, home, budgetMin, opts = {}, dayFea
     if (opts.log) opts.log(`RESTI: ${singles.flat().length} tappe rimaste indietro, le riempio in una giornata (al bisogno due) [${singles.flat().map(nameOf).join(", ")}]`);
     await growDays(groupColocated(singles.flat(), opts), "resti accorpati");
   }
+
+  // Ordine finale delle giornate: dalla più vicina a casa alla più lontana (richiesta dell'utente).
+  days.sort((a, b) => Math.max(...a.map(s => legMin(home, s, opts))) - Math.max(...b.map(s => legMin(home, s, opts))));
 
   return days;
 }

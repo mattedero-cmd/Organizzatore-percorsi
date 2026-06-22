@@ -72,8 +72,15 @@ lontana alla più vicina; i resti vicini si accorpano alla fine.**
    - Una zona troppo grande → più giornate (estremo→casa). Quando il giorno non cresce più → chiude.
    - **Resti accorpati**: le giornate da UNA sola tappa ("rimaste indietro") vengono unite in un gruppo
      e ri-clusterizzate insieme alla fine (se ≥2; una tappa davvero isolata resta sola).
-5. Per ogni giornata: ordine **far-first** bloccato (`orderDayFarFirst`) → `planRoute` (orari/soste/pranzo reali).
-6. **Date solo feriali**: `addWorkdaysISO` salta sabato/domenica (banche chiuse). `dayIndex` → data del
+5. **FASE DI RIEMPIMENTO** (`fillDays`): le giornate per-zona finiscono presto (una valle = poche tappe).
+   Si riempiono unendo le adiacenti: partendo dalla giornata col punto più LONTANO da casa, assorbe le
+   tappe più vicine (entro `MERGE_MAX_GAP` 60' di strada) dalle altre giornate finché resta FATTIBILE
+   (motore reale). Le valli opposte non si uniscono (gap + fattibilità → un'unione che sfora gli orari o
+   mescola direzioni viene rifiutata). Regola utente: «fare prima il seme più lontano e poi unire il più
+   vicino, se necessario spezzare». Esempio confermato: Tione/Riva assorbe Rovereto. **`MERGE_MAX_GAP` tarabile.**
+6. Ordine finale delle giornate: dalla più vicina a casa alla più lontana.
+7. Per ogni giornata: ordine **far-first** bloccato (`orderDayFarFirst`) → `planRoute` (orari/soste/pranzo reali).
+8. **Date solo feriali**: `addWorkdaysISO` salta sabato/domenica (banche chiuse). `dayIndex` → data del
    giorno lavorativo, usata anche per risolvere gli orari di apertura nella fattibilità.
 
 ### Tarature (sulla Diagnostica, coi tempi reali)
