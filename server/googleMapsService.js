@@ -67,9 +67,22 @@ export async function resolvePlace(place) {
   return { lat: 46.004, lng: 11.196, source: "local-estimate" };
 }
 
+// Cache dei tragitti (coppia di coordinate → leg). routeBetween viene chiamata molte volte
+// sulle stesse coppie (matrice multi-giorno + planRoute per ogni giornata che ricostruisce le
+// stesse tratte). Senza cache ogni chiamata colpisce l'API Directions: questo rende troppo
+// costoso usare il motore reale (planRoute) come oracolo di fattibilità nel multi-giorno.
+// Chiave: coordinate arrotondate a ~11m, direzionale (origine→destinazione).
+const routeCache = new Map();
+function routeCacheKey(a, b) {
+  const r = v => Math.round(Number(v) * 1e4) / 1e4;
+  return `${r(a.lat)},${r(a.lng)}->${r(b.lat)},${r(b.lng)}`;
+}
+
 export async function routeBetween(a, b) {
   const coordA = await resolvePlace(a);
   const coordB = await resolvePlace(b);
+  const cacheKey = routeCacheKey(coordA, coordB);
+  if (routeCache.has(cacheKey)) return routeCache.get(cacheKey);
   const key = API_KEY();
   if (key) {
     try {
@@ -81,17 +94,21 @@ export async function routeBetween(a, b) {
       const data = await res.json();
       if (data.status === "OK" && data.routes?.[0]) {
         const leg = data.routes[0].legs[0];
-        return {
+        const result = {
           km: Math.round(leg.distance.value / 100) / 10,
           driveMinutes: Math.ceil(leg.duration.value / 60),
           source: "google"
         };
+        routeCache.set(cacheKey, result);
+        return result;
       }
     } catch {
       // fallthrough
     }
   }
-  return localFallback(coordA, coordB);
+  const fallback = localFallback(coordA, coordB);
+  routeCache.set(cacheKey, fallback);
+  return fallback;
 }
 
 function decodePolyline(encoded) {
@@ -198,7 +215,10 @@ export async function findNearbyRestStop(lat, lng, segFromLat, segFromLng, segTo
   })() : null;
 
   try {
-    const url = `${BASE}/place/nearbysearch/json?location=${lat},${lng}&radius=${radiusM}&type=bar&language=it&key=${key}`;
+    // rankby=distance restituisce i bar PIÙ VICINI al punto (ordinati per distanza)
+    // invece dei più "prominenti" entro un raggio — così troviamo locali sul percorso
+    // e non mete turistiche lontane. (radius è incompatibile con rankby=distance.)
+    const url = `${BASE}/place/nearbysearch/json?location=${lat},${lng}&rankby=distance&type=bar&language=it&key=${key}`;
     trackCall("google_maps", "nearby_search");
     const res = await fetch(url, { signal: AbortSignal.timeout(6000) });
     const data = await res.json();
@@ -211,16 +231,29 @@ export async function findNearbyRestStop(lat, lng, segFromLat, segFromLng, segTo
 
     const candidates = data.results
       .filter(p => {
-        if (!p.rating || p.user_ratings_total < 5) { debugCb?.(`  scarto "${p.name}": no rating/reviews`); return false; }
         if (EXCLUDE_KEYWORDS.test(p.name)) { debugCb?.(`  scarto "${p.name}": keyword esclusa`); return false; }
+        // Soglia qualità minima: almeno 4 stelle e 5 recensioni. Tra i locali che la
+        // superano sceglieremo poi il più vicino al percorso (ordinamento più sotto).
+        if (!p.rating || p.rating < 4 || !p.user_ratings_total || p.user_ratings_total < 5) {
+          debugCb?.(`  scarto "${p.name}": qualità sotto soglia (${p.rating ?? "n/d"}★ / ${p.user_ratings_total ?? 0} recensioni)`);
+          return false;
+        }
         const pLat = p.geometry.location.lat, pLng = p.geometry.location.lng;
         const km = hasSegment
           ? perpKmToSegment(pLat, pLng, segFromLat, segFromLng, segToLat, segToLng)
           : haversineKm({ lat, lng }, { lat: pLat, lng: pLng });
         if (km > MAX_DETOUR_KM) { debugCb?.(`  scarto "${p.name}": dist=${km.toFixed(2)}km > max=${MAX_DETOUR_KM.toFixed(1)}km`); return false; }
+        p._detourKm = km;
         return true;
       })
-      .sort((a, b) => placesScore(b) - placesScore(a))
+      // Preferisci i locali SUL percorso: ordina per distanza dal tragitto (a bucket di
+      // 0.5km per evitare oscillazioni), usando il punteggio rating·log(recensioni) solo
+      // come spareggio. Meglio un bar modesto sulla strada che un locale ottimo lontano.
+      .sort((a, b) => {
+        const da = Math.round(a._detourKm * 2) / 2, db = Math.round(b._detourKm * 2) / 2;
+        if (da !== db) return da - db;
+        return placesScore(b) - placesScore(a);
+      })
       .slice(0, 5);
 
     if (!candidates.length) { placesCache.set(cacheKey, null); return null; }
@@ -293,7 +326,7 @@ export async function findNearbyRestaurant(lat, lng, segFromLat, segFromLng, seg
   })() : null;
 
   try {
-    const url = `${BASE}/place/nearbysearch/json?location=${lat},${lng}&radius=${radiusM}&type=restaurant&language=it&keyword=mensa+trattoria+osteria+ristorante&key=${key}`;
+    const url = `${BASE}/place/nearbysearch/json?location=${lat},${lng}&radius=${radiusM}&type=restaurant&language=it&keyword=mensa+trattoria+osteria+ristorante+pizzeria&key=${key}`;
     trackCall("google_maps", "nearby_search");
     const res = await fetch(url, { signal: AbortSignal.timeout(6000) });
     const data = await res.json();
@@ -305,8 +338,10 @@ export async function findNearbyRestaurant(lat, lng, segFromLat, segFromLng, seg
 
     const candidates = data.results
       .filter(p => {
-        if (!p.rating || p.rating < 3.8 || p.user_ratings_total < 10) return false;
+        // Pranzi: qualità più alta delle soste — almeno 4.3 stelle e 20 recensioni.
+        if (!p.rating || p.rating < 4.3 || p.user_ratings_total < 20) return false;
         if (EXCLUDE_KEYWORDS.test(p.name)) return false;
+        // Fascia prezzo ≤ ~25€/persona: Google price_level 2 = "Moderato"; oltre (3-4) = escluso.
         if (p.price_level != null && p.price_level > 2) return false;
         const pLat = p.geometry.location.lat, pLng = p.geometry.location.lng;
         const km = hasSegment

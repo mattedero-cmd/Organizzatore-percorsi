@@ -1,5 +1,42 @@
 # ROADMAP
 
+## V5 - Pianificazione multi-giorno (in corso)
+
+Obiettivo: dato un insieme di tappe troppo grande per una sola giornata, suddividerle
+automaticamente in più giornate e organizzarle per fare meno chilometri possibile.
+
+Scelte di progetto (decise con l'utente il 2026-06-15):
+- Base unica: ogni giornata parte e rientra a casa/ufficio (nessun pernottamento).
+- Capienza giornata: finestra oraria esistente (startTime -> maxReturnTime), pranzo e soste inclusi.
+- Numero di giornate: automatico.
+- Ottimizzazione: minimizzare i chilometri totali (giornate anche sbilanciate).
+
+Architettura (v5.000):
+- `server/multiDayPlanner.js`:
+  - `estimateDayMinutes(dayStops, home, opts)` - stima leggera della durata giornata
+    (guida nearest-neighbor casa->tappe->casa con roadFactor 1.35 + buffer, lavoro, pranzo, soste).
+  - `buildDayClusters(stops, home, budgetMin, opts)` - clustering "farthest seed + nearest
+    accretion" rispettando il budget, seguito da `improveClusters` (ricerca locale che sposta
+    tappe tra giornate per ridurre i km e svuotare le giornate scarne). Funzioni pure, testate.
+  - `planMultiDay(payload, settings, restStops)` - geocodifica, clusterizza, poi lancia il
+    `planRoute` esistente per ogni giornata (date consecutive) e aggrega km/ore.
+- API: `POST /api/plan-multiday` (autenticata, riusa getSettings + listAddresses).
+
+Stato: motore server + API + test fatti (v5.000); UI elenco giornate (v5.001); vincolo orari
+di apertura nel clustering (v5.002); riorganizzazione manuale con drag + frecce e ricalcolo
+ad assegnazione bloccata (v5.003). Da fare:
+- [x] UI: pulsante "Pianifica su piu giorni" + vista risultato con elenco giornate (v5.001).
+- [x] Vincolo orari: niente tappe servite dopo la chiusura, tolleranza 10 min (v5.002).
+- [x] Riorganizzazione manuale (drag tra giornate + frecce su/giu) + "Ricalcola giornate"
+      con manualDays (ordine bloccato per giornata) (v5.003).
+- [ ] "Crea i giri": salvare ogni giornata come giro dentro una cartella unica con nome
+      scelto in questa schermata (campo nome cartella + pulsante).
+- [ ] Salvataggio/ripristino del piano multi-giorno tra sessioni.
+- [ ] Meteo per giornata (ora saltato nell'endpoint multiday per velocita).
+- [ ] Raffinamenti algoritmo: bilanciamento opzionale, 2-opt sui giri giornalieri,
+      gestione tappe con finestre orarie fisse vincolanti su un giorno preciso.
+- [ ] Avviso quando una tappa singola non sta in nessuna giornata (troppo lontana).
+
 ## Fase 0 - Ordine progetto
 
 Stato: in corso.
