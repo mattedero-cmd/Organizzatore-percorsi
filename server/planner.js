@@ -626,17 +626,12 @@ function findNearestRestStop(restStops, fromLat, fromLng, toLat, toLng, maxPerpK
     candidates.push({ s, distKm, openAtBreak });
   }
 
-  if (!candidates.length) return null;
+  if (!candidates.length) return [];
 
   // Prefer open stops; fall back to unknown; skip definitively closed ones
   const open = candidates.filter(c => c.openAtBreak === true).sort((a, b) => a.distKm - b.distKm);
-  if (open.length) return open[0].s;
-
   const unknown = candidates.filter(c => c.openAtBreak === null).sort((a, b) => a.distKm - b.distKm);
-  if (unknown.length) return unknown[0].s;
-
-  // All saved stops in range are closed at this time — return null, let caller try Places API
-  return null;
+  return [...open, ...unknown].map(c => c.s);
 }
 
 // Latest closing minute applicable to a row (user window > afternoon > morning).
@@ -757,22 +752,8 @@ async function insertBreaks(rows, options) {
     // il limite maxDetourKm come deviazione massima accettabile.
     const ON_ROUTE_PERP_KM = 2.0;
     const _maxDetourKmL = maxDetourKmOverride ?? maxDetourKm;
-    let savedSpot = findNearestRestStop(restaurantStops, fromRow?.lat, fromRow?.lng, toRow?.lat, toRow?.lng, _maxDetourKmL, lunchTimeMin, scheduledDate);
-    let savedSpotOnRoute = false;
-    if (savedSpot && fromRow?.lat && fromRow?.lng && toRow?.lat && toRow?.lng) {
-      const { perpKm } = perpDistToSegment(savedSpot.lat, savedSpot.lng, fromRow.lat, fromRow.lng, toRow.lat, toRow.lng);
-      const isOnRoute = perpKm <= ON_ROUTE_PERP_KM;
-      if (!isOnRoute) {
-        const directKm = haversineKm({ lat: fromRow.lat, lng: fromRow.lng }, { lat: savedSpot.lat, lng: savedSpot.lng });
-        if (directKm > _maxDetourKmL) { L(`    savedRist "${savedSpot.customer}" SCARTATO fuori-percorso perp=${perpKm.toFixed(1)}km direct=${directKm.toFixed(1)}km > max=${_maxDetourKmL.toFixed(1)}km`); savedSpot = null; }
-        else L(`    savedRist "${savedSpot.customer}" fuori-percorso perp=${perpKm.toFixed(1)}km direct=${directKm.toFixed(1)}km OK`);
-      } else {
-        savedSpotOnRoute = true;
-        L(`    savedRist "${savedSpot.customer}" SUL_PERCORSO perp=${perpKm.toFixed(1)}km OK`);
-      }
-    } else if (!savedSpot) {
-      L(`    savedRist: nessuno entro maxDetourKm=${maxDetourKm.toFixed(1)}km`);
-    }
+    const savedSpots = findNearestRestStop(restaurantStops, fromRow?.lat, fromRow?.lng, toRow?.lat, toRow?.lng, _maxDetourKmL, lunchTimeMin, scheduledDate);
+    if (!savedSpots.length) L(`    savedRist: nessuno entro maxDetourKm=${maxDetourKm.toFixed(1)}km`);
     const calcTravelMin = (candidate, from, to) => {
       if (!from?.lat || !from?.lng || !candidate.lat || !candidate.lng) return 0;
       if (to?.lat && to?.lng) {
@@ -822,10 +803,24 @@ async function insertBreaks(rows, options) {
     }
 
     let spotResult = null;
-    if (savedSpot) {
+    // Prova i ristoranti salvati in ordine (prima aperti, poi orario sconosciuto)
+    for (const savedSpot of savedSpots) {
+      if (!fromRow?.lat || !fromRow?.lng) break;
+      // Verifica distanza/percorso prima di passare a validateSpot
+      if (toRow?.lat && toRow?.lng) {
+        const { perpKm } = perpDistToSegment(savedSpot.lat, savedSpot.lng, fromRow.lat, fromRow.lng, toRow.lat, toRow.lng);
+        if (perpKm > ON_ROUTE_PERP_KM) {
+          const directKm = haversineKm({ lat: fromRow.lat, lng: fromRow.lng }, { lat: savedSpot.lat, lng: savedSpot.lng });
+          if (directKm > _maxDetourKmL) { L(`    savedRist "${savedSpot.customer}" SCARTATO fuori-percorso perp=${perpKm.toFixed(1)}km direct=${directKm.toFixed(1)}km > max=${_maxDetourKmL.toFixed(1)}km`); continue; }
+          else L(`    savedRist "${savedSpot.customer}" fuori-percorso perp=${perpKm.toFixed(1)}km direct=${directKm.toFixed(1)}km OK`);
+        } else {
+          L(`    savedRist "${savedSpot.customer}" SUL_PERCORSO perp=${perpKm.toFixed(1)}km OK`);
+        }
+      }
       spotResult = validateSpot(savedSpot, "savedRist");
+      if (spotResult) break;
     }
-    // Se il saved restaurant è stato scartato (o non c'è), prova Places API
+    // Se nessun ristorante salvato è valido, prova Places API
     if (!spotResult && searchLat) {
       const apiSpot = await findNearbyRestaurant(searchLat, searchLng, fromRow.lat, fromRow.lng, toRow?.lat, toRow?.lng, Math.round(_maxDetourKmL * 1000 * 1.5), lunchTimeMin, scheduledDate, _maxDetourKmL)
         .then(r => { L(`    PlacesAPI ristorante @ (${searchLat.toFixed(4)},${searchLng.toFixed(4)}): ${r ? `"${r.customer}" (${r.rating}⭐)` : "nessuno"}`); return r; })

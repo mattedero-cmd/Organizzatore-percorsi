@@ -1,3 +1,7 @@
+## v5.043 — 2026-06-23
+- Fix menu fisso in basso: rimosso overflow-x:clip da .shell (causava breaking di position:fixed su iOS Safari), spostato su .app
+- Fix regressione pausa pranzo: findNearestRestStop ora restituisce tutti i candidati validi in ordine di preferenza; makeLunchEntry li prova tutti prima di passare alla Places API
+
 ## v5.042 — 2026-06-23
 - Cache sessione senza scadenza: i dati restano validi per tutta la sessione (invalidati solo al logout o chiusura browser)
 
