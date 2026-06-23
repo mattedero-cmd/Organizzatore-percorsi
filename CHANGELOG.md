@@ -1,3 +1,6 @@
+## v5.038 — 2026-06-22
+- Fix URL 3bMeteo: spazi sostituiti con + invece di - (es. "spini+di+gardolo")
+
 ## v5.037 — 2026-06-22
 - Fix regressione meteo: to3bSlug semplificata (solo lowercase + spazi→trattini) — la versione precedente con strip di accenti/apostrofi rompeva le tappe d'archivio
 

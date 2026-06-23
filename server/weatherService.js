@@ -75,7 +75,7 @@ function nearestIndex(times, scheduledDate, time) {
 }
 
 function to3bSlug(name) {
-  return (name || "").toLowerCase().replace(/\s+/g, "-");
+  return (name || "").toLowerCase().replace(/\s+/g, "+");
 }
 function weatherWarnings(weather) {
   const warnings = [];
