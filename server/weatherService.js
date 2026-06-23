@@ -77,6 +77,16 @@ function nearestIndex(times, scheduledDate, time) {
 function to3bSlug(name) {
   return (name || "").toLowerCase().replace(/\s+/g, "+");
 }
+
+function cityForWeather(row) {
+  // Estrae il comune dall'indirizzo completo (formato italiano: "38121 Trento TN")
+  if (row.address) {
+    const m = row.address.match(/\b\d{5}\s+([A-Za-zÀ-ž][A-Za-zÀ-ž\s\-']*?)(?:\s+[A-Z]{2})?\s*(?:,|$)/);
+    if (m) return m[1].trim();
+  }
+  return row.location || "";
+}
+
 function weatherWarnings(weather) {
   const warnings = [];
   if (Number(weather.precipitationMm || 0) >= 5) warnings.push("pioggia significativa");
@@ -104,7 +114,7 @@ function fromOpenMeteo(payload, row, scheduledDate, mode, source) {
     mode
   };
   weather.warnings = weatherWarnings(weather);
-  const city = to3bSlug(row.location || row.customer || "");
+  const city = to3bSlug(cityForWeather(row));
   weather.sourceUrl = city ? `https://www.3bmeteo.com/meteo/${city}` : "https://www.3bmeteo.com/";
   return weather;
 }
@@ -181,7 +191,7 @@ async function openWeatherForecast(coords, row, scheduledDate) {
     mode: "forecast"
   };
   weather.warnings = weatherWarnings(weather);
-  const owCity = to3bSlug(row.location || row.customer || "");
+  const owCity = to3bSlug(cityForWeather(row));
   weather.sourceUrl = owCity ? `https://www.3bmeteo.com/meteo/${owCity}` : "https://www.3bmeteo.com/";
   return weather;
 }
@@ -216,7 +226,7 @@ async function weatherbitForecast(coords, row, scheduledDate) {
     mode: "forecast"
   };
   weather.warnings = weatherWarnings(weather);
-  const wbCity = to3bSlug(row.location || row.customer || "");
+  const wbCity = to3bSlug(cityForWeather(row));
   weather.sourceUrl = wbCity ? `https://www.3bmeteo.com/meteo/${wbCity}` : "https://www.3bmeteo.com/";
   return weather;
 }

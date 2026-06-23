@@ -1,3 +1,6 @@
+## v5.039 — 2026-06-22
+- Fix 3bMeteo per tappe importate da Google Maps: il comune viene ora estratto dall'indirizzo completo (CAP + città) invece di usare row.location che contiene il nome dell'attività (es. "Nima s.a.s." → estratto "Trento")
+
 ## v5.038 — 2026-06-22
 - Fix URL 3bMeteo: spazi sostituiti con + invece di - (es. "spini+di+gardolo")
 
