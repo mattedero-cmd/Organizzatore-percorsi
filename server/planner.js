@@ -536,6 +536,45 @@ function perpDistToSegment(pLat, pLng, aLat, aLng, bLat, bLng) {
 // Find the nearest saved rest stop along the segment [from → to].
 // maxPerpKm = max perpendicular distance from the route line (handles parallel valleys).
 // Falls back to 15 km haversine if no destination is known.
+// Restituisce l'orario di chiusura (in minuti) del candidato per il giorno scheduledDate,
+// considerando la finestra che copre arrivalMin. Restituisce null se non noto.
+function candidateCloseMin(candidate, scheduledDate, arrivalMin) {
+  const targetDay = (scheduledDate && arrivalMin != null)
+    ? (() => { const [y, m, d] = scheduledDate.split("-").map(Number); return new Date(y, m - 1, d).getDay(); })()
+    : null;
+  if (targetDay === null) return null;
+
+  // Saved spot: usa weeklyHours o openMorning/closeMorning/openAfternoon/closeAfternoon
+  if (candidate.weeklyHours) {
+    const day = candidate.weeklyHours[String(targetDay)] || candidate.weeklyHours[targetDay];
+    if (!day || day.closed) return null;
+    const normalized = normalizeStop(candidate, 0, targetDay);
+    for (const w of getWindows(normalized)) {
+      if (arrivalMin >= w.start && arrivalMin < w.end) return w.end;
+    }
+    return null;
+  }
+  if (candidate.openMorning || candidate.closeAfternoon || candidate.closeMorning) {
+    const normalized = normalizeStop(candidate, 0, null);
+    for (const w of getWindows(normalized)) {
+      if (arrivalMin >= w.start && arrivalMin < w.end) return w.end;
+    }
+    return null;
+  }
+  // Places API spot: usa periods
+  if (Array.isArray(candidate.periods)) {
+    for (const p of candidate.periods) {
+      if (!p.open || !p.close) continue;
+      if (p.open.day !== targetDay) continue;
+      const openMin = parseInt(p.open.time.slice(0, 2)) * 60 + parseInt(p.open.time.slice(2));
+      const closeMin = parseInt(p.close.time.slice(0, 2)) * 60 + parseInt(p.close.time.slice(2));
+      if (arrivalMin >= openMin && arrivalMin < closeMin) return closeMin;
+    }
+    return null;
+  }
+  return null;
+}
+
 function findNearestRestStop(restStops, fromLat, fromLng, toLat, toLng, maxPerpKm = 2.0, breakTimeMin = null, scheduledDate = null, maxDirectKm = null) {
   if (!restStops.length) return null;
   // Senza coordinate correnti non possiamo valutare la distanza → nessuna sosta
@@ -748,11 +787,18 @@ async function insertBreaks(rows, options) {
       return Math.round(haversineKm({ lat: from.lat, lng: from.lng }, { lat: candidate.lat, lng: candidate.lng }) / 50 * 60);
     };
 
-    // Valida candidato: calcola travelMin e verifica effectiveLunchClose
+    // Valida candidato: calcola travelMin, verifica effectiveLunchClose e orari del locale
     const validateSpot = (candidate, label) => {
       const tm = calcTravelMin(candidate, fromRow, toRow);
       if (tm === Infinity) { L(`    ${label} "${candidate.customer}" SCARTATO fuori-percorso > max=${_maxDetourKmL.toFixed(1)}km`); return null; }
-      if (lunchTimeMin + tm > effectiveLunchClose) { L(`    ${label} "${candidate.customer}" SCARTATO arrivo=${formatTime(lunchTimeMin + tm)} > close=${formatTime(effectiveLunchClose)}`); return null; }
+      const arrivalMin = lunchTimeMin + tm;
+      if (arrivalMin > effectiveLunchClose) { L(`    ${label} "${candidate.customer}" SCARTATO arrivo=${formatTime(arrivalMin)} > close=${formatTime(effectiveLunchClose)}`); return null; }
+      // Verifica orari reali del locale: arrivo + durata devono stare dentro la finestra di apertura
+      const spotClose = candidateCloseMin(candidate, scheduledDate, arrivalMin);
+      if (spotClose !== null && arrivalMin + lunchBreakMinutes > spotClose) {
+        L(`    ${label} "${candidate.customer}" SCARTATO: chiude ${formatTime(spotClose)}, fine pranzo ${formatTime(arrivalMin + lunchBreakMinutes)}`);
+        return null;
+      }
       return { spot: candidate, travelMin: tm };
     };
 

@@ -1,3 +1,6 @@
+## v5.041 — 2026-06-23
+- Fix pausa pranzo fuori orario: validateSpot ora controlla che arrivo+durata pranzo stia dentro la finestra di apertura del locale (sia per ristoranti salvati che Places API); findNearbyRestaurant restituisce periods per abilitare il controllo
+
 ## v5.040 — 2026-06-23
 - Fast reload iOS: cache sessionStorage (TTL 5min) — al ritorno da background l'app mostra subito l'UI salvata e aggiorna i dati in background; splash ridotto a 150ms; rimosso ripristino tab pl_nav
 

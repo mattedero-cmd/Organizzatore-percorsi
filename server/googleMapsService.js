@@ -356,18 +356,22 @@ export async function findNearbyRestaurant(lat, lng, segFromLat, segFromLng, seg
 
     let chosen = candidates[0];
     let chosenOpenAtBreak = null;
+    let chosenPeriods = null;
 
     if (checkHours) {
       const withHours = await Promise.all(candidates.map(async p => {
         const oh = await fetchPlaceDetails(p.place_id, key);
         const openAtBreak = isOpenAtTime(oh?.periods ?? null, targetDay, lunchTimeMin);
-        return { p, openAtBreak };
+        return { p, openAtBreak, periods: oh?.periods ?? null };
       }));
       const open = withHours.filter(x => x.openAtBreak === true);
       const unknown = withHours.filter(x => x.openAtBreak === null);
-      if (open.length) { chosen = open[0].p; chosenOpenAtBreak = true; }
-      else if (unknown.length) { chosen = unknown[0].p; chosenOpenAtBreak = null; }
+      if (open.length) { chosen = open[0].p; chosenOpenAtBreak = true; chosenPeriods = open[0].periods; }
+      else if (unknown.length) { chosen = unknown[0].p; chosenOpenAtBreak = null; chosenPeriods = unknown[0].periods; }
       else { placesCache.set(cacheKey, null); return null; }
+    } else {
+      const oh = await fetchPlaceDetails(chosen.place_id, key).catch(() => null);
+      chosenPeriods = oh?.periods ?? null;
     }
 
     const result = {
@@ -380,6 +384,7 @@ export async function findNearbyRestaurant(lat, lng, segFromLat, segFromLng, seg
       reviewCount: chosen.user_ratings_total,
       placeId: chosen.place_id || null,
       openAtBreak: chosenOpenAtBreak,
+      periods: chosenPeriods,
       addressType: "restaurant",
       fromPlaces: true
     };
