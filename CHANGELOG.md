@@ -1,3 +1,6 @@
+## v5.034 — 2026-06-22
+- Cambio sito meteo: icona meteo apre ora 3bMeteo sul comune della tappa (era ilMeteo.it); MeteoTrentino invariato per tappe in Trentino
+
 ## v5.033 — 2026-06-22
 - Meteo cliccabile su tutte le tappe: le soste fuori Trentino/Alto Adige aprono ora ilMeteo.it per la città della tappa (prima mancava sourceUrl nei risultati Open-Meteo/OpenWeather/Weatherbit); Alto Adige punta a ilMeteo.it per comune specifico
 

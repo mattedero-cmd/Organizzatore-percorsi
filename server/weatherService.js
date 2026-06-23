@@ -102,7 +102,7 @@ function fromOpenMeteo(payload, row, scheduledDate, mode, source) {
   };
   weather.warnings = weatherWarnings(weather);
   const city = encodeURIComponent(row.location || row.customer || "");
-  weather.sourceUrl = city ? `https://www.ilmeteo.it/meteo/${city}` : "https://www.ilmeteo.it/";
+  weather.sourceUrl = city ? `https://www.3bmeteo.com/meteo/${city}` : "https://www.3bmeteo.com/";
   return weather;
 }
 
@@ -179,7 +179,7 @@ async function openWeatherForecast(coords, row, scheduledDate) {
   };
   weather.warnings = weatherWarnings(weather);
   const owCity = encodeURIComponent(row.location || row.customer || "");
-  weather.sourceUrl = owCity ? `https://www.ilmeteo.it/meteo/${owCity}` : "https://www.ilmeteo.it/";
+  weather.sourceUrl = owCity ? `https://www.3bmeteo.com/meteo/${owCity}` : "https://www.3bmeteo.com/";
   return weather;
 }
 
@@ -214,7 +214,7 @@ async function weatherbitForecast(coords, row, scheduledDate) {
   };
   weather.warnings = weatherWarnings(weather);
   const wbCity = encodeURIComponent(row.location || row.customer || "");
-  weather.sourceUrl = wbCity ? `https://www.ilmeteo.it/meteo/${wbCity}` : "https://www.ilmeteo.it/";
+  weather.sourceUrl = wbCity ? `https://www.3bmeteo.com/meteo/${wbCity}` : "https://www.3bmeteo.com/";
   return weather;
 }
 
@@ -377,7 +377,7 @@ async function meteoBolzanoForecast(coords, row, scheduledDate) {
     mode: "forecast"
   };
   weather.warnings = mtWarningsFromDescription(desc);
-  weather.sourceUrl = `https://www.ilmeteo.it/meteo/${encodeURIComponent(loc.name)}`;
+  weather.sourceUrl = `https://www.3bmeteo.com/meteo/${encodeURIComponent(loc.name)}`;
   return weather;
 }
 
