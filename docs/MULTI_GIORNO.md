@@ -60,17 +60,21 @@ lontana alla più vicina; i resti vicini si accorpano alla fine.**
 3. `assignZones(groups, home)` → SOLO per la Diagnostica (riga `ZONE`); NON vincola più la costruzione.
 4. `buildDayClusters` = un unico GREEDY far-first con unione PARZIALE (sostituisce per-zona + `fillDays`):
    - Finché restano gruppi LONTANI (`maxHome(group) > NEAR_HOME_RADIUS` 35'):
-     - **Seme** = gruppo col membro più LONTANO da casa (tra tutti i non assegnati).
-     - **Accrescimento "sulla via"** = aggiunge il gruppo con la **minima deviazione-per-tappa**
-       `(driveMin(giorno+g) − driveMin(giorno)) / nTappe(g)` che sia ≤ `MERGE_DETOUR_PER_STOP` (22') E
-       FATTIBILE (motore reale: rientro ≤ maxReturnTime − `MERGE_RETURN_MARGIN` 15', nessuna tappa oltre
-       chiusura). Riempie la giornata; le tappe in eccesso restano LIBERE per le giornate successive
-       (unione PARZIALE — non tutto-o-niente). Così San Candido tira Bressanone/Ortisei/Bolzano finché
-       piena, lasciando liberi Egna/Sen Jan/Merano; Tione tira Riva+Rovereto; Primiero tira Levico/Pergine;
-       le valli opposte hanno deviazione-per-tappa alta → escluse.
-   - **Orfani** (gruppi vicino casa rimasti + eventuali giornate-singolo dissolte): accorpati con
-     `growDays` = far-first, riempi una giornata e sfora solo al bisogno, SENZA limite di direzione
-     (vicino casa è tutto raggiungibile → «accorpare necessariamente»; una tappa davvero sola resta sola).
+     - **Seme** = SEMPRE il gruppo col membro più LONTANO da casa (tra tutti i non assegnati). `F` = quel
+       punto; definisce il corridoio F→casa. (Seminare il più lontano tiene basso il detour-dal-seme delle
+       tappe di corridoio.)
+     - **Accrescimento "sul corridoio + contiguo"** = tra i gruppi che superano DUE gate, aggiunge il più
+       VICINO alle tappe del giorno (gap minimo) → riempie il corridoio in modo CONTIGUO dal seme verso casa:
+       - gate 1 **sul corridoio**: `detour(g) = min su g di [legMin(F,s)+legMin(s,casa)−legMin(F,casa)]`
+         ≤ `ON_CORRIDOR_DETOUR_MAX` (35'). Blocca le altre valli anche se vicine all'hub di casa
+         (Pergine da Ortisei ≈40' → fuori; Bressanone da San Candido ≈21' → dentro).
+       - gate 2 **fattibile**: rientro ≤ maxReturnTime − `MERGE_RETURN_MARGIN` (15'), nessuna tappa oltre chiusura.
+       Riempie la giornata; le tappe in eccesso restano LIBERE per le giornate successive (unione PARZIALE).
+       NON usa la deviazione marginale (v5.030: ingannata dall'hub → snake + salti alle tappe vicino casa).
+   - **Orfani VICINO CASA** (solo gruppi `≤ NEAR_HOME_RADIUS` rimasti): accorpati con `growDays` = far-first,
+     per vicinanza, fattibile, SENZA gate di direzione (vicino casa è tutto raggiungibile → «accorpare
+     necessariamente»). Gli estremi LONTANI rimasti soli restano giornate proprie (NON impastati con altre
+     valli — era la causa di Primiero+Cles / Bressanone+Merano+Tione in v5.030).
    - Ordine finale near→far. La costruzione è far-first; il calendario è dalla più vicina alla più lontana.
    - Fallback offline (`!dayFeasible`): `growDays` su tutto con `estimateDayMinutes`/`dayHoursFeasible`.
 5. Per ogni giornata: ordine **far-first** bloccato (`orderDayFarFirst`) → `planRoute` (orari/soste/pranzo reali).
