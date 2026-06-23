@@ -1,3 +1,6 @@
+## v5.035 — 2026-06-22
+- Fix meteo: anche le tappe Trentino aprono 3bMeteo al clic (MeteoTrentino resta la fonte dati API, ma il link di consultazione è sempre 3bMeteo)
+
 ## v5.034 — 2026-06-22
 - Cambio sito meteo: icona meteo apre ora 3bMeteo sul comune della tappa (era ilMeteo.it); MeteoTrentino invariato per tappe in Trentino
 

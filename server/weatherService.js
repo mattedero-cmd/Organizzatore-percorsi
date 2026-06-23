@@ -415,7 +415,7 @@ async function meteoTrentinoForecast(coords, row, scheduledDate) {
     mode: "forecast"
   };
   weather.warnings = mtWarningsFromDescription(description);
-  weather.sourceUrl = `https://www.meteotrentino.it/previsioni-meteo/localita/${loc.code.toLowerCase().replace(/ /g, '-')}`;
+  weather.sourceUrl = `https://www.3bmeteo.com/meteo/${encodeURIComponent(loc.code.toLowerCase())}`;
   return weather;
 }
 
