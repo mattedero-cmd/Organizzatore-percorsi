@@ -516,12 +516,76 @@ function updateGreeting() {
   h1.textContent = h1Text;
 }
 
+// ── session cache (fast reload) ───────────────────────────────────────────────
+const _SC_KEY = "pl_sc";
+const _SC_TTL = 5 * 60 * 1000; // 5 minuti
+
+function _scSave(user) {
+  try {
+    const data = {
+      ts: Date.now(),
+      user,
+      mapApiConfigured: state.mapApiConfigured,
+      whisperConfigured: state.whisperConfigured,
+      googleMapsKey: state.googleMapsKey,
+      googleClientId: state.googleClientId,
+      settings: state.settings,
+      allAddresses: state.allAddresses,
+      savedRoutes: state.savedRoutes,
+      multiDayPlans: state.multiDayPlans,
+      folders: state.folders,
+    };
+    sessionStorage.setItem(_SC_KEY, JSON.stringify(data));
+  } catch {}
+}
+
+function _scLoad() {
+  try {
+    const raw = sessionStorage.getItem(_SC_KEY);
+    if (!raw) return null;
+    const data = JSON.parse(raw);
+    if (!data || !data.user || Date.now() - data.ts > _SC_TTL) return null;
+    return data;
+  } catch { return null; }
+}
+
+function _scApply(data) {
+  state.user = data.user;
+  state._authVerified = true;
+  state.mapApiConfigured = data.mapApiConfigured || false;
+  state.whisperConfigured = data.whisperConfigured || false;
+  state.googleMapsKey = data.googleMapsKey || "";
+  state.googleClientId = data.googleClientId || "";
+  state.settings = data.settings || state.settings;
+  state.allAddresses = data.allAddresses || [];
+  state.savedRoutes = data.savedRoutes || [];
+  state.multiDayPlans = data.multiDayPlans || [];
+  state.folders = data.folders || [];
+  // Aggiorna route defaults da settings
+  const s = state.settings;
+  state.navigatorPref = s.navigatorPref || localStorage.getItem("navigatorPref") || "google";
+  state.themeMode = s.themeMode || (s.themePref === "light" ? "light" : s.themePref === "dark" ? "dark" : "auto");
+  state.themePalette = s.themePalette || "default";
+  state.route.lunchBreak = s.lunchBreakEnabled !== false;
+  state.route.lunchBreakMinutes = s.lunchBreakMinutes || 45;
+  if (s.defaultStartLabel || s.defaultStartAddress) {
+    state.route.startLabel = s.defaultStartLabel || state.route.startLabel;
+    state.route.startAddress = s.defaultStartAddress || state.route.startAddress;
+    if (state.route.endSameAsStart) {
+      state.route.endLabel = state.route.startLabel;
+      state.route.endAddress = state.route.startAddress;
+    }
+  }
+  applyTheme();
+  document.querySelector("#map-status").textContent = state.mapApiConfigured ? "Google Maps" : "Stima locale";
+}
+
 const _splashShown = Date.now();
 function hideSplash() {
   const el = document.getElementById("splash");
   if (!el) return;
   const elapsed = Date.now() - _splashShown;
-  const delay = Math.max(0, 500 - elapsed);
+  const delay = Math.max(0, 150 - elapsed);
   setTimeout(() => {
     const bar = document.getElementById("splash-bar");
     if (bar) bar.classList.add("complete");
@@ -536,12 +600,6 @@ function hideSplash() {
 function setActiveTab(tab) {
   state.activeTab = tab;
   document.querySelectorAll(".tab").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
-  // Persisti la tab attiva e il giro corrente per il ripristino dopo reload
-  try {
-    const snap = { tab };
-    if (tab === "result" && state.result?.id) snap.resultId = state.result.id;
-    localStorage.setItem("pl_nav", JSON.stringify(snap));
-  } catch {}
   if (tab === "archive") {
     refreshSavedRoutes().then(() => render());
   } else {
@@ -1270,7 +1328,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.039 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.040 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -1282,9 +1340,11 @@ function renderMenuInfo() {
         <li>${state.whisperConfigured ? _svg('<polyline points="20 6 9 17 4 12"/>', 14) + " Comandi vocali attivi (Whisper)" : _svg('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>', 14) + " Comandi vocali non configurati"}</li>
       </ul>
 
-      <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v5.034</p>
+      <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v5.040</p>
       <ul class="info-list">
-        <li>Meteo cliccabile su tutte le tappe: l'icona meteo apre 3bMeteo sul comune della tappa — MeteoTrentino per Trentino, 3bMeteo per Alto Adige e resto d'Italia</li>
+        <li>Caricamento più veloce su iOS: la schermata di avvio sparisce subito e l'app è pronta all'uso; al ritorno da un'altra app non ricomincia da capo</li>
+        <li>Meteo cliccabile su tutte le tappe: l'icona meteo apre 3bMeteo sul comune della tappa</li>
+        <li>I contatti possono essere taggati come sosta caffè o luogo pranzo anche senza essere di tipo "Sosta" o "Ristorante"</li>
       </ul>
 
       <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v5.030 — pianificazione multi-giorno (riepilogo)</p>
@@ -7431,32 +7491,44 @@ function renderAuthScreen(isSetup = false) {
 async function initApp() {
   await loadInitialData();
   await refreshFolders();
-
-  // Ripristina la tab e il giro aperti prima del reload (iOS background)
-  try {
-    const snap = JSON.parse(localStorage.getItem("pl_nav") || "{}");
-    if (snap.tab && snap.tab !== "route") {
-      state.activeTab = snap.tab;
-      document.querySelectorAll(".tab").forEach(b => b.classList.toggle("active", b.dataset.tab === snap.tab));
-    }
-    if (snap.tab === "result" && snap.resultId) {
-      // Prova a trovare il giro nella lista già caricata, altrimenti lo scarica
-      const cached = state.savedRoutes.find(r => String(r.id) === String(snap.resultId));
-      if (cached) {
-        state.result = cached;
-      } else {
-        try {
-          const loaded = await api(`/api/routes/${snap.resultId}`);
-          if (loaded) state.result = loaded;
-        } catch {}
-      }
-    }
-  } catch {}
-
   render();
 }
 
 async function init() {
+  const shareTokenMatch = window.location.pathname.match(/^\/share\/([a-zA-Z0-9_-]+)/);
+
+  // Fast path: usa cache sessionStorage se disponibile e fresca
+  const cached = _scLoad();
+  if (cached) {
+    _scApply(cached);
+    updateGreeting();
+    render();
+    hideSplash();
+    // Verifica sessione + aggiorna dati in background senza bloccare UI
+    fetch(window.location.origin + '/api/auth/me').then(async r => {
+      if (!r.ok) {
+        state.user = null;
+        state._authVerified = false;
+        sessionStorage.removeItem(_SC_KEY);
+        renderAuthScreen(false);
+        return;
+      }
+      const me = await r.json().catch(() => ({}));
+      state.user = me;
+      if (!me.nickname) showNicknameSetup();
+      if (shareTokenMatch) handleShareImport(shareTokenMatch[1]);
+      // Refresh dati in background
+      loadInitialData().then(() => {
+        refreshFolders().then(() => {
+          _scSave(me);
+          render();
+        });
+      }).catch(() => {});
+    }).catch(() => {});
+    return;
+  }
+
+  // Slow path: caricamento completo
   try {
     const meRes = await fetch(window.location.origin + '/api/auth/me');
     const me = await meRes.json().catch(() => ({}));
@@ -7468,11 +7540,10 @@ async function init() {
     state.user = me;
     state._authVerified = true;
     await initApp();
+    _scSave(me);
     updateGreeting();
     hideSplash();
     if (!me.nickname) showNicknameSetup();
-    // Controlla se l'URL contiene un token di condivisione
-    const shareTokenMatch = window.location.pathname.match(/^\/share\/([a-zA-Z0-9_-]+)/);
     if (shareTokenMatch) handleShareImport(shareTokenMatch[1]);
   } catch {
     // Errore di rete (non 401) — riprova una volta dopo 2s prima di mostrare il login
@@ -7484,6 +7555,7 @@ async function init() {
       state.user = retryMe;
       state._authVerified = true;
       await initApp();
+      _scSave(retryMe);
       updateGreeting();
       hideSplash();
       if (!retryMe.nickname) showNicknameSetup();

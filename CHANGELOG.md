@@ -1,3 +1,6 @@
+## v5.040 — 2026-06-23
+- Fast reload iOS: cache sessionStorage (TTL 5min) — al ritorno da background l'app mostra subito l'UI salvata e aggiorna i dati in background; splash ridotto a 150ms; rimosso ripristino tab pl_nav
+
 ## v5.039 — 2026-06-22
 - Fix 3bMeteo per tappe importate da Google Maps: il comune viene ora estratto dall'indirizzo completo (CAP + città) invece di usare row.location che contiene il nome dell'attività (es. "Nima s.a.s." → estratto "Trento")
 
