@@ -1,3 +1,6 @@
+## v5.037 — 2026-06-22
+- Fix regressione meteo: to3bSlug semplificata (solo lowercase + spazi→trattini) — la versione precedente con strip di accenti/apostrofi rompeva le tappe d'archivio
+
 ## v5.036 — 2026-06-22
 - Fix 3bMeteo 404: URL ora generato con slug (lowercase, spazi→trattini, accenti e apostrofi rimossi) invece di encodeURIComponent — risolve le tappe importate da Google Maps con spazi nel nome città
 

@@ -75,15 +75,8 @@ function nearestIndex(times, scheduledDate, time) {
 }
 
 function to3bSlug(name) {
-  return (name || "")
-    .toLowerCase()
-    .normalize("NFD").replace(/[̀-ͯ]/g, "")  // rimuove accenti (à→a, è→e…)
-    .replace(/[''`]/g, "")                              // rimuove apostrofi
-    .replace(/[^a-z0-9\s-]/g, "")                      // rimuove altri caratteri speciali
-    .trim()
-    .replace(/\s+/g, "-");                              // spazi → trattini
+  return (name || "").toLowerCase().replace(/\s+/g, "-");
 }
-
 function weatherWarnings(weather) {
   const warnings = [];
   if (Number(weather.precipitationMm || 0) >= 5) warnings.push("pioggia significativa");
