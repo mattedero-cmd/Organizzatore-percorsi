@@ -74,6 +74,16 @@ function nearestIndex(times, scheduledDate, time) {
   return bestIndex;
 }
 
+function to3bSlug(name) {
+  return (name || "")
+    .toLowerCase()
+    .normalize("NFD").replace(/[̀-ͯ]/g, "")  // rimuove accenti (à→a, è→e…)
+    .replace(/[''`]/g, "")                              // rimuove apostrofi
+    .replace(/[^a-z0-9\s-]/g, "")                      // rimuove altri caratteri speciali
+    .trim()
+    .replace(/\s+/g, "-");                              // spazi → trattini
+}
+
 function weatherWarnings(weather) {
   const warnings = [];
   if (Number(weather.precipitationMm || 0) >= 5) warnings.push("pioggia significativa");
@@ -101,7 +111,7 @@ function fromOpenMeteo(payload, row, scheduledDate, mode, source) {
     mode
   };
   weather.warnings = weatherWarnings(weather);
-  const city = encodeURIComponent(row.location || row.customer || "");
+  const city = to3bSlug(row.location || row.customer || "");
   weather.sourceUrl = city ? `https://www.3bmeteo.com/meteo/${city}` : "https://www.3bmeteo.com/";
   return weather;
 }
@@ -178,7 +188,7 @@ async function openWeatherForecast(coords, row, scheduledDate) {
     mode: "forecast"
   };
   weather.warnings = weatherWarnings(weather);
-  const owCity = encodeURIComponent(row.location || row.customer || "");
+  const owCity = to3bSlug(row.location || row.customer || "");
   weather.sourceUrl = owCity ? `https://www.3bmeteo.com/meteo/${owCity}` : "https://www.3bmeteo.com/";
   return weather;
 }
@@ -213,7 +223,7 @@ async function weatherbitForecast(coords, row, scheduledDate) {
     mode: "forecast"
   };
   weather.warnings = weatherWarnings(weather);
-  const wbCity = encodeURIComponent(row.location || row.customer || "");
+  const wbCity = to3bSlug(row.location || row.customer || "");
   weather.sourceUrl = wbCity ? `https://www.3bmeteo.com/meteo/${wbCity}` : "https://www.3bmeteo.com/";
   return weather;
 }
@@ -377,7 +387,7 @@ async function meteoBolzanoForecast(coords, row, scheduledDate) {
     mode: "forecast"
   };
   weather.warnings = mtWarningsFromDescription(desc);
-  weather.sourceUrl = `https://www.3bmeteo.com/meteo/${encodeURIComponent(loc.name)}`;
+  weather.sourceUrl = `https://www.3bmeteo.com/meteo/${to3bSlug(loc.name)}`;
   return weather;
 }
 
@@ -415,7 +425,7 @@ async function meteoTrentinoForecast(coords, row, scheduledDate) {
     mode: "forecast"
   };
   weather.warnings = mtWarningsFromDescription(description);
-  weather.sourceUrl = `https://www.3bmeteo.com/meteo/${encodeURIComponent(loc.code.toLowerCase())}`;
+  weather.sourceUrl = `https://www.3bmeteo.com/meteo/${to3bSlug(loc.code)}`;
   return weather;
 }
 
