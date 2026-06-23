@@ -518,12 +518,11 @@ function updateGreeting() {
 
 // ── session cache (fast reload) ───────────────────────────────────────────────
 const _SC_KEY = "pl_sc";
-const _SC_TTL = 5 * 60 * 1000; // 5 minuti
+// Nessun TTL: la cache vale per tutta la sessione (invalidata solo al logout o chiusura browser)
 
 function _scSave(user) {
   try {
     const data = {
-      ts: Date.now(),
       user,
       mapApiConfigured: state.mapApiConfigured,
       whisperConfigured: state.whisperConfigured,
@@ -544,7 +543,7 @@ function _scLoad() {
     const raw = sessionStorage.getItem(_SC_KEY);
     if (!raw) return null;
     const data = JSON.parse(raw);
-    if (!data || !data.user || Date.now() - data.ts > _SC_TTL) return null;
+    if (!data || !data.user) return null;
     return data;
   } catch { return null; }
 }
@@ -1328,7 +1327,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.041 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.042 &mdash; giugno 2026</p>
         </div>
       </div>
 

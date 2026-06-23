@@ -1,3 +1,6 @@
+## v5.042 — 2026-06-23
+- Cache sessione senza scadenza: i dati restano validi per tutta la sessione (invalidati solo al logout o chiusura browser)
+
 ## v5.041 — 2026-06-23
 - Fix pausa pranzo fuori orario: validateSpot ora controlla che arrivo+durata pranzo stia dentro la finestra di apertura del locale (sia per ristoranti salvati che Places API); findNearbyRestaurant restituisce periods per abilitare il controllo
 
