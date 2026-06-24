@@ -1,3 +1,6 @@
+## v5.060 — 2026-06-24
+- Segnaposti nearby nel picker con InfoWindow stile Google Maps: tocca un segnaposto e vedi nome, rating (stelle), numero recensioni e stato aperto/chiuso, con pulsante "Scegli questo locale". Aggiornata sezione Novità (multiplo di 10).
+
 ## v5.059 — 2026-06-24
 - Card sosta riempita: tap sulla card avvia la navigazione (Google/Apple Maps secondo preferenza); pulsante matita dedicato per cambiare il locale; cestino per eliminare. Estratta `openBreakPicker` come helper condiviso tra tap-neutro e pulsante modifica.
 

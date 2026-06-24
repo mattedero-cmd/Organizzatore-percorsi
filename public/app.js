@@ -1332,7 +1332,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.059 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.060 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -1342,6 +1342,14 @@ function renderMenuInfo() {
       <ul class="info-list">
         <li>${state.mapApiConfigured ? _svg('<polyline points="20 6 9 17 4 12"/>', 14) + " Google Maps attivo — percorsi reali e ottimizzazione avanzata" : _svg('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>', 14) + " Google Maps non configurato — stime distanze locali"}</li>
         <li>${state.whisperConfigured ? _svg('<polyline points="20 6 9 17 4 12"/>', 14) + " Comandi vocali attivi (Whisper)" : _svg('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>', 14) + " Comandi vocali non configurati"}</li>
+      </ul>
+
+      <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v5.060 — soste e pause pranzo (riepilogo)</p>
+      <ul class="info-list">
+        <li>Tocca una scheda Sosta o Pausa pranzo: la mappa mostra subito bar o ristoranti vicini con segnaposti; toccando un segnaposto vedi nome, stelle, numero recensioni e se è aperto, poi scegli il locale.</li>
+        <li>Il locale scelto aggiorna la scheda esistente (niente tappa duplicata) e diventa una vera tappa del giro: il percorso si ricalcola con tempi e ETA reali dalla tappa precedente.</li>
+        <li>Scheda sosta riempita: tocca per navigare, pulsante matita per cambiare locale, cestino per eliminare.</li>
+        <li>Barra di navigazione inferiore stabile su iPhone (safe area) e picker Maps con barra di ricerca sotto la status bar.</li>
       </ul>
 
       <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v5.053</p>
@@ -5904,6 +5912,22 @@ function openMapPickerForField({ labelEl, addressEl, latEl, lngEl, hoursEl, onCo
     if (breakType) {
       const nearbyType = breakType === "lunch" ? "restaurant" : "bar";
       const svc = new google.maps.places.PlacesService(map);
+      const infoWin = new google.maps.InfoWindow();
+      // Disegna le stelle (piene/mezze/vuote) per un rating 0–5
+      const starsHtml = (rating) => {
+        if (!rating) return "";
+        const full = Math.floor(rating);
+        const half = rating - full >= 0.25 && rating - full < 0.75;
+        const fullExtra = rating - full >= 0.75 ? 1 : 0;
+        const nFull = full + fullExtra;
+        let out = "";
+        for (let i = 0; i < 5; i++) {
+          if (i < nFull) out += `<span style="color:#fbbc04">★</span>`;
+          else if (i === nFull && half) out += `<span style="color:#fbbc04">⯨</span>`;
+          else out += `<span style="color:#dadce0">★</span>`;
+        }
+        return out;
+      };
       if (labelSpan) labelSpan.textContent = `Ricerca ${breakType === "lunch" ? "ristoranti" : "bar"} vicini…`;
       svc.nearbySearch({ location: { lat: startLat, lng: startLng }, radius: 1500, type: nearbyType }, (results, status) => {
         if (status !== google.maps.places.PlacesServiceStatus.OK || !results?.length) {
@@ -5912,16 +5936,43 @@ function openMapPickerForField({ labelEl, addressEl, latEl, lngEl, hoursEl, onCo
         }
         const iconSvg = encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28"><circle cx="14" cy="14" r="11" fill="${breakType === "lunch" ? "#ff8c42" : "#5c7cfa"}" stroke="white" stroke-width="2.5"/></svg>`);
         const nearbyIcon = { url: `data:image/svg+xml;charset=UTF-8,${iconSvg}`, scaledSize: new google.maps.Size(28, 28), anchor: new google.maps.Point(14, 14) };
+        const selectPlace = (placeId) => {
+          svc.getDetails({ placeId, fields: ["name", "formatted_address", "geometry", "opening_hours"] }, (detail, st) => {
+            if (st !== google.maps.places.PlacesServiceStatus.OK || !detail.geometry) return;
+            pickedPlace = detail;
+            pickedAddress = detail.formatted_address || detail.name || "";
+            updateMarker(detail.geometry.location.lat(), detail.geometry.location.lng(), detail.name || detail.formatted_address);
+            infoWin.close();
+            map.setZoom(17);
+          });
+        };
         results.slice(0, 12).forEach(place => {
           if (!place.geometry?.location) return;
           const nm = new google.maps.Marker({ position: place.geometry.location, map, icon: nearbyIcon, title: place.name, zIndex: 1 });
           nm.addListener("click", () => {
-            svc.getDetails({ placeId: place.place_id, fields: ["name", "formatted_address", "geometry", "opening_hours"] }, (detail, st) => {
-              if (st !== google.maps.places.PlacesServiceStatus.OK || !detail.geometry) return;
-              pickedPlace = detail;
-              pickedAddress = detail.formatted_address || detail.name || "";
-              updateMarker(detail.geometry.location.lat(), detail.geometry.location.lng(), detail.name || detail.formatted_address);
-              map.setZoom(17);
+            const rating = place.rating;
+            const reviews = place.user_ratings_total;
+            const openNow = place.opening_hours?.isOpen?.();
+            const ratingRow = rating
+              ? `<div style="display:flex;align-items:center;gap:4px;margin:3px 0;font-size:13px">
+                   <strong style="color:#202124">${rating.toFixed(1)}</strong>
+                   <span style="letter-spacing:-1px">${starsHtml(rating)}</span>
+                   ${reviews != null ? `<span style="color:#70757a">(${reviews})</span>` : ""}
+                 </div>`
+              : `<div style="color:#70757a;font-size:13px;margin:3px 0">Nessuna recensione</div>`;
+            const openRow = openNow === true ? `<span style="color:#188038">Aperto ora</span>`
+              : openNow === false ? `<span style="color:#d93025">Chiuso ora</span>` : "";
+            infoWin.setContent(`
+              <div style="font-family:system-ui,-apple-system,sans-serif;min-width:180px;max-width:240px;padding:2px 4px">
+                <div style="font-weight:600;font-size:15px;color:#202124;line-height:1.25">${escapeHtml(place.name || "")}</div>
+                ${ratingRow}
+                ${place.vicinity ? `<div style="color:#70757a;font-size:12px;margin-bottom:2px">${escapeHtml(place.vicinity)}</div>` : ""}
+                ${openRow ? `<div style="font-size:12px;margin-bottom:6px">${openRow}</div>` : ""}
+                <button id="iw-pick-btn" style="width:100%;margin-top:4px;padding:7px 10px;border:0;border-radius:8px;background:#1a73e8;color:#fff;font-size:13px;font-weight:600;cursor:pointer">Scegli questo locale</button>
+              </div>`);
+            infoWin.open(map, nm);
+            google.maps.event.addListenerOnce(infoWin, "domready", () => {
+              document.getElementById("iw-pick-btn")?.addEventListener("click", () => selectPlace(place.place_id));
             });
           });
         });
