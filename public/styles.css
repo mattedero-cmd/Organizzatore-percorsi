@@ -2754,9 +2754,14 @@ tbody tr:last-child td {
   flex-shrink: 0;
 }
 
+.map-picker-header {
+  padding-top: max(12px, env(safe-area-inset-top, 12px));
+}
+
 .map-picker-footer {
   border-bottom: 0;
   border-top: 1px solid var(--line);
+  padding-bottom: max(12px, env(safe-area-inset-bottom, 12px));
 }
 
 #map-picker-map,

@@ -1,3 +1,6 @@
+## v5.055 — 2026-06-24
+- Fix picker Maps: con viewport-fit=cover il modal a schermo intero si estendeva sotto la status bar. Aggiunto padding-top:env(safe-area-inset-top) all'header del picker e padding-bottom:env(safe-area-inset-bottom) al footer.
+
 ## v5.054 — 2026-06-24
 - Fix barra nav iOS ancora "troppo in basso": aggiunto `viewport-fit=cover` al meta viewport (necessario affinché `env(safe-area-inset-bottom)` restituisca il valore reale su iPhone); sostituito `height:100%` con `height:100dvh` su html/body/.shell per calcolo corretto dell'altezza senza barre browser; padding-bottom .app aggiorna dinamicamente per l'altezza della home bar.
 
