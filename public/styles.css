@@ -2375,16 +2375,22 @@ tbody tr:last-child td {
 .lunch-card .break-icon { background: rgba(251,146,60,0.12); border-color: rgba(251,146,60,0.35); color: #fb923c; }
 .rest-card  .break-icon { background: rgba(139,92,246,0.12); border-color: rgba(139,92,246,0.35); color: #a78bfa; }
 
-.break-card[data-break-maps-url] {
+.break-card[data-break-pick] {
   cursor: pointer;
   transition: opacity 0.15s;
 }
-.break-card[data-break-maps-url]:active { opacity: 0.7; }
+.break-card[data-break-pick]:active { opacity: 0.7; }
 .break-maps-hint {
   flex-shrink: 0;
   opacity: 0.4;
   display: flex;
   align-items: center;
+}
+.break-pick-hint {
+  font-size: 0.78rem;
+  color: var(--accent);
+  opacity: 0.85;
+  margin-top: 1px;
 }
 .break-place-footer {
   display: flex;

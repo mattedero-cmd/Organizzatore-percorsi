@@ -102,6 +102,24 @@ server/
 
 ---
 
+## Soste e pause pranzo — architettura (v5.053)
+
+Le soste (`type:"rest"`) e le pause pranzo (`type:"lunch"`) sono **vere tappe del giro**, con comportamento **uniforme** tra riempimento automatico da archivio e scelta manuale da Maps.
+
+- **Planner** (`insertBreaks` in `planner.js`): decide *dove* va la pausa (in base a guida/lavoro cumulati e finestra pranzo) e prova a riempirla dall'**ARCHIVIO** (`addressType:"rest"` / `"restaurant"`, oppure `isRestStop`/`isLunchStop`). **Solo archivio, niente Places API** (rimossa in v5.048 su richiesta utente).
+  - `findNearestRestStop(restStops, ...)` → **ritorna un ARRAY** ordinato per distanza (aperti prima, poi orario sconosciuto). `tryInsert` prende il primo spot non già usato.
+  - `makeLunchEntry` cerca tra `restaurantStops`, calcola il travel reale del detour (haversine /50km/h, "sul percorso" se perp ≤ 2 km), valida orari con `candidateCloseMin`.
+  - Break riempito da archivio → `placeAssigned:true`, `addressId`, `weeklyHours`, `notes`, travel reale. Nessun match → break **neutro** (`placeAssigned:false`, posizione stimata midpoint).
+- **Client**: le schede break sono cliccabili (`data-break-pick`). Riempite mostrano nome/indirizzo + "Tocca per cambiare"; neutre mostrano "Tocca per scegliere". Tap → `openMapPickerForField` (picker Maps/Places in-app, centrato sulla posizione stimata) → `onUseDirectly` → replan.
+- **Conversione** (`rebuildStopsFromResultRows`):
+  - break scelti **manualmente da Maps** (`userPicked:true`) → diventano **tappe fisse persistenti** (il planner non può ri-derivarli, non sono in archivio). Pranzo manuale → `lunchBreak:false` nel replan (no doppia pausa).
+  - break da **archivio o neutri** → scartati e **ri-derivati** dal planner ad ogni replan (restano gestiti automaticamente e modificabili).
+- Le righe break materializzate (`planner.js`, blocco `result.push`) propagano `weeklyHours`, `notes`, `addressId`, `placeAssigned`.
+
+> Non reintrodurre la ricerca automatica via Places API: l'utente vuole esplicitamente solo l'archivio in automatico, e la scelta manuale via picker.
+
+---
+
 ## Sessioni utente
 
 - Token casuale 32 byte hex, salvato in cookie `HttpOnly; SameSite=Lax`

@@ -1,3 +1,9 @@
+## v5.053 — 2026-06-24
+- Soste/pranzo come vere tappe, comportamento uniforme archivio + Maps:
+  - Planner: ripristinato riempimento break da ARCHIVIO (solo archivio, no Places API). `findNearestRestStop`/`candidateCloseMin` ripristinate; `makeLunchEntry`/`tryInsert` cercano ristoranti/soste salvati vicino al punto della pausa e calcolano travel reale del detour. Break riempiti: `placeAssigned:true`, `addressId`, `weeklyHours`, `notes`, type sosta/pranzo. Fallback neutro se nessun match in archivio. Fix: `findNearestRestStop` ritorna un array → `tryInsert` prende il primo spot non duplicato.
+  - Client: schede break cliccabili. Riempite da archivio mostrano nome/indirizzo ("Tocca per cambiare"); neutre mostrano "Tocca per scegliere". Tap → picker Maps/Places in-app (`openMapPickerForField`, centrato sulla posizione stimata) → scelta → replan.
+  - `rebuildStopsFromResultRows`: i break scelti manualmente da Maps (`userPicked`) diventano tappe fisse persistenti (routing reale); i break da archivio/neutri sono ri-derivati dal planner ad ogni replan. Pranzo manuale → `lunchBreak:false` per evitare doppia pausa.
+
 ## v5.052 — 2026-06-24
 - Fix definitivo barra nav inferiore iOS: html/body bloccati al viewport (height:100%; overflow:hidden) nella media query mobile; .shell diventa flex-column; .app scorre internamente (overflow-y:auto; flex:1; min-height:0). La tab bar position:fixed non viene più influenzata dallo scroll del body.
 

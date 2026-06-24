@@ -1332,7 +1332,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.052 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.053 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -1342,6 +1342,11 @@ function renderMenuInfo() {
       <ul class="info-list">
         <li>${state.mapApiConfigured ? _svg('<polyline points="20 6 9 17 4 12"/>', 14) + " Google Maps attivo — percorsi reali e ottimizzazione avanzata" : _svg('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>', 14) + " Google Maps non configurato — stime distanze locali"}</li>
         <li>${state.whisperConfigured ? _svg('<polyline points="20 6 9 17 4 12"/>', 14) + " Comandi vocali attivi (Whisper)" : _svg('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>', 14) + " Comandi vocali non configurati"}</li>
+      </ul>
+
+      <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v5.053</p>
+      <ul class="info-list">
+        <li>Soste e pause pranzo come vere tappe: l'app le riempie dall'archivio (sosta/ristorante salvati) con dati e tempi di percorrenza reali, incluse nel calcolo del giro. Tocca una scheda sosta/pranzo per scegliere o cambiare il locale su Maps; la scelta diventa una tappa fissa e il percorso si ricalcola. Comportamento uniforme tra soste automatiche e scelte manualmente.</li>
       </ul>
 
       <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v5.052</p>
@@ -3457,61 +3462,39 @@ function renderResult() {
 
       <div class="result-list">
         ${(()=>{let rvStopIdx=-1;return rows.map(row => {
-          // Build Maps URL for a break row (rest or restaurant lunch)
-          const breakMapsUrl = (r, type) => {
-            const query = type === "lunch" ? "ristorante trattoria" : "bar";
-            const q = encodeURIComponent(query);
-            if (state.navigatorPref === "apple") {
-              return r.lat && r.lng
-                ? `http://maps.apple.com/?ll=${r.lat},${r.lng}&q=${q}&spn=0.01,0.01`
-                : `http://maps.apple.com/?q=${q}`;
-            }
-            if (state.navigatorPref === "waze") {
-              return `https://waze.com/ul?q=${q}&navigate=yes`;
-            }
-            return r.lat && r.lng
-              ? `https://www.google.com/maps/search/${q}/@${r.lat},${r.lng},14z`
-              : `https://www.google.com/maps/search/?api=1&query=${q}`;
-          };
-
-          // Special row: lunch break
+          // Special row: lunch break (neutral card — tap to pick a real place nearby)
           if (row.type === "lunch") {
             const lunchIdx = result.rows.indexOf(row);
-            const lunchSearchUrl = breakMapsUrl(row, "lunch");
-            return `<article class="card result-card break-card lunch-card" data-break-maps-url="${lunchSearchUrl}" role="link" tabindex="0">
+            const filled = row.placeAssigned && row.customer;
+            return `<article class="card result-card break-card lunch-card" data-break-pick="lunch" data-break-idx="${lunchIdx}" role="button" tabindex="0">
   <div class="break-row">
     <span class="break-icon lunch-icon">${I.fork(18)}</span>
     <div style="flex:1;min-width:0">
-      <p class="stop-title" style="margin:0">${row.customer ? escapeHtml(row.customer) : "Pausa pranzo"}</p>
+      <p class="stop-title" style="margin:0">${filled ? escapeHtml(row.customer) : "Pausa pranzo"}</p>
       <div class="stop-meta">${escapeHtml(row.serviceStartTime)} – ${escapeHtml(row.serviceEndTime)} · ${minutesLabel(row.durationMinutes)}</div>
-      ${row.address ? `<div class="stop-meta" style="font-size:0.8rem">${escapeHtml(row.address)}</div>` : ""}
+      ${filled && row.address ? `<div class="stop-meta" style="font-size:0.8rem">${escapeHtml(row.address)}</div>` : ""}
+      <div class="stop-meta break-pick-hint">${filled ? "Tocca per cambiare ristorante" : "Tocca per scegliere un ristorante vicino"}</div>
     </div>
-    <span class="break-maps-hint">${I.mapPin(14)}</span>
+    <span class="break-maps-hint">${I.search(14)}</span>
   </div>
-  ${row.customer ? `<div class="break-place-footer">
-    ${row.address ? `<span class="stop-meta" style="flex:1">${escapeHtml(row.address)}</span>` : ""}
-    <button class="btn ghost break-save-archive-btn" data-break-idx="${lunchIdx}" title="Salva in archivio">${I.bookmark(13)} Archivio</button>
-  </div>` : ""}
-</article>`;}
+</article>`;
+          }
 
-          // Special row: rest stop
+          // Special row: rest stop — neutra (tap per scegliere) o riempita da archivio (tap per cambiare)
           if (row.type === "rest") {
             const restIdx = result.rows.indexOf(row);
-            const restSearchUrl = breakMapsUrl(row, "rest");
-            return `<article class="card result-card break-card rest-card" data-break-maps-url="${restSearchUrl}" role="link" tabindex="0">
+            const filled = row.placeAssigned && row.customer;
+            return `<article class="card result-card break-card rest-card" data-break-pick="rest" data-break-idx="${restIdx}" role="button" tabindex="0">
   <div class="break-row">
     <span class="break-icon coffee-icon">${I.coffee(18)}</span>
     <div style="flex:1;min-width:0">
-      <p class="stop-title" style="margin:0">${row.customer ? escapeHtml(row.customer) : "Sosta"}</p>
+      <p class="stop-title" style="margin:0">${filled ? escapeHtml(row.customer) : "Sosta"}</p>
       <div class="stop-meta">${escapeHtml(row.serviceStartTime)} – ${escapeHtml(row.serviceEndTime)} · ${minutesLabel(row.durationMinutes)}</div>
-      ${row.address ? `<div class="stop-meta" style="font-size:0.8rem">${escapeHtml(row.address)}</div>` : ""}
+      ${filled && row.address ? `<div class="stop-meta" style="font-size:0.8rem">${escapeHtml(row.address)}</div>` : ""}
+      <div class="stop-meta break-pick-hint">${filled ? "Tocca per cambiare sosta" : "Tocca per scegliere un bar vicino"}</div>
     </div>
-    <span class="break-maps-hint">${I.mapPin(14)}</span>
+    <span class="break-maps-hint">${I.search(14)}</span>
   </div>
-  ${row.customer ? `<div class="break-place-footer">
-    ${row.address ? `<span class="stop-meta" style="flex:1">${escapeHtml(row.address)}</span>` : ""}
-    <button class="btn ghost break-save-archive-btn" data-break-idx="${restIdx}" title="Salva in archivio">${I.bookmark(13)} Archivio</button>
-  </div>` : ""}
 </article>`;
           }
 
@@ -4105,17 +4088,42 @@ function _readResultEditForm() {
 // La durata personalizzata viene sempre preservata; il default (45) si applica solo
 // quando una tappa non ha alcuna durata valida.
 function rebuildStopsFromResultRows(rows) {
-  const list = (rows || []).filter(r => !r.type);
+  const all = rows || [];
   const stopIdOf = (x, idx) => x.stopUid || x.uid || (x.addressId != null ? `addr-${x.addressId}` : `idx-${idx}`);
   const seen = new Set();
   const out = [];
-  list.forEach((r, idx) => {
+  // Iterate ALL rows in order so assigned-break stops keep their position in the route.
+  all.forEach((r, idx) => {
+    // Break rows (sosta/pranzo):
+    // - scelti MANUALMENTE da Maps (userPicked) → diventano una vera tappa fissa, persistente
+    //   (il planner non può ri-derivarli perché non sono in archivio).
+    // - riempiti dall'ARCHIVIO o neutri → scartati qui: il planner li ri-deriva ad ogni replan
+    //   (restano gestiti automaticamente e modificabili).
+    if (r.type === "lunch" || r.type === "rest") {
+      if (!r.userPicked || r.lat == null || !r.address) return;
+      out.push({
+        uid: crypto.randomUUID(),
+        addressId: r.addressId ?? null,   // collega all'archivio se la sosta ne proviene
+        customer: r.customer || (r.type === "lunch" ? "Pausa pranzo" : "Sosta"),
+        location: r.location || "",
+        fullAddress: r.address,
+        notes: r.notes || "",
+        durationMinutes: Number(r.durationMinutes) || (r.type === "lunch" ? 45 : 15),
+        lat: r.lat, lng: r.lng,
+        weeklyHours: r.weeklyHours || null,
+        ignoreHours: true,        // bar/ristorante: visitato all'orario della pausa, fuori dalle finestre
+        breakOrigin: r.type,      // marcatore: questa tappa nasce da una sosta/pranzo
+        recognized: true
+      });
+      return;
+    }
+    if (r.type) return; // altri tipi speciali
     if (r.stopPart === "afternoon") return; // riunito con la sua parte "morning"
     const key = stopIdOf(r, idx);
     if (seen.has(key)) return;
     seen.add(key);
     // Somma tutte le parti (mattina + pomeriggio) della stessa tappa
-    const sameStop = list.filter((x, j) => stopIdOf(x, j) === key);
+    const sameStop = all.filter((x, j) => !x.type && stopIdOf(x, j) === key);
     const totalDuration = sameStop.reduce((t, x) => t + Number(x.durationMinutes || 0), 0);
     const addr = r.addressId != null ? (state.allAddresses || []).find(a => String(a.id) === String(r.addressId)) : null;
     out.push({
@@ -4155,9 +4163,13 @@ async function replanFromResult() {
   if (!stops.length) { showToast("Nessuna tappa nel giro"); return; }
 
   const timingMode = v.timingMode || result.timingMode || "first_open_minus";
-  const lunchBreak = state.resultLunchEnabled !== null
-    ? state.resultLunchEnabled
-    : (v.lunchBreak === "on" || v.lunchBreak === true);
+  // Se l'utente ha scelto un ristorante per la pausa pranzo, quella tappa È il pranzo:
+  // disabilita l'auto-inserimento per non avere una doppia pausa.
+  const lunchAssigned = stops.some(s => s.breakOrigin === "lunch");
+  const lunchBreak = lunchAssigned ? false
+    : state.resultLunchEnabled !== null
+      ? state.resultLunchEnabled
+      : (v.lunchBreak === "on" || v.lunchBreak === true);
   const routePayload = {
     name: result.name || "Percorso giornaliero",
     id: result.id,
@@ -6681,29 +6693,31 @@ function bindEvents() {
       return;
     }
 
-    if (e.target.closest(".break-card[data-break-maps-url]") && !e.target.closest(".break-save-archive-btn")) {
-      const card = e.target.closest(".break-card[data-break-maps-url]");
-      window.open(card.dataset.breakMapsUrl, "_blank", "noopener");
-      return;
-    }
-
-    if (e.target.closest(".break-save-archive-btn")) {
-      const btn = e.target.closest(".break-save-archive-btn");
-      const rowIdx = Number(btn.dataset.breakIdx);
+    // Break card (sosta/pranzo): tap → pick a real place nearby → import as stop → replan
+    if (e.target.closest(".break-card[data-break-pick]")) {
+      const card = e.target.closest(".break-card[data-break-pick]");
+      const rowIdx = Number(card.dataset.breakIdx);
+      const breakType = card.dataset.breakPick;
       const row = state.result?.rows?.[rowIdx];
-      if (!row || !row.customer) return;
-      await api("/api/addresses", {
-        method: "POST",
-        body: JSON.stringify({
-          customer: row.customer,
-          location: row.location || "",
-          fullAddress: row.address || "",
-          addressType: row.type === "lunch" ? "restaurant" : "rest",
-          lat: row.lat, lng: row.lng
-        })
-      }).catch(() => null);
-      await refreshAllData();
-      showToast(`"${row.customer}" salvato in archivio`);
+      if (!row) return;
+      // Seed the picker on the break's estimated position so nearby POIs are visible
+      openMapPickerForField({
+        latEl: { value: row.lat != null ? String(row.lat) : "" },
+        lngEl: { value: row.lng != null ? String(row.lng) : "" },
+        onUseDirectly: (label, address, lat, lng, weeklyHours) => {
+          row.customer = label || (address ? address.split(",")[0] : "") || (breakType === "lunch" ? "Pausa pranzo" : "Sosta");
+          row.location = "";
+          row.address = address || "";
+          row.lat = lat ?? null;
+          row.lng = lng ?? null;
+          row.weeklyHours = weeklyHours || null;
+          row.placeAssigned = true;
+          row.userPicked = true;   // scelta manuale da Maps → diventa tappa fissa persistente
+          row.addressId = null;    // non proviene dall'archivio
+          // Diventa una tappa reale: il replan ricalcola tempi, durata, deviazioni e ETA
+          replanFromResult();
+        }
+      });
       return;
     }
 
