@@ -2567,13 +2567,13 @@ tbody tr:last-child td {
    * gli elementi position:fixed durante lo scroll — eliminando il bounce
    * della tab bar che si ripresentava ad ogni modifica del layout.
    */
-  html { height: 100%; }
-  body { height: 100%; overflow: hidden; }
+  html { height: 100dvh; }
+  body { height: 100dvh; overflow: hidden; }
 
   .shell {
     display: flex;
     flex-direction: column;
-    height: 100%;
+    height: 100dvh;
     overflow: hidden;
   }
 
@@ -2589,7 +2589,7 @@ tbody tr:last-child td {
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
     padding: 12px;
-    padding-bottom: 86px;
+    padding-bottom: calc(86px + env(safe-area-inset-bottom, 0px));
     padding-top: 82px;
   }
 

@@ -1,3 +1,6 @@
+## v5.054 — 2026-06-24
+- Fix barra nav iOS ancora "troppo in basso": aggiunto `viewport-fit=cover` al meta viewport (necessario affinché `env(safe-area-inset-bottom)` restituisca il valore reale su iPhone); sostituito `height:100%` con `height:100dvh` su html/body/.shell per calcolo corretto dell'altezza senza barre browser; padding-bottom .app aggiorna dinamicamente per l'altezza della home bar.
+
 ## v5.053 — 2026-06-24
 - Soste/pranzo come vere tappe, comportamento uniforme archivio + Maps:
   - Planner: ripristinato riempimento break da ARCHIVIO (solo archivio, no Places API). `findNearestRestStop`/`candidateCloseMin` ripristinate; `makeLunchEntry`/`tryInsert` cercano ristoranti/soste salvati vicino al punto della pausa e calcolano travel reale del detour. Break riempiti: `placeAssigned:true`, `addressId`, `weeklyHours`, `notes`, type sosta/pranzo. Fallback neutro se nessun match in archivio. Fix: `findNearestRestStop` ritorna un array → `tryInsert` prende il primo spot non duplicato.
