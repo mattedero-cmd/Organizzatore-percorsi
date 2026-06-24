@@ -1,3 +1,6 @@
+## v5.046 — 2026-06-24
+- "Scegli su Maps" e "Completa con Maps" ora funzionano nel pannello Percorso (non solo archivio): importano nome, indirizzo, coordinate e orari; applyPlaceToRoutePanel aggiorna state.route direttamente; completeFormWithMaps rileva il pannello attivo e applica i dati al contesto corretto
+
 ## v5.045 — 2026-06-23
 - Multi-giorno: REVERT alla costruzione PER-ZONA della v5.029 (per-zona + unione a giornate INTERE). Il greedy globale "gate sul corridoio" (v5.030–v5.044) sul giro reale faceva SNAKE (Ortisei→…→Pergine/Levico) e FRAMMENTAVA (4 giornate da una tappa: Cles/Tione/Merano/Primiero), perché nessun criterio a sole distanze punto-punto separa le valli: una tappa vicino casa ha detour basso da qualsiasi seme lontano (Pergine da Ortisei 25'<35 → snake) e due estremi-partner lontani hanno detour alto (Tione→Riva 44'>35 → spezzati), con Mezzolombardo/Valsugana rubati ad altre zone. Le ZONE (`assignZones`) sono invece corrette → si torna a costruire SEMPRE per-zona, con unione di riempimento a giornate INTERE adiacenti compatibili (`fillDays`). Documentata la lezione in `docs/MULTI_GIORNO.md` (greedy globale tra gli approcci falliti). `server/multiDayPlanner.js` ripristinato da b64b1a1 (v5.029). NB versione rinumerata sopra v5.044 della sessione parallela.
 

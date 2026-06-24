@@ -260,6 +260,7 @@ const state = {
     customCustomer: "", customLocation: "", customAddress: "",
     customDuration: 45,
     customWeeklyHours: null,
+    customLat: null, customLng: null,
     stops: [],
     transcript: "",
     lunchBreak: true,
@@ -1327,7 +1328,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.045 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.046 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -1337,6 +1338,11 @@ function renderMenuInfo() {
       <ul class="info-list">
         <li>${state.mapApiConfigured ? _svg('<polyline points="20 6 9 17 4 12"/>', 14) + " Google Maps attivo — percorsi reali e ottimizzazione avanzata" : _svg('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>', 14) + " Google Maps non configurato — stime distanze locali"}</li>
         <li>${state.whisperConfigured ? _svg('<polyline points="20 6 9 17 4 12"/>', 14) + " Comandi vocali attivi (Whisper)" : _svg('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>', 14) + " Comandi vocali non configurati"}</li>
+      </ul>
+
+      <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v5.046</p>
+      <ul class="info-list">
+        <li>"Scegli su Maps" e "Completa con Maps" ora funzionano anche nel pannello Percorso (non solo nell'archivio): importano nome, indirizzo, coordinate e orari di apertura direttamente nello stato della tappa in fase di inserimento.</li>
       </ul>
 
       <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v5.045</p>
@@ -2347,8 +2353,8 @@ function renderRoute() {
                 Indirizzo<input name="customAddress" id="rp-custom-address" value="${escapeHtml(r.customAddress)}" />
               </label>
               ${state.googleMapsKey ? `<div class="field full" style="padding-top:0"><button type="button" class="btn" id="rp-custom-map-btn">${I.map(14)} Scegli sulla mappa</button></div>` : ""}
-              <input type="hidden" id="rp-custom-lat" value="" />
-              <input type="hidden" id="rp-custom-lng" value="" />
+              <input type="hidden" id="rp-custom-lat" value="${r.customLat || ''}" />
+              <input type="hidden" id="rp-custom-lng" value="${r.customLng || ''}" />
               <label class="field">Durata<input name="customDuration" type="time" step="300" value="${minsToHHMM(r.customDuration || 45)}" data-duration-hhmm /></label>
             </div>
             ${renderWeeklyHoursSection(r.customWeeklyHours || null)}
@@ -5284,7 +5290,17 @@ async function completeFormWithMaps() {
   if (document.getElementById("cwm-modal")) return;
 
   const form = document.getElementById("address-form");
-  if (!form) return;
+  const isRoutePanel = !form && !!document.getElementById("rp-custom-customer");
+  if (!form && !isRoutePanel) return;
+
+  const fValCtx = name => {
+    if (form) return (form.querySelector(`[name="${name}"]`)?.value || "").trim();
+    if (name === "activity" || name === "customer") return state.route.customCustomer || "";
+    if (name === "fullAddress" || name === "location") return state.route.customAddress || "";
+    if (name === "lat") return String(state.route.customLat || "");
+    if (name === "lng") return String(state.route.customLng || "");
+    return "";
+  };
 
   // Show modal immediately with loading state
   const modal = document.createElement("div");
@@ -5320,7 +5336,7 @@ async function completeFormWithMaps() {
   const placeAddrEl = modal.querySelector("#cwm-place-addr");
   const useBtn = modal.querySelector("#cwm-use-btn");
 
-  const fVal = name => (form.querySelector(`[name="${name}"]`)?.value || "").trim();
+  const fVal = name => fValCtx(name);
 
   // Load Maps script
   const ready = await loadGoogleMapsScript();
@@ -5453,8 +5469,23 @@ async function completeFormWithMaps() {
       );
     }
     closeModal();
-    applyPlaceToForm(selectedPlace);
+    if (isRoutePanel) { applyPlaceToRoutePanel(selectedPlace); } else { applyPlaceToForm(selectedPlace); }
   };
+}
+
+function applyPlaceToRoutePanel(place) {
+  const weeklyHours = googlePeriodsToWeeklyHours(place.opening_hours?.periods);
+  if (!state.route.customCustomer && place.name) state.route.customCustomer = place.name;
+  if (!state.route.customAddress && place.formatted_address) state.route.customAddress = place.formatted_address;
+  if (place.geometry?.location) {
+    state.route.customLat = place.geometry.location.lat();
+    state.route.customLng = place.geometry.location.lng();
+  }
+  if (weeklyHours) state.route.customWeeklyHours = weeklyHours;
+  render();
+  if (!place.opening_hours?.periods) { showToast("Dati compilati — nessun orario disponibile su Maps"); return; }
+  const filled = weeklyHours ? Object.keys(weeklyHours).length : 0;
+  showToast(filled ? `Compilati orari per ${filled} giorni` : "Dati compilati — orari già presenti");
 }
 
 function applyPlaceToForm(place) {
@@ -6851,8 +6882,9 @@ function bindEvents() {
     if (e.target.closest("#add-temp-stop")) {
       updateRouteFromForm();
       if (!state.route.customAddress) { showToast("Indirizzo obbligatorio"); return; }
-      const lat = parseFloat(document.getElementById("rp-custom-lat")?.value) || null;
-      const lng = parseFloat(document.getElementById("rp-custom-lng")?.value) || null;
+      const lat = parseFloat(document.getElementById("rp-custom-lat")?.value) || state.route.customLat || null;
+      const lng = parseFloat(document.getElementById("rp-custom-lng")?.value) || state.route.customLng || null;
+      const wh = readWeeklyHours() || state.route.customWeeklyHours || null;
       state.route.stops.push({
         uid: crypto.randomUUID(),
         addressId: null,
@@ -6860,14 +6892,14 @@ function bindEvents() {
         location: state.route.customLocation || "",
         fullAddress: state.route.customAddress,
         durationMinutes: state.route.customDuration || 45,
-        weeklyHours: null,
+        weeklyHours: wh,
         lat, lng,
         recognized: true,
         temporary: true
       });
-      Object.assign(state.route, { customCustomer: "", customLocation: "", customAddress: "", customDuration: 45, customWeeklyHours: null });
+      Object.assign(state.route, { customCustomer: "", customLocation: "", customAddress: "", customDuration: 45, customWeeklyHours: null, customLat: null, customLng: null });
       render();
-      showToast("Tappa aggiunta (non salvata in archivio)");
+      showToast(wh ? "Tappa aggiunta con orari (non salvata in archivio)" : "Tappa aggiunta (non salvata in archivio)");
       return;
     }
 
@@ -6891,7 +6923,7 @@ function bindEvents() {
         fullAddress: state.route.customAddress, durationMinutes: state.route.customDuration,
         weeklyHours: wh, recognized: true
       });
-      Object.assign(state.route, { customCustomer: "", customLocation: "", customAddress: "", customDuration: 45, customWeeklyHours: null });
+      Object.assign(state.route, { customCustomer: "", customLocation: "", customAddress: "", customDuration: 45, customWeeklyHours: null, customLat: null, customLng: null });
       render();
       showToast("Tappa aggiunta e salvata");
       return;
@@ -7097,6 +7129,14 @@ function bindEvents() {
         addressEl: document.querySelector("#rp-custom-address"),
         latEl: document.querySelector("#rp-custom-lat"),
         lngEl: document.querySelector("#rp-custom-lng"),
+        onConfirm: (label, address, lat, lng, weeklyHours) => {
+          if (label) state.route.customCustomer = label;
+          if (address) state.route.customAddress = address;
+          if (lat) state.route.customLat = lat;
+          if (lng) state.route.customLng = lng;
+          if (weeklyHours) state.route.customWeeklyHours = weeklyHours;
+          render();
+        },
         onUseDirectly: (label, address, lat, lng, weeklyHours) => {
           state.route.stops.push({
             uid: crypto.randomUUID(),
@@ -7110,7 +7150,7 @@ function bindEvents() {
             recognized: true,
             temporary: true
           });
-          Object.assign(state.route, { customCustomer: "", customLocation: "", customAddress: "", customDuration: 45 });
+          Object.assign(state.route, { customCustomer: "", customLocation: "", customAddress: "", customDuration: 45, customWeeklyHours: null, customLat: null, customLng: null });
           render();
           showToast(weeklyHours ? "Tappa aggiunta con orari da Maps (non salvata in archivio)" : "Tappa aggiunta (non salvata in archivio)");
         }
