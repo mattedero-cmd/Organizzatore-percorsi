@@ -683,7 +683,7 @@ function renderMenu() {
     });
     ov.querySelector("#bsheet-close")?.addEventListener("click", () => closeMenu());
     ov.querySelector("#logout-btn")?.addEventListener("click", async () => {
-      await fetch("/api/auth/logout", { method: "POST" });
+      await fetch(window.location.origin + "/api/auth/logout", { method: "POST" });
       state.user = null;
       closeMenu();
       renderAuthScreen(false);
@@ -756,7 +756,7 @@ function renderMenu() {
         return;
       }
       try {
-        const res = await fetch("/api/auth/change-password", {
+        const res = await fetch(window.location.origin + "/api/auth/change-password", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ currentPassword: v.currentPassword, newPassword: v.newPassword })
@@ -775,7 +775,7 @@ function renderMenu() {
       const v = readForm(e.target);
       const errEl = document.getElementById("nickname-error");
       try {
-        const res = await fetch("/api/auth/profile", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ nickname: v.nickname }) });
+        const res = await fetch(window.location.origin + "/api/auth/profile", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ nickname: v.nickname }) });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) { if (errEl) errEl.textContent = data.error || "Errore"; return; }
         state.user = { ...state.user, nickname: data.nickname };
@@ -1332,7 +1332,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.048 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.049 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -1342,6 +1342,11 @@ function renderMenuInfo() {
       <ul class="info-list">
         <li>${state.mapApiConfigured ? _svg('<polyline points="20 6 9 17 4 12"/>', 14) + " Google Maps attivo — percorsi reali e ottimizzazione avanzata" : _svg('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>', 14) + " Google Maps non configurato — stime distanze locali"}</li>
         <li>${state.whisperConfigured ? _svg('<polyline points="20 6 9 17 4 12"/>', 14) + " Comandi vocali attivi (Whisper)" : _svg('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>', 14) + " Comandi vocali non configurati"}</li>
+      </ul>
+
+      <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v5.049</p>
+      <ul class="info-list">
+        <li>Fix URL assoluti in tutti i fetch (logout, cambio password, profilo, condivisione, trascrizione vocale) — risolve l'errore "The string did not match the expected pattern" su Safari PWA.</li>
       </ul>
 
       <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v5.048</p>
@@ -4050,7 +4055,7 @@ async function shareRoute(routeId) {
 async function handleShareImport(token) {
   try {
     showSpinner("Caricamento giro…");
-    const route = await fetch(`/api/share/${token}`).then(r => r.ok ? r.json() : Promise.reject(new Error("Link scaduto o non valido")));
+    const route = await fetch(window.location.origin + `/api/share/${token}`).then(r => r.ok ? r.json() : Promise.reject(new Error("Link scaduto o non valido")));
     hideSpinner();
 
     // Mostra preview e chiede conferma
@@ -4591,7 +4596,7 @@ function updateVoiceButton() {
 
 async function transcribeBlob(blob, mimeType) {
   showToast("Trascrizione in corso…");
-  const res = await fetch("/api/voice/transcribe", {
+  const res = await fetch(window.location.origin + "/api/voice/transcribe", {
     method: "POST",
     headers: { "Content-Type": mimeType },
     body: blob

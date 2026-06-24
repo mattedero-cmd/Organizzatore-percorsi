@@ -1,3 +1,6 @@
+## v5.049 — 2026-06-24
+- Fix Safari PWA: URL assoluti (window.location.origin) su tutti i fetch rimasti con URL relativo — logout, cambio password, profilo, condivisione giro, trascrizione vocale. Risolve "The string did not match the expected pattern".
+
 ## v5.048 — 2026-06-24
 - Card sosta e pranzo neutrali: nessun luogo pre-selezionato, l'utente apre Maps o cerca nell'app
 
