@@ -1,3 +1,6 @@
+## v5.058 — 2026-06-24
+- Card sosta/pranzo — gestione completa: apertura picker con ricerca nearby automatica (bar o ristoranti colorati sulla mappa in base al tipo di sosta); card riempita mostra pulsanti Naviga (link Google Maps) + Elimina; breakType passato al picker per ricerca contestualizzata.
+
 ## v5.057 — 2026-06-24
 - Fix auto-sosta duplicata dopo import da Maps: il post-work break della tappa precedente ora controlla se la riga successiva ha `breakOrigin` e in quel caso salta l'auto-inserimento, evitando la card "Sosta" vuota affiancata alla card con il locale scelto.
 

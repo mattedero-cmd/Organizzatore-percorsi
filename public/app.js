@@ -1332,7 +1332,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.057 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.058 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -3475,7 +3475,10 @@ function renderResult() {
       ${filled && row.address ? `<div class="stop-meta" style="font-size:0.8rem">${escapeHtml(row.address)}</div>` : ""}
       <div class="stop-meta break-pick-hint">${filled ? "Tocca per cambiare ristorante" : "Tocca per scegliere un ristorante vicino"}</div>
     </div>
-    <span class="break-maps-hint">${I.search(14)}</span>
+    ${filled ? `<div class="break-card-actions" style="display:flex;flex-direction:column;gap:4px;flex-shrink:0;align-items:center">
+      <a class="btn icon-btn" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((row.lat && row.lng) ? row.lat+','+row.lng : row.address||row.customer||'')}" target="_blank" rel="noopener" data-break-nav title="Naviga">${I.navigate(14)}</a>
+      <button class="btn icon-btn danger" data-break-delete="${lunchIdx}" title="Elimina sosta">${I.trash(14)}</button>
+    </div>` : `<span class="break-maps-hint">${I.search(14)}</span>`}
   </div>
 </article>`;
           }
@@ -3493,7 +3496,10 @@ function renderResult() {
       ${filled && row.address ? `<div class="stop-meta" style="font-size:0.8rem">${escapeHtml(row.address)}</div>` : ""}
       <div class="stop-meta break-pick-hint">${filled ? "Tocca per cambiare sosta" : "Tocca per scegliere un bar vicino"}</div>
     </div>
-    <span class="break-maps-hint">${I.search(14)}</span>
+    ${filled ? `<div class="break-card-actions" style="display:flex;flex-direction:column;gap:4px;flex-shrink:0;align-items:center">
+      <a class="btn icon-btn" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((row.lat && row.lng) ? row.lat+','+row.lng : row.address||row.customer||'')}" target="_blank" rel="noopener" data-break-nav title="Naviga">${I.navigate(14)}</a>
+      <button class="btn icon-btn danger" data-break-delete="${restIdx}" title="Elimina sosta">${I.trash(14)}</button>
+    </div>` : `<span class="break-maps-hint">${I.search(14)}</span>`}
   </div>
 </article>`;
           }
@@ -5831,19 +5837,21 @@ function parseHoursField(id) {
   catch { return null; }
 }
 
-function openMapPickerForField({ labelEl, addressEl, latEl, lngEl, hoursEl, onConfirm, onUseDirectly }) {
+function openMapPickerForField({ labelEl, addressEl, latEl, lngEl, hoursEl, onConfirm, onUseDirectly, breakType }) {
   const startLat = Number(latEl?.value) || 46.07;
   const startLng = Number(lngEl?.value) || 11.12;
   let pickedLat = startLat, pickedLng = startLng;
   let pickedPlace = null;
   let pickedAddress = ""; // real resolved address (empty = only coordinates)
 
+  const searchPlaceholder = breakType === "lunch" ? "Cerca ristorante, trattoria…" : breakType === "rest" ? "Cerca bar, caffè…" : "Cerca un posto, indirizzo…";
+
   const modal = document.createElement("div");
   modal.className = "map-picker-modal";
   modal.innerHTML = `
     <div class="map-picker-inner">
       <div class="map-picker-header">
-        <input id="map-picker-field-search" class="map-picker-search" type="text" placeholder="Cerca un posto, indirizzo…" autocomplete="off" />
+        <input id="map-picker-field-search" class="map-picker-search" type="text" placeholder="${searchPlaceholder}" autocomplete="off" />
         <button class="btn" id="map-picker-field-cancel">✕</button>
       </div>
       <div id="map-picker-field-map"></div>
@@ -5866,6 +5874,35 @@ function openMapPickerForField({ labelEl, addressEl, latEl, lngEl, hoursEl, onCo
     });
     const marker = new google.maps.Marker({ position: { lat: startLat, lng: startLng }, map, draggable: true });
     const labelSpan = document.getElementById("map-picker-field-label");
+
+    // ── Ricerca automatica nearby ──────────────────────────────────────────────
+    if (breakType) {
+      const nearbyType = breakType === "lunch" ? "restaurant" : "bar";
+      const svc = new google.maps.places.PlacesService(map);
+      if (labelSpan) labelSpan.textContent = `Ricerca ${breakType === "lunch" ? "ristoranti" : "bar"} vicini…`;
+      svc.nearbySearch({ location: { lat: startLat, lng: startLng }, radius: 1500, type: nearbyType }, (results, status) => {
+        if (status !== google.maps.places.PlacesServiceStatus.OK || !results?.length) {
+          if (labelSpan) labelSpan.textContent = "Tocca la mappa o cerca un luogo";
+          return;
+        }
+        const iconSvg = encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28"><circle cx="14" cy="14" r="11" fill="${breakType === "lunch" ? "#ff8c42" : "#5c7cfa"}" stroke="white" stroke-width="2.5"/></svg>`);
+        const nearbyIcon = { url: `data:image/svg+xml;charset=UTF-8,${iconSvg}`, scaledSize: new google.maps.Size(28, 28), anchor: new google.maps.Point(14, 14) };
+        results.slice(0, 12).forEach(place => {
+          if (!place.geometry?.location) return;
+          const nm = new google.maps.Marker({ position: place.geometry.location, map, icon: nearbyIcon, title: place.name, zIndex: 1 });
+          nm.addListener("click", () => {
+            svc.getDetails({ placeId: place.place_id, fields: ["name", "formatted_address", "geometry", "opening_hours"] }, (detail, st) => {
+              if (st !== google.maps.places.PlacesServiceStatus.OK || !detail.geometry) return;
+              pickedPlace = detail;
+              pickedAddress = detail.formatted_address || detail.name || "";
+              updateMarker(detail.geometry.location.lat(), detail.geometry.location.lng(), detail.name || detail.formatted_address);
+              map.setZoom(17);
+            });
+          });
+        });
+        if (labelSpan) labelSpan.textContent = `${results.length > 12 ? 12 : results.length} ${breakType === "lunch" ? "ristoranti" : "bar"} trovati — tocca un segnaposto`;
+      });
+    }
 
     const updateMarker = (lat, lng, label) => {
       pickedLat = lat; pickedLng = lng;
@@ -6693,6 +6730,22 @@ function bindEvents() {
       return;
     }
 
+    // Naviga verso la sosta scelta (link <a>, non serve handler — ma blocca propagazione verso break-card)
+    if (e.target.closest("[data-break-nav]")) {
+      // let the <a> navigate, just stop it from triggering the break-card picker
+      return;
+    }
+
+    // Elimina la sosta scelta e ricalcola
+    if (e.target.closest("[data-break-delete]")) {
+      const idx = Number(e.target.closest("[data-break-delete]").dataset.breakDelete);
+      if (!isNaN(idx) && state.result?.rows) {
+        state.result.rows.splice(idx, 1);
+        replanFromResult();
+      }
+      return;
+    }
+
     // Break card (sosta/pranzo): tap → pick a real place nearby → import as stop → replan
     if (e.target.closest(".break-card[data-break-pick]")) {
       const card = e.target.closest(".break-card[data-break-pick]");
@@ -6704,6 +6757,7 @@ function bindEvents() {
       openMapPickerForField({
         latEl: { value: row.lat != null ? String(row.lat) : "" },
         lngEl: { value: row.lng != null ? String(row.lng) : "" },
+        breakType,
         onUseDirectly: (label, address, lat, lng, weeklyHours) => {
           row.customer = label || (address ? address.split(",")[0] : "") || (breakType === "lunch" ? "Pausa pranzo" : "Sosta");
           row.location = "";
