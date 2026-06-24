@@ -1,3 +1,6 @@
+## v5.047 — 2026-06-24
+- Fix duplicazione giro: replanWithOrder e toggle-lunch-break passavano /api/plan senza id → creavano nuovo giro. Fix: aggiunto id+name al payload. Aggiunto state.route.id per tracciare il giro in modifica nel tab Percorso; planCurrentRoute usa state.route.id invece di state.result?.id
+
 ## v5.046 — 2026-06-24
 - "Scegli su Maps" e "Completa con Maps" ora funzionano nel pannello Percorso (non solo archivio): importano nome, indirizzo, coordinate e orari; applyPlaceToRoutePanel aggiorna state.route direttamente; completeFormWithMaps rileva il pannello attivo e applica i dati al contesto corretto
 
