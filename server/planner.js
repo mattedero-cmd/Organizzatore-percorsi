@@ -1,4 +1,4 @@
-import { routeBetween, findNearbyRestStop, findNearbyRestaurant, resolvePlace, isOpenAtTime } from "./googleMapsService.js";
+import { routeBetween, resolvePlace } from "./googleMapsService.js";
 
 function haversineKm(a, b) {
   const R = 6371, toRad = d => d * Math.PI / 180;
@@ -536,103 +536,6 @@ function perpDistToSegment(pLat, pLng, aLat, aLng, bLat, bLng) {
 // Find the nearest saved rest stop along the segment [from → to].
 // maxPerpKm = max perpendicular distance from the route line (handles parallel valleys).
 // Falls back to 15 km haversine if no destination is known.
-// Restituisce l'orario di chiusura (in minuti) del candidato per il giorno scheduledDate,
-// considerando la finestra che copre arrivalMin. Restituisce null se non noto.
-function candidateCloseMin(candidate, scheduledDate, arrivalMin) {
-  const targetDay = (scheduledDate && arrivalMin != null)
-    ? (() => { const [y, m, d] = scheduledDate.split("-").map(Number); return new Date(y, m - 1, d).getDay(); })()
-    : null;
-  if (targetDay === null) return null;
-
-  // Saved spot: usa weeklyHours o openMorning/closeMorning/openAfternoon/closeAfternoon
-  if (candidate.weeklyHours) {
-    const day = candidate.weeklyHours[String(targetDay)] || candidate.weeklyHours[targetDay];
-    if (!day || day.closed) return null;
-    const normalized = normalizeStop(candidate, 0, targetDay);
-    for (const w of getWindows(normalized)) {
-      if (arrivalMin >= w.start && arrivalMin < w.end) return w.end;
-    }
-    return null;
-  }
-  if (candidate.openMorning || candidate.closeAfternoon || candidate.closeMorning) {
-    const normalized = normalizeStop(candidate, 0, null);
-    for (const w of getWindows(normalized)) {
-      if (arrivalMin >= w.start && arrivalMin < w.end) return w.end;
-    }
-    return null;
-  }
-  // Places API spot: usa periods
-  if (Array.isArray(candidate.periods)) {
-    for (const p of candidate.periods) {
-      if (!p.open || !p.close) continue;
-      if (p.open.day !== targetDay) continue;
-      const openMin = parseInt(p.open.time.slice(0, 2)) * 60 + parseInt(p.open.time.slice(2));
-      const closeMin = parseInt(p.close.time.slice(0, 2)) * 60 + parseInt(p.close.time.slice(2));
-      if (arrivalMin >= openMin && arrivalMin < closeMin) return closeMin;
-    }
-    return null;
-  }
-  return null;
-}
-
-function findNearestRestStop(restStops, fromLat, fromLng, toLat, toLng, maxPerpKm = 2.0, breakTimeMin = null, scheduledDate = null, maxDirectKm = null) {
-  if (!restStops.length) return null;
-  // Senza coordinate correnti non possiamo valutare la distanza → nessuna sosta
-  if (!fromLat || !fromLng) return null;
-  const hasSegment = toLat != null && toLng != null;
-
-  const targetDay = (breakTimeMin != null && scheduledDate)
-    ? (() => { const [y, m, d] = scheduledDate.split("-").map(Number); return new Date(y, m - 1, d).getDay(); })()
-    : null;
-
-  const candidates = [];
-  for (const s of restStops) {
-    if (!s.lat || !s.lng) continue;
-    // Verifica distanza diretta dalla posizione corrente (evita soste troppo avanti nel percorso)
-    if (maxDirectKm != null) {
-      const directKm = haversineKm({ lat: fromLat, lng: fromLng }, { lat: s.lat, lng: s.lng });
-      if (directKm > maxDirectKm) continue;
-    }
-    let distKm;
-    if (hasSegment) {
-      const { perpKm, t } = perpDistToSegment(s.lat, s.lng, fromLat, fromLng, toLat, toLng);
-      if (perpKm > maxPerpKm || t < -0.05) continue;
-      distKm = perpKm;
-    } else {
-      const R = 6371, toRad = d => d * Math.PI / 180;
-      const dlat = toRad(s.lat - fromLat), dlng = toRad(s.lng - fromLng);
-      distKm = R * 2 * Math.asin(Math.sqrt(Math.sin(dlat/2)**2 + Math.cos(toRad(fromLat)) * Math.cos(toRad(s.lat)) * Math.sin(dlng/2)**2));
-      if (distKm > 15) continue;
-    }
-
-    // Check opening hours if we have time info and the stop has weeklyHours or periods
-    let openAtBreak = null;
-    if (targetDay !== null && breakTimeMin != null) {
-      if (s.weeklyHours) {
-        // Use weeklyHours stored in DB (same format as normalizeStop)
-        const day = s.weeklyHours[String(targetDay)] || s.weeklyHours[targetDay];
-        if (day?.closed) openAtBreak = false;
-        else if (day) {
-          const normalized = normalizeStop(s, 0, targetDay);
-          const windows = getWindows(normalized);
-          openAtBreak = windows.length === 0 ? null
-            : windows.some(w => breakTimeMin >= w.start && breakTimeMin < w.end) ? true : false;
-        }
-      } else if (s.periods) {
-        openAtBreak = isOpenAtTime(s.periods, targetDay, breakTimeMin);
-      }
-    }
-
-    candidates.push({ s, distKm, openAtBreak });
-  }
-
-  if (!candidates.length) return [];
-
-  // Prefer open stops; fall back to unknown; skip definitively closed ones
-  const open = candidates.filter(c => c.openAtBreak === true).sort((a, b) => a.distKm - b.distKm);
-  const unknown = candidates.filter(c => c.openAtBreak === null).sort((a, b) => a.distKm - b.distKm);
-  return [...open, ...unknown].map(c => c.s);
-}
 
 // Latest closing minute applicable to a row (user window > afternoon > morning).
 function rowCloseMinutes(row) {
@@ -704,7 +607,6 @@ function shiftRowTimes(row, minutes) {
 async function insertBreaks(rows, options) {
   const {
     lunchBreakEnabled, lunchBreakMinutes = 45,
-    restStops = [], restaurantStops = [],
     dayStart = 7 * 60,
     finalArrival = 20 * 60,
     scheduledDate = null,
@@ -740,111 +642,22 @@ async function insertBreaks(rows, options) {
   L(`=== PIANO SOSTE ${scheduledDate || "?"} ===`);
   L(`dayStart=${formatTime(dayStart)} finalArrival=${formatTime(finalArrival)}`);
   L(`REST_MIN=${REST_MIN}min REST_MAX=${REST_MAX}min maxDetourKm=${maxDetourKm.toFixed(1)}km`);
-  L(`soste salvate=${restStops.length} ristoranti salvati=${restaurantStops.length}`);
+  L(`sosta/pranzo: schede neutrali — il posto viene scelto dall'utente su Maps`);
 
   // ── 1. Pausa pranzo ──────────────────────────────────────────────────────────
-  const makeLunchEntry = async (beforeIndex, refRow, nextRow, lunchTimeMin, effectiveLunchClose = LUNCH_CLOSE, maxDetourKmOverride = null) => {
+  // Inserisce una scheda pranzo neutra (senza ristorante specifico).
+  // La posizione stimata serve per aprire Maps in ricerca vicino al punto del percorso.
+  const makeLunchEntry = (beforeIndex, refRow, nextRow, lunchTimeMin) => {
     const fromRow = refRow || (beforeIndex > 0 ? rows[beforeIndex - 1] : null);
-    const toRow = nextRow || (beforeIndex < rows.length ? rows[beforeIndex] : null);
-    L(`  pranzo: da "${fromRow?.customer||"?"}" (${fromRow?.lat?.toFixed(4)||"?"}) verso "${toRow?.customer||"?"}" ore=${formatTime(lunchTimeMin)}`);
-    // Ristoranti salvati: se è "sul percorso" (perpendicolare ≤ 2 km) non c'è limite di distanza
-    // lungo la strada (posso guidare 30 min se è sulla mia via). Se è "fuori percorso" si applica
-    // il limite maxDetourKm come deviazione massima accettabile.
-    const ON_ROUTE_PERP_KM = 2.0;
-    const _maxDetourKmL = maxDetourKmOverride ?? maxDetourKm;
-    const savedSpots = findNearestRestStop(restaurantStops, fromRow?.lat, fromRow?.lng, toRow?.lat, toRow?.lng, _maxDetourKmL, lunchTimeMin, scheduledDate);
-    if (!savedSpots.length) L(`    savedRist: nessuno entro maxDetourKm=${maxDetourKm.toFixed(1)}km`);
-    const calcTravelMin = (candidate, from, to) => {
-      if (!from?.lat || !from?.lng || !candidate.lat || !candidate.lng) return 0;
-      if (to?.lat && to?.lng) {
-        const { perpKm, t } = perpDistToSegment(candidate.lat, candidate.lng, from.lat, from.lng, to.lat, to.lng);
-        if (perpKm <= ON_ROUTE_PERP_KM) {
-          const segKm = haversineKm({ lat: from.lat, lng: from.lng }, { lat: to.lat, lng: to.lng });
-          return Math.round(t * segKm / 50 * 60);
-        }
-        const rawKm = haversineKm({ lat: from.lat, lng: from.lng }, { lat: candidate.lat, lng: candidate.lng });
-        return rawKm > _maxDetourKmL ? Infinity : Math.round(rawKm / 50 * 60);
-      }
-      return Math.round(haversineKm({ lat: from.lat, lng: from.lng }, { lat: candidate.lat, lng: candidate.lng }) / 50 * 60);
-    };
-
-    // Valida candidato: calcola travelMin, verifica effectiveLunchClose e orari del locale
-    const validateSpot = (candidate, label) => {
-      const tm = calcTravelMin(candidate, fromRow, toRow);
-      if (tm === Infinity) { L(`    ${label} "${candidate.customer}" SCARTATO fuori-percorso > max=${_maxDetourKmL.toFixed(1)}km`); return null; }
-      const arrivalMin = lunchTimeMin + tm;
-      if (arrivalMin > effectiveLunchClose) { L(`    ${label} "${candidate.customer}" SCARTATO arrivo=${formatTime(arrivalMin)} > close=${formatTime(effectiveLunchClose)}`); return null; }
-      // Verifica orari reali del locale: arrivo + durata devono stare dentro la finestra di apertura
-      const spotClose = candidateCloseMin(candidate, scheduledDate, arrivalMin);
-      if (spotClose !== null && arrivalMin + lunchBreakMinutes > spotClose) {
-        L(`    ${label} "${candidate.customer}" SCARTATO: chiude ${formatTime(spotClose)}, fine pranzo ${formatTime(arrivalMin + lunchBreakMinutes)}`);
-        return null;
-      }
-      return { spot: candidate, travelMin: tm };
-    };
-
-    // Centro di ricerca per Places API:
-    // - Tappa spezzata (fromRow e toRow stessa posizione, distanza < 1km): cerca vicino alla tappa
-    // - Guida (stop distanti): cerca lungo il percorso ~20 min avanti, dove il cliente sarà presto
-    const segDistKm = (fromRow?.lat && toRow?.lat)
-      ? haversineKm({ lat: fromRow.lat, lng: fromRow.lng }, { lat: toRow.lat, lng: toRow.lng })
-      : 0;
-    const isDriving = segDistKm > 1.0;
-    let searchLat = fromRow?.lat, searchLng = fromRow?.lng;
-    if (isDriving && toRow?.lat && toRow?.lng) {
-      // Cerca nel punto dove il cliente si trova quando dovrebbe fermarsi a pranzo:
-      // l'ultimo momento utile è LUNCH_CLOSE − lunchBreakMinutes minuti dopo la partenza.
-      const estDriveMin = Math.max(1, segDistKm / 50 * 60);
-      const availMin = Math.max(0, LUNCH_CLOSE - lunchBreakMinutes - lunchTimeMin);
-      const frac = Math.min(0.7, availMin / estDriveMin);
-      searchLat = fromRow.lat + (toRow.lat - fromRow.lat) * frac;
-      searchLng = fromRow.lng + (toRow.lng - fromRow.lng) * frac;
-      L(`  pranzo (guida): centro ricerca a frac=${frac.toFixed(2)} avail=${availMin}min (${searchLat.toFixed(4)},${searchLng.toFixed(4)})`);
-    }
-
-    let spotResult = null;
-    // Prova i ristoranti salvati in ordine (prima aperti, poi orario sconosciuto)
-    for (const savedSpot of savedSpots) {
-      if (!fromRow?.lat || !fromRow?.lng) break;
-      // Verifica distanza/percorso prima di passare a validateSpot
-      if (toRow?.lat && toRow?.lng) {
-        const { perpKm } = perpDistToSegment(savedSpot.lat, savedSpot.lng, fromRow.lat, fromRow.lng, toRow.lat, toRow.lng);
-        if (perpKm > ON_ROUTE_PERP_KM) {
-          const directKm = haversineKm({ lat: fromRow.lat, lng: fromRow.lng }, { lat: savedSpot.lat, lng: savedSpot.lng });
-          if (directKm > _maxDetourKmL) { L(`    savedRist "${savedSpot.customer}" SCARTATO fuori-percorso perp=${perpKm.toFixed(1)}km direct=${directKm.toFixed(1)}km > max=${_maxDetourKmL.toFixed(1)}km`); continue; }
-          else L(`    savedRist "${savedSpot.customer}" fuori-percorso perp=${perpKm.toFixed(1)}km direct=${directKm.toFixed(1)}km OK`);
-        } else {
-          L(`    savedRist "${savedSpot.customer}" SUL_PERCORSO perp=${perpKm.toFixed(1)}km OK`);
-        }
-      }
-      spotResult = validateSpot(savedSpot, "savedRist");
-      if (spotResult) break;
-    }
-    // Se nessun ristorante salvato è valido, prova Places API
-    if (!spotResult && searchLat) {
-      const apiSpot = await findNearbyRestaurant(searchLat, searchLng, fromRow.lat, fromRow.lng, toRow?.lat, toRow?.lng, Math.round(_maxDetourKmL * 1000 * 1.5), lunchTimeMin, scheduledDate, _maxDetourKmL)
-        .then(r => { L(`    PlacesAPI ristorante @ (${searchLat.toFixed(4)},${searchLng.toFixed(4)}): ${r ? `"${r.customer}" (${r.rating}⭐)` : "nessuno"}`); return r; })
-        .catch(e => { L(`    PlacesAPI ristorante: errore ${e.message}`); return null; });
-      if (apiSpot) spotResult = validateSpot(apiSpot, "PlacesAPI");
-    }
-    // Retry ristorante con raggio esteso se non trovato o scartato
-    if (!spotResult && searchLat) {
-      L(`    → retry ristorante raggio esteso...`);
-      const extRadius = Math.round(_maxDetourKmL * 1000 * 3);
-      const apiSpot2 = await findNearbyRestaurant(searchLat, searchLng, fromRow.lat, fromRow.lng, toRow?.lat, toRow?.lng, extRadius, lunchTimeMin, scheduledDate, _maxDetourKmL * 1.5)
-        .then(r => { L(`    PlacesAPI ristorante (ext) @ (${searchLat.toFixed(4)},${searchLng.toFixed(4)}): ${r ? `"${r.customer}" (${r.rating}⭐)` : "nessuno"}`); return r; })
-        .catch(e => { L(`    PlacesAPI ristorante (ext): errore ${e.message}`); return null; });
-      if (apiSpot2) spotResult = validateSpot(apiSpot2, "PlacesAPI(ext)");
-    }
-    if (!spotResult) { L(`    → Pausa pranzo senza luogo`); return { beforeIndex, type: "lunch", duration: lunchBreakMinutes, customer: "Pausa pranzo" }; }
-    const { spot, travelMin } = spotResult;
-    const travelKm = travelMin / 60 * 50;
-    L(`    → PRANZO "${spot.customer}" travelMin=${travelMin} arrivo=${formatTime(lunchTimeMin + travelMin)}`);
-    L(`    → PRANZO "${spot.customer}" travelMin=${travelMin} arrivo=${formatTime(lunchTimeMin + travelMin)}`);
-    const label = spot.rating ? `${spot.customer} · ⭐ ${spot.rating} (${spot.reviewCount})` : spot.customer;
-    return { beforeIndex, type: "lunch", duration: lunchBreakMinutes, travelMinutes: travelMin, travelKm,
-      customer: label, location: spot.location || "", address: spot.fullAddress || "",
-      lat: spot.lat ?? null, lng: spot.lng ?? null, placeId: spot.placeId ?? null };
+    const toRow   = nextRow  || (beforeIndex < rows.length ? rows[beforeIndex] : null);
+    let lat = null, lng = null;
+    if (fromRow?.lat && toRow?.lat) {
+      lat = (fromRow.lat + toRow.lat) / 2;
+      lng = (fromRow.lng + toRow.lng) / 2;
+    } else if (fromRow?.lat) { lat = fromRow.lat; lng = fromRow.lng; }
+    else if (toRow?.lat)     { lat = toRow.lat;   lng = toRow.lng;   }
+    L(`  pranzo: posizione stimata (${lat?.toFixed(4)||"?"},${lng?.toFixed(4)||"?"}) ore=${formatTime(lunchTimeMin)}`);
+    return { beforeIndex, type: "lunch", duration: lunchBreakMinutes, customer: "", travelMinutes: 0, travelKm: 0, lat, lng };
   };
 
   if (lunchBreakEnabled) {
@@ -1076,94 +889,22 @@ async function insertBreaks(rows, options) {
 
   // driveOffset: minutes into the drive-to-row-i where the break is inserted.
   // 0 = at the start of the leg (end of previous stop); >0 = mid-leg.
-  const tryInsert = async (beforeIndex, refLat, refLng, fromLat, fromLng, toLat, toLng, driveOffset = 0, breakTimeMin = null) => {
+  // Inserisce una sosta neutra (senza bar specifico). L'utente sceglierà il posto su Maps.
+  const tryInsert = (beforeIndex, refLat, refLng, fromLat, fromLng, toLat, toLng, driveOffset = 0, breakTimeMin = null) => {
     if (insertions.some(ins => ins.beforeIndex === beforeIndex && Math.abs((ins.driveOffset||0) - driveOffset) < 5)) {
       cumulative = 0;
       return true;
     }
-    // Don't insert rest stops before a fixed-window afternoon continuation
     if (rows[beforeIndex]?.fixedWindow && rows[beforeIndex]?.stopPart === "afternoon") {
       return false;
     }
-    // Soste salvate: perpendicolare ≤ 2 km = "sul percorso" ma devono essere entro maxDetourKm dalla posizione corrente.
-    let spot = findNearestRestStop(restStops, refLat, refLng, toLat, toLng, 2.0, breakTimeMin, scheduledDate, maxDetourKm);
-    // Non riusare uno spot già inserito in questa sessione (evita doppioni della stessa sosta)
-    if (spot && insertions.some(ins => ins.lat === spot.lat && ins.lng === spot.lng)) {
-      L(`    savedSosta "${spot.customer}" già usata — skip`);
-      spot = null;
-    }
-    if (spot) { L(`    savedSosta "${spot.customer}" trovata`); }
-    if (!spot && refLat && refLng) {
-      spot = await findNearbyRestStop(refLat, refLng, fromLat, fromLng, toLat, toLng, 15000, breakTimeMin, scheduledDate, maxDetourKm, (msg) => L(`    ${msg}`))
-        .then(r => { L(`    PlacesAPI sosta @ (${refLat?.toFixed(4)},${refLng?.toFixed(4)}): ${r ? `"${r.customer}"` : "nessuna"}`); return r; })
-        .catch(e => { L(`    PlacesAPI sosta: errore ${e.message}`); return null; });
-      // Retry con raggio esteso se non trovato nulla
-      if (!spot) {
-        L(`    → retry raggio esteso 25km...`);
-        spot = await findNearbyRestStop(refLat, refLng, fromLat, fromLng, toLat, toLng, 25000, breakTimeMin, scheduledDate, maxDetourKm * 1.5, (msg) => L(`    [ext] ${msg}`))
-          .then(r => { L(`    PlacesAPI sosta (ext) @ (${refLat?.toFixed(4)},${refLng?.toFixed(4)}): ${r ? `"${r.customer}"` : "nessuna"}`); return r; })
-          .catch(e => { L(`    PlacesAPI sosta (ext): errore ${e.message}`); return null; });
-      }
-    }
-    if (!spot) { L(`    → nessun posto trovato, cumulative preservato`); return false; }
-    const label = spot.rating
-      ? `${spot.customer} · ⭐ ${spot.rating} (${spot.reviewCount})`
-      : spot.customer;
-    const warnings = spot.openAtBreak === false
-      ? [{ msg: `La sosta "${spot.customer}" potrebbe essere chiusa all'orario previsto`, level: "warn" }]
-      : [];
-    // Per soste sul percorso (perp ≤ 2km) il detour è ~0; travelKm conta solo fuori-percorso
-    let travelKm = 0;
-    if (refLat != null && refLng != null && spot.lat != null && spot.lng != null) {
-      const rawKm = haversineKm({ lat: refLat, lng: refLng }, { lat: spot.lat, lng: spot.lng });
-      if (toLat != null && toLng != null) {
-        const { perpKm } = perpDistToSegment(spot.lat, spot.lng, refLat, refLng, toLat, toLng);
-        if (perpKm > 2.0) {
-          if (rawKm > maxDetourKm) {
-            L(`    "${spot.customer}" SCARTATO fuori-percorso perp=${perpKm.toFixed(1)}km travel=${rawKm.toFixed(1)}km > max=${maxDetourKm.toFixed(1)}km`);
-            // Tenta retry con raggio esteso prima di arrendersi
-            if (refLat && refLng) {
-              L(`    → retry raggio esteso 25km dopo scarto per distanza...`);
-              spot = await findNearbyRestStop(refLat, refLng, fromLat, fromLng, toLat, toLng, 25000, breakTimeMin, scheduledDate, maxDetourKm * 1.5, (msg) => L(`    [ext] ${msg}`))
-                .then(r => { L(`    PlacesAPI sosta (ext): ${r ? `"${r.customer}"` : "nessuna"}`); return r; })
-                .catch(() => null);
-            }
-            if (!spot) { L(`    → nessun posto trovato, cumulative preservato`); return false; }
-            // Ricalcola travelKm per il nuovo spot
-            const r2 = haversineKm({ lat: refLat, lng: refLng }, { lat: spot.lat, lng: spot.lng });
-            const { perpKm: p2 } = perpDistToSegment(spot.lat, spot.lng, refLat, refLng, toLat, toLng);
-            travelKm = p2 > 2.0 ? r2 : 0;
-            // Rivalida la deviazione: il retry esteso (raggio 25km) può restituire uno spot
-            // oltre il limite accettabile perché la misura interna di findNearbyRestStop
-            // differisce dalla distanza diretta. Una sosta breve non giustifica una grande
-            // deviazione (peggio se in direzione opposta alla tappa successiva): meglio nessuna sosta.
-            if (travelKm > maxDetourKm * 1.5) {
-              L(`    "${spot.customer}" SCARTATO anche dopo retry: deviazione=${travelKm.toFixed(1)}km > max=${(maxDetourKm * 1.5).toFixed(1)}km — nessuna sosta`);
-              return false;
-            }
-          } else {
-            travelKm = rawKm;
-          }
-        }
-        // Sul percorso (perp ≤ 2km): travelKm = 0, ci si passa già sopra
-      } else {
-        travelKm = rawKm;
-      }
-    }
-    const travelMin = Math.round(travelKm / 50 * 60);
     insertions.push({
       beforeIndex, type: "rest", duration: REST_DUR,
-      driveOffset, travelMinutes: travelMin, travelKm,
-      customer: label,
-      location: spot.location || "",
-      address: spot.fullAddress || "",
-      lat: spot.lat ?? null,
-      lng: spot.lng ?? null,
-      placeId: spot.placeId ?? null,
-      openAtBreak: spot.openAtBreak ?? null,
-      warnings
+      driveOffset, travelMinutes: 0, travelKm: 0,
+      customer: "", location: "", address: "",
+      lat: refLat ?? null, lng: refLng ?? null
     });
-    L(`    → SOSTA "${spot.customer}" travelMin=${Math.round(travelKm/50*60)} before[${beforeIndex}]`);
+    L(`    → SOSTA before[${beforeIndex}] @ (${refLat?.toFixed(4)||"?"},${refLng?.toFixed(4)||"?"})`);
     cumulative = 0;
     return true;
   };
@@ -1180,7 +921,6 @@ async function insertBreaks(rows, options) {
     let remainingDrive = row.driveMinutes || 0;
     const workMin = row.durationMinutes || 0;
     let driveConsumed = 0;
-    let noSpotFound = false;
     L(`[i=${i}] "${row.customer}" part=${row.stopPart||"-"} hours="${row.openingHours||""}" drive=${remainingDrive}min work=${workMin}min cumul=${cumulative}`);
 
     // Mid-leg breaks
@@ -1193,19 +933,12 @@ async function insertBreaks(rows, options) {
       const valid = isValidBreakTime(breakTime);
       L(`  mid-leg needed=${needed}min breakTime=${formatTime(breakTime)} valid=${valid}`);
       if (!valid) break;
-      const inserted = await tryInsert(i, interpLat, interpLng, lastLat, lastLng, row.lat, row.lng, driveConsumed + needed, breakTime);
-      if (!inserted) { noSpotFound = true; break; }
+      tryInsert(i, interpLat, interpLng, lastLat, lastLng, row.lat, row.lng, driveConsumed + needed, breakTime);
       driveConsumed += needed;
       remainingDrive -= needed;
     }
 
-    if (noSpotFound) {
-      const minutesTried = Math.max(0, REST_MIN - cumulative);
-      cumulative += Math.min(minutesTried, remainingDrive);
-      L(`  noSpot: cumul→${cumulative}`);
-    } else {
-      cumulative += remainingDrive;
-    }
+    cumulative += remainingDrive;
 
     cumulative += workMin;
     prevServiceEnd = parseTime(row.serviceEndTime) || prevServiceEnd;
@@ -1338,7 +1071,7 @@ async function insertBreaks(rows, options) {
   return { rows: result, addedMinutes: timeShift, debugLog };
 }
 
-export async function planRoute(payload, settings, restStops = []) {
+export async function planRoute(payload, settings) {
   const scheduledDate = payload.scheduledDate || new Date().toISOString().slice(0, 10);
   // JS getDay(): 0=Sun,1=Mon,...,6=Sat — matches Google Places periods
   const dayOfWeek = new Date(scheduledDate + "T12:00:00").getDay();
@@ -1449,14 +1182,10 @@ export async function planRoute(payload, settings, restStops = []) {
   }
 
   // Insert lunch break and rest stops into the timeline
-  const activeRestStops = restStops.filter(s => s.addressType === "rest" || s.isRestStop);
-  const activeRestaurantStops = restStops.filter(s => s.addressType === "restaurant" || s.isLunchStop);
   const maxReturnTime = settings?.maxReturnTime ? parseTime(settings.maxReturnTime) : null;
   const actualFinalArrival = parseTime(best.finalLeg.arrivalTime);
   const { rows: enrichedRows, addedMinutes, debugLog } = await insertBreaks(best.rows, {
     lunchBreakEnabled, lunchBreakMinutes, lunchFixedTime,
-    restStops: activeRestStops,
-    restaurantStops: activeRestaurantStops,
     dayStart: parseTime(best.summary.dayStart),
     finalArrival: maxReturnTime != null ? Math.max(actualFinalArrival, maxReturnTime) : actualFinalArrival,
     restIntervalMin: settings?.restIntervalMin ?? 120,

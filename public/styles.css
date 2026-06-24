@@ -2375,6 +2375,20 @@ tbody tr:last-child td {
 .lunch-card .break-icon { background: rgba(251,146,60,0.12); border-color: rgba(251,146,60,0.35); color: #fb923c; }
 .rest-card  .break-icon { background: rgba(139,92,246,0.12); border-color: rgba(139,92,246,0.35); color: #a78bfa; }
 
+.break-actions {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  flex-shrink: 0;
+}
+.break-place-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px 10px;
+  border-top: 1px solid var(--line);
+}
+
 .break-place-link {
   display: block;
   color: var(--accent);
