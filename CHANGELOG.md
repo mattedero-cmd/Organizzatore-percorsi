@@ -1,3 +1,6 @@
+## v5.052 — 2026-06-24
+- Fix definitivo barra nav inferiore iOS: html/body bloccati al viewport (height:100%; overflow:hidden) nella media query mobile; .shell diventa flex-column; .app scorre internamente (overflow-y:auto; flex:1; min-height:0). La tab bar position:fixed non viene più influenzata dallo scroll del body.
+
 ## v5.051 — 2026-06-24
 - Card Sosta e Pausa pranzo: clic sulla card apre Maps con ricerca bar/ristorante vicino. Rimossi pulsanti separati (Maps + lente). Piccola icona segnaposto come affordance visiva.
 
