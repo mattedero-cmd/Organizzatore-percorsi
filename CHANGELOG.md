@@ -1,3 +1,6 @@
+## v5.057 — 2026-06-24
+- Fix auto-sosta duplicata dopo import da Maps: il post-work break della tappa precedente ora controlla se la riga successiva ha `breakOrigin` e in quel caso salta l'auto-inserimento, evitando la card "Sosta" vuota affiancata alla card con il locale scelto.
+
 ## v5.056 — 2026-06-24
 - Fix import sosta da Maps: la sosta scelta non crea più una tappa duplicata separata. Il planner ora tratta i break con `breakOrigin` come "pause già prese" (reset cumulativo, nessuna auto-sosta aggiuntiva) e li emette come row di tipo "rest"/"lunch" con i dati reali del locale. La card sosta nel risultato mostra nome + indirizzo + orari reali e rimane cliccabile per cambiare.
 

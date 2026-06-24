@@ -1110,7 +1110,7 @@ async function insertBreaks(rows, options) {
           await tryInsert(i + 1, row.lat, row.lng, row.lat, row.lng, nextRow.lat, nextRow.lng, 0, breakTime);
         }
       }
-    } else if (cumulative >= REST_MIN && i < rows.length - 1) {
+    } else if (cumulative >= REST_MIN && i < rows.length - 1 && !nextRow?.breakOrigin) {
       const breakTime = prevServiceEnd;
       const valid = isValidBreakTime(breakTime);
       L(`  post-work break: breakTime=${formatTime(breakTime)} valid=${valid}`);
