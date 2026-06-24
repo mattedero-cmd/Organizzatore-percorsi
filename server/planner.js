@@ -80,7 +80,9 @@ function normalizeStop(stop, index, dayOfWeek = null) {
     fixedFirst: stop.fixedFirst === true,
     timeFrom: stop.timeFrom || "",
     timeTo: stop.timeTo || "",
-    timeWindowMode: stop.timeWindowMode || "available"
+    timeWindowMode: stop.timeWindowMode || "available",
+    breakOrigin: stop.breakOrigin || null,
+    userPicked: stop.userPicked === true
   };
 }
 
@@ -412,6 +414,8 @@ function evaluateOrder(order, context) {
       timeWindowMode: stop.timeWindowMode || null,
       fixedFirst: stop.fixedFirst || false,
       ignoreHours: stop.ignoreHours || false,
+      breakOrigin: stop.breakOrigin || null,
+      userPicked: stop.userPicked || false,
       departureTime: formatTime(departure),
       driveMinutes: leg.driveMinutes,
       baseDriveMinutes: leg.baseDriveMinutes ?? leg.driveMinutes,
@@ -1043,6 +1047,17 @@ async function insertBreaks(rows, options) {
     }
 
     const row = rows[i];
+
+    // User-picked break embedded as a regular stop: treat as break already taken.
+    // Reset cumulative, advance time, skip rest-stop logic for this row.
+    if (row.breakOrigin) {
+      cumulative = 0;
+      prevServiceEnd = parseTime(row.serviceEndTime) || prevServiceEnd;
+      lastLat = row.lat ?? lastLat;
+      lastLng = row.lng ?? lastLng;
+      continue;
+    }
+
     let remainingDrive = row.driveMinutes || 0;
     const workMin = row.durationMinutes || 0;
     let driveConsumed = 0;
@@ -1180,8 +1195,38 @@ async function insertBreaks(rows, options) {
       if (!brk.noTimeShift) timeShift += travelMin + brk.duration;
     }
     if (i < rows.length) {
-      result.push(shiftRowTimes(rows[i], timeShift));
       const r = rows[i];
+      if (r.breakOrigin) {
+        // Emit user-picked break as a break row (type:"rest"/"lunch") with shifted times
+        const s = shiftRowTimes(r, timeShift);
+        result.push({
+          type: r.breakOrigin,
+          stopNumber: null,
+          customer: r.customer || "",
+          location: r.location || "",
+          address: r.address || "",
+          lat: r.lat ?? null,
+          lng: r.lng ?? null,
+          weeklyHours: r.weeklyHours || null,
+          notes: r.notes || "",
+          addressId: r.addressId ?? null,
+          placeAssigned: true,
+          userPicked: true,
+          departureTime: s.departureTime,
+          arrivalTime: s.arrivalTime,
+          serviceStartTime: s.serviceStartTime,
+          serviceEndTime: s.serviceEndTime,
+          durationMinutes: r.durationMinutes,
+          warnings: r.warnings || [],
+          driveMinutes: r.driveMinutes,
+          baseDriveMinutes: r.baseDriveMinutes ?? r.driveMinutes,
+          driveBufferMinutes: r.driveBufferMinutes ?? 0,
+          km: r.km,
+          legSource: r.legSource
+        });
+      } else {
+        result.push(shiftRowTimes(rows[i], timeShift));
+      }
       // An afternoon split part (opening-hours or fixed-window) has absolute service
       // times, and subsequent stops were planned from its absolute end. Breaks before
       // it are absorbed by the midday closure gap → reset the shift. Same for a

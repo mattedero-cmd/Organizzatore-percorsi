@@ -1,3 +1,6 @@
+## v5.056 — 2026-06-24
+- Fix import sosta da Maps: la sosta scelta non crea più una tappa duplicata separata. Il planner ora tratta i break con `breakOrigin` come "pause già prese" (reset cumulativo, nessuna auto-sosta aggiuntiva) e li emette come row di tipo "rest"/"lunch" con i dati reali del locale. La card sosta nel risultato mostra nome + indirizzo + orari reali e rimane cliccabile per cambiare.
+
 ## v5.055 — 2026-06-24
 - Fix picker Maps: con viewport-fit=cover il modal a schermo intero si estendeva sotto la status bar. Aggiunto padding-top:env(safe-area-inset-top) all'header del picker e padding-bottom:env(safe-area-inset-bottom) al footer.
 
