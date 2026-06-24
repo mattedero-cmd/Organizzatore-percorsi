@@ -1,3 +1,6 @@
+## v5.059 — 2026-06-24
+- Card sosta riempita: tap sulla card avvia la navigazione (Google/Apple Maps secondo preferenza); pulsante matita dedicato per cambiare il locale; cestino per eliminare. Estratta `openBreakPicker` come helper condiviso tra tap-neutro e pulsante modifica.
+
 ## v5.058 — 2026-06-24
 - Card sosta/pranzo — gestione completa: apertura picker con ricerca nearby automatica (bar o ristoranti colorati sulla mappa in base al tipo di sosta); card riempita mostra pulsanti Naviga (link Google Maps) + Elimina; breakType passato al picker per ricerca contestualizzata.
 
