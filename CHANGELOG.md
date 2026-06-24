@@ -1,3 +1,6 @@
+## v5.050 — 2026-06-24
+- Fix critico: `const routePayloadMatch` dichiarata due volte in server/index.js (merge di due commit v5.048 da agenti paralleli) causava SyntaxError al boot — server non partiva, login dava errore su Safari.
+
 ## v5.049 — 2026-06-24
 - Fix Safari PWA: URL assoluti (window.location.origin) su tutti i fetch rimasti con URL relativo — logout, cambio password, profilo, condivisione giro, trascrizione vocale. Risolve "The string did not match the expected pattern".
 

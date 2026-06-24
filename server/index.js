@@ -794,16 +794,6 @@ async function handleApi(request, response) {
       return sendJson(response, 200, { ok: true });
     }
 
-    // PATCH /api/routes/:id/payload — aggiorna il payload senza ricalcolare (es. posto sosta scelto manualmente)
-    const routePayloadMatch = url.pathname.match(/^\/api\/routes\/(\d+)\/payload$/);
-    if (routePayloadMatch && method === "PATCH") {
-      const body = await parseBody(request);
-      const existing = await getRoute(routePayloadMatch[1], userId);
-      if (!existing) return sendJson(response, 404, { error: "Not found" });
-      await updateRoutePayload(routePayloadMatch[1], body, userId);
-      return sendJson(response, 200, { ok: true });
-    }
-
     // ── cartelle (sincronizzate lato server) ──────────────────────────────────
     if (method === "GET" && url.pathname === "/api/folders") {
       return sendJson(response, 200, await listFolders(userId));
