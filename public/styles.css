@@ -4305,3 +4305,21 @@ html[data-brand2] .sg-label { color: var(--brand2); }
 html[data-brand2] .menu-btn { border-color: var(--brand2-border); color: var(--brand2); }
 html[data-brand2] .menu-btn:hover { border-color: var(--brand2-border); box-shadow: 0 0 10px var(--brand2-glow); }
 html[data-brand2] .visit-history-details[open] .visit-history-toggle { color: var(--brand2); }
+.break-actions {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  flex-shrink: 0;
+}
+.break-place-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid var(--line);
+}
+.break-place-footer .stop-meta {
+  flex: 1;
+  font-size: 0.8rem;
+}

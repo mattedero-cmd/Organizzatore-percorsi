@@ -77,8 +77,9 @@ const I = {
   lock:     (s) => _svg('<rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>', s),
   key:      (s) => _svg('<path d="m21 2-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0 3 3L22 7l-3-3m-3.5 3.5L19 4"/>', s),
   whatsapp: (s) => _svg('<path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.127.558 4.122 1.532 5.851L0 24l6.318-1.508A11.955 11.955 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.816 9.816 0 0 1-5.034-1.387l-.36-.214-3.742.893.925-3.65-.235-.374A9.773 9.773 0 0 1 2.182 12C2.182 6.57 6.57 2.182 12 2.182c5.43 0 9.818 4.388 9.818 9.818 0 5.43-4.388 9.818-9.818 9.818z"/>', s),
-  magnify:  (s) => _svg('<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>', s),
   bookmark: (s) => _svg('<path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>', s),
+  search:   (s) => _svg('<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>', s),
+  mapPin:   (s) => _svg('<path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>', s),
 };
 
 function phoneIcon(type) {
@@ -1345,7 +1346,7 @@ function renderMenuInfo() {
 
       <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v5.048</p>
       <ul class="info-list">
-        <li>Soste e pausa pranzo: schede neutrali senza bar/ristorante preassegnato. Pulsante "Maps" apre la ricerca vicino alla posizione stimata; "Cerca nell'app" permette di scegliere il posto con il picker integrato e salvarlo nel giro.</li>
+        <li>Card sosta e pranzo neutrali: nessun luogo pre-selezionato, l'utente apre Maps per cercare nelle vicinanze o cerca nell'app per assegnare un luogo specifico e salvarlo in archivio.</li>
       </ul>
 
       <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v5.047</p>
@@ -3436,63 +3437,69 @@ function renderResult() {
 
       <div class="result-list">
         ${(()=>{let rvStopIdx=-1;return rows.map(row => {
-          // Build Maps search URL for a break row (opens Maps with nearby search)
-          const breakMapsSearchUrl = (r, type) => {
+          // Build Maps URL for a break row (rest or restaurant lunch)
+          const breakMapsUrl = (r, type) => {
             const query = type === "lunch" ? "ristorante trattoria" : "bar";
             const q = encodeURIComponent(query);
-            if (state.navigatorPref === "apple") return r.lat && r.lng ? `http://maps.apple.com/?ll=${r.lat},${r.lng}&q=${q}` : `http://maps.apple.com/?q=${q}`;
-            if (state.navigatorPref === "waze") return `https://waze.com/ul?q=${q}&navigate=yes`;
-            return r.lat && r.lng ? `https://www.google.com/maps/search/${q}/@${r.lat},${r.lng},14z` : `https://www.google.com/maps/search/?api=1&query=${q}`;
+            if (state.navigatorPref === "apple") {
+              return r.lat && r.lng
+                ? `http://maps.apple.com/?ll=${r.lat},${r.lng}&q=${q}&spn=0.01,0.01`
+                : `http://maps.apple.com/?q=${q}`;
+            }
+            if (state.navigatorPref === "waze") {
+              return `https://waze.com/ul?q=${q}&navigate=yes`;
+            }
+            return r.lat && r.lng
+              ? `https://www.google.com/maps/search/${q}/@${r.lat},${r.lng},14z`
+              : `https://www.google.com/maps/search/?api=1&query=${q}`;
           };
 
           // Special row: lunch break
           if (row.type === "lunch") {
-            const rowIdx = rows.indexOf(row);
-            const hasPlace = !!row.customer;
-            const mapsUrl = breakMapsSearchUrl(row, "lunch");
-            return `
-          <article class="card result-card break-card lunch-card">
-            <div class="break-row">
-              <span class="break-icon lunch-icon">${I.fork(18)}</span>
-              <div style="flex:1;min-width:0">
-                <p class="stop-title" style="margin:0">${hasPlace ? escapeHtml(row.customer) : "Pausa pranzo"}</p>
-                <div class="stop-meta">${escapeHtml(row.serviceStartTime)} – ${escapeHtml(row.serviceEndTime)} · ${minutesLabel(row.durationMinutes)}</div>
-                ${row.address ? `<div class="stop-meta" style="font-size:0.79rem">${escapeHtml(row.address)}</div>` : ""}
-              </div>
-              <div class="break-actions">
-                <a class="btn ghost" href="${mapsUrl}" target="_blank" rel="noopener" title="Cerca ristoranti vicino su Maps" style="white-space:nowrap">${I.location(14)} Maps</a>
-                <button class="btn ghost break-search-btn" data-break-idx="${rowIdx}" data-break-type="lunch" title="Scegli su Maps (nell'app)">${I.magnify(14)}</button>
-              </div>
-            </div>
-            ${hasPlace ? `<div class="break-place-footer">
-              <button class="btn ghost break-save-archive-btn" data-break-idx="${rowIdx}" title="Salva in archivio clienti">${I.bookmark(13)} Salva in archivio</button>
-            </div>` : ""}
-          </article>`;
+            const lunchIdx = result.rows.indexOf(row);
+            const lunchSearchUrl = breakMapsUrl(row, "lunch");
+            return `<article class="card result-card break-card lunch-card">
+  <div class="break-row">
+    <span class="break-icon lunch-icon">${I.fork(18)}</span>
+    <div style="flex:1;min-width:0">
+      <p class="stop-title" style="margin:0">${row.customer ? escapeHtml(row.customer) : "Pausa pranzo"}</p>
+      <div class="stop-meta">${escapeHtml(row.serviceStartTime)} – ${escapeHtml(row.serviceEndTime)} · ${minutesLabel(row.durationMinutes)}</div>
+      ${row.address ? `<div class="stop-meta" style="font-size:0.8rem">${escapeHtml(row.address)}</div>` : ""}
+    </div>
+    <div class="break-actions">
+      <a class="btn ghost" href="${lunchSearchUrl}" target="_blank" rel="noopener" title="Cerca ristoranti vicino su Maps">${I.mapPin(14)} Maps</a>
+      <button class="btn ghost break-search-btn" data-break-idx="${lunchIdx}" data-break-type="lunch" title="Cerca nell'app">${I.search(14)}</button>
+    </div>
+  </div>
+  ${row.customer ? `<div class="break-place-footer">
+    ${row.address ? `<span class="stop-meta">${escapeHtml(row.address)}</span>` : ""}
+    <button class="btn ghost break-save-archive-btn" data-break-idx="${lunchIdx}" title="Salva in archivio">${I.bookmark(13)} Archivio</button>
+  </div>` : ""}
+</article>`;
           }
 
           // Special row: rest stop
           if (row.type === "rest") {
-            const rowIdx = rows.indexOf(row);
-            const hasPlace = !!row.customer;
-            const mapsUrl = breakMapsSearchUrl(row, "rest");
-            return `
-          <article class="card result-card break-card rest-card">
-            <div class="break-row">
-              <span class="break-icon coffee-icon">${I.coffee(18)}</span>
-              <div style="flex:1;min-width:0">
-                <p class="stop-title" style="margin:0">${hasPlace ? escapeHtml(row.customer) : "Sosta"}</p>
-                <div class="stop-meta">${escapeHtml(row.serviceStartTime)} – ${escapeHtml(row.serviceEndTime)} · ${minutesLabel(row.durationMinutes)}</div>
-                ${row.address ? `<div class="stop-meta" style="font-size:0.79rem">${escapeHtml(row.address)}</div>` : ""}
-              </div>
-              <div class="break-actions">
-                <a class="btn ghost" href="${mapsUrl}" target="_blank" rel="noopener" title="Cerca bar vicino su Maps" style="white-space:nowrap">${I.location(14)} Maps</a>
-                <button class="btn ghost break-search-btn" data-break-idx="${rowIdx}" data-break-type="rest" title="Scegli su Maps (nell'app)">${I.magnify(14)}</button>
-              </div>
-            </div>
-            ${hasPlace ? `<div class="break-place-footer">
-              <button class="btn ghost break-save-archive-btn" data-break-idx="${rowIdx}" title="Salva in archivio clienti">${I.bookmark(13)} Salva in archivio</button>
-            </div>` : ""}
-          </article>`;
+            const restIdx = result.rows.indexOf(row);
+            const restSearchUrl = breakMapsUrl(row, "rest");
+            return `<article class="card result-card break-card rest-card">
+  <div class="break-row">
+    <span class="break-icon coffee-icon">${I.coffee(18)}</span>
+    <div style="flex:1;min-width:0">
+      <p class="stop-title" style="margin:0">${row.customer ? escapeHtml(row.customer) : "Sosta"}</p>
+      <div class="stop-meta">${escapeHtml(row.serviceStartTime)} – ${escapeHtml(row.serviceEndTime)} · ${minutesLabel(row.durationMinutes)}</div>
+      ${row.address ? `<div class="stop-meta" style="font-size:0.8rem">${escapeHtml(row.address)}</div>` : ""}
+    </div>
+    <div class="break-actions">
+      <a class="btn ghost" href="${restSearchUrl}" target="_blank" rel="noopener" title="Cerca bar vicino su Maps">${I.mapPin(14)} Maps</a>
+      <button class="btn ghost break-search-btn" data-break-idx="${restIdx}" data-break-type="rest" title="Cerca nell'app">${I.search(14)}</button>
+    </div>
+  </div>
+  ${row.customer ? `<div class="break-place-footer">
+    ${row.address ? `<span class="stop-meta">${escapeHtml(row.address)}</span>` : ""}
+    <button class="btn ghost break-save-archive-btn" data-break-idx="${restIdx}" title="Salva in archivio">${I.bookmark(13)} Archivio</button>
+  </div>` : ""}
+</article>`;
           }
 
           const addr = state.allAddresses.find(a => String(a.id) === String(row.addressId));
@@ -6415,54 +6422,6 @@ function bindEvents() {
       return;
     }
 
-    // Break card: open in-app Maps picker to choose a specific place
-    if (e.target.closest(".break-search-btn")) {
-      const btn = e.target.closest(".break-search-btn");
-      const rowIdx = Number(btn.dataset.breakIdx);
-      const breakType = btn.dataset.breakType;
-      const rows = state.result?.rows;
-      if (!rows) return;
-      openMapPickerForField({
-        onUseDirectly: async (label, address, lat, lng) => {
-          const row = rows[rowIdx];
-          if (!row) return;
-          row.customer = label || address.split(",")[0] || (breakType === "lunch" ? "Pausa pranzo" : "Sosta");
-          row.address = address || "";
-          row.lat = lat || null;
-          row.lng = lng || null;
-          if (state.result?.id) {
-            await api(`/api/routes/${state.result.id}/payload`, {
-              method: "PATCH",
-              body: JSON.stringify(state.result)
-            }).catch(() => {});
-          }
-          render();
-          showToast("Luogo salvato nel giro");
-        }
-      });
-      return;
-    }
-
-    // Break card: save chosen place to archive
-    if (e.target.closest(".break-save-archive-btn")) {
-      const btn = e.target.closest(".break-save-archive-btn");
-      const rowIdx = Number(btn.dataset.breakIdx);
-      const row = state.result?.rows?.[rowIdx];
-      if (!row?.customer) return;
-      await api("/api/addresses", {
-        method: "POST",
-        body: JSON.stringify({
-          customer: row.customer, location: row.location || "",
-          fullAddress: row.address || "",
-          addressType: row.type === "lunch" ? "restaurant" : "rest",
-          lat: row.lat, lng: row.lng
-        })
-      }).catch(() => null);
-      await refreshAllData();
-      showToast(`"${row.customer}" salvato in archivio`);
-      return;
-    }
-
     if (e.target.closest("#toggle-lunch-break")) {
       if (!state.result) return;
       const hasLunch = state.result.rows?.some(r => r.type === "lunch");
@@ -6706,6 +6665,53 @@ function bindEvents() {
         showToast(`${customer} salvato — premi Ricalcola`);
         renderResult();
       } catch (err) { showToast(err.message); }
+      return;
+    }
+
+    if (e.target.closest(".break-search-btn")) {
+      const btn = e.target.closest(".break-search-btn");
+      const rowIdx = Number(btn.dataset.breakIdx);
+      const breakType = btn.dataset.breakType;
+      const row = state.result?.rows?.[rowIdx];
+      if (!row) return;
+      openMapPickerForField({
+        onUseDirectly: async (label, address, lat, lng, weeklyHours) => {
+          // Update the break row in memory
+          row.customer = label || address.split(",")[0] || (breakType === "lunch" ? "Pausa pranzo" : "Sosta");
+          row.address = address || "";
+          row.lat = lat || null;
+          row.lng = lng || null;
+          // Persist to DB if route has an id
+          if (state.result?.id) {
+            await api(`/api/routes/${state.result.id}/payload`, {
+              method: "PATCH",
+              body: JSON.stringify(state.result)
+            }).catch(() => {});
+          }
+          render();
+          showToast("Luogo salvato nel giro");
+        }
+      });
+      return;
+    }
+
+    if (e.target.closest(".break-save-archive-btn")) {
+      const btn = e.target.closest(".break-save-archive-btn");
+      const rowIdx = Number(btn.dataset.breakIdx);
+      const row = state.result?.rows?.[rowIdx];
+      if (!row || !row.customer) return;
+      await api("/api/addresses", {
+        method: "POST",
+        body: JSON.stringify({
+          customer: row.customer,
+          location: row.location || "",
+          fullAddress: row.address || "",
+          addressType: row.type === "lunch" ? "restaurant" : "rest",
+          lat: row.lat, lng: row.lng
+        })
+      }).catch(() => null);
+      await refreshAllData();
+      showToast(`"${row.customer}" salvato in archivio`);
       return;
     }
 

@@ -1,5 +1,5 @@
 ## v5.048 — 2026-06-24
-- Soste e pausa pranzo neutrali: planner non cerca più bar/ristoranti automaticamente. Schede "Sosta"/"Pausa pranzo" con posizione stimata. Pulsante "Maps" apre ricerca bar/ristoranti vicino nel navigatore preferito. Pulsante cerchio-lente apre il picker in-app per scegliere un posto e salvarlo nel giro (PATCH /api/routes/:id/payload). Pulsante "Salva in archivio" disponibile quando il posto è stato scelto.
+- Card sosta e pranzo neutrali: nessun luogo pre-selezionato, l'utente apre Maps o cerca nell'app
 
 ## v5.047 — 2026-06-24
 - Fix duplicazione giro: replanWithOrder e toggle-lunch-break passavano /api/plan senza id → creavano nuovo giro. Fix: aggiunto id+name al payload. Aggiunto state.route.id per tracciare il giro in modifica nel tab Percorso; planCurrentRoute usa state.route.id invece di state.result?.id

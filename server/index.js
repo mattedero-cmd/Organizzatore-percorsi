@@ -746,6 +746,17 @@ async function handleApi(request, response) {
       return sendJson(response, 201, saved);
     }
 
+    // PATCH /api/routes/:id/payload — update route payload without replanning
+    const routePayloadMatch = url.pathname.match(/^\/api\/routes\/(\d+)\/payload$/);
+    if (method === "PATCH" && routePayloadMatch) {
+      const routeId = Number(routePayloadMatch[1]);
+      const body = await parseBody(request);
+      const existing = await getRoute(routeId, userId);
+      if (!existing) return sendJson(response, 404, { error: "Not found" });
+      await updateRoutePayload(routeId, body, userId);
+      return sendJson(response, 200, { ok: true });
+    }
+
     const routeMatch = url.pathname.match(/^\/api\/routes\/(\d+)$/);
     if (routeMatch && method === "GET") {
       const stored = await getRoute(routeMatch[1], userId);
