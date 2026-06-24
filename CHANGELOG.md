@@ -1,3 +1,6 @@
+## v5.051 — 2026-06-24
+- Card Sosta e Pausa pranzo: clic sulla card apre Maps con ricerca bar/ristorante vicino. Rimossi pulsanti separati (Maps + lente). Piccola icona segnaposto come affordance visiva.
+
 ## v5.050 — 2026-06-24
 - Fix critico: `const routePayloadMatch` dichiarata due volte in server/index.js (merge di due commit v5.048 da agenti paralleli) causava SyntaxError al boot — server non partiva, login dava errore su Safari.
 

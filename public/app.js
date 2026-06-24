@@ -1332,7 +1332,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.050 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.051 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -1342,6 +1342,11 @@ function renderMenuInfo() {
       <ul class="info-list">
         <li>${state.mapApiConfigured ? _svg('<polyline points="20 6 9 17 4 12"/>', 14) + " Google Maps attivo — percorsi reali e ottimizzazione avanzata" : _svg('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>', 14) + " Google Maps non configurato — stime distanze locali"}</li>
         <li>${state.whisperConfigured ? _svg('<polyline points="20 6 9 17 4 12"/>', 14) + " Comandi vocali attivi (Whisper)" : _svg('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>', 14) + " Comandi vocali non configurati"}</li>
+      </ul>
+
+      <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v5.051</p>
+      <ul class="info-list">
+        <li>Schede Sosta e Pausa pranzo: clic sulla card apre direttamente Maps con la ricerca corretta (bar o ristorante vicino). Rimossi i due pulsanti separati; piccola icona segnaposto indica l'azione.</li>
       </ul>
 
       <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v5.050</p>
@@ -3468,7 +3473,7 @@ function renderResult() {
           if (row.type === "lunch") {
             const lunchIdx = result.rows.indexOf(row);
             const lunchSearchUrl = breakMapsUrl(row, "lunch");
-            return `<article class="card result-card break-card lunch-card">
+            return `<article class="card result-card break-card lunch-card" data-break-maps-url="${lunchSearchUrl}" role="link" tabindex="0">
   <div class="break-row">
     <span class="break-icon lunch-icon">${I.fork(18)}</span>
     <div style="flex:1;min-width:0">
@@ -3476,23 +3481,19 @@ function renderResult() {
       <div class="stop-meta">${escapeHtml(row.serviceStartTime)} – ${escapeHtml(row.serviceEndTime)} · ${minutesLabel(row.durationMinutes)}</div>
       ${row.address ? `<div class="stop-meta" style="font-size:0.8rem">${escapeHtml(row.address)}</div>` : ""}
     </div>
-    <div class="break-actions">
-      <a class="btn ghost" href="${lunchSearchUrl}" target="_blank" rel="noopener" title="Cerca ristoranti vicino su Maps">${I.mapPin(14)} Maps</a>
-      <button class="btn ghost break-search-btn" data-break-idx="${lunchIdx}" data-break-type="lunch" title="Cerca nell'app">${I.search(14)}</button>
-    </div>
+    <span class="break-maps-hint">${I.mapPin(14)}</span>
   </div>
   ${row.customer ? `<div class="break-place-footer">
-    ${row.address ? `<span class="stop-meta">${escapeHtml(row.address)}</span>` : ""}
+    ${row.address ? `<span class="stop-meta" style="flex:1">${escapeHtml(row.address)}</span>` : ""}
     <button class="btn ghost break-save-archive-btn" data-break-idx="${lunchIdx}" title="Salva in archivio">${I.bookmark(13)} Archivio</button>
   </div>` : ""}
-</article>`;
-          }
+</article>`;}
 
           // Special row: rest stop
           if (row.type === "rest") {
             const restIdx = result.rows.indexOf(row);
             const restSearchUrl = breakMapsUrl(row, "rest");
-            return `<article class="card result-card break-card rest-card">
+            return `<article class="card result-card break-card rest-card" data-break-maps-url="${restSearchUrl}" role="link" tabindex="0">
   <div class="break-row">
     <span class="break-icon coffee-icon">${I.coffee(18)}</span>
     <div style="flex:1;min-width:0">
@@ -3500,13 +3501,10 @@ function renderResult() {
       <div class="stop-meta">${escapeHtml(row.serviceStartTime)} – ${escapeHtml(row.serviceEndTime)} · ${minutesLabel(row.durationMinutes)}</div>
       ${row.address ? `<div class="stop-meta" style="font-size:0.8rem">${escapeHtml(row.address)}</div>` : ""}
     </div>
-    <div class="break-actions">
-      <a class="btn ghost" href="${restSearchUrl}" target="_blank" rel="noopener" title="Cerca bar vicino su Maps">${I.mapPin(14)} Maps</a>
-      <button class="btn ghost break-search-btn" data-break-idx="${restIdx}" data-break-type="rest" title="Cerca nell'app">${I.search(14)}</button>
-    </div>
+    <span class="break-maps-hint">${I.mapPin(14)}</span>
   </div>
   ${row.customer ? `<div class="break-place-footer">
-    ${row.address ? `<span class="stop-meta">${escapeHtml(row.address)}</span>` : ""}
+    ${row.address ? `<span class="stop-meta" style="flex:1">${escapeHtml(row.address)}</span>` : ""}
     <button class="btn ghost break-save-archive-btn" data-break-idx="${restIdx}" title="Salva in archivio">${I.bookmark(13)} Archivio</button>
   </div>` : ""}
 </article>`;
@@ -6678,30 +6676,9 @@ function bindEvents() {
       return;
     }
 
-    if (e.target.closest(".break-search-btn")) {
-      const btn = e.target.closest(".break-search-btn");
-      const rowIdx = Number(btn.dataset.breakIdx);
-      const breakType = btn.dataset.breakType;
-      const row = state.result?.rows?.[rowIdx];
-      if (!row) return;
-      openMapPickerForField({
-        onUseDirectly: async (label, address, lat, lng, weeklyHours) => {
-          // Update the break row in memory
-          row.customer = label || address.split(",")[0] || (breakType === "lunch" ? "Pausa pranzo" : "Sosta");
-          row.address = address || "";
-          row.lat = lat || null;
-          row.lng = lng || null;
-          // Persist to DB if route has an id
-          if (state.result?.id) {
-            await api(`/api/routes/${state.result.id}/payload`, {
-              method: "PATCH",
-              body: JSON.stringify(state.result)
-            }).catch(() => {});
-          }
-          render();
-          showToast("Luogo salvato nel giro");
-        }
-      });
+    if (e.target.closest(".break-card[data-break-maps-url]") && !e.target.closest(".break-save-archive-btn")) {
+      const card = e.target.closest(".break-card[data-break-maps-url]");
+      window.open(card.dataset.breakMapsUrl, "_blank", "noopener");
       return;
     }
 

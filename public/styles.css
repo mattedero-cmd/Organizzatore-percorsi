@@ -2375,11 +2375,16 @@ tbody tr:last-child td {
 .lunch-card .break-icon { background: rgba(251,146,60,0.12); border-color: rgba(251,146,60,0.35); color: #fb923c; }
 .rest-card  .break-icon { background: rgba(139,92,246,0.12); border-color: rgba(139,92,246,0.35); color: #a78bfa; }
 
-.break-actions {
-  display: flex;
-  gap: 4px;
-  align-items: center;
+.break-card[data-break-maps-url] {
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.break-card[data-break-maps-url]:active { opacity: 0.7; }
+.break-maps-hint {
   flex-shrink: 0;
+  opacity: 0.4;
+  display: flex;
+  align-items: center;
 }
 .break-place-footer {
   display: flex;
@@ -4305,12 +4310,6 @@ html[data-brand2] .sg-label { color: var(--brand2); }
 html[data-brand2] .menu-btn { border-color: var(--brand2-border); color: var(--brand2); }
 html[data-brand2] .menu-btn:hover { border-color: var(--brand2-border); box-shadow: 0 0 10px var(--brand2-glow); }
 html[data-brand2] .visit-history-details[open] .visit-history-toggle { color: var(--brand2); }
-.break-actions {
-  display: flex;
-  gap: 4px;
-  align-items: center;
-  flex-shrink: 0;
-}
 .break-place-footer {
   display: flex;
   align-items: center;
