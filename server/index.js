@@ -70,18 +70,29 @@ const publicDir = path.join(rootDir, "public");
 
 loadEnv(rootDir);
 
-// Boot resiliente: se l'init del DB lancia (Postgres irraggiungibile, migrazione
-// fallita), NON far fallire il caricamento del modulo. Su Vercel un throw qui
-// rende ogni invocazione un opaco FUNCTION_INVOCATION_FAILED ("Serverless Function
-// has crashed") — 500 su tutto, login impossibile, persino /api/health muore.
-// Catturiamo l'errore e lo esponiamo via /api/health invece di crashare.
+// ── Lazy init ────────────────────────────────────────────────────────────────
+// Su Vercel (serverless) il modulo viene caricato a ogni cold start.
+// Un top-level `await initDb()` che aspetta una connessione Postgres può
+// durare 30+ secondi; Vercel uccide la funzione dopo ~10s prima ancora che
+// il catch possa girare → FUNCTION_INVOCATION_FAILED su ogni richiesta.
+// Soluzione: l'init avviene alla PRIMA richiesta HTTP (lazy), con un timeout
+// rapido sul pool pg (8s). Se fallisce, /api/health espone l'errore e ogni
+// altra API risponde 503 invece di far crashare la funzione.
+let _initialized = false;
 let bootError = null;
-try {
-  await initDb(rootDir);
-  await initApiStatsTable();
-} catch (err) {
-  bootError = err;
-  console.error("BOOT FAILED — init DB/stats:", err);
+
+async function ensureInit() {
+  if (_initialized) return;
+  if (bootError) throw bootError;
+  try {
+    await initDb(rootDir);
+    await initApiStatsTable();
+    _initialized = true;
+  } catch (err) {
+    bootError = err;
+    console.error("BOOT FAILED — init DB/stats:", err);
+    throw err;
+  }
 }
 
 const PORT = Number(process.env.PORT || 5174);
@@ -318,6 +329,11 @@ async function handleApi(request, response) {
 
   try {
     if (method === "GET" && url.pathname === "/api/health") {
+      // Avvia l'init lazy (no-op se già fatto o già fallito).
+      // Non propagare l'errore qui: vogliamo sempre rispondere su /api/health.
+      if (!_initialized && !bootError) {
+        try { await ensureInit(); } catch { /* bootError è già impostato */ }
+      }
       // Diagnostica: se l'init è fallito (bootError) il DB non è mai stato
       // inizializzato — riportiamo l'errore di boot. Altrimenti test reale SELECT 1.
       let dbOk = false;
@@ -346,8 +362,18 @@ async function handleApi(request, response) {
       });
     }
 
-    // Se il boot è fallito, ogni altra API risponde 503 con messaggio leggibile
-    // invece di crashare o dare risultati incoerenti (es. login che non entra mai).
+    // Lazy init: prima richiesta non-health avvia l'inizializzazione DB.
+    // Se già fatta (o già fallita) è un no-op/throw immediato.
+    if (!_initialized) {
+      try { await ensureInit(); } catch (initErr) {
+        return sendJson(response, 503, {
+          error: "Server non inizializzato: database non raggiungibile.",
+          detail: initErr?.message || String(initErr)
+        });
+      }
+    }
+
+    // Se il boot è fallito in un tentativo precedente, risponde 503 leggibile.
     if (bootError) {
       return sendJson(response, 503, {
         error: "Server non inizializzato: database non raggiungibile.",

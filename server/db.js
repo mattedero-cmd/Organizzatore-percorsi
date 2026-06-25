@@ -157,7 +157,12 @@ export async function initDb(rootDir) {
     dbMode = "postgres";
     pgPool = new Pool({
       connectionString,
-      ssl: connectionString.includes("localhost") ? false : { rejectUnauthorized: false }
+      ssl: connectionString.includes("localhost") ? false : { rejectUnauthorized: false },
+      // Fail fast su Vercel: senza timeout il pool aspetta 30s+ e Vercel
+      // uccide la funzione serverless prima che il catch possa girare.
+      connectionTimeoutMillis: 8000,
+      idleTimeoutMillis: 20000,
+      max: 3
     });
     await initPostgresDb();
     return "postgres";

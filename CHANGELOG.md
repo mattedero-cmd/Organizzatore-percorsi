@@ -1,3 +1,6 @@
+## v5.063 — 2026-06-25
+- Fix definitivo FUNCTION_INVOCATION_FAILED: init DB ora lazy (alla prima richiesta HTTP) invece che top-level await nel modulo. Su Vercel serverless, un top-level await che aspetta Postgres può durare 30s+; Vercel uccide la funzione dopo ~10s prima che il catch possa girare → crash opaco su ogni richiesta. Con lazy init il modulo si carica istantaneamente; se il DB non risponde, /api/health riporta bootFailed+errore e ogni altra API risponde 503 leggibile. Aggiunto connectionTimeoutMillis:8000 al pool pg per fail-fast.
+
 ## v5.062 — 2026-06-25
 - Boot resiliente del server: se `initDb`/`initApiStatsTable` lanciano (Postgres irraggiungibile, migrazione fallita), il modulo non fallisce più a caricarsi. Su Vercel un throw al top-level rendeva ogni invocazione un opaco `FUNCTION_INVOCATION_FAILED` ("Serverless Function has crashed") — 500 su tutto, login impossibile. Ora l'errore viene catturato in `bootError`, esposto su `/api/health` (`bootFailed:true` + dettaglio) e ogni altra API risponde 503 leggibile invece di crashare.
 
