@@ -50,7 +50,8 @@ import {
   adminDeleteUser,
   adminGetStats,
   getDbMode,
-  getDbPath
+  getDbPath,
+  runSql
 } from "./db.js";
 import { hashPassword, verifyPassword, generateToken } from "./auth.js";
 import { loadEnv } from "./env.js";
@@ -305,8 +306,25 @@ async function handleApi(request, response) {
 
   try {
     if (method === "GET" && url.pathname === "/api/health") {
+      // Diagnostica connessione DB: test reale con SELECT 1, così un 500 da
+      // database irraggiungibile (provider sospeso, DATABASE_URL scaduta) diventa
+      // un messaggio chiaro su /api/health invece di una schermata di login.
+      let dbOk = false;
+      let dbError = null;
+      try {
+        await runSql("SELECT 1", true);
+        dbOk = true;
+      } catch (err) {
+        dbError = err?.message || String(err);
+      }
       return sendJson(response, 200, {
-        ok: true,
+        ok: dbOk,
+        dbMode: getDbMode(),
+        dbOk,
+        dbError,
+        databaseUrlConfigured: Boolean(
+          process.env.DATABASE_URL || process.env.POSTGRES_URL || process.env.POSTGRES_PRISMA_URL
+        ),
         mapApiConfigured: Boolean(process.env.GOOGLE_MAPS_API_KEY),
         whisperConfigured: Boolean(process.env.OPENAI_API_KEY)
       });

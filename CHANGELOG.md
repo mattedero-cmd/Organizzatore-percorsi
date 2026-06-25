@@ -1,3 +1,6 @@
+## v5.061 — 2026-06-25
+- Diagnostica DB su `/api/health`: l'endpoint ora esegue un `SELECT 1` reale e restituisce `dbOk`, `dbError`, `dbMode` e `databaseUrlConfigured`. Permette di distinguere un 500 da database irraggiungibile (provider sospeso, `DATABASE_URL` scaduta) — che si manifesta come schermata di login — da un errore del codice applicativo.
+
 ## v5.060 — 2026-06-24
 - Segnaposti nearby nel picker con InfoWindow stile Google Maps: tocca un segnaposto e vedi nome, rating (stelle), numero recensioni e stato aperto/chiuso, con pulsante "Scegli questo locale". Aggiornata sezione Novità (multiplo di 10).
 
