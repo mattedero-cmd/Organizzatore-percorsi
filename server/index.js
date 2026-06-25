@@ -68,6 +68,16 @@ const __dirname = path.dirname(__filename);
 const rootDir = path.resolve(__dirname, "..");
 const publicDir = path.join(rootDir, "public");
 
+// Handler globale: cattura eccezioni non gestite e le logga PRIMA che Vercel
+// mostri "FUNCTION_INVOCATION_FAILED" — rende visibile la riga esatta del crash
+// nei Vercel Function Logs anche quando il modulo muore durante il caricamento.
+process.on("uncaughtException", (err) => {
+  console.error("FATAL uncaughtException:", err?.stack || err);
+});
+process.on("unhandledRejection", (reason) => {
+  console.error("FATAL unhandledRejection:", reason?.stack || reason);
+});
+
 loadEnv(rootDir);
 
 // ── Lazy init ────────────────────────────────────────────────────────────────
@@ -1075,6 +1085,13 @@ const server = http.createServer((request, response) => {
   serveStatic(request, response);
 });
 
+server.on("error", (err) => {
+  // Non crashare su EADDRINUSE (es. sviluppo locale con porta già in uso)
+  console.error("Server listen error:", err?.code, err?.message);
+});
 server.listen(PORT, HOST, () => {
   console.log(`Work Route Planner attivo su http://${HOST}:${PORT}`);
 });
+
+// Export esplicito per @vercel/node ESM — alcune versioni lo richiedono
+export default server;

@@ -1,3 +1,6 @@
+## v5.064 — 2026-06-25
+- Diagnostica crash Vercel: handler `uncaughtException`/`unhandledRejection` logga l'errore esatto nei Function Logs. `export default server` per compatibilità @vercel/node ESM. `server.on('error')` per non crashare su EADDRINUSE.
+
 ## v5.063 — 2026-06-25
 - Fix definitivo FUNCTION_INVOCATION_FAILED: init DB ora lazy (alla prima richiesta HTTP) invece che top-level await nel modulo. Su Vercel serverless, un top-level await che aspetta Postgres può durare 30s+; Vercel uccide la funzione dopo ~10s prima che il catch possa girare → crash opaco su ogni richiesta. Con lazy init il modulo si carica istantaneamente; se il DB non risponde, /api/health riporta bootFailed+errore e ogni altra API risponde 503 leggibile. Aggiunto connectionTimeoutMillis:8000 al pool pg per fail-fast.
 
@@ -670,3 +673,5 @@
 - Fix login admin: rate limit usa `X-Forwarded-For` per IP reale dietro proxy/Vercel
 - Fix login admin: `startAutoRefresh()` ora chiamato subito dopo il login, non solo al boot
 - Fix login app: `novalidate` sui form + lettura valori diretta dagli input per compatibilità autofill Safari iOS
+
+- Diagnostica crash Vercel: aggiunto handler `uncaughtException`/`unhandledRejection` che logga l'errore esatto nei Vercel Function Logs prima che la funzione muoia. Aggiunto `export default server` per compatibilità con versioni recenti di `@vercel/node` ESM. Aggiunto error handler su `server.on('error')` per non crashare su EADDRINUSE.
