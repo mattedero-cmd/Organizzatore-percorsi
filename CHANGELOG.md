@@ -1,3 +1,6 @@
+## v5.062 — 2026-06-25
+- Boot resiliente del server: se `initDb`/`initApiStatsTable` lanciano (Postgres irraggiungibile, migrazione fallita), il modulo non fallisce più a caricarsi. Su Vercel un throw al top-level rendeva ogni invocazione un opaco `FUNCTION_INVOCATION_FAILED` ("Serverless Function has crashed") — 500 su tutto, login impossibile. Ora l'errore viene catturato in `bootError`, esposto su `/api/health` (`bootFailed:true` + dettaglio) e ogni altra API risponde 503 leggibile invece di crashare.
+
 ## v5.061 — 2026-06-25
 - Diagnostica DB su `/api/health`: l'endpoint ora esegue un `SELECT 1` reale e restituisce `dbOk`, `dbError`, `dbMode` e `databaseUrlConfigured`. Permette di distinguere un 500 da database irraggiungibile (provider sospeso, `DATABASE_URL` scaduta) — che si manifesta come schermata di login — da un errore del codice applicativo.
 

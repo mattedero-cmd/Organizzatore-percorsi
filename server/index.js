@@ -69,8 +69,20 @@ const rootDir = path.resolve(__dirname, "..");
 const publicDir = path.join(rootDir, "public");
 
 loadEnv(rootDir);
-await initDb(rootDir);
-await initApiStatsTable();
+
+// Boot resiliente: se l'init del DB lancia (Postgres irraggiungibile, migrazione
+// fallita), NON far fallire il caricamento del modulo. Su Vercel un throw qui
+// rende ogni invocazione un opaco FUNCTION_INVOCATION_FAILED ("Serverless Function
+// has crashed") — 500 su tutto, login impossibile, persino /api/health muore.
+// Catturiamo l'errore e lo esponiamo via /api/health invece di crashare.
+let bootError = null;
+try {
+  await initDb(rootDir);
+  await initApiStatsTable();
+} catch (err) {
+  bootError = err;
+  console.error("BOOT FAILED — init DB/stats:", err);
+}
 
 const PORT = Number(process.env.PORT || 5174);
 
@@ -306,27 +318,40 @@ async function handleApi(request, response) {
 
   try {
     if (method === "GET" && url.pathname === "/api/health") {
-      // Diagnostica connessione DB: test reale con SELECT 1, così un 500 da
-      // database irraggiungibile (provider sospeso, DATABASE_URL scaduta) diventa
-      // un messaggio chiaro su /api/health invece di una schermata di login.
+      // Diagnostica: se l'init è fallito (bootError) il DB non è mai stato
+      // inizializzato — riportiamo l'errore di boot. Altrimenti test reale SELECT 1.
       let dbOk = false;
       let dbError = null;
-      try {
-        await runSql("SELECT 1", true);
-        dbOk = true;
-      } catch (err) {
-        dbError = err?.message || String(err);
+      if (bootError) {
+        dbError = `BOOT: ${bootError?.message || String(bootError)}`;
+      } else {
+        try {
+          await runSql("SELECT 1", true);
+          dbOk = true;
+        } catch (err) {
+          dbError = err?.message || String(err);
+        }
       }
       return sendJson(response, 200, {
         ok: dbOk,
         dbMode: getDbMode(),
         dbOk,
         dbError,
+        bootFailed: Boolean(bootError),
         databaseUrlConfigured: Boolean(
           process.env.DATABASE_URL || process.env.POSTGRES_URL || process.env.POSTGRES_PRISMA_URL
         ),
         mapApiConfigured: Boolean(process.env.GOOGLE_MAPS_API_KEY),
         whisperConfigured: Boolean(process.env.OPENAI_API_KEY)
+      });
+    }
+
+    // Se il boot è fallito, ogni altra API risponde 503 con messaggio leggibile
+    // invece di crashare o dare risultati incoerenti (es. login che non entra mai).
+    if (bootError) {
+      return sendJson(response, 503, {
+        error: "Server non inizializzato: database non raggiungibile.",
+        detail: bootError?.message || String(bootError)
       });
     }
 
