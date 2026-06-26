@@ -183,21 +183,186 @@ function readForm(form) {
   return Object.fromEntries(new FormData(form).entries());
 }
 
+// ── IndexedDB local store ─────────────────────────────────────────────────────
+
+const IDB_NAME = "percorsi-lavoro";
+const IDB_VERSION = 1;
+let _idb = null;
+
+function openIdb() {
+  if (_idb) return Promise.resolve(_idb);
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(IDB_NAME, IDB_VERSION);
+    req.onupgradeneeded = e => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains("addresses"))
+        db.createObjectStore("addresses", { keyPath: "id", autoIncrement: true });
+      if (!db.objectStoreNames.contains("routes"))
+        db.createObjectStore("routes", { keyPath: "id", autoIncrement: true });
+      if (!db.objectStoreNames.contains("settings"))
+        db.createObjectStore("settings", { keyPath: "key" });
+      if (!db.objectStoreNames.contains("folders"))
+        db.createObjectStore("folders", { keyPath: "id", autoIncrement: true });
+      if (!db.objectStoreNames.contains("multiday_plans"))
+        db.createObjectStore("multiday_plans", { keyPath: "id", autoIncrement: true });
+    };
+    req.onsuccess = e => { _idb = e.target.result; resolve(_idb); };
+    req.onerror = () => reject(req.error);
+  });
+}
+
+function idbGetAll(store) {
+  return openIdb().then(db => new Promise((res, rej) => {
+    const r = db.transaction(store, "readonly").objectStore(store).getAll();
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => rej(r.error);
+  }));
+}
+function idbGet(store, key) {
+  return openIdb().then(db => new Promise((res, rej) => {
+    const r = db.transaction(store, "readonly").objectStore(store).get(key);
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => rej(r.error);
+  }));
+}
+function idbPut(store, value) {
+  return openIdb().then(db => new Promise((res, rej) => {
+    const r = db.transaction(store, "readwrite").objectStore(store).put(value);
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => rej(r.error);
+  }));
+}
+function idbAdd(store, value) {
+  return openIdb().then(db => new Promise((res, rej) => {
+    const r = db.transaction(store, "readwrite").objectStore(store).add(value);
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => rej(r.error);
+  }));
+}
+function idbDelete(store, key) {
+  return openIdb().then(db => new Promise((res, rej) => {
+    const r = db.transaction(store, "readwrite").objectStore(store).delete(key);
+    r.onsuccess = () => res();
+    r.onerror = () => rej(r.error);
+  }));
+}
+
+// Paths handled locally by IndexedDB (not sent to server)
+const _LOCAL_PREFIXES = ["/api/addresses", "/api/routes", "/api/settings", "/api/folders", "/api/multiday-plans"];
+
+function _isLocal(path) {
+  const bare = path.split("?")[0];
+  // /api/routes/:id/share → server (share tokens created server-side)
+  if (/^\/api\/routes\/\d+\/share$/.test(bare)) return false;
+  return _LOCAL_PREFIXES.some(p => bare === p || bare.startsWith(p + "/"));
+}
+
+function _addrMatches(addr, q) {
+  if (!q) return true;
+  const lo = q.toLowerCase();
+  return ["customer", "activity", "location", "fullAddress", "notes"].some(k => (addr[k] || "").toLowerCase().includes(lo));
+}
+
+async function localApi(path, options = {}) {
+  const method = (options.method || "GET").toUpperCase();
+  const body = options.body ? JSON.parse(options.body) : null;
+  const [bare, qs] = path.split("?");
+  const params = new URLSearchParams(qs || "");
+
+  // Settings
+  if (bare === "/api/settings") {
+    if (method === "GET") { const s = await idbGet("settings", "main"); return s ? s.value : {}; }
+    if (method === "PUT") { await idbPut("settings", { key: "main", value: body }); return body; }
+  }
+
+  // Folders
+  if (bare === "/api/folders") {
+    if (method === "GET") return idbGetAll("folders");
+    if (method === "POST") { const id = await idbAdd("folders", { ...body }); return { ...body, id }; }
+  }
+  const folderMatch = bare.match(/^\/api\/folders\/(\d+)$/);
+  if (folderMatch) {
+    const id = Number(folderMatch[1]);
+    if (method === "PUT") { await idbPut("folders", { ...body, id }); return { ...body, id }; }
+    if (method === "DELETE") { await idbDelete("folders", id); return {}; }
+  }
+
+  // Addresses — opening hours check
+  const openingMatch = bare.match(/^\/api\/addresses\/(\d+)\/opening$/);
+  if (openingMatch) {
+    const addr = await idbGet("addresses", Number(openingMatch[1]));
+    if (!addr) throw new Error("Indirizzo non trovato");
+    const date = params.get("date") || new Date().toISOString().slice(0, 10);
+    const dayIdx = new Date(date + "T12:00:00").getDay(); // 0=Sun
+    const days = ["sun","mon","tue","wed","thu","fri","sat"];
+    const wh = addr.weeklyHours || {};
+    const dayKey = days[dayIdx];
+    const status = wh[dayKey] === false ? "closed" : (wh[dayKey] ? "open" : "unknown");
+    return { status, weeklyHours: addr.weeklyHours, date };
+  }
+
+  // Addresses
+  const addrMatch = bare.match(/^\/api\/addresses\/(\d+)$/);
+  if (addrMatch) {
+    const id = Number(addrMatch[1]);
+    if (method === "GET") { const a = await idbGet("addresses", id); if (!a) throw new Error("Non trovato"); return a; }
+    if (method === "PUT") { await idbPut("addresses", { ...body, id }); return { ...body, id }; }
+    if (method === "DELETE") { await idbDelete("addresses", id); return {}; }
+  }
+  if (bare === "/api/addresses") {
+    if (method === "GET") {
+      const all = await idbGetAll("addresses");
+      const q = params.get("search") || "";
+      return all.filter(a => _addrMatches(a, q));
+    }
+    if (method === "POST") { const id = await idbAdd("addresses", { ...body }); return { ...body, id }; }
+  }
+
+  // Routes
+  if (bare === "/api/routes") {
+    if (method === "GET") return idbGetAll("routes");
+    if (method === "POST") { const id = await idbAdd("routes", { ...body }); return { ...body, id }; }
+  }
+  const routeMatch = bare.match(/^\/api\/routes\/(\d+)$/);
+  if (routeMatch) {
+    const id = Number(routeMatch[1]);
+    if (method === "GET") { const r = await idbGet("routes", id); if (!r) throw new Error("Giro non trovato"); return r; }
+    if (method === "PUT") { await idbPut("routes", { ...body, id }); return { ...body, id }; }
+    if (method === "PATCH") {
+      const ex = await idbGet("routes", id); if (!ex) throw new Error("Giro non trovato");
+      const upd = { ...ex, ...body }; await idbPut("routes", upd); return upd;
+    }
+    if (method === "DELETE") { await idbDelete("routes", id); return {}; }
+  }
+  const routeFolderMatch = bare.match(/^\/api\/routes\/(\d+)\/folder$/);
+  if (routeFolderMatch) {
+    const id = Number(routeFolderMatch[1]);
+    const ex = await idbGet("routes", id);
+    if (ex) await idbPut("routes", { ...ex, folderId: body?.folderId ?? null });
+    return {};
+  }
+
+  // Multiday plans
+  if (bare === "/api/multiday-plans") {
+    if (method === "GET") return idbGetAll("multiday_plans");
+    if (method === "POST") { const id = await idbAdd("multiday_plans", { ...body }); return { ...body, id }; }
+  }
+  const mdMatch = bare.match(/^\/api\/multiday-plans\/(\d+)$/);
+  if (mdMatch) {
+    const id = Number(mdMatch[1]);
+    if (method === "DELETE") { await idbDelete("multiday_plans", id); return {}; }
+  }
+
+  throw new Error(`localApi: path non gestito: ${method} ${path}`);
+}
+
 async function api(path, options = {}) {
+  if (_isLocal(path)) return localApi(path, options);
   const res = await fetch(window.location.origin + path, {
     headers: { "Content-Type": "application/json", ...(options.headers || {}) },
     ...options
   });
   const payload = await res.json().catch(() => ({}));
-  if (res.status === 401) {
-    // Don't force logout during initial load (when user was just verified by /api/auth/me)
-    if (state._authVerified) {
-      state.user = null;
-      state._authVerified = false;
-      renderAuthScreen(false);
-    }
-    throw new Error("Sessione scaduta. Effettua di nuovo il login.");
-  }
   if (!res.ok) throw new Error(payload.error || `Errore ${res.status}`);
   return payload;
 }
@@ -547,9 +712,7 @@ function _scLoad() {
   try {
     const raw = sessionStorage.getItem(_SC_KEY);
     if (!raw) return null;
-    const data = JSON.parse(raw);
-    if (!data || !data.user) return null;
-    return data;
+    return JSON.parse(raw) || null;
   } catch { return null; }
 }
 
@@ -1332,7 +1495,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.064 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.065 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -3988,7 +4151,7 @@ function renderMenuStats() {
 // ── render dispatch ───────────────────────────────────────────────────────────
 
 function render() {
-  if (!state.user) { renderAuthScreen(false); return; }
+  if (false) { renderAuthScreen(false); return; } // auth removed — always render
   if (state.activeTab === "route") renderRoute();
   else if (state.activeTab === "saved") renderSaved();
   else if (state.activeTab === "archive") renderArchive();
@@ -4041,7 +4204,13 @@ function addressToStop(address, durationOverride = null) {
 async function shareRoute(routeId) {
   try {
     showSpinner("Generazione link…");
-    const data = await api(`/api/routes/${routeId}/share`, { method: "POST" });
+    // Fetch route from local IndexedDB and send full JSON to server (routes are local-only)
+    const localRoute = await idbGet("routes", Number(routeId));
+    if (!localRoute) throw new Error("Giro non trovato");
+    const data = await api(`/api/routes/${routeId}/share`, {
+      method: "POST",
+      body: JSON.stringify({ routeData: localRoute })
+    });
     hideSpinner();
     const url = data.url;
     if (navigator.share) {
@@ -4072,7 +4241,11 @@ async function handleShareImport(token) {
     if (!confirm) return;
 
     showSpinner("Importazione…");
-    const saved = await api(`/api/share/${token}/import`, { method: "POST" });
+    // Fetch shared route from server, then save locally to IndexedDB
+    const sharedRoute = await fetch(window.location.origin + `/api/share/${token}`).then(r => r.ok ? r.json() : Promise.reject(new Error("Link scaduto")));
+    const toSave = { ...sharedRoute, source: "imported", name };
+    const newId = await idbAdd("routes", toSave);
+    const saved = { ...toSave, id: newId };
     state.result = saved;
     await refreshSavedRoutes();
     hideSpinner();
@@ -7749,74 +7922,11 @@ async function initApp() {
 
 async function init() {
   const shareTokenMatch = window.location.pathname.match(/^\/share\/([a-zA-Z0-9_-]+)/);
-
-  // Fast path: usa cache sessionStorage se disponibile e fresca
-  const cached = _scLoad();
-  if (cached) {
-    _scApply(cached);
-    updateGreeting();
-    render();
-    hideSplash();
-    // Verifica sessione + aggiorna dati in background senza bloccare UI
-    fetch(window.location.origin + '/api/auth/me').then(async r => {
-      if (!r.ok) {
-        state.user = null;
-        state._authVerified = false;
-        sessionStorage.removeItem(_SC_KEY);
-        renderAuthScreen(false);
-        return;
-      }
-      const me = await r.json().catch(() => ({}));
-      state.user = me;
-      if (!me.nickname) showNicknameSetup();
-      if (shareTokenMatch) handleShareImport(shareTokenMatch[1]);
-      // Refresh dati in background
-      loadInitialData().then(() => {
-        refreshFolders().then(() => {
-          _scSave(me);
-          render();
-        });
-      }).catch(() => {});
-    }).catch(() => {});
-    return;
-  }
-
-  // Slow path: caricamento completo
-  try {
-    const meRes = await fetch(window.location.origin + '/api/auth/me');
-    const me = await meRes.json().catch(() => ({}));
-    if (!meRes.ok) {
-      hideSplash();
-      renderAuthScreen(me.setup === true);
-      return;
-    }
-    state.user = me;
-    state._authVerified = true;
-    await initApp();
-    _scSave(me);
-    updateGreeting();
-    hideSplash();
-    if (!me.nickname) showNicknameSetup();
-    if (shareTokenMatch) handleShareImport(shareTokenMatch[1]);
-  } catch {
-    // Errore di rete (non 401) — riprova una volta dopo 2s prima di mostrare il login
-    await new Promise(r => setTimeout(r, 2000));
-    try {
-      const retryRes = await fetch(window.location.origin + '/api/auth/me');
-      const retryMe = await retryRes.json().catch(() => ({}));
-      if (!retryRes.ok) { hideSplash(); renderAuthScreen(retryMe.setup === true); return; }
-      state.user = retryMe;
-      state._authVerified = true;
-      await initApp();
-      _scSave(retryMe);
-      updateGreeting();
-      hideSplash();
-      if (!retryMe.nickname) showNicknameSetup();
-    } catch {
-      hideSplash();
-      renderAuthScreen(false);
-    }
-  }
+  state.user = { username: "locale", id: 1 };
+  state._authVerified = true;
+  await initApp();
+  hideSplash();
+  if (shareTokenMatch) handleShareImport(shareTokenMatch[1]);
 }
 
 applyTheme();
@@ -7826,33 +7936,7 @@ window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () 
 });
 bindEvents();
 
-// bfcache restore (iOS Safari ripristina la pagina con il vecchio stato JS)
-// → ricontrolla sempre la sessione quando la pagina torna visibile dalla cache
-window.addEventListener("pageshow", (e) => {
-  if (e.persisted) {
-    fetch(window.location.origin + "/api/auth/me").then(r => {
-      if (!r.ok) {
-        state.user = null;
-        state._authVerified = false;
-        renderAuthScreen(false);
-      }
-    }).catch(() => {});
-  }
-});
-
-// Visibilitychange: ricontrolla la sessione quando l'app torna in primo piano
-// dopo un lungo periodo in background (es. iOS uccide il tab e lo ripristina)
-document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "visible" && state.user) {
-    fetch(window.location.origin + "/api/auth/me").then(r => {
-      if (!r.ok) {
-        state.user = null;
-        state._authVerified = false;
-        renderAuthScreen(false);
-      }
-    }).catch(() => {});
-  }
-});
+// bfcache / visibilitychange: app è locale, non serve verifica sessione
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {

@@ -605,12 +605,8 @@ async function handleApi(request, response) {
       return sendJson(response, 200, route);
     }
 
-    // ── All routes below require authentication ───────────────────────────────
-    const userId = await authenticate(request);
-    if (!userId) {
-      const noUsers = !(await hasAnyUser());
-      return sendJson(response, 401, { error: "Non autenticato", setup: noUsers });
-    }
+    // App è local-first: nessuna autenticazione server-side richiesta
+    const userId = (await authenticate(request)) || 1;
 
     if (method === "GET" && url.pathname === "/api/config") {
       return sendJson(response, 200, {
@@ -902,29 +898,18 @@ async function handleApi(request, response) {
     }
 
     // POST /api/routes/:id/share → crea link di condivisione
+    // Accetta routeData nel body (routes sono in IndexedDB lato client)
     const shareRouteMatch = url.pathname.match(/^\/api\/routes\/(\d+)\/share$/);
     if (shareRouteMatch && method === "POST") {
-      const route = await getRoute(shareRouteMatch[1], userId);
-      if (!route) return sendJson(response, 404, { error: "Giro non trovato" });
-      const sharer = await getUserById(userId);
-      const sharerName = sharer?.nickname || sharer?.username || null;
+      const body = await parseBody(request);
+      const routeData = body?.routeData;
+      if (!routeData) return sendJson(response, 400, { error: "routeData mancante" });
       const token = generateToken();
-      const routeData = { ...(route.payload || route), source: "imported", sharedBy: sharerName };
-      await createSharedRoute(token, userId, JSON.stringify(routeData));
+      await createSharedRoute(token, null, JSON.stringify({ ...routeData, source: "imported" }));
       const host = request.headers.host || "";
       const proto = process.env.NODE_ENV === "production" ? "https" : "http";
       const shareUrl = `${proto}://${host}/share/${token}`;
       return sendJson(response, 200, { token, url: shareUrl, expiresInDays: 5 });
-    }
-
-    // POST /api/share/:token/import → importa giro (autenticato)
-    const importMatch = url.pathname.match(/^\/api\/share\/([a-zA-Z0-9_-]+)\/import$/);
-    if (importMatch && method === "POST") {
-      const route = await getSharedRoute(importMatch[1]);
-      if (!route) return sendJson(response, 404, { error: "Link scaduto o non trovato" });
-      const saved = await saveRoute({ ...route, source: "imported" }, userId, "imported");
-      const full = await getRoute(saved.id, userId);
-      return sendJson(response, 200, full);
     }
 
     if (method === "POST" && url.pathname === "/api/voice/parse") {

@@ -1,3 +1,6 @@
+## v5.065 — 2026-06-26
+- Architettura local-first: tutti i dati (indirizzi, giri salvati, impostazioni, cartelle, piani multi-giorno) ora sono in IndexedDB nel browser. Il server è mantenuto solo per la pianificazione percorso (chiave Google Maps lato server) e le API di condivisione. Login e registrazione rimossi — nessun account necessario. Il server non richiede più autenticazione per le API di pianificazione. La funzione di condivisione giri invia ora il JSON del giro direttamente al server invece di recuperarlo dal DB server-side.
+
 ## v5.064 — 2026-06-25
 - Diagnostica crash Vercel: handler `uncaughtException`/`unhandledRejection` logga l'errore esatto nei Function Logs. `export default server` per compatibilità @vercel/node ESM. `server.on('error')` per non crashare su EADDRINUSE.
 
