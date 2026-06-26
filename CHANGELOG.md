@@ -1,3 +1,6 @@
+## v5.066 — 2026-06-26
+- Sync bidirezionale IndexedDB ↔ server: all'avvio (se login disponibile) scarica tutti i dati dal server e aggiorna IndexedDB; ogni scrittura viene replicata al server in background (fire-and-forget). Backup settimanale automatico: se l'ultimo backup ha più di 7 giorni, l'intero IndexedDB viene inviato al server via `/api/backup`. L'app si avvia sempre con i dati locali — il login non è più bloccante: se il server non risponde, continua offline senza errori.
+
 ## v5.065 — 2026-06-26
 - Architettura local-first: tutti i dati (indirizzi, giri salvati, impostazioni, cartelle, piani multi-giorno) ora sono in IndexedDB nel browser. Il server è mantenuto solo per la pianificazione percorso (chiave Google Maps lato server) e le API di condivisione. Login e registrazione rimossi — nessun account necessario. Il server non richiede più autenticazione per le API di pianificazione. La funzione di condivisione giri invia ora il JSON del giro direttamente al server invece di recuperarlo dal DB server-side.
 

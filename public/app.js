@@ -252,7 +252,6 @@ const _LOCAL_PREFIXES = ["/api/addresses", "/api/routes", "/api/settings", "/api
 
 function _isLocal(path) {
   const bare = path.split("?")[0];
-  // /api/routes/:id/share → server (share tokens created server-side)
   if (/^\/api\/routes\/\d+\/share$/.test(bare)) return false;
   return _LOCAL_PREFIXES.some(p => bare === p || bare.startsWith(p + "/"));
 }
@@ -261,6 +260,107 @@ function _addrMatches(addr, q) {
   if (!q) return true;
   const lo = q.toLowerCase();
   return ["customer", "activity", "location", "fullAddress", "notes"].some(k => (addr[k] || "").toLowerCase().includes(lo));
+}
+
+// Low-level server fetch (bypasses localApi routing, used for sync)
+async function _serverFetch(path, options = {}) {
+  const res = await fetch(window.location.origin + path, {
+    headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+    ...options
+  });
+  if (!res.ok) throw new Error(`sync error ${res.status}`);
+  return res.json().catch(() => ({}));
+}
+
+// After a local write, sync in background to server (fire-and-forget).
+// For new records (POST), reconciles the ID: if server assigns a different ID,
+// the local record is moved to the server ID so all references stay consistent.
+function _bgSync(path, options, localId) {
+  if (!state._syncEnabled) return;
+  const method = (options.method || "GET").toUpperCase();
+  _serverFetch(path, options).then(serverResult => {
+    if (method === "POST" && serverResult?.id && localId !== undefined && serverResult.id !== localId) {
+      // Server assigned a different ID — move local record to server ID
+      const store = _pathToStore(path.split("?")[0]);
+      if (store) {
+        idbGet(store, localId).then(rec => {
+          if (!rec) return;
+          idbDelete(store, localId);
+          idbPut(store, { ...rec, id: serverResult.id });
+        }).catch(() => {});
+      }
+    }
+  }).catch(() => {}); // silently ignore — server might be down
+}
+
+function _pathToStore(bare) {
+  if (bare === "/api/addresses" || bare.startsWith("/api/addresses/")) return "addresses";
+  if (bare === "/api/routes" || bare.startsWith("/api/routes/")) return "routes";
+  if (bare === "/api/folders" || bare.startsWith("/api/folders/")) return "folders";
+  if (bare === "/api/multiday-plans" || bare.startsWith("/api/multiday-plans/")) return "multiday_plans";
+  return null;
+}
+
+// Sync server → IndexedDB (pull). Called at startup when auth succeeds.
+// Server is the source of truth for shared/backup data.
+async function syncFromServer() {
+  try {
+    const [addresses, routes, settings, folders, plans] = await Promise.all([
+      _serverFetch("/api/addresses?search=").catch(() => null),
+      _serverFetch("/api/routes").catch(() => null),
+      _serverFetch("/api/settings").catch(() => null),
+      _serverFetch("/api/folders").catch(() => null),
+      _serverFetch("/api/multiday-plans").catch(() => null),
+    ]);
+    // Overwrite IndexedDB stores with server data (server wins)
+    await Promise.all([
+      addresses && _idbReplaceAll("addresses", addresses),
+      routes    && _idbReplaceAll("routes",    routes),
+      folders   && _idbReplaceAll("folders",   folders),
+      plans     && _idbReplaceAll("multiday_plans", plans),
+      settings  && idbPut("settings", { key: "main", value: settings }),
+    ].filter(Boolean));
+    try { localStorage.setItem("_lastSync", new Date().toISOString()); } catch {}
+  } catch { /* offline or server down — silently skip */ }
+}
+
+// Replace all records in an IndexedDB store with a new array.
+async function _idbReplaceAll(store, records) {
+  const db = await openIdb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(store, "readwrite");
+    const s = tx.objectStore(store);
+    s.clear();
+    records.forEach(r => s.put(r));
+    tx.oncomplete = resolve;
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+// Weekly backup: push all IndexedDB data to server.
+async function _weeklyBackupIfDue() {
+  if (!state._syncEnabled) return;
+  try {
+    const last = localStorage.getItem("_lastBackup");
+    const daysSince = last ? (Date.now() - new Date(last).getTime()) / 86400000 : 999;
+    if (daysSince < 7) return;
+    await _pushBackupToServer();
+    localStorage.setItem("_lastBackup", new Date().toISOString());
+  } catch {}
+}
+
+async function _pushBackupToServer() {
+  const [addresses, routes, settings, folders, plans] = await Promise.all([
+    idbGetAll("addresses"),
+    idbGetAll("routes"),
+    idbGet("settings", "main").then(s => s?.value || {}),
+    idbGetAll("folders"),
+    idbGetAll("multiday_plans"),
+  ]);
+  await _serverFetch("/api/backup", {
+    method: "POST",
+    body: JSON.stringify({ addresses, routes, settings, folders, plans })
+  }).catch(() => {}); // silently ignore if server down
 }
 
 async function localApi(path, options = {}) {
@@ -272,28 +372,36 @@ async function localApi(path, options = {}) {
   // Settings
   if (bare === "/api/settings") {
     if (method === "GET") { const s = await idbGet("settings", "main"); return s ? s.value : {}; }
-    if (method === "PUT") { await idbPut("settings", { key: "main", value: body }); return body; }
+    if (method === "PUT") {
+      await idbPut("settings", { key: "main", value: body });
+      _bgSync(path, options);
+      return body;
+    }
   }
 
   // Folders
   if (bare === "/api/folders") {
     if (method === "GET") return idbGetAll("folders");
-    if (method === "POST") { const id = await idbAdd("folders", { ...body }); return { ...body, id }; }
+    if (method === "POST") {
+      const id = await idbAdd("folders", { ...body });
+      _bgSync(path, options, id);
+      return { ...body, id };
+    }
   }
   const folderMatch = bare.match(/^\/api\/folders\/(\d+)$/);
   if (folderMatch) {
     const id = Number(folderMatch[1]);
-    if (method === "PUT") { await idbPut("folders", { ...body, id }); return { ...body, id }; }
-    if (method === "DELETE") { await idbDelete("folders", id); return {}; }
+    if (method === "PUT") { await idbPut("folders", { ...body, id }); _bgSync(path, options); return { ...body, id }; }
+    if (method === "DELETE") { await idbDelete("folders", id); _bgSync(path, options); return {}; }
   }
 
-  // Addresses — opening hours check
+  // Addresses — opening hours check (local, no sync needed)
   const openingMatch = bare.match(/^\/api\/addresses\/(\d+)\/opening$/);
   if (openingMatch) {
     const addr = await idbGet("addresses", Number(openingMatch[1]));
     if (!addr) throw new Error("Indirizzo non trovato");
     const date = params.get("date") || new Date().toISOString().slice(0, 10);
-    const dayIdx = new Date(date + "T12:00:00").getDay(); // 0=Sun
+    const dayIdx = new Date(date + "T12:00:00").getDay();
     const days = ["sun","mon","tue","wed","thu","fri","sat"];
     const wh = addr.weeklyHours || {};
     const dayKey = days[dayIdx];
@@ -306,8 +414,8 @@ async function localApi(path, options = {}) {
   if (addrMatch) {
     const id = Number(addrMatch[1]);
     if (method === "GET") { const a = await idbGet("addresses", id); if (!a) throw new Error("Non trovato"); return a; }
-    if (method === "PUT") { await idbPut("addresses", { ...body, id }); return { ...body, id }; }
-    if (method === "DELETE") { await idbDelete("addresses", id); return {}; }
+    if (method === "PUT") { await idbPut("addresses", { ...body, id }); _bgSync(path, options); return { ...body, id }; }
+    if (method === "DELETE") { await idbDelete("addresses", id); _bgSync(path, options); return {}; }
   }
   if (bare === "/api/addresses") {
     if (method === "GET") {
@@ -315,42 +423,54 @@ async function localApi(path, options = {}) {
       const q = params.get("search") || "";
       return all.filter(a => _addrMatches(a, q));
     }
-    if (method === "POST") { const id = await idbAdd("addresses", { ...body }); return { ...body, id }; }
+    if (method === "POST") {
+      const id = await idbAdd("addresses", { ...body });
+      _bgSync(path, options, id);
+      return { ...body, id };
+    }
   }
 
   // Routes
   if (bare === "/api/routes") {
     if (method === "GET") return idbGetAll("routes");
-    if (method === "POST") { const id = await idbAdd("routes", { ...body }); return { ...body, id }; }
+    if (method === "POST") {
+      const id = await idbAdd("routes", { ...body });
+      _bgSync(path, options, id);
+      return { ...body, id };
+    }
   }
   const routeMatch = bare.match(/^\/api\/routes\/(\d+)$/);
   if (routeMatch) {
     const id = Number(routeMatch[1]);
     if (method === "GET") { const r = await idbGet("routes", id); if (!r) throw new Error("Giro non trovato"); return r; }
-    if (method === "PUT") { await idbPut("routes", { ...body, id }); return { ...body, id }; }
+    if (method === "PUT") { await idbPut("routes", { ...body, id }); _bgSync(path, options); return { ...body, id }; }
     if (method === "PATCH") {
       const ex = await idbGet("routes", id); if (!ex) throw new Error("Giro non trovato");
-      const upd = { ...ex, ...body }; await idbPut("routes", upd); return upd;
+      const upd = { ...ex, ...body }; await idbPut("routes", upd); _bgSync(path, options); return upd;
     }
-    if (method === "DELETE") { await idbDelete("routes", id); return {}; }
+    if (method === "DELETE") { await idbDelete("routes", id); _bgSync(path, options); return {}; }
   }
   const routeFolderMatch = bare.match(/^\/api\/routes\/(\d+)\/folder$/);
   if (routeFolderMatch) {
     const id = Number(routeFolderMatch[1]);
     const ex = await idbGet("routes", id);
-    if (ex) await idbPut("routes", { ...ex, folderId: body?.folderId ?? null });
+    if (ex) { await idbPut("routes", { ...ex, folderId: body?.folderId ?? null }); _bgSync(path, options); }
     return {};
   }
 
   // Multiday plans
   if (bare === "/api/multiday-plans") {
     if (method === "GET") return idbGetAll("multiday_plans");
-    if (method === "POST") { const id = await idbAdd("multiday_plans", { ...body }); return { ...body, id }; }
+    if (method === "POST") {
+      const id = await idbAdd("multiday_plans", { ...body });
+      _bgSync(path, options, id);
+      return { ...body, id };
+    }
   }
   const mdMatch = bare.match(/^\/api\/multiday-plans\/(\d+)$/);
   if (mdMatch) {
     const id = Number(mdMatch[1]);
-    if (method === "DELETE") { await idbDelete("multiday_plans", id); return {}; }
+    if (method === "DELETE") { await idbDelete("multiday_plans", id); _bgSync(path, options); return {}; }
   }
 
   throw new Error(`localApi: path non gestito: ${method} ${path}`);
@@ -363,6 +483,14 @@ async function api(path, options = {}) {
     ...options
   });
   const payload = await res.json().catch(() => ({}));
+  if (res.status === 401) {
+    if (state._authVerified) {
+      state.user = null;
+      state._authVerified = false;
+      state._syncEnabled = false;
+    }
+    throw new Error("Sessione scaduta. Effettua di nuovo il login.");
+  }
   if (!res.ok) throw new Error(payload.error || `Errore ${res.status}`);
   return payload;
 }
@@ -1495,7 +1623,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.065 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.066 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -4151,7 +4279,7 @@ function renderMenuStats() {
 // ── render dispatch ───────────────────────────────────────────────────────────
 
 function render() {
-  if (false) { renderAuthScreen(false); return; } // auth removed — always render
+  // Nessun blocco su state.user: l'app gira sempre con dati locali
   if (state.activeTab === "route") renderRoute();
   else if (state.activeTab === "saved") renderSaved();
   else if (state.activeTab === "archive") renderArchive();
@@ -7922,8 +8050,28 @@ async function initApp() {
 
 async function init() {
   const shareTokenMatch = window.location.pathname.match(/^\/share\/([a-zA-Z0-9_-]+)/);
-  state.user = { username: "locale", id: 1 };
-  state._authVerified = true;
+
+  // Prova auth — se riesce, sincronizza dal server; se fallisce, usa solo IndexedDB locale
+  try {
+    const meRes = await fetch(window.location.origin + "/api/auth/me");
+    if (meRes.ok) {
+      const me = await meRes.json().catch(() => ({}));
+      state.user = me;
+      state._authVerified = true;
+      state._syncEnabled = true;
+      // Sync server → IndexedDB in background (non blocca l'avvio)
+      syncFromServer().then(() => {
+        _weeklyBackupIfDue().catch(() => {});
+        // Ricarica i dati aggiornati dal server nell'UI
+        Promise.all([refreshAddressesForRoute(), refreshSavedRoutes(), refreshMultiDayPlans(), refreshFolders()])
+          .then(() => render()).catch(() => {});
+      }).catch(() => {});
+    }
+    // Se non autenticato: usa solo IndexedDB (nessun sync server)
+  } catch { /* rete assente — usa solo IndexedDB */ }
+
+  // Avvio immediato con dati locali (IndexedDB), indipendentemente dall'auth
+  state.user = state.user || { username: "locale", id: 0 };
   await initApp();
   hideSplash();
   if (shareTokenMatch) handleShareImport(shareTokenMatch[1]);

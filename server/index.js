@@ -1049,6 +1049,42 @@ ${addressList}
       return sendJson(response, 200, { text: data.text || "" });
     }
 
+    // POST /api/backup — riceve dump completo da IndexedDB, sostituisce tutti i dati del server
+    if (method === "POST" && url.pathname === "/api/backup") {
+      const body = await parseBody(request);
+      // Ripristina settings
+      if (body.settings && typeof body.settings === "object") {
+        await updateSettings(userId, body.settings).catch(() => {});
+      }
+      // Ripristina indirizzi (upsert: usa id dal client come riferimento)
+      for (const addr of (body.addresses || [])) {
+        const existing = await getAddress(addr.id, userId).catch(() => null);
+        if (existing) await updateAddress(addr.id, addr, userId).catch(() => {});
+        else await createAddress(addr, userId).catch(() => {});
+      }
+      // Ripristina cartelle
+      for (const folder of (body.folders || [])) {
+        const allFolders = await listFolders(userId).catch(() => []);
+        const exists = allFolders.find(f => f.id === folder.id);
+        if (!exists) await createFolder(folder.name, userId).catch(() => {});
+        else await renameFolder(folder.id, folder.name, userId).catch(() => {});
+      }
+      // Ripristina giri
+      for (const route of (body.routes || [])) {
+        const existing = await getRoute(route.id, userId).catch(() => null);
+        if (existing) await updateRoutePayload(route.id, route, userId).catch(() => {});
+        else await saveRoute(route, userId, route.source || null).catch(() => {});
+      }
+      // Ripristina piani multi-giorno
+      for (const plan of (body.plans || [])) {
+        const all = await listMultiDayPlans(userId).catch(() => []);
+        if (!all.find(p => p.id === plan.id)) {
+          await saveMultiDayPlan(plan.name, plan.payload, userId).catch(() => {});
+        }
+      }
+      return sendJson(response, 200, { ok: true });
+    }
+
     return sendJson(response, 404, { error: "Endpoint non trovato" });
   } catch (error) {
     console.error(error);
