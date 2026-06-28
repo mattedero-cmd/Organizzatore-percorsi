@@ -1,3 +1,12 @@
+## v5.069 — 2026-06-28
+Sync offline affidabile — outbox durabile + merge non distruttivo (IndexedDB v2):
+- **Le cancellazioni offline non “risorgono” più**: ogni modifica/cancellazione viene messa in una coda durabile (`outbox`) che sopravvive a reload e mancanza di rete; alla riconnessione viene inviata al server PRIMA di ri-scaricare i dati, così un giro/indirizzo cancellato offline resta cancellato.
+- **Niente più perdita di scritture offline**: creazioni e modifiche fatte senza rete vengono inviate appena torna la connessione (al riavvio e sull'evento `online`), con riconciliazione dell'id assegnato dal server.
+- **Pull non distruttivo**: al sync iniziale i record con operazioni ancora in coda non vengono sovrascritti dal server (le modifiche locali non sincronizzate vincono), e i record con una cancellazione in sospeso non vengono re-importati.
+- Verificato con simulazione dei casi critici (cancella offline, crea offline, crea+modifica offline, delete/update in sospeso durante il pull).
+
+> Nota: la deduplica perfetta tra PIÙ dispositivi che modificano lo STESSO record contemporaneamente offline richiederebbe un id stabile lato server (`client_uid`): è un irrobustimento futuro. I casi reali a singolo utente (un device, o device diversi non in conflitto simultaneo) sono coperti.
+
 ## v5.068 — 2026-06-28
 Giri salvati offline + sync dettaglio (fix regressione local-first):
 - **Apertura giri salvati**: prima, da sincronizzati, il sync scaricava solo un riassunto dei giri → aprendo un giro salvato si vedevano 0 tappe / niente meteo. Ora ogni giro pianificato viene messo in cache COMPLETO in IndexedDB (tappe, meteo, costi) e il sync usa `/api/routes?full=1`, quindi lista e apertura funzionano anche offline.

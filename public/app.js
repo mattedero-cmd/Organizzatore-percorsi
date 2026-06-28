@@ -196,7 +196,7 @@ function readForm(form) {
 // ── IndexedDB local store ─────────────────────────────────────────────────────
 
 const IDB_NAME = "percorsi-lavoro";
-const IDB_VERSION = 1;
+const IDB_VERSION = 2;
 let _idb = null;
 
 function openIdb() {
@@ -215,6 +215,9 @@ function openIdb() {
         db.createObjectStore("folders", { keyPath: "id", autoIncrement: true });
       if (!db.objectStoreNames.contains("multiday_plans"))
         db.createObjectStore("multiday_plans", { keyPath: "id", autoIncrement: true });
+      // v2: coda durabile delle mutazioni da inviare al server (sync offline affidabile)
+      if (!db.objectStoreNames.contains("outbox"))
+        db.createObjectStore("outbox", { keyPath: "seq", autoIncrement: true });
     };
     req.onsuccess = e => { _idb = e.target.result; resolve(_idb); };
     req.onerror = () => reject(req.error);
@@ -282,25 +285,22 @@ async function _serverFetch(path, options = {}) {
   return res.json().catch(() => ({}));
 }
 
-// After a local write, sync in background to server (fire-and-forget).
-// For new records (POST), reconciles the ID: if server assigns a different ID,
-// the local record is moved to the server ID so all references stay consistent.
+// Dopo una scrittura locale, accoda la mutazione nell'OUTBOX durabile (sopravvive a
+// reload/offline) e prova a svuotarlo. Non più fire-and-forget: una scrittura/cancellazione
+// fatta offline NON viene persa e verrà inviata al server al prossimo flush (online).
 function _bgSync(path, options, localId) {
   if (!state._syncEnabled) return;
   const method = (options.method || "GET").toUpperCase();
-  _serverFetch(path, options).then(serverResult => {
-    if (method === "POST" && serverResult?.id && localId !== undefined && serverResult.id !== localId) {
-      // Server assigned a different ID — move local record to server ID
-      const store = _pathToStore(path.split("?")[0]);
-      if (store) {
-        idbGet(store, localId).then(rec => {
-          if (!rec) return;
-          idbDelete(store, localId);
-          idbPut(store, { ...rec, id: serverResult.id });
-        }).catch(() => {});
-      }
-    }
-  }).catch(() => {}); // silently ignore — server might be down
+  if (method === "GET") return;
+  const store = _pathToStore(path.split("?")[0]);
+  // recId: per POST è l'id locale appena creato; per PUT/PATCH/DELETE è l'id nel path.
+  let recId = localId ?? null;
+  if (recId == null) {
+    const m = path.match(/\/(\d+)(?:\/[a-z-]+)?$/);
+    if (m) recId = Number(m[1]);
+  }
+  _outboxEnqueue({ store, method, path, body: options.body || null, recId })
+    .then(() => flushOutbox()).catch(() => {});
 }
 
 function _pathToStore(bare) {
@@ -311,10 +311,58 @@ function _pathToStore(bare) {
   return null;
 }
 
-// Sync server → IndexedDB (pull). Called at startup when auth succeeds.
-// Server is the source of truth for shared/backup data.
+function _outboxEnqueue(entry) {
+  return idbAdd("outbox", entry); // seq autoincrement → ordine FIFO garantito
+}
+
+// Svuota l'outbox in ordine. Riconcilia gli id: quando il server assegna un id diverso
+// a una POST, mappa recId→idServer per quel flush e sposta il record locale, così PUT/DELETE
+// successivi della stessa entità (stesso flush) colpiscono l'id giusto. Si ferma al primo
+// errore di rete e ritenta al flush successivo, preservando l'ordine.
+let _flushing = false;
+async function flushOutbox() {
+  if (!state._syncEnabled || _flushing) return;
+  _flushing = true;
+  try {
+    const entries = (await idbGetAll("outbox")).sort((a, b) => a.seq - b.seq);
+    const idMap = {}; // recId locale → id server (entro questo flush)
+    for (const e of entries) {
+      try {
+        let path = e.path;
+        if (e.recId != null && idMap[e.recId] != null && idMap[e.recId] !== e.recId) {
+          path = path.replace(new RegExp(`/${e.recId}(/|$)`), `/${idMap[e.recId]}$1`);
+        }
+        const resp = await _serverFetch(path, { method: e.method, body: e.body || undefined });
+        if (e.method === "POST" && e.store && resp?.id != null && e.recId != null && resp.id !== e.recId) {
+          idMap[e.recId] = resp.id;
+          const rec = await idbGet(e.store, e.recId);
+          if (rec) { await idbDelete(e.store, e.recId); await idbPut(e.store, { ...rec, id: resp.id }); }
+        }
+        await idbDelete("outbox", e.seq);
+      } catch {
+        break; // server irraggiungibile: riprova al prossimo flush mantenendo l'ordine
+      }
+    }
+  } finally {
+    _flushing = false;
+  }
+}
+
+// Sync server → IndexedDB (pull). Chiamata all'avvio quando l'auth riesce.
+// Prima svuota l'OUTBOX (così i delete/create/update offline raggiungono il server PRIMA
+// del pull → niente "risurrezioni"), poi tira i dati e fa un MERGE NON DISTRUTTIVO:
+// salta i record con un delete ancora in coda e preserva i record con create/update non
+// ancora sincronizzati.
 async function syncFromServer() {
   try {
+    await flushOutbox();
+    // op rimaste in coda (ancora offline / server ko): non sovrascriverle col server
+    const pending = await idbGetAll("outbox");
+    const writes = {}, deletes = {};
+    for (const e of pending) {
+      if (!e.store || e.recId == null) continue;
+      (e.method === "DELETE" ? (deletes[e.store] ||= new Set()) : (writes[e.store] ||= new Set())).add(e.recId);
+    }
     const [addresses, routes, settings, folders, plans] = await Promise.all([
       _serverFetch("/api/addresses?search=").catch(() => null),
       _serverFetch("/api/routes?full=1").catch(() => null), // full=1: include rows/weather per l'apertura offline
@@ -322,16 +370,45 @@ async function syncFromServer() {
       _serverFetch("/api/folders").catch(() => null),
       _serverFetch("/api/multiday-plans").catch(() => null),
     ]);
-    // Overwrite IndexedDB stores with server data (server wins); routes: merge che preserva il dettaglio
     await Promise.all([
-      addresses && _idbReplaceAll("addresses", addresses),
-      routes    && _idbMergeRoutes(routes),
-      folders   && _idbReplaceAll("folders",   folders),
-      plans     && _idbReplaceAll("multiday_plans", plans),
-      settings  && idbPut("settings", { key: "main", value: settings }),
+      addresses && _applyPull("addresses", addresses, writes.addresses, deletes.addresses, false),
+      routes    && _applyPull("routes", routes, writes.routes, deletes.routes, true),
+      folders   && _applyPull("folders", folders, writes.folders, deletes.folders, false),
+      plans     && _applyPull("multiday_plans", plans, writes.multiday_plans, deletes.multiday_plans, false),
+      // settings: non sovrascrivere se c'è un PUT settings ancora in coda (store null → non in writes)
+      (settings && !pending.some(e => e.path === "/api/settings")) && idbPut("settings", { key: "main", value: settings }),
     ].filter(Boolean));
     try { localStorage.setItem("_lastSync", new Date().toISOString()); } catch {}
   } catch { /* offline or server down — silently skip */ }
+}
+
+// Applica i dati del server a uno store con merge non distruttivo:
+// - scarta i record server che hanno un DELETE locale ancora in coda (non risorgono)
+// - mantiene i record locali con CREATE/UPDATE ancora in coda e non presenti sul server
+// - preserveDetail (giri): se il record server è solo un riassunto, tiene il dettaglio locale
+async function _applyPull(store, serverRecords, pendingWrites, pendingDeletes, preserveDetail) {
+  let incoming = pendingDeletes ? serverRecords.filter(r => !pendingDeletes.has(r.id)) : serverRecords.slice();
+  if (preserveDetail) {
+    const existing = {};
+    (await idbGetAll(store)).forEach(r => { existing[r.id] = r; });
+    incoming = incoming.map(r => {
+      const hasDetail = r.payload || (Array.isArray(r.rows) && r.rows.length);
+      if (hasDetail) return r;
+      const ex = existing[r.id];
+      return ex && (ex.payload || ex.rows)
+        ? { ...r, payload: ex.payload, rows: ex.rows, weather: ex.weather, finalLeg: ex.finalLeg }
+        : r;
+    });
+  }
+  if (pendingWrites && pendingWrites.size) {
+    // i record con create/update non ancora sincronizzato vincono sulla versione server
+    const locals = new Map();
+    for (const r of await idbGetAll(store)) if (pendingWrites.has(r.id)) locals.set(r.id, r);
+    incoming = incoming.map(r => locals.has(r.id) ? locals.get(r.id) : r);
+    const present = new Set(incoming.map(r => r.id));
+    for (const [id, r] of locals) if (!present.has(id)) incoming.push(r);
+  }
+  return _idbReplaceAll(store, incoming);
 }
 
 // Replace all records in an IndexedDB store with a new array.
@@ -390,22 +467,6 @@ function _routeRecordToFlat(rec) {
     folderId: rec.folderId ?? null,
     notes: rec.notes ?? ""
   };
-}
-
-// Sync giri dal server: i giri sono server-authoritative (li salva /api/plan), ma se un
-// record in arrivo è solo un riassunto (senza dettaglio) preserviamo il dettaglio locale.
-async function _idbMergeRoutes(records) {
-  const existing = {};
-  (await idbGetAll("routes")).forEach(r => { existing[r.id] = r; });
-  const merged = records.map(r => {
-    const hasDetail = r.payload || (Array.isArray(r.rows) && r.rows.length);
-    if (hasDetail) return r;
-    const ex = existing[r.id];
-    return ex && (ex.payload || ex.rows)
-      ? { ...r, payload: ex.payload, rows: ex.rows, weather: ex.weather, finalLeg: ex.finalLeg }
-      : r;
-  });
-  return _idbReplaceAll("routes", merged);
 }
 
 // Weekly backup: push all IndexedDB data to server.
@@ -1684,7 +1745,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.068 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.069 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -8144,6 +8205,9 @@ window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () 
 bindEvents();
 
 // bfcache / visibilitychange: app è locale, non serve verifica sessione
+
+// Tornata la connessione: svuota la coda delle mutazioni offline verso il server
+window.addEventListener("online", () => { flushOutbox().catch(() => {}); });
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
