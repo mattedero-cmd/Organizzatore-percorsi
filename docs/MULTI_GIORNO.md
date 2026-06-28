@@ -54,37 +54,32 @@ lontana alla più vicina; i resti vicini si accorpano alla fine.**
   CHIUSURA, e timing della 1ª tappa (orari risolti + se è scattato il calcolo a ritroso).
 - **Chiedere SEMPRE all'utente di incollare questo log** prima di toccare i raggruppamenti.
 
-## Algoritmo attuale (passi) — v5.030 (GREEDY far-first con unione PARZIALE)
+## Algoritmo attuale (passi) — v5.070 (PER-ZONA + unione PARZIALE sul corridoio)
+> ATTENZIONE: il GREEDY GLOBALE (v5.030–v5.044) è stato ANNULLATO — sul giro reale faceva SNAKE e
+> FRAMMENTAVA (vedi sotto "Cosa è stato provato e NON va"). Si costruisce SEMPRE per-zona.
 1. `buildLegTimeMatrix(home, stops)` → matrice tempi reali; `legMin(a,b)` usa la matrice (+buffer) o fallback.
 2. `groupColocated` → tappe stesso paese (località) o entro ~6 min = gruppo atomico (MAI separate).
-3. `assignZones(groups, home)` → SOLO per la Diagnostica (riga `ZONE`); NON vincola più la costruzione.
-4. `buildDayClusters` = un unico GREEDY far-first con unione PARZIALE (sostituisce per-zona + `fillDays`):
-   - Finché restano gruppi LONTANI (`maxHome(group) > NEAR_HOME_RADIUS` 35'):
-     - **Seme** = gruppo col membro più LONTANO da casa (tra tutti i non assegnati).
-     - **Accrescimento "sulla via"** = aggiunge il gruppo con la **minima deviazione-per-tappa**
-       `(driveMin(giorno+g) − driveMin(giorno)) / nTappe(g)` che sia ≤ `MERGE_DETOUR_PER_STOP` (22') E
-       FATTIBILE (motore reale: rientro ≤ maxReturnTime − `MERGE_RETURN_MARGIN` 15', nessuna tappa oltre
-       chiusura). Riempie la giornata; le tappe in eccesso restano LIBERE per le giornate successive
-       (unione PARZIALE — non tutto-o-niente). Così San Candido tira Bressanone/Ortisei/Bolzano finché
-       piena, lasciando liberi Egna/Sen Jan/Merano; Tione tira Riva+Rovereto; Primiero tira Levico/Pergine;
-       le valli opposte hanno deviazione-per-tappa alta → escluse.
-   - **Orfani** (gruppi vicino casa rimasti + eventuali giornate-singolo dissolte): accorpati con
-     `growDays` = far-first, riempi una giornata e sfora solo al bisogno, SENZA limite di direzione
-     (vicino casa è tutto raggiungibile → «accorpare necessariamente»; una tappa davvero sola resta sola).
-   - Ordine finale near→far. La costruzione è far-first; il calendario è dalla più vicina alla più lontana.
-   - Fallback offline (`!dayFeasible`): `growDays` su tutto con `estimateDayMinutes`/`dayHoursFeasible`.
-5. Per ogni giornata: ordine **far-first** bloccato (`orderDayFarFirst`) → `planRoute` (orari/soste/pranzo reali).
-6. **Date solo feriali**: `addWorkdaysISO` salta sabato/domenica; `dayIndex` → data del giorno lavorativo.
+3. `assignZones(groups, home)` → partiziona in ZONE (valli). CONFERMATE CORRETTE sui tempi reali.
+4. `buildDayClusters` costruisce le giornate DENTRO ogni zona (`growDays` per-zona): seme = più lontano
+   nella zona, accresce il più vicino fattibile (motore reale). Niente mescolanze tra valli.
+5. **UNIONE PARZIALE sul corridoio** (`fillPartial`, NUOVA, TRA grow per-zona e `fillDays`): una giornata
+   lontana POVERA (slack > `SLACK_MIN` 75' rispetto al rientro max) assorbe singoli GRUPPI atomici "sulla
+   via" da zone adiacenti, lasciando il resto LIBERO. Candidato g ammesso se DIRECTNESS
+   `legMin(seme,g)/(legMin(seme,casa)+legMin(g,casa))` ≤ `TAU_PARTIAL` (0.45) E detour-dal-corridoio ≤
+   `CORRIDOR_DETOUR` (25'); si assorbe per **savings** (Clarke-Wright) decrescente; **GATE ANTI-FURTO**:
+   g si sposta solo se la giornata donatrice resta non-vuota e FATTIBILE. La directness è **ancorata al
+   SEME FISSO** (estremo lontano), MAI alla frontiera — l'unico ancoraggio che l'hub vicino casa non
+   inganna: Ortisei→Pergine 0.85 ESCLUSO (niente snake), San Candido→Trento 0.79 ESCLUSO (niente salto),
+   Tione→Riva 0.39 / Cavalese→SenJan 0.19 INCLUSI. È il savings di Clarke-Wright adimensionale. ADDITIVO:
+   se nessuna giornata è povera → no-op (= comportamento v5.029). Sposta gruppi interi → co-locate mai
+   separate. (Esito di un design-panel multi-agente; vedi CHANGELOG v5.070.)
+6. **FASE DI RIEMPIMENTO** (`fillDays`): unisce le GIORNATE INTERE adiacenti compatibili residue
+   (deviazione-per-tappa ≤ `MERGE_DETOUR_PER_STOP` 22' + fattibilità). Tione/Riva+Rovereto, Primiero+Valsugana.
+7. Orfani vicino casa accorpati; ordine finale near→far.
+8. Per ogni giornata: ordine **far-first** bloccato (`orderDayFarFirst`) → `planRoute` (orari/soste/pranzo reali).
+9. **Date solo feriali**: `addWorkdaysISO` salta sabato/domenica; `dayIndex` → data del giorno lavorativo.
 
-### STORICO (approcci superati su questo punto)
-- Per-zona + `fillDays` (unione a GIORNATE INTERE, ≤v5.029): lasciava le giornate lontane corte quando il
-  cluster adiacente era grande (non poteva prenderne solo una parte). Sostituito dal greedy con unione PARZIALE.
-- Riempimento tappa-per-tappa SENZA criterio (≤v5.026): separava le co-locate / mescolava le valli.
-- Corridoio-ratio `1.4×2×estremo` (v5.026): scalava con la distanza (troppo lasco per i semi lontani,
-  troppo stretto per le zone a "V"). Sostituito dalla deviazione-per-tappa (scale-free).
-7. Per ogni giornata: ordine **far-first** bloccato (`orderDayFarFirst`) → `planRoute` (orari/soste/pranzo reali).
-8. **Date solo feriali**: `addWorkdaysISO` salta sabato/domenica (banche chiuse). `dayIndex` → data del
-   giorno lavorativo, usata anche per risolvere gli orari di apertura nella fattibilità.
+### Tarature `fillPartial`: `TAU_PARTIAL` 0.45, `SLACK_MIN` 75', `CORRIDOR_DETOUR` 25' (tutte sulla Diagnostica reale).
 
 ### Tarature (sulla Diagnostica, coi tempi reali)
 - `NEAR_HOME_RADIUS` (35') — raggio "vicino casa" accorpato in un'unica zona/giornata.

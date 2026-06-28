@@ -309,16 +309,149 @@ export function assignZones(groups, home, opts = {}) {
   return far; // zone lontane (estremi prima) + un'unica zona vicino-casa in coda
 }
 
-// Soglia di accrescimento "sulla via": una tappa entra nella giornata solo se la DEVIAZIONE IN PIÙ
-// PER TAPPA (quanto allunga il viaggio includerla, diviso le tappe aggiunte) è piccola. Scale-free
-// (non scala con la distanza): distingue le tappe sulla via di rientro (Tione/Riva+Rovereto ~7'/tappa,
-// Primiero+Valsugana ~18'/tappa) dalle deviazioni in un'altra valle (San Candido+Cavalese ~27'/tappa,
-// Sen Jan+Merano ~71'/tappa). Tarabile sulla Diagnostica.
+// Un'unione è ammessa se la DEVIAZIONE IN PIÙ PER TAPPA aggiunta è piccola: cioè quanto allunga il
+// viaggio includere l'altra giornata, diviso il numero di tappe aggiunte. È scale-free (non scala con
+// la distanza, a differenza di "2× estremo"): distingue le unioni "sulla via" (Tione/Riva+Rovereto
+// ~7'/tappa, Primiero+Valsugana ~18'/tappa) dalle deviazioni in un'altra valle (San Candido+Cavalese
+// ~27'/tappa, Sen Jan+Merano ~71'/tappa). Tarabile sulla Diagnostica.
 const MERGE_DETOUR_PER_STOP = 22;
-// Margine di sicurezza (min) sul rientro: l'oracolo dei tempi è una stima (pranzo/soste come
-// allowance), quindi accettiamo una tappa solo se il rientro resta sotto il limite massimo meno
-// questo margine, così nel piano reale non si finisce per servire una tappa dopo la chiusura.
+// Margine di sicurezza (min) sul rientro quando si UNISCONO due giornate: l'oracolo dei tempi è una
+// stima (pranzo/soste come allowance), quindi per le unioni restiamo sotto il limite massimo, così
+// nel piano reale non si finisce per servire una tappa dopo la chiusura.
 const MERGE_RETURN_MARGIN = 15;
+
+// ── UNIONE PARZIALE SUL CORRIDOIO (fillPartial) ───────────────────────────────────────────────
+// Riempie le giornate lontane "povere" (che finiscono molto prima del limite) assorbendo singoli
+// GRUPPI atomici "sulla via" da zone adiacenti, lasciando il resto LIBERO (unione PARZIALE, non
+// tutto-o-niente come fillDays). È il pezzo che mancava a v5.029.
+//
+// METRICA: directness(seme, g) = legMin(seme,g) / (legMin(seme,casa) + legMin(g,casa)). È il savings
+// di Clarke-Wright in forma adimensionale. Bassa = direttamente collegati (stesso corridoio); ~1 =
+// per andare da seme a g passi da casa (direzioni diverse). ANCORATA AL SEME FISSO (estremo lontano
+// della giornata ricevente), MAI alla frontiera mobile: è l'unico ancoraggio che l'hub vicino casa
+// NON inganna. Reali: Ortisei→Pergine 0.85 (escluso, niente snake), San Candido→Trento 0.79 (escluso,
+// niente salto), Tione→Riva 0.39 / Cavalese→SenJan 0.19 (inclusi). Vedi docs/MULTI_GIORNO.md.
+const TAU_PARTIAL = 0.45;     // soglia directness per assorbire un gruppo cross-zona
+const SLACK_MIN = 75;         // una giornata è "povera" se finisce > SLACK_MIN prima di maxReturnTime
+const CORRIDOR_DETOUR = 25;   // detour max (min) del gruppo rispetto al corridoio seme→casa
+
+const homeMinG = (g, home, opts) => Math.min(...g.map(s => legMin(home, s, opts)));
+const groupGapMin = (a, b, opts) => { let m = Infinity; for (const x of a) for (const y of b) { const t = legMin(x, y, opts); if (t < m) m = t; } return m; };
+function directnessGG(seedGroup, g, home, opts) {
+  const denom = homeMinG(seedGroup, home, opts) + homeMinG(g, home, opts);
+  return denom > 0 ? groupGapMin(seedGroup, g, opts) / denom : 1;
+}
+function savingsGG(seedGroup, g, home, opts) {
+  return homeMinG(seedGroup, home, opts) + homeMinG(g, home, opts) - groupGapMin(seedGroup, g, opts);
+}
+function corridorDetourGG(seedGroup, g, home, opts) {
+  return groupGapMin(seedGroup, g, opts) + homeMinG(g, home, opts) - homeMinG(seedGroup, home, opts);
+}
+// Gruppo atomico (in allGroups) che contiene la tappa più LONTANA da casa della giornata = il seme.
+function seedGroupOf(dayStops, allGroups, home, opts) {
+  let far = dayStops[0], fd = -1;
+  for (const s of dayStops) { const d = legMin(home, s, opts); if (d > fd) { fd = d; far = s; } }
+  return allGroups.find(grp => grp.includes(far)) || [far];
+}
+
+// Sposta gruppi-prefisso "sul corridoio" dalle zone adiacenti nelle giornate povere lontane.
+// allGroups = groupColocated(stops); ogni giornata è un array PIATTO di tappe.
+async function fillPartial(days, allGroups, home, opts, dayFeasible, endMin) {
+  const groupsInDay = d => allGroups.filter(g => g.some(s => d.includes(s)));
+  // Ordine deterministico: giornate dal seme più LONTANO al più vicino (riempi prima le lontane).
+  const order = days.map((d, i) => ({ i, far: Math.max(...d.map(s => legMin(home, s, opts))) }))
+    .sort((a, b) => b.far - a.far).map(x => x.i);
+  for (const i of order) {
+    let P = days[i];
+    if (!P || !P.length) continue;
+    let f0 = await dayFeasible(orderDayFarFirst(P, home, opts), i);
+    if (!f0.ok || f0.dayEndWithBreaks == null) continue;
+    let slack = (endMin ?? f0.dayEndWithBreaks) - f0.dayEndWithBreaks;
+    if (slack <= SLACK_MIN) continue;                 // giornata già piena
+    const seedG = seedGroupOf(P, allGroups, home, opts);  // FISSO per tutta la fase
+    // Candidati = gruppi NON-seme di OGNI altra giornata, sul corridoio del seme.
+    const cand = [];
+    for (let j = 0; j < days.length; j++) {
+      if (j === i || !days[j].length) continue;
+      const seedJ = seedGroupOf(days[j], allGroups, home, opts);
+      for (const g of groupsInDay(days[j])) {
+        if (g === seedJ) continue;                    // mai cedere il seme del donatore
+        const dir = directnessGG(seedG, g, home, opts);
+        if (dir > TAU_PARTIAL) continue;
+        if (corridorDetourGG(seedG, g, home, opts) > CORRIDOR_DETOUR) continue;
+        cand.push({ g, j, dir, sav: savingsGG(seedG, g, home, opts) });
+      }
+    }
+    cand.sort((a, b) => b.sav - a.sav);               // savings decrescente (Clarke-Wright)
+    if (opts.log && cand.length) opts.log(`UNIONE PARZIALE — giornata "${nameOf(seedG[0])}" povera (slack ${Math.round(slack)}min), candidati: ${cand.map(c => `${nameOf(c.g[0])}(dir ${c.dir.toFixed(2)},sav ${Math.round(c.sav)})`).join(", ")}`);
+    for (const c of cand) {
+      if (!days[c.j].some(s => c.g.includes(s))) continue;   // già spostato altrove
+      // GATE ANTI-FURTO: il donatore SENZA g deve restare non-vuoto e fattibile.
+      const donorRest = days[c.j].filter(s => !c.g.includes(s));
+      if (donorRest.length === 0) { if (opts.log) opts.log(`   ✗ "${nameOf(c.g[0])}": svuoterebbe il donatore → lasciato`); continue; }
+      const fDonor = await dayFeasible(orderDayFarFirst(donorRest, home, opts), c.j);
+      if (!fDonor.ok) { if (opts.log) opts.log(`   ✗ "${nameOf(c.g[0])}": donatore resterebbe infattibile → lasciato`); continue; }
+      // Prova ad aggiungere g alla giornata povera.
+      const fP = await dayFeasible(orderDayFarFirst([...P, ...c.g], home, opts), i);
+      if (!fP.ok || (endMin != null && fP.dayEndWithBreaks != null && fP.dayEndWithBreaks > endMin - MERGE_RETURN_MARGIN)) {
+        if (opts.log) opts.log(`   ✗ "${nameOf(c.g[0])}": non fattibile nella povera (${fP.dayEndWithBreaks != null ? `rientro ${formatTime(fP.dayEndWithBreaks)}` : "orari"}) → lasciato`);
+        continue;
+      }
+      P = [...P, ...c.g]; days[i] = P; days[c.j] = donorRest;
+      if (opts.log) opts.log(`   ✓ "${nameOf(c.g[0])}" spostato da "${nameOf(seedGroupOf(days[c.j].length ? days[c.j] : c.g, allGroups, home, opts)[0])}" → "${nameOf(seedG[0])}"`);
+      slack = endMin != null && fP.dayEndWithBreaks != null ? endMin - fP.dayEndWithBreaks : slack;
+      if (slack <= SLACK_MIN) break;                  // povera ora piena
+    }
+  }
+  return days.filter(d => d.length);
+}
+
+// FASE DI RIEMPIMENTO: le giornate per-zona finiscono presto (una valle = poche tappe). Si UNISCONO
+// le GIORNATE INTERE adiacenti (mai singole tappe → le tappe dello stesso paese non si separano e le
+// valli non si mescolano), purché l'unione resti FATTIBILE (motore reale, con margine) E la deviazione
+// in più PER TAPPA aggiunta sia piccola (sulla via, non un'altra valle). Si procede dalla giornata più
+// lontana, unendo la più vicina compatibile. Regola utente: «fare prima il seme più lontano e poi unire
+// il più vicino; se necessario spezzare». Esempi: Tione/Riva+Rovereto sì, Primiero+Valsugana sì,
+// San Candido+Cavalese no, Sen Jan+Merano no.
+async function fillDays(daysIn, home, opts, dayFeasible, endMin) {
+  const maxHome = d => Math.max(...d.map(s => legMin(home, s, opts)));
+  let days = [...daysIn];
+  let changed = true;
+  while (changed) {
+    changed = false;
+    days.sort((a, b) => maxHome(b) - maxHome(a)); // dalla più lontana
+    for (let i = 0; i < days.length && !changed; i++) {
+      // guida del giorno i DA SOLO (per la deviazione marginale per tappa)
+      const fCur = await dayFeasible(orderDayFarFirst(days[i], home, opts), i);
+      const curDrive = fCur.driveMin;
+      let bestJ = -1, bestGap = Infinity;
+      for (let j = 0; j < days.length; j++) {
+        if (j === i) continue;
+        // gap (tempo-strada minimo) tra le due giornate: si preferisce unire la più vicina
+        let gap = Infinity;
+        for (const a of days[i]) for (const b of days[j]) { const t = legMin(a, b, opts); if (t < gap) gap = t; }
+        if (gap >= bestGap) continue;
+        const combined = orderDayFarFirst([...days[i], ...days[j]], home, opts);
+        const f = await dayFeasible(combined, i);
+        if (!f.ok) continue;
+        // margine di sicurezza sul rientro (l'oracolo è una stima)
+        if (endMin != null && f.dayEndWithBreaks != null && f.dayEndWithBreaks > endMin - MERGE_RETURN_MARGIN) continue;
+        // deviazione in più PER TAPPA aggiunta: piccola ⇒ l'altra giornata è "sulla via"
+        if (f.driveMin != null && curDrive != null && days[j].length > 0) {
+          const perStop = (f.driveMin - curDrive) / days[j].length;
+          if (perStop > MERGE_DETOUR_PER_STOP) continue;
+        }
+        bestGap = gap; bestJ = j;
+      }
+      if (bestJ >= 0) {
+        days[i] = [...days[i], ...days[bestJ]];
+        days.splice(bestJ, 1);
+        changed = true;
+      }
+    }
+  }
+  return days;
+}
 
 
 //
@@ -334,32 +467,48 @@ const MERGE_RETURN_MARGIN = 15;
 // divergenza dell'approssimazione dal motore reale (es. Bressanone esiliato per l'interazione col
 // pranzo): ora il gate è il motore reale.
 export async function buildDayClusters(stops, home, budgetMin, opts = {}, dayFeasible = null) {
-  const allGroups = groupColocated(stops.map(s => ({ ...s })), opts); // gruppi co-locati (atomici)
+  const allGroups = groupColocated(stops.map(s => ({ ...s })), opts); // array di gruppi
+  const zones = assignZones(allGroups, home, opts);
+  // Ordine dei giri: dall'estremo PIÙ VICINO a casa, allontanandosi (richiesta dell'utente).
+  const orderedZones = [...zones].sort((a, b) => a.seedHome - b.seedHome);
   const days = [];
   const flat = arr => arr.flat();
-  const maxHomeG = g => Math.max(...g.map(s => legMin(home, s, opts)));
-  const detourCap = opts.mergeDetourPerStop ?? MERGE_DETOUR_PER_STOP;
-  const endMin = opts.endMin;
 
-  // Diagnostica: cluster per valle. NON vincola la costruzione (serve solo a leggere il piano).
   if (opts.log) {
-    const zones = [...assignZones(allGroups, home, opts)].sort((a, b) => a.seedHome - b.seedHome);
-    opts.log(`ZONE (${zones.length}, dal più vicino a casa): ` + zones.map((z, i) =>
+    opts.log(`ZONE (${orderedZones.length}, dal più vicino a casa): ` + orderedZones.map((z, i) =>
       `Z${i + 1}[${nameOf(z.seed[0])} ${Math.round(z.seedHome)}']={${z.members.flat().map(nameOf).join(", ")}}`).join("  ·  "));
   }
 
-  // growDays: riempie giornate da una lista di gruppi col criterio "più vicino fattibile", far-first,
-  // SENZA limite di direzione (per gli ORFANI vicino casa — "accorpare necessariamente" — e per il
-  // fallback offline). Riempie una giornata, sfora su una seconda solo al bisogno.
+  // Oracolo di fattibilità: motore reale se disponibile, altrimenti approssimazione (offline).
+  // `dayIndex` = indice progressivo della giornata (per risolvere il giorno della settimana,
+  // saltando i weekend, lato planMultiDay).
+  const feasible = async (dayStops, dayIndex) => {
+    if (dayFeasible) {
+      const ordered = orderDayFarFirst(dayStops, home, opts);
+      const f = await dayFeasible(ordered, dayIndex);
+      return !!f.ok;
+    }
+    return estimateDayMinutes(dayStops, home, opts).total <= budgetMin
+      && dayHoursFeasible(dayStops, home, opts, dowForCluster(opts, dayIndex));
+  };
+
+  // Costruisce le giornate da una lista di GRUPPI: seme = gruppo più LONTANO da casa, poi accresce
+  // il più VICINO finché la giornata resta FATTIBILE (motore reale). Una lista troppo grande si
+  // spezza in più giornate (estremo → casa). Aggiunge a `days`. Niente mescolanze: la lista è
+  // già una zona/corridoio coerente (o i resti accorpati).
   const growDays = async (groupList, label) => {
     const unassigned = [...groupList];
     let guard = 0;
     while (unassigned.length && guard++ < 5000) {
       const dayIndex = days.length;
       let seedI = 0, seedD = -1;
-      for (let i = 0; i < unassigned.length; i++) { const d = maxHomeG(unassigned[i]); if (d > seedD) { seedD = d; seedI = i; } }
+      for (let i = 0; i < unassigned.length; i++) {
+        const d = legMin(home, unassigned[i][0], opts);
+        if (d > seedD) { seedD = d; seedI = i; }
+      }
       const dayGroups = [unassigned.splice(seedI, 1)[0]];
       if (opts.log) opts.log(`Giorno ${dayIndex + 1} (${label}) — seme "${nameOf(dayGroups[0][0])}" (da casa ${Math.round(seedD)}min)`);
+
       let added = true;
       while (added && unassigned.length) {
         added = false;
@@ -370,97 +519,80 @@ export async function buildDayClusters(stops, home, budgetMin, opts = {}, dayFea
           for (const cs of unassigned[i]) for (const ds of dayStops) { const t = legMin(ds, cs, opts); if (t < d) d = t; }
           if (d >= bestDist - 1e-6) continue;
           const tentative = [...dayStops, ...unassigned[i]];
-          let ok;
-          if (dayFeasible) { const f = await dayFeasible(orderDayFarFirst(tentative, home, opts), dayIndex); ok = f.ok; }
-          else ok = estimateDayMinutes(tentative, home, opts).total <= budgetMin && dayHoursFeasible(tentative, home, opts, dowForCluster(opts, dayIndex));
-          if (!ok) continue;
+          if (!(await feasible(tentative, dayIndex))) continue;
           bestDist = d; best = i;
         }
         if (best >= 0) { dayGroups.push(unassigned.splice(best, 1)[0]); added = true; }
       }
-      days.push(flat(dayGroups));
-      if (opts.log) opts.log(`Giorno ${days.length} chiuso: ${flat(dayGroups).length} tappe [${flat(dayGroups).map(nameOf).join(" → ")}]`);
+
+      const dayStops = flat(dayGroups);
+      days.push(dayStops);
+
+      if (opts.log) {
+        opts.log(`Giorno ${days.length} chiuso: ${dayStops.length} tappe [${dayStops.map(nameOf).join(" → ")}]`);
+        if (unassigned.length && dayFeasible) {
+          const ranked = unassigned.map(g => {
+            let d = Infinity;
+            for (const cs of g) for (const ds of dayStops) { const t = legMin(ds, cs, opts); if (t < d) d = t; }
+            return { g, d };
+          }).sort((a, b) => a.d - b.d).slice(0, 6);
+          for (const { g, d } of ranked) {
+            const ordered = orderDayFarFirst([...dayStops, ...g], home, opts);
+            const f = await dayFeasible(ordered, dayIndex);
+            const why = f.ok ? "VALIDA ma non aggiunta (?)"
+              : `${f.dayEndWithBreaks != null ? `rientro ${formatTime(f.dayEndWithBreaks)}${opts.endMin != null && f.dayEndWithBreaks > opts.endMin ? " OLTRE ORARIO" : ""}` : "orari non ok"}${f.lateStops?.length ? `, FUORI CHIUSURA: ${f.lateStops.join(", ")}` : ""}`;
+            opts.log(`   ✗ "${nameOf(g[0])}" (+${Math.round(d)}min dal giorno, da casa ${Math.round(legMin(home, g[0], opts))}min): ${why}`);
+          }
+        }
+      }
     }
   };
 
-  // ── FASE PRINCIPALE: greedy far-first con UNIONE PARZIALE "sulla via" ──────────────────────────
-  // Solo col motore reale (serve driveMin per la deviazione-per-tappa). Ogni giornata parte dal seme
-  // più lontano e tira dentro le tappe sulla via di rientro (deviazione-per-tappa minima ≤ soglia),
-  // finché è piena (fattibilità reale). Le tappe in eccesso restano LIBERE per le giornate successive.
+  // Una zona alla volta (niente mescolanze tra valli), dalla più vicina a casa alla più lontana.
+  for (let zi = 0; zi < orderedZones.length; zi++) {
+    await growDays(orderedZones[zi].members, `Z${zi + 1} ${nameOf(orderedZones[zi].seed[0])}`);
+  }
+
+  // UNIONE PARZIALE SUL CORRIDOIO: una giornata lontana POVERA assorbe singoli gruppi "sulla via" da
+  // zone adiacenti (directness ancorata al seme + anti-furto), lasciando il resto libero. Additivo:
+  // se nessuna giornata è povera è un no-op (output = v5.029). Vedi docs/MULTI_GIORNO.md.
   if (dayFeasible) {
-    const unassigned = [...allGroups];
-    const isFar = g => maxHomeG(g) > NEAR_HOME_RADIUS;
-    while (unassigned.some(isFar)) {
-      const dayIndex = days.length;
-      // Seme = gruppo col membro più lontano da casa.
-      let seedI = 0, seedD = -1;
-      for (let i = 0; i < unassigned.length; i++) { const d = maxHomeG(unassigned[i]); if (d > seedD) { seedD = d; seedI = i; } }
-      const day = [...unassigned.splice(seedI, 1)[0]];
-      if (opts.log) opts.log(`Giorno ${dayIndex + 1} — seme "${nameOf(day[0])}" (da casa ${Math.round(seedD)}min)`);
-      let curDrive = (await dayFeasible(orderDayFarFirst(day, home, opts), dayIndex)).driveMin;
-
-      // Accrescimento: aggiunge il gruppo con la MINIMA deviazione-per-tappa (più "sulla via"), entro
-      // la soglia, fattibile (con margine sul rientro). Gli altri restano liberi.
-      let added = true;
-      while (added && unassigned.length) {
-        added = false;
-        let best = -1, bestDetour = Infinity, bestDrive = null;
-        for (let i = 0; i < unassigned.length; i++) {
-          const g = unassigned[i];
-          const f = await dayFeasible(orderDayFarFirst([...day, ...g], home, opts), dayIndex);
-          if (!f.ok) continue;
-          if (endMin != null && f.dayEndWithBreaks != null && f.dayEndWithBreaks > endMin - MERGE_RETURN_MARGIN) continue;
-          const perStop = (curDrive != null && f.driveMin != null) ? (f.driveMin - curDrive) / g.length : 0;
-          if (perStop > detourCap) continue;
-          if (perStop < bestDetour) { bestDetour = perStop; best = i; bestDrive = f.driveMin; }
-        }
-        if (best >= 0) { day.push(...unassigned.splice(best, 1)[0]); curDrive = bestDrive ?? curDrive; added = true; }
-      }
-      days.push(day);
-
-      if (opts.log) {
-        opts.log(`Giorno ${days.length} chiuso: ${day.length} tappe [${day.map(nameOf).join(" → ")}]`);
-        // Candidati scartati col motivo (deviazione "altra direzione" / oltre orario / fuori chiusura).
-        const ranked = unassigned.map(g => {
-          let d = Infinity; for (const cs of g) for (const ds of day) { const t = legMin(ds, cs, opts); if (t < d) d = t; }
-          return { g, d };
-        }).sort((a, b) => a.d - b.d).slice(0, 6);
-        for (const { g, d } of ranked) {
-          const f = await dayFeasible(orderDayFarFirst([...day, ...g], home, opts), dayIndex);
-          let why;
-          if (!f.ok || (endMin != null && f.dayEndWithBreaks != null && f.dayEndWithBreaks > endMin - MERGE_RETURN_MARGIN)) {
-            why = `${f.dayEndWithBreaks != null ? `rientro ${formatTime(f.dayEndWithBreaks)}${endMin != null && f.dayEndWithBreaks > endMin ? " OLTRE ORARIO" : ""}` : "orari non ok"}${f.lateStops?.length ? `, FUORI CHIUSURA: ${f.lateStops.join(", ")}` : ""}`;
-          } else {
-            const perStop = (curDrive != null && f.driveMin != null) ? Math.round((f.driveMin - curDrive) / g.length) : 0;
-            why = `ALTRA DIREZIONE (+${perStop}min/tappa > ${detourCap})`;
-          }
-          opts.log(`   ✗ "${nameOf(g[0])}" (+${Math.round(d)}min dal giorno, da casa ${Math.round(maxHomeG(g))}min): ${why}`);
-        }
-      }
+    const before = days.length;
+    const partial = await fillPartial(days, allGroups, home, opts, dayFeasible, opts.endMin);
+    days.length = 0;
+    for (const d of partial) days.push(d);
+    if (opts.log && days.length !== before) {
+      opts.log(`DOPO UNIONE PARZIALE (${days.length} giornate): ` +
+        days.map((d, i) => `G${i + 1}[${d.map(nameOf).join(", ")}]`).join("  ·  "));
     }
+  }
 
-    // ── ORFANI: gruppi vicino casa rimasti + eventuali giornate-singolo isolate → accorpati ──
-    // (far-first, senza limite di direzione: vicino casa è tutto raggiungibile, "accorpare necessariamente").
-    const singles = days.filter(d => d.length <= 1);
-    const orphanGroups = [...unassigned];
-    if (singles.length) {
-      const solid = days.filter(d => d.length > 1);
-      days.length = 0; for (const d of solid) days.push(d);
-      for (const s of singles) orphanGroups.push(...groupColocated(s, opts));
+  // FASE DI RIEMPIMENTO: unisci le giornate adiacenti per sfruttarle appieno (dal seme più lontano,
+  // assorbendo le più vicine, finché fattibile). Le valli opposte non si uniscono (gap + fattibilità).
+  if (dayFeasible) {
+    const filled = await fillDays(days, home, opts, dayFeasible, opts.endMin);
+    days.length = 0;
+    for (const d of filled) days.push(d);
+    if (opts.log) {
+      opts.log(`DOPO RIEMPIMENTO (${days.length} giornate): ` +
+        days.map((d, i) => `G${i + 1}[${d.map(nameOf).join(", ")}]`).join("  ·  "));
     }
-    if (orphanGroups.length) {
-      if (opts.log) opts.log(`ORFANI/vicino casa: ${flat(orphanGroups).length} tappe da accorpare [${flat(orphanGroups).map(nameOf).join(", ")}]`);
-      await growDays(orphanGroups, "orfani");
-    }
-  } else {
-    // Offline / senza motore reale: growDays su tutto (approssimazione, non valida i raggruppamenti reali).
-    await growDays(allGroups, "offline");
+  }
+
+  // "Tappe rimaste indietro": le giornate da UNA sola tappa che NON si sono unite a nessuna (sono
+  // isolate). Se ne restano ≥2 le riempio insieme in una giornata (al bisogno due); una tappa
+  // davvero sola resta isolata (inevitabile). `growDays` riempie un giorno e sfora solo al bisogno.
+  const singles = days.filter(d => d.length <= 1);
+  if (singles.length > 1) {
+    const solid = days.filter(d => d.length > 1);
+    days.length = 0;
+    for (const d of solid) days.push(d);
+    if (opts.log) opts.log(`RESTI: ${singles.flat().length} tappe rimaste indietro, le riempio in una giornata (al bisogno due) [${singles.flat().map(nameOf).join(", ")}]`);
+    await growDays(groupColocated(singles.flat(), opts), "resti accorpati");
   }
 
   // Ordine finale delle giornate: dalla più vicina a casa alla più lontana (richiesta dell'utente).
   days.sort((a, b) => Math.max(...a.map(s => legMin(home, s, opts))) - Math.max(...b.map(s => legMin(home, s, opts))));
-
-  if (opts.log) opts.log(`PIANO FINALE (${days.length} giornate): ` + days.map((d, i) => `G${i + 1}[${d.map(nameOf).join(", ")}]`).join("  ·  "));
 
   return days;
 }
