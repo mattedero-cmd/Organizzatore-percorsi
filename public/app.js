@@ -317,15 +317,15 @@ async function syncFromServer() {
   try {
     const [addresses, routes, settings, folders, plans] = await Promise.all([
       _serverFetch("/api/addresses?search=").catch(() => null),
-      _serverFetch("/api/routes").catch(() => null),
+      _serverFetch("/api/routes?full=1").catch(() => null), // full=1: include rows/weather per l'apertura offline
       _serverFetch("/api/settings").catch(() => null),
       _serverFetch("/api/folders").catch(() => null),
       _serverFetch("/api/multiday-plans").catch(() => null),
     ]);
-    // Overwrite IndexedDB stores with server data (server wins)
+    // Overwrite IndexedDB stores with server data (server wins); routes: merge che preserva il dettaglio
     await Promise.all([
       addresses && _idbReplaceAll("addresses", addresses),
-      routes    && _idbReplaceAll("routes",    routes),
+      routes    && _idbMergeRoutes(routes),
       folders   && _idbReplaceAll("folders",   folders),
       plans     && _idbReplaceAll("multiday_plans", plans),
       settings  && idbPut("settings", { key: "main", value: settings }),
@@ -347,6 +347,67 @@ async function _idbReplaceAll(store, records) {
   });
 }
 
+// Record giro per IndexedDB: campi riassuntivi in cima (per la lista) + payload completo
+// (rows/weather/finalLeg per l'apertura). Stessa forma che il server restituisce con ?full=1.
+function _routeToLocalRecord(result) {
+  const stops = (result.rows || result.plannedStops || []).filter(s => !s.type);
+  const sum = result.summary || {};
+  return {
+    id: result.id,
+    name: result.name || "Giro salvato",
+    scheduledDate: result.scheduledDate || "",
+    startLabel: result.start?.label || result.startLabel || "",
+    startAddress: result.start?.address || result.startAddress || "",
+    endLabel: result.end?.label || result.endLabel || "",
+    endAddress: result.end?.address || result.endAddress || "",
+    startTime: result.startTime || sum.dayStart || "",
+    totalKm: Number(sum.totalKm ?? result.totalKm ?? 0),
+    totalDriveMinutes: Number(sum.totalDriveMinutes ?? 0),
+    totalWorkMinutes: Number(sum.totalWorkMinutes ?? 0),
+    totalCost: Number(sum.totalCost ?? 0),
+    plannedStops: stops.map(s => ({ customer: s.customer || "", location: s.location || "", addressId: s.addressId, stopUid: s.uid || s.stopUid, stopPart: s.stopPart, addressType: s.addressType })),
+    source: result.source ?? null,
+    sharedBy: result.sharedBy ?? null,
+    folderId: result.folderId ?? null,
+    notes: result.notes ?? "",
+    payload: result
+  };
+}
+
+// Da un record IndexedDB (wrapper {meta..., payload}) al giro "piatto" (rows in cima) che il
+// server (saveRoute), la condivisione e l'import si aspettano. I campi meta del wrapper
+// (name, label/address, scheduledDate, notes) sovrascrivono il payload perché saveRoute li legge piatti.
+function _routeRecordToFlat(rec) {
+  if (!rec || !rec.payload) return rec; // già piatto o legacy summary
+  return {
+    ...rec.payload,
+    id: rec.id,
+    name: rec.name ?? rec.payload.name,
+    scheduledDate: rec.scheduledDate ?? rec.payload.scheduledDate,
+    startLabel: rec.startLabel, startAddress: rec.startAddress,
+    endLabel: rec.endLabel, endAddress: rec.endAddress,
+    source: rec.source ?? rec.payload.source ?? null,
+    folderId: rec.folderId ?? null,
+    notes: rec.notes ?? ""
+  };
+}
+
+// Sync giri dal server: i giri sono server-authoritative (li salva /api/plan), ma se un
+// record in arrivo è solo un riassunto (senza dettaglio) preserviamo il dettaglio locale.
+async function _idbMergeRoutes(records) {
+  const existing = {};
+  (await idbGetAll("routes")).forEach(r => { existing[r.id] = r; });
+  const merged = records.map(r => {
+    const hasDetail = r.payload || (Array.isArray(r.rows) && r.rows.length);
+    if (hasDetail) return r;
+    const ex = existing[r.id];
+    return ex && (ex.payload || ex.rows)
+      ? { ...r, payload: ex.payload, rows: ex.rows, weather: ex.weather, finalLeg: ex.finalLeg }
+      : r;
+  });
+  return _idbReplaceAll("routes", merged);
+}
+
 // Weekly backup: push all IndexedDB data to server.
 async function _weeklyBackupIfDue() {
   if (!state._syncEnabled) return;
@@ -360,13 +421,16 @@ async function _weeklyBackupIfDue() {
 }
 
 async function _pushBackupToServer() {
-  const [addresses, routes, settings, folders, plans] = await Promise.all([
+  const [addresses, routesRaw, settings, folders, plans] = await Promise.all([
     idbGetAll("addresses"),
     idbGetAll("routes"),
     idbGet("settings", "main").then(s => s?.value || {}),
     idbGetAll("folders"),
     idbGetAll("multiday_plans"),
   ]);
+  // I record giro hanno il giro completo dentro .payload: il server vuole il giro "piatto"
+  // (summary + name/label in cima), quindi spacchettiamo preservando i campi meta del wrapper.
+  const routes = routesRaw.map(_routeRecordToFlat);
   await _serverFetch("/api/backup", {
     method: "POST",
     body: JSON.stringify({ addresses, routes, settings, folders, plans })
@@ -481,16 +545,25 @@ async function localApi(path, options = {}) {
   if (bare === "/api/routes") {
     if (method === "GET") return idbGetAll("routes");
     if (method === "POST") {
-      const id = await idbAdd("routes", { ...body });
-      _bgSync(path, options, id);
-      return { ...body, id };
+      // Localmente salviamo il wrapper canonico (summary in cima + payload completo) così
+      // lista e apertura funzionano; al server inviamo il giro "piatto" che saveRoute si aspetta.
+      const flat = body?.payload ? _routeRecordToFlat(body) : body;
+      const rec = _routeToLocalRecord(flat);
+      delete rec.id; // nuovo record: id autoincrement locale
+      const id = await idbAdd("routes", rec);
+      _bgSync(path, { ...options, body: JSON.stringify(flat) }, id);
+      return { ...rec, id };
     }
   }
   const routeMatch = bare.match(/^\/api\/routes\/(\d+)$/);
   if (routeMatch) {
     const id = Number(routeMatch[1]);
     if (method === "GET") { const r = await idbGet("routes", id); if (!r) throw new Error("Giro non trovato"); return r; }
-    if (method === "PUT") { await idbPut("routes", { ...body, id }); _bgSync(path, options); return { ...body, id }; }
+    if (method === "PUT") {
+      // PUT può arrivare con solo { name } (rinomina): merge per non perdere il payload.
+      const ex = await idbGet("routes", id) || {};
+      const upd = { ...ex, ...body, id }; await idbPut("routes", upd); _bgSync(path, options); return upd;
+    }
     if (method === "PATCH") {
       const ex = await idbGet("routes", id); if (!ex) throw new Error("Giro non trovato");
       const upd = { ...ex, ...body }; await idbPut("routes", upd); _bgSync(path, options); return upd;
@@ -543,6 +616,11 @@ async function api(path, options = {}) {
     throw new Error("Sessione scaduta. Effettua di nuovo il login.");
   }
   if (!res.ok) throw new Error(payload.error || `Errore ${res.status}`);
+  // /api/plan è server-authoritative (salva il giro lato server e assegna l'id): ne teniamo
+  // una copia COMPLETA in IndexedDB così la lista e l'apertura giri funzionano anche offline.
+  if (path === "/api/plan" && payload?.id) {
+    await idbPut("routes", _routeToLocalRecord(payload)).catch(() => {});
+  }
   return payload;
 }
 
@@ -1606,7 +1684,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.067 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.068 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -4304,12 +4382,12 @@ function addressToStop(address, durationOverride = null) {
 async function shareRoute(routeId) {
   try {
     showSpinner("Generazione link…");
-    // Fetch route from local IndexedDB and send full JSON to server (routes are local-only)
+    // Prendi il giro da IndexedDB e invialo "piatto" (rows in cima): l'import lo legge così.
     const localRoute = await idbGet("routes", Number(routeId));
     if (!localRoute) throw new Error("Giro non trovato");
     const data = await api(`/api/routes/${routeId}/share`, {
       method: "POST",
-      body: JSON.stringify({ routeData: localRoute })
+      body: JSON.stringify({ routeData: _routeRecordToFlat(localRoute) })
     });
     hideSpinner();
     const url = data.url;
@@ -4341,12 +4419,13 @@ async function handleShareImport(token) {
     if (!confirm) return;
 
     showSpinner("Importazione…");
-    // Fetch shared route from server, then save locally to IndexedDB
+    // Recupera il giro condiviso (piatto) e salvalo in IndexedDB nel wrapper canonico.
     const sharedRoute = await fetch(window.location.origin + `/api/share/${token}`).then(r => r.ok ? r.json() : Promise.reject(new Error("Link scaduto")));
-    const toSave = { ...sharedRoute, source: "imported", name };
-    const newId = await idbAdd("routes", toSave);
-    const saved = { ...toSave, id: newId };
-    state.result = saved;
+    const flat = { ...(sharedRoute.payload || sharedRoute), source: "imported", name };
+    const rec = _routeToLocalRecord(flat);
+    delete rec.id;
+    const newId = await idbAdd("routes", rec);
+    state.result = normalizeSavedRoute({ ...flat, id: newId });
     await refreshSavedRoutes();
     hideSpinner();
     setActiveTab("result");
@@ -7319,9 +7398,10 @@ function bindEvents() {
       try {
         const id = duplicateRoute.dataset.duplicateRoute;
         const raw = await api(`/api/routes/${id}`);
-        const { id: _id, ...payload } = raw;
+        const flat = _routeRecordToFlat(raw);
+        const { id: _id, ...rest } = flat;
         const newName = (raw.name || "Giro") + " (copia)";
-        await api("/api/routes", { method: "POST", body: JSON.stringify({ ...payload, name: newName }) });
+        await api("/api/routes", { method: "POST", body: JSON.stringify({ ...rest, name: newName }) });
         await refreshSavedRoutes();
         renderSaved();
         showToast("Giro duplicato");
@@ -7337,6 +7417,7 @@ function bindEvents() {
       try {
         const raw = await api(`/api/routes/${openRoute.dataset.openRoute}`);
         state.result = normalizeSavedRoute({ ...raw.payload, id: raw.id, ...raw });
+        delete state.result.payload; // evita il wrapper auto-annidato (footgun se ri-salvato)
         state.manualOrderRows = null;
     state.expandedStops = new Set();
     state.expandedPanels = new Set();

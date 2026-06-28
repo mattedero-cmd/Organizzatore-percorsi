@@ -1,3 +1,13 @@
+## v5.068 — 2026-06-28
+Giri salvati offline + sync dettaglio (fix regressione local-first):
+- **Apertura giri salvati**: prima, da sincronizzati, il sync scaricava solo un riassunto dei giri → aprendo un giro salvato si vedevano 0 tappe / niente meteo. Ora ogni giro pianificato viene messo in cache COMPLETO in IndexedDB (tappe, meteo, costi) e il sync usa `/api/routes?full=1`, quindi lista e apertura funzionano anche offline.
+- **Server `/api/routes?full=1`**: nuova opzione che restituisce i giri completi da un'unica query (`listRoutes(full)`), senza N+1.
+- **Rinomina giro**: la PUT locale faceva un replace che cancellava il dettaglio del giro dalla cache fino al sync successivo; ora fa merge e preserva tappe/meteo.
+- **Condivisione / Duplica / Import / Backup**: i giri vengono sempre normalizzati nella forma "piatta" che il server e l'import si aspettano (helper `_routeRecordToFlat`), così il giro condiviso/importato/duplicato/ripristinato mantiene nome, partenza/arrivo e tappe (prima poteva risultare vuoto o senza nome).
+- `/api/plan` restituisce ora anche il nome assegnato, così la cache locale mostra subito il nome reale.
+
+> Restano da affrontare, come intervento di sync dedicato e testato a parte: cancellazioni offline che “risorgono” al sync, collisioni di id tra dispositivi diversi nel backup, e merge non distruttivo durante il sync iniziale.
+
 ## v5.067 — 2026-06-28
 Audit discrepanze tra funzioni simili + fix bug e pulizia (nessuna funzione rimossa):
 - **Pranzo (planner)**: i limiti di detour/orario del gap di chiusura (`gapMaxDetourKm`, `gapLunchClose`) ora vengono effettivamente passati a `makeLunchEntry` nei tre rami split-gap/wait-time — prima erano calcolati ma ignorati, così un ristorante troppo lontano poteva spingere la tappa pomeridiana.

@@ -757,6 +757,7 @@ async function handleApi(request, response) {
         endAddress: route.end?.address || route.end?.fullAddress || ""
       }, userId);
       route.id = saved.id;
+      route.name = autoName; // echo del nome così la cache locale (IndexedDB) mostra subito il nome reale
       return route;
       })();
       recentPlanRequests.set(dedupKey, { at: Date.now(), promise: planPromise });
@@ -804,7 +805,9 @@ async function handleApi(request, response) {
     }
 
     if (method === "GET" && url.pathname === "/api/routes") {
-      return sendJson(response, 200, await listRoutes(userId));
+      // ?full=1 → include il payload completo (rows/weather/finalLeg) per la cache offline
+      const full = url.searchParams.get("full") === "1";
+      return sendJson(response, 200, await listRoutes(userId, full));
     }
 
     if (method === "POST" && url.pathname === "/api/routes") {

@@ -734,14 +734,16 @@ export async function countRoutesByDate(date, userId = null) {
   return Number(rows[0]?.n ?? rows[0]?.count ?? 0);
 }
 
-export async function listRoutes(userId = null) {
+export async function listRoutes(userId = null, full = false) {
   const userFilter = userId != null ? `WHERE user_id = ${sqlValue(Number(userId))}` : "";
+  // full=true → mappa con rowToRoute (include il payload completo) dalla STESSA query, niente N+1
+  const map = full ? rowToRoute : rowToRouteSummary;
   if (dbMode === "postgres") {
     const rows = await runSql(`SELECT * FROM planned_routes ${userFilter} ORDER BY COALESCE(NULLIF(scheduled_date, ''), created_at::date::text) DESC, id DESC;`, true);
-    return rows.map(rowToRouteSummary);
+    return rows.map(map);
   }
   const rows = await runSql(`SELECT * FROM planned_routes ${userFilter} ORDER BY COALESCE(NULLIF(scheduled_date, ''), created_at) DESC, id DESC;`, true);
-  return rows.map(rowToRouteSummary);
+  return rows.map(map);
 }
 
 export async function getRoute(id, userId = null) {
