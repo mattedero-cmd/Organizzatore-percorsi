@@ -230,7 +230,7 @@ export function dayHoursFeasible(dayStops, home, opts = {}, dayOfWeek = null) {
       const leg = legMin(prev, s, opts);
       let arrival = t + leg;
       driveAccum += leg;
-      if (restInt > 0 && driveAccum >= restInt) { arrival += restDur; driveAccum -= restInt; }
+      while (restInt > 0 && driveAccum >= restInt) { arrival += restDur; driveAccum -= restInt; }
       if (wins.length === 0) {
         t = arrival + work;
       } else {

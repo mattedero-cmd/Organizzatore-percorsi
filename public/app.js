@@ -95,18 +95,28 @@ function preferredPhone(a) {
 }
 
 function formatPhoneForWhatsApp(phone) {
-  let n = String(phone || "").replace(/[\s\-().+]/g, "");
+  let n = String(phone || "").replace(/[\s\-().+]/g, ""); // strip anche il '+'
   if (!n) return null;
   if (n.startsWith("00")) n = n.slice(2);
-  if (!n.startsWith("39") && !n.startsWith("+")) n = "39" + n;
-  return n.replace(/^\+/, "");
+  if (!n.startsWith("39")) n = "39" + n;
+  return n;
+}
+
+// Tipo telefono dal numero: cellulare IT inizia per 3 (dopo lo strip del prefisso 39).
+function detectPhoneType(phone) {
+  const digits = String(phone || "").replace(/\D/g, "");
+  if (!digits) return "";
+  const local = digits.startsWith("39") ? digits.slice(2) : digits;
+  return local.startsWith("3") ? "cell" : "fisso";
 }
 
 function parseTimeToMinutes(t) {
-  if (!t) return null;
-  const [h, m] = t.split(":").map(Number);
-  if (isNaN(h)) return null;
-  return h * 60 + (m || 0);
+  // Accetta "HH:MM" o "HH.MM" e valida i range, come parseTime() del planner.
+  const m = String(t || "").match(/^(\d{1,2})[:.](\d{2})$/);
+  if (!m) return null;
+  const h = Number(m[1]), mm = Number(m[2]);
+  if (h > 23 || mm > 59) return null;
+  return h * 60 + mm;
 }
 
 function buildWhatsAppMessage(result, row) {
@@ -396,17 +406,46 @@ async function localApi(path, options = {}) {
   }
 
   // Addresses — opening hours check (local, no sync needed)
+  // Ritorna la STESSA forma del server: { isOpen, openNow, weekdayText, placeId }.
   const openingMatch = bare.match(/^\/api\/addresses\/(\d+)\/opening$/);
   if (openingMatch) {
     const addr = await idbGet("addresses", Number(openingMatch[1]));
     if (!addr) throw new Error("Indirizzo non trovato");
     const date = params.get("date") || new Date().toISOString().slice(0, 10);
-    const dayIdx = new Date(date + "T12:00:00").getDay();
-    const days = ["sun","mon","tue","wed","thu","fri","sat"];
-    const wh = addr.weeklyHours || {};
-    const dayKey = days[dayIdx];
-    const status = wh[dayKey] === false ? "closed" : (wh[dayKey] ? "open" : "unknown");
-    return { status, weeklyHours: addr.weeklyHours, date };
+    const now = new Date();
+    const dayIdx = new Date(date + "T12:00:00").getDay(); // 0=domenica
+    const targetMin = now.getHours() * 60 + now.getMinutes();
+    const wh = addr.weeklyHours || null; // chiave numerica 0-6 (o stringa dopo round-trip JSON)
+    const toMin = t => { if (!t) return null; const [h, m] = String(t).split(/[:.]/).map(Number); return h * 60 + (m || 0); };
+    const inSlot = (o, c) => { const a = toMin(o), b = toMin(c); return a != null && b != null && targetMin >= a && targetMin < b; };
+    let isOpen = null; // null = sconosciuto, true/false = aperto/chiuso (come il server)
+    if (wh) {
+      const day = wh[dayIdx] || wh[String(dayIdx)];
+      if (day) {
+        if (day.closed) isOpen = false;
+        else if (day.continuous) isOpen = inSlot(day.openMorning, day.closeAfternoon);
+        else if (day.openMorning || day.openAfternoon) isOpen = inSlot(day.openMorning, day.closeMorning) || inSlot(day.openAfternoon, day.closeAfternoon);
+      }
+    }
+    let weekdayText = null;
+    if (wh) {
+      const NAMES = ["domenica", "lunedì", "martedì", "mercoledì", "giovedì", "venerdì", "sabato"];
+      weekdayText = [1, 2, 3, 4, 5, 6, 0].map(d => { // lunedì-first, come il consumer UI
+        const h = wh[d] || wh[String(d)] || {};
+        let times = "Chiuso";
+        if (!h.closed) {
+          if (h.continuous && h.openMorning && h.closeAfternoon) times = `${h.openMorning}–${h.closeAfternoon}`;
+          else {
+            const parts = [];
+            if (h.openMorning && h.closeMorning) parts.push(`${h.openMorning}–${h.closeMorning}`);
+            if (h.openAfternoon && h.closeAfternoon) parts.push(`${h.openAfternoon}–${h.closeAfternoon}`);
+            times = parts.join(", ") || "Chiuso";
+          }
+        }
+        return `${NAMES[d]}: ${times}`;
+      });
+    }
+    return { isOpen, openNow: isOpen, weekdayText, placeId: null };
   }
 
   // Addresses
@@ -421,7 +460,15 @@ async function localApi(path, options = {}) {
     if (method === "GET") {
       const all = await idbGetAll("addresses");
       const q = params.get("search") || "";
-      return all.filter(a => _addrMatches(a, q));
+      // Stesso ordinamento del server: activity, poi customer (vuoti in fondo), poi location, poi id.
+      const norm = v => (v || "").trim().toLowerCase();
+      const cmpNullsLast = (x, y) => (!x && !y) ? 0 : !x ? 1 : !y ? -1 : x.localeCompare(y);
+      return all.filter(a => _addrMatches(a, q)).sort((a, b) =>
+        cmpNullsLast(norm(a.activity), norm(b.activity)) ||
+        cmpNullsLast(norm(a.customer), norm(b.customer)) ||
+        (a.location || "").toLowerCase().localeCompare((b.location || "").toLowerCase()) ||
+        (Number(a.id) - Number(b.id))
+      );
     }
     if (method === "POST") {
       const id = await idbAdd("addresses", { ...body });
@@ -460,11 +507,14 @@ async function localApi(path, options = {}) {
 
   // Multiday plans
   if (bare === "/api/multiday-plans") {
-    if (method === "GET") return idbGetAll("multiday_plans");
+    // Il server deriva stopCount da payload.stops.length: replichiamo per non mostrare "undefined tappe".
+    if (method === "GET") return (await idbGetAll("multiday_plans"))
+      .map(rec => ({ ...rec, stopCount: rec.stopCount ?? (Array.isArray(rec.payload?.stops) ? rec.payload.stops.length : 0) }));
     if (method === "POST") {
-      const id = await idbAdd("multiday_plans", { ...body });
+      const rec = { ...body, stopCount: Array.isArray(body.payload?.stops) ? body.payload.stops.length : 0 };
+      const id = await idbAdd("multiday_plans", rec);
       _bgSync(path, options, id);
-      return { ...body, id };
+      return { ...rec, id };
     }
   }
   const mdMatch = bare.match(/^\/api\/multiday-plans\/(\d+)$/);
@@ -484,8 +534,9 @@ async function api(path, options = {}) {
   });
   const payload = await res.json().catch(() => ({}));
   if (res.status === 401) {
+    // App local-first: una sessione scaduta disabilita solo il sync, non sloggia
+    // (i dati restano in IndexedDB). Non azzerare state.user per non mostrare il login.
     if (state._authVerified) {
-      state.user = null;
       state._authVerified = false;
       state._syncEnabled = false;
     }
@@ -812,67 +863,6 @@ function updateGreeting() {
 
   eyebrow.textContent = eyebrowText;
   h1.textContent = h1Text;
-}
-
-// ── session cache (fast reload) ───────────────────────────────────────────────
-const _SC_KEY = "pl_sc";
-// Nessun TTL: la cache vale per tutta la sessione (invalidata solo al logout o chiusura browser)
-
-function _scSave(user) {
-  try {
-    const data = {
-      user,
-      mapApiConfigured: state.mapApiConfigured,
-      whisperConfigured: state.whisperConfigured,
-      googleMapsKey: state.googleMapsKey,
-      googleClientId: state.googleClientId,
-      settings: state.settings,
-      allAddresses: state.allAddresses,
-      savedRoutes: state.savedRoutes,
-      multiDayPlans: state.multiDayPlans,
-      folders: state.folders,
-    };
-    sessionStorage.setItem(_SC_KEY, JSON.stringify(data));
-  } catch {}
-}
-
-function _scLoad() {
-  try {
-    const raw = sessionStorage.getItem(_SC_KEY);
-    if (!raw) return null;
-    return JSON.parse(raw) || null;
-  } catch { return null; }
-}
-
-function _scApply(data) {
-  state.user = data.user;
-  state._authVerified = true;
-  state.mapApiConfigured = data.mapApiConfigured || false;
-  state.whisperConfigured = data.whisperConfigured || false;
-  state.googleMapsKey = data.googleMapsKey || "";
-  state.googleClientId = data.googleClientId || "";
-  state.settings = data.settings || state.settings;
-  state.allAddresses = data.allAddresses || [];
-  state.savedRoutes = data.savedRoutes || [];
-  state.multiDayPlans = data.multiDayPlans || [];
-  state.folders = data.folders || [];
-  // Aggiorna route defaults da settings
-  const s = state.settings;
-  state.navigatorPref = s.navigatorPref || localStorage.getItem("navigatorPref") || "google";
-  state.themeMode = s.themeMode || (s.themePref === "light" ? "light" : s.themePref === "dark" ? "dark" : "auto");
-  state.themePalette = s.themePalette || "default";
-  state.route.lunchBreak = s.lunchBreakEnabled !== false;
-  state.route.lunchBreakMinutes = s.lunchBreakMinutes || 45;
-  if (s.defaultStartLabel || s.defaultStartAddress) {
-    state.route.startLabel = s.defaultStartLabel || state.route.startLabel;
-    state.route.startAddress = s.defaultStartAddress || state.route.startAddress;
-    if (state.route.endSameAsStart) {
-      state.route.endLabel = state.route.startLabel;
-      state.route.endAddress = state.route.startAddress;
-    }
-  }
-  applyTheme();
-  document.querySelector("#map-status").textContent = state.mapApiConfigured ? "Google Maps" : "Stima locale";
 }
 
 const _splashShown = Date.now();
@@ -1281,13 +1271,6 @@ function renderMenuAccount() {
     </div>`;
 }
 
-function showNicknameSetup() {
-  const key = "pl_nickname_prompt_shown";
-  if (localStorage.getItem(key)) return;
-  localStorage.setItem(key, "1");
-  showToast("Imposta il tuo nickname in Menu → Account", 4000);
-}
-
 function renderMenuSettings() {
   const s = state.settings;
   const nav = s.navigatorPref || "google";
@@ -1623,7 +1606,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.066 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.067 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -2972,7 +2955,9 @@ function stopHoursHint(stop, scheduledDate) {
   const day = wh[dow] || wh[String(dow)];
   if (!day) return `<span class="stop-meta">—</span>`;
   if (day.closed) return `<span class="badge badge-error">Chiuso ${DAYS_IT[dow]}</span>`;
-  if (day.continuous) return `<span class="stop-meta">${day.openMorning}–${day.closeAfternoon} <span style="opacity:.6">(cont.)</span></span>`;
+  if (day.continuous) return day.openMorning && day.closeAfternoon
+    ? `<span class="stop-meta">${day.openMorning}–${day.closeAfternoon} <span style="opacity:.6">(cont.)</span></span>`
+    : `<span class="stop-meta">—</span>`;
   const parts = [];
   if (day.openMorning && day.closeMorning) parts.push(`${day.openMorning}–${day.closeMorning}`);
   if (day.openAfternoon && day.closeAfternoon) parts.push(`${day.openAfternoon}–${day.closeAfternoon}`);
@@ -3000,8 +2985,8 @@ function weeklyHoursSummary(a) {
 
 function deriveHoursFromWeekly(wh) {
   if (!wh) return { openMorning: "", closeMorning: "", openAfternoon: "", closeAfternoon: "" };
-  // Use Monday (1) or first non-closed weekday
-  const day = wh[1] || wh[2] || wh[3] || wh[4] || wh[5] || Object.values(wh).find(d => !d.closed);
+  // Primo giorno feriale NON chiuso (lunedì preferito): salta i giorni presenti ma chiusi.
+  const day = [1, 2, 3, 4, 5, 6, 0].map(k => wh[k] || wh[String(k)]).find(d => d && !d.closed);
   if (!day || day.closed) return { openMorning: "", closeMorning: "", openAfternoon: "", closeAfternoon: "" };
   if (day.continuous) return { openMorning: day.openMorning || "", closeMorning: "", openAfternoon: "", closeAfternoon: day.closeAfternoon || "" };
   return { openMorning: day.openMorning || "", closeMorning: day.closeMorning || "", openAfternoon: day.openAfternoon || "", closeAfternoon: day.closeAfternoon || "" };
@@ -3715,6 +3700,31 @@ function renderResultMultiDay() {
     </section>`;
 }
 
+// Scheda break (pausa pranzo / sosta) nella vista risultato. Le due varianti
+// differiscono solo per icona, classi ed etichette: un'unica funzione le genera.
+function renderBreakCard(result, row, kind) {
+  const idx = result.rows.indexOf(row);
+  const filled = row.placeAssigned && row.customer;
+  const cfg = kind === "lunch"
+    ? { cardClass: "lunch-card", iconClass: "lunch-icon", icon: I.fork(18), fallbackTitle: "Pausa pranzo", hint: "un ristorante vicino", editTitle: "Cambia ristorante" }
+    : { cardClass: "rest-card", iconClass: "coffee-icon", icon: I.coffee(18), fallbackTitle: "Sosta", hint: "un bar vicino", editTitle: "Cambia sosta" };
+  return `<article class="card result-card break-card ${cfg.cardClass}" data-break-pick="${kind}" data-break-idx="${idx}" data-break-filled="${filled ? "1" : ""}" role="button" tabindex="0">
+  <div class="break-row">
+    <span class="break-icon ${cfg.iconClass}">${cfg.icon}</span>
+    <div style="flex:1;min-width:0">
+      <p class="stop-title" style="margin:0">${filled ? escapeHtml(row.customer) : cfg.fallbackTitle}</p>
+      <div class="stop-meta">${escapeHtml(row.serviceStartTime)} – ${escapeHtml(row.serviceEndTime)} · ${minutesLabel(row.durationMinutes)}</div>
+      ${filled && row.address ? `<div class="stop-meta" style="font-size:0.8rem">${escapeHtml(row.address)}</div>` : ""}
+      <div class="stop-meta break-pick-hint">${filled ? "Tocca per navigare" : `Tocca per scegliere ${cfg.hint}`}</div>
+    </div>
+    ${filled ? `<div class="break-card-actions" style="display:flex;flex-direction:column;gap:4px;flex-shrink:0;align-items:center">
+      <button class="btn icon-btn" data-break-edit="${idx}" title="${cfg.editTitle}">${I.edit(14)}</button>
+      <button class="btn icon-btn danger" data-break-delete="${idx}" title="Elimina sosta">${I.trash(14)}</button>
+    </div>` : `<span class="break-maps-hint">${I.search(14)}</span>`}
+  </div>
+</article>`;
+}
+
 function renderResult() {
   if (state.resultMultiDay) { renderResultMultiDay(); return; }
   if (!state.result) {
@@ -3761,47 +3771,9 @@ function renderResult() {
 
       <div class="result-list">
         ${(()=>{let rvStopIdx=-1;return rows.map(row => {
-          // Special row: lunch break (neutral card — tap to pick a real place nearby)
-          if (row.type === "lunch") {
-            const lunchIdx = result.rows.indexOf(row);
-            const filled = row.placeAssigned && row.customer;
-            return `<article class="card result-card break-card lunch-card" data-break-pick="lunch" data-break-idx="${lunchIdx}" data-break-filled="${filled ? "1" : ""}" role="button" tabindex="0">
-  <div class="break-row">
-    <span class="break-icon lunch-icon">${I.fork(18)}</span>
-    <div style="flex:1;min-width:0">
-      <p class="stop-title" style="margin:0">${filled ? escapeHtml(row.customer) : "Pausa pranzo"}</p>
-      <div class="stop-meta">${escapeHtml(row.serviceStartTime)} – ${escapeHtml(row.serviceEndTime)} · ${minutesLabel(row.durationMinutes)}</div>
-      ${filled && row.address ? `<div class="stop-meta" style="font-size:0.8rem">${escapeHtml(row.address)}</div>` : ""}
-      <div class="stop-meta break-pick-hint">${filled ? "Tocca per navigare" : "Tocca per scegliere un ristorante vicino"}</div>
-    </div>
-    ${filled ? `<div class="break-card-actions" style="display:flex;flex-direction:column;gap:4px;flex-shrink:0;align-items:center">
-      <button class="btn icon-btn" data-break-edit="${lunchIdx}" title="Cambia ristorante">${I.edit(14)}</button>
-      <button class="btn icon-btn danger" data-break-delete="${lunchIdx}" title="Elimina sosta">${I.trash(14)}</button>
-    </div>` : `<span class="break-maps-hint">${I.search(14)}</span>`}
-  </div>
-</article>`;
-          }
-
-          // Special row: rest stop — neutra (tap per scegliere) o riempita da archivio (tap per cambiare)
-          if (row.type === "rest") {
-            const restIdx = result.rows.indexOf(row);
-            const filled = row.placeAssigned && row.customer;
-            return `<article class="card result-card break-card rest-card" data-break-pick="rest" data-break-idx="${restIdx}" data-break-filled="${filled ? "1" : ""}" role="button" tabindex="0">
-  <div class="break-row">
-    <span class="break-icon coffee-icon">${I.coffee(18)}</span>
-    <div style="flex:1;min-width:0">
-      <p class="stop-title" style="margin:0">${filled ? escapeHtml(row.customer) : "Sosta"}</p>
-      <div class="stop-meta">${escapeHtml(row.serviceStartTime)} – ${escapeHtml(row.serviceEndTime)} · ${minutesLabel(row.durationMinutes)}</div>
-      ${filled && row.address ? `<div class="stop-meta" style="font-size:0.8rem">${escapeHtml(row.address)}</div>` : ""}
-      <div class="stop-meta break-pick-hint">${filled ? "Tocca per navigare" : "Tocca per scegliere un bar vicino"}</div>
-    </div>
-    ${filled ? `<div class="break-card-actions" style="display:flex;flex-direction:column;gap:4px;flex-shrink:0;align-items:center">
-      <button class="btn icon-btn" data-break-edit="${restIdx}" title="Cambia sosta">${I.edit(14)}</button>
-      <button class="btn icon-btn danger" data-break-delete="${restIdx}" title="Elimina sosta">${I.trash(14)}</button>
-    </div>` : `<span class="break-maps-hint">${I.search(14)}</span>`}
-  </div>
-</article>`;
-          }
+          // Righe speciali break: pausa pranzo / sosta (neutra o riempita da archivio)
+          if (row.type === "lunch") return renderBreakCard(result, row, "lunch");
+          if (row.type === "rest") return renderBreakCard(result, row, "rest");
 
           const addr = state.allAddresses.find(a => String(a.id) === String(row.addressId));
           if (!row.stopPart || row.stopPart === "morning") rvStopIdx++;
@@ -5544,6 +5516,7 @@ async function importFromGoogleContacts() {
 
 async function saveAddressForm(form) {
   const v = readForm(form);
+  const wh = readWeeklyHours();
   const payload = {
     customer: v.customer, activity: v.activity || "", location: v.location, fullAddress: v.fullAddress,
     addressType: v.addressType || "customer",
@@ -5551,9 +5524,9 @@ async function saveAddressForm(form) {
     phone2: v.phone2 || "", phone2Type: v.phone2Type || "fisso", phone2Name: v.phone2Name || "",
     phonePreferred: v.phonePreferred || "phone",
     email: v.email || "", notes: v.notes,
-    weeklyHours: readWeeklyHours(),
+    weeklyHours: wh,
     // Derive legacy fields from Mon or first working day for backward compat
-    ...deriveHoursFromWeekly(readWeeklyHours()),
+    ...deriveHoursFromWeekly(wh),
     defaultDuration: hhmmToMins(v.defaultDuration) || 45,
     lat: v.lat ? Number(v.lat) : null, lng: v.lng ? Number(v.lng) : null,
     isRestStop: form.elements.isRestStop?.checked ?? false,
@@ -5868,7 +5841,16 @@ function applyPlaceToForm(place) {
   setIfEmpty("activity", place.name);
   setIfEmpty("customer", place.name);
   setIfEmpty("fullAddress", place.formatted_address);
-  setIfEmpty("phone", place.formatted_phone_number || place.international_phone_number || "");
+  // Telefono: compila solo se vuoto e, in tal caso, deduci anche il tipo (come il picker mappa).
+  const phoneEl = f("phone");
+  const phoneWasEmpty = phoneEl && !phoneEl.value.trim();
+  const phoneVal = place.formatted_phone_number || place.international_phone_number || "";
+  setIfEmpty("phone", phoneVal);
+  if (phoneWasEmpty && phoneVal) {
+    const sel = f("phoneType");
+    const t = detectPhoneType(phoneVal);
+    if (sel && t) sel.value = t;
+  }
   if (place.geometry?.location) {
     setIfEmpty("lat", place.geometry.location.lat().toFixed(6));
     setIfEmpty("lng", place.geometry.location.lng().toFixed(6));
@@ -6041,14 +6023,10 @@ function openMapPicker() {
         // Phone — prefer formatted local number, fall back to international; auto-detect type
         const phone = pickedPlace.formatted_phone_number || pickedPlace.international_phone_number || "";
         if (phone) {
-          const digits = phone.replace(/\D/g, "");
-          // Italian mobile: starts with 3 (after country code +39 → strip it)
-          const localDigits = digits.startsWith("39") ? digits.slice(2) : digits;
-          const autoType = localDigits.startsWith("3") ? "cell" : "fisso";
           if (f("phone") && !f("phone").value) {
             f("phone").value = phone;
             const sel = document.querySelector("#address-form [name=phoneType]");
-            if (sel) sel.value = autoType;
+            if (sel) sel.value = detectPhoneType(phone);
           }
         }
 

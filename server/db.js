@@ -331,7 +331,7 @@ async function initPostgresDb() {
       rest_duration_min INTEGER DEFAULT 15,
       drive_markup_min_per_hour DOUBLE PRECISION DEFAULT 10,
       earliest_break_time TEXT DEFAULT '08:00',
-      max_detour_km DOUBLE PRECISION DEFAULT 1.7,
+      max_detour_km DOUBLE PRECISION DEFAULT 1.5,
       max_return_time TEXT DEFAULT ''
     );
     INSERT INTO settings (id, km_rate, drive_hour_rate, work_hour_rate)

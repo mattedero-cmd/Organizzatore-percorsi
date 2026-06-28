@@ -1,3 +1,17 @@
+## v5.067 — 2026-06-28
+Audit discrepanze tra funzioni simili + fix bug e pulizia (nessuna funzione rimossa):
+- **Pranzo (planner)**: i limiti di detour/orario del gap di chiusura (`gapMaxDetourKm`, `gapLunchClose`) ora vengono effettivamente passati a `makeLunchEntry` nei tre rami split-gap/wait-time — prima erano calcolati ma ignorati, così un ristorante troppo lontano poteva spingere la tappa pomeridiana.
+- **`/opening` locale (offline)**: ritornava `{status}` con chiavi sbagliate e logica errata (chiave giorno `mon`/`tue` invece che numerica) → badge sempre "Sconosciuto". Ora ritorna `{isOpen, weekdayText}` come il server, con calcolo aperto/chiuso orario-aware e testo settimanale lunedì-first.
+- **`deriveHoursFromWeekly`**: se il lunedì era "chiuso" azzerava gli orari legacy invece di prendere il primo giorno feriale aperto. Corretto.
+- **Ricerca indirizzi offline**: ora ordinata come il server (attività, cliente, località, id).
+- **Piani multi-giorno offline**: calcolato `stopCount` → niente più "undefined tappe".
+- **`dayHoursFeasible` (multi-giorno)**: modello soste allineato agli altri stimatori (`while` invece di `if`).
+- **`stopHoursHint`**: giorno "continuo" senza orari completi ora mostra "—" come `weeklyHoursSummary`.
+- **WhatsApp/telefono**: `formatPhoneForWhatsApp` semplificato (rimosso handling `+` morto); `parseTimeToMinutes` ora valida i range e accetta `:`/`.` come il planner; tipo telefono dedotto con helper condiviso `detectPhoneType` anche nell'autocomplete del form (prima solo nel picker mappa).
+- **Admin login**: niente più crash 500 con body senza `secret` → 401 corretto.
+- **Condivisione giri**: non marca più il payload del creatore come `imported` (il tag lo mette il client all'import) e registra l'autore reale invece di `user_id=0`.
+- **Pulizia**: rimosso codice morto (`_scSave/_scLoad/_scApply`, `showNicknameSetup`, guardia `t < -0.05` irraggiungibile); schede break pranzo/sosta unificate in `renderBreakCard`; `readWeeklyHours()` chiamata una volta sola; default `max_detour_km` allineato (1.5) tra SQLite e Postgres.
+
 ## v5.066 — 2026-06-26
 - Sync bidirezionale IndexedDB ↔ server: all'avvio (se login disponibile) scarica tutti i dati dal server e aggiorna IndexedDB; ogni scrittura viene replicata al server in background (fire-and-forget). Backup settimanale automatico: se l'ultimo backup ha più di 7 giorni, l'intero IndexedDB viene inviato al server via `/api/backup`. L'app si avvia sempre con i dati locali — il login non è più bloccante: se il server non risponde, continua offline senza errori.
 

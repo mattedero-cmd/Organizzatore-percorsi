@@ -582,8 +582,8 @@ function findNearestRestStop(restStops, fromLat, fromLng, toLat, toLng, maxPerpK
     }
     let distKm;
     if (hasSegment) {
-      const { perpKm, t } = perpDistToSegment(s.lat, s.lng, fromLat, fromLng, toLat, toLng);
-      if (perpKm > maxPerpKm || t < -0.05) continue;
+      const { perpKm } = perpDistToSegment(s.lat, s.lng, fromLat, fromLng, toLat, toLng);
+      if (perpKm > maxPerpKm) continue;
       distKm = perpKm;
     } else {
       distKm = haversineKm({ lat: fromLat, lng: fromLng }, { lat: s.lat, lng: s.lng });
@@ -873,7 +873,7 @@ async function insertBreaks(rows, options) {
             const gapMaxDetourKm  = Math.min(maxDetourKm, maxTravelOneWay / 60 * 50);
             const gapLunchClose   = gapStart + maxTravelOneWay;
             L(`  → tappa spezzata "${rows[i].customer}": pranzo nel gap chiusura ${formatTime(gapStart)}-${formatTime(gapEnd)} (${gapMin}min)`);
-            insertions.push(await makeLunchEntry(i + 1, rows[i], nextRow, gapStart));
+            insertions.push(await makeLunchEntry(i + 1, rows[i], nextRow, gapStart, gapLunchClose, gapMaxDetourKm));
           } else if (!rows[i].stopPart && svcEnd != null && svcEnd >= LUNCH_OPEN && svcEnd <= LUNCH_CLOSE) {
             // Tappa non spezzata che finisce in finestra: fai PRIMA l'intervento e mangia
             // DOPO (vicino alla tappa). Evita di deviare a mangiare per poi tornare a
@@ -917,7 +917,7 @@ async function insertBreaks(rows, options) {
           const gapMaxDetourKm = Math.min(maxDetourKm, maxTravelOneWay / 60 * 50);
           const gapLunchClose  = gapStart + maxTravelOneWay;
           L(`    travelMax=${maxTravelOneWay}min detourMax=${gapMaxDetourKm.toFixed(1)}km`);
-          const entry = await makeLunchEntry(i + 1, morRow, aftRow, gapStart);
+          const entry = await makeLunchEntry(i + 1, morRow, aftRow, gapStart, gapLunchClose, gapMaxDetourKm);
           if (entry) { insertions.push(entry); placed = true; }
         } else {
           L(`    gap troppo breve per pranzo (${gapMin}min < ${lunchBreakMinutes + 10}min) — sosta nel gap gestita dalle soste automatiche`);
@@ -949,7 +949,7 @@ async function insertBreaks(rows, options) {
         // va cercato vicino alla tappa stessa, non lungo la tratta percorsa per arrivarci
         // (altrimenti finisce a metà strada, es. a Bolzano invece che a Riva del Garda).
         L(`  wait-time pranzo "${row.customer}": attesa=${waitMin}min lunchAt=${formatTime(lunchAt)} travelMax=${maxTravelOneWay}min`);
-        const entry = await makeLunchEntry(i, row, row, lunchAt);
+        const entry = await makeLunchEntry(i, row, row, lunchAt, gapLunchClose, gapMaxDetourKm);
         if (entry) {
           // Place the lunch at the right time within the drive-to-stop leg:
           // driveOffset = how many minutes after the previous stop's departure the lunch starts

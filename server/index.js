@@ -522,7 +522,7 @@ async function handleApi(request, response) {
         const secret = (process.env.ADMIN_SECRET || "").trim();
         if (!secret) return sendJson(response, 503, { error: "Admin non configurato" });
         const body = await parseBody(request);
-        if (body.secret.trim() !== secret) {
+        if ((body.secret || "").trim() !== secret) {
           return sendJson(response, 401, { error: "Credenziali non valide" });
         }
         const token = generateAdminToken();
@@ -905,7 +905,9 @@ async function handleApi(request, response) {
       const routeData = body?.routeData;
       if (!routeData) return sendJson(response, 400, { error: "routeData mancante" });
       const token = generateToken();
-      await createSharedRoute(token, null, JSON.stringify({ ...routeData, source: "imported" }));
+      // Non marcare il payload come "imported": è il giro originale del creatore.
+      // Il tag source:"imported" viene messo dal client SOLO al momento dell'import.
+      await createSharedRoute(token, userId, JSON.stringify(routeData));
       const host = request.headers.host || "";
       const proto = process.env.NODE_ENV === "production" ? "https" : "http";
       const shareUrl = `${proto}://${host}/share/${token}`;
