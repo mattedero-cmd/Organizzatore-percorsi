@@ -122,10 +122,13 @@ Le soste (`type:"rest"`) e le pause pranzo (`type:"lunch"`) sono **vere tappe de
 
 ## Sessioni utente
 
+- **Login obbligatorio (v5.071)**: niente utente anonimo. Senza sessione l'app mostra il login e NON entra in modalità operativa. Lato server NON esiste più il fallback `user_id=1`: ogni endpoint dati risponde 401 se non autenticato (`/api/config` resta pubblico, `/api/health` invariato).
 - Token casuale 32 byte hex, salvato in cookie `HttpOnly; SameSite=Lax`
 - Scadenza 30 giorni con **sliding expiry**: ogni chiamata a `/api/auth/me` estende la sessione
-- `state._authVerified`: flag che indica che l'utente ha completato almeno un login nella sessione corrente. Il 401 su API secondarie fa logout **solo** se questo flag è `true`. Evita falsi logout su app appena aperta.
-- **bfcache iOS Safari**: `pageshow` (e.persisted) e `visibilitychange` ri-verificano `/api/auth/me` senza ricaricare la pagina — fix per utenti che trovavano l'app "dentro ma slogati"
+- **Avvio offline-first (v5.071)**: marcatore NON sensibile in `localStorage` (`session.user` = `{id,username,nickname}`). Se presente, `init()` parte SUBITO con i dati locali (IndexedDB) **senza check di rete bloccante** e ri-valida in background con `revalidateSession()`. Il marcatore non concede accessi: ogni chiamata al server resta protetta dal cookie. Settato a ogni auth riuscita, cancellato al logout e su 401 confermata.
+- `state._authVerified`: true quando la sessione è stata confermata dal server in questa sessione di pagina (boot da marcatore parte con `false` → `_maybeRevalidate` su online/pageshow/visibilitychange la conferma). Una 401 dal server in `api()` riporta al login **senza** cancellare i dati locali.
+- **Migrazione/adozione (v5.071)**: `adoptLocalDataIntoAccount(userId)` — al primo login i dati creati da anonimo (solo IndexedDB, outbox mai popolato) vengono accodati all'outbox e svuotati (push) PRIMA del primo pull, così un pull da account vuoto non sovrascrive i dati. Una sola volta per dispositivo (flag `_adoptedAccount`). NON distruttiva.
+- **bfcache iOS Safari**: `pageshow` (e.persisted) e `visibilitychange` chiamano `_maybeRevalidate()` (ri-valida solo se la sessione in cache non è ancora confermata).
 
 ---
 
@@ -154,13 +157,14 @@ Non usare `stopPropagation()` sui container dei pulsanti — rompe tutto. È pre
 
 ## Condivisione giri
 
-- Tabella `shared_routes`: `(token, user_id, route_json, created_at, expires_at)`
-- Scadenza 5 giorni; pulizia automatica ogni 6h con `setInterval`
-- URL pubblica: `/share/:token` → serve `index.html`, il frontend intercetta il path
-- `GET /api/share/:token` — endpoint pubblico, nessuna auth richiesta
-- `POST /api/routes/:id/share` — crea il token, richiede auth
-- `POST /api/share/:token/import` — importa nel proprio account, richiede auth
-- I giri importati hanno `source = "imported"` nel DB e appaiono in viola nell'UI
+- Tabella `shared_routes`: `(token, user_id, route_json, created_at, expires_at)`. `route_json` = snapshot **embedded** del giro al momento dello share (copia indipendente, NON un link vivo).
+- **Scadenza 7 giorni** (`SHARE_LINK_TTL_DAYS` in `db.js`, era 5); pulizia automatica ogni 6h con `setInterval`. La scadenza blocca solo NUOVI import: le copie già importate sui dispositivi restano permanenti.
+- `/share/:token` (HTML) → serve `index.html`; il frontend salva il token in `sessionStorage.pendingShareImport` e procede.
+- `GET /api/share/:token` — **richiede sessione (v5.071)**: 401+`needsAuth` se non autenticato. Nessun accesso anonimo, nemmeno in lettura.
+- `POST /api/routes/:id/share` — crea il token, richiede auth (dietro il gate 401). Risponde `expiresInDays: SHARE_LINK_TTL_DAYS`.
+- **Import lato client** (non esiste un endpoint server di import): `handleShareImport(token)` richiede sessione; il destinatario non loggato è mandato al login e l'import riprende da `_resumePendingShareImport()` dopo l'accesso. Il giro è salvato TRA I PROPRI GIRI via `api("/api/routes", POST)` (IndexedDB + sync), con `source:"imported"`.
+- **Tappe self-contained**: `_makeImportedSelfContained()` azzera `addressId` su ogni tappa del giro importato → le tappe sono dati interni del giro (nome/indirizzo/coordinate embedded), niente fusione/collisione con l'anagrafica del destinatario. Il calcolo percorso usa le coordinate embedded.
+- I giri importati hanno `source = "imported"` (persistito anche lato server da `POST /api/routes`) e appaiono in viola nell'UI. Ri-condivisibili: la ri-condivisione genera un nuovo snapshot dalla copia del destinatario.
 
 ---
 

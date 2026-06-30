@@ -289,7 +289,9 @@ async function _serverFetch(path, options = {}) {
 // reload/offline) e prova a svuotarlo. Non più fire-and-forget: una scrittura/cancellazione
 // fatta offline NON viene persa e verrà inviata al server al prossimo flush (online).
 function _bgSync(path, options, localId) {
-  if (!state._syncEnabled) return;
+  // Login obbligatorio: quando l'app è operativa l'utente è sempre loggato → sync sempre attivo
+  // (quando online). Offline le fetch falliscono e l'outbox riprova alla riconnessione.
+  if (!state.user) return;
   const method = (options.method || "GET").toUpperCase();
   if (method === "GET") return;
   const store = _pathToStore(path.split("?")[0]);
@@ -321,7 +323,7 @@ function _outboxEnqueue(entry) {
 // errore di rete e ritenta al flush successivo, preservando l'ordine.
 let _flushing = false;
 async function flushOutbox() {
-  if (!state._syncEnabled || _flushing) return;
+  if (!state.user || _flushing) return;
   _flushing = true;
   try {
     const entries = (await idbGetAll("outbox")).sort((a, b) => a.seq - b.seq);
@@ -471,7 +473,7 @@ function _routeRecordToFlat(rec) {
 
 // Weekly backup: push all IndexedDB data to server.
 async function _weeklyBackupIfDue() {
-  if (!state._syncEnabled) return;
+  if (!state.user) return;
   try {
     const last = localStorage.getItem("_lastBackup");
     const daysSince = last ? (Date.now() - new Date(last).getTime()) / 86400000 : 999;
@@ -668,11 +670,13 @@ async function api(path, options = {}) {
   });
   const payload = await res.json().catch(() => ({}));
   if (res.status === 401) {
-    // App local-first: una sessione scaduta disabilita solo il sync, non sloggia
-    // (i dati restano in IndexedDB). Non azzerare state.user per non mostrare il login.
-    if (state._authVerified) {
+    // Login obbligatorio: una 401 dal server significa sessione non valida. I dati locali
+    // restano in IndexedDB (non si cancella nulla); si torna al login per ripristinarla.
+    if (state.user) {
       state._authVerified = false;
-      state._syncEnabled = false;
+      _clearSessionMarker();
+      state.user = null;
+      renderAuthScreen(false, { adoptNotice: true, expired: true });
     }
     throw new Error("Sessione scaduta. Effettua di nuovo il login.");
   }
@@ -1103,8 +1107,10 @@ function renderMenu() {
     });
     ov.querySelector("#bsheet-close")?.addEventListener("click", () => closeMenu());
     ov.querySelector("#logout-btn")?.addEventListener("click", async () => {
-      await fetch(window.location.origin + "/api/auth/logout", { method: "POST" });
+      await fetch(window.location.origin + "/api/auth/logout", { method: "POST" }).catch(() => {});
+      _clearSessionMarker();
       state.user = null;
+      state._authVerified = false;
       closeMenu();
       renderAuthScreen(false);
     });
@@ -1745,7 +1751,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.070 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.071 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -1755,6 +1761,14 @@ function renderMenuInfo() {
       <ul class="info-list">
         <li>${state.mapApiConfigured ? _svg('<polyline points="20 6 9 17 4 12"/>', 14) + " Google Maps attivo — percorsi reali e ottimizzazione avanzata" : _svg('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>', 14) + " Google Maps non configurato — stime distanze locali"}</li>
         <li>${state.whisperConfigured ? _svg('<polyline points="20 6 9 17 4 12"/>', 14) + " Comandi vocali attivi (Whisper)" : _svg('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>', 14) + " Comandi vocali non configurati"}</li>
+      </ul>
+
+      <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v5.071</p>
+      <ul class="info-list">
+        <li>Accesso obbligatorio: per usare l'app si fa login o registrazione. Una volta dentro, l'app resta locale e funziona offline come prima — il server fa da backup, sincronizzazione e calcolo percorso.</li>
+        <li>Sessione che dura: dopo il primo accesso l'app si apre subito, anche senza rete, e ri-controlla l'accesso da sola quando torna online. I dati restano sul dispositivo.</li>
+        <li>Dati già presenti sul dispositivo: al primo accesso vengono associati automaticamente al tuo account, senza perdite.</li>
+        <li>Condivisione giri: un link è apribile solo da chi ha un account; chi lo riceve importa una copia indipendente del giro tra i suoi giri (le tappe restano dentro il giro, non finiscono in archivio). Il link scade dopo 7 giorni; le copie già importate restano per sempre.</li>
       </ul>
 
       <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v5.070</p>
@@ -4395,7 +4409,9 @@ function renderMenuStats() {
 // ── render dispatch ───────────────────────────────────────────────────────────
 
 function render() {
-  // Nessun blocco su state.user: l'app gira sempre con dati locali
+  // Login obbligatorio: senza sessione (in cache o confermata) non si mostra mai l'UI operativa.
+  if (!state.user) { renderAuthScreen(false); return; }
+  document.body.classList.remove("auth-only");
   if (state.activeTab === "route") renderRoute();
   else if (state.activeTab === "saved") renderSaved();
   else if (state.activeTab === "archive") renderArchive();
@@ -4462,7 +4478,7 @@ async function shareRoute(routeId) {
       await navigator.share({ title: routeName, text: `Giro di lavoro: ${routeName}`, url }).catch(() => {});
     } else {
       await navigator.clipboard.writeText(url).catch(() => {});
-      showToast("Link copiato — scade tra 5 giorni");
+      showToast(`Link copiato — scade tra ${data.expiresInDays || 7} giorni`);
     }
   } catch (e) {
     hideSpinner();
@@ -4470,28 +4486,60 @@ async function shareRoute(routeId) {
   }
 }
 
+// Rende il giro importato AUTOSUFFICIENTE: le sue tappe sono dati INTERNI del giro
+// (nome/indirizzo/coordinate embedded), scollegate dall'anagrafica del destinatario. Azzeriamo
+// `addressId` su tutte le tappe così non collidono con indirizzi diversi nell'archivio locale e
+// non vengono mai fuse con l'anagrafica. È uno SNAPSHOT indipendente (source:"imported").
+function _makeImportedSelfContained(route, name) {
+  const strip = s => (s && typeof s === "object" && !Array.isArray(s)) ? { ...s, addressId: null } : s;
+  const out = { ...route, source: "imported", name };
+  if (Array.isArray(out.rows)) out.rows = out.rows.map(strip);
+  if (Array.isArray(out.plannedStops)) out.plannedStops = out.plannedStops.map(strip);
+  if (Array.isArray(out.stops)) out.stops = out.stops.map(strip);
+  return out;
+}
+
 async function handleShareImport(token) {
+  // Import consentito SOLO a utenti loggati. Senza utente in sessione (nemmeno in cache): salva il
+  // token e manda al login; dopo l'accesso `_resumePendingShareImport` riprende da qui. Se l'utente
+  // è loggato ma la sessione non è ancora confermata dal server, si prova comunque: il GET sotto
+  // gestisce un'eventuale 401 ri-mandando al login (niente falsi blocchi su sessione in cache).
+  if (!state.user) {
+    try { sessionStorage.setItem("pendingShareImport", token); } catch {}
+    renderAuthScreen(false, { adoptNotice: await _hasLocalData(), pendingShare: true });
+    return;
+  }
   try {
     showSpinner("Caricamento giro…");
-    const route = await fetch(window.location.origin + `/api/share/${token}`).then(r => r.ok ? r.json() : Promise.reject(new Error("Link scaduto o non valido")));
+    const res = await fetch(window.location.origin + `/api/share/${token}`);
+    if (res.status === 401) {
+      // Sessione non valida lato server: torna al login conservando il token per riprendere.
+      hideSpinner();
+      try { sessionStorage.setItem("pendingShareImport", token); } catch {}
+      _clearSessionMarker();
+      state.user = null; state._authVerified = false;
+      renderAuthScreen(false, { adoptNotice: await _hasLocalData(), pendingShare: true });
+      return;
+    }
+    if (!res.ok) throw new Error(res.status === 404 ? "Link scaduto o non valido" : `Errore ${res.status}`);
+    const route = await res.json();
     hideSpinner();
 
     // Mostra preview e chiede conferma
     const name = route.name || "Giro condiviso";
     const stops = (route.rows || route.plannedStops || []).filter(s => !s.type);
-    const stopNames = stops.slice(0, 5).map(s => `• ${s.customer || s.customer}`).join("\n");
+    const stopNames = stops.slice(0, 5).map(s => `• ${s.customer || s.location || "Tappa"}`).join("\n");
     const more = stops.length > 5 ? `\n… e altri ${stops.length - 5}` : "";
     const confirm = window.confirm(`Importare il giro "${name}"?\n\n${stopNames}${more}\n\nVerrà aggiunto ai tuoi giri salvati.`);
-    if (!confirm) return;
+    if (!confirm) { try { sessionStorage.removeItem("pendingShareImport"); } catch {} history.replaceState(null, "", "/"); return; }
 
     showSpinner("Importazione…");
-    // Recupera il giro condiviso (piatto) e salvalo in IndexedDB nel wrapper canonico.
-    const sharedRoute = await fetch(window.location.origin + `/api/share/${token}`).then(r => r.ok ? r.json() : Promise.reject(new Error("Link scaduto")));
-    const flat = { ...(sharedRoute.payload || sharedRoute), source: "imported", name };
-    const rec = _routeToLocalRecord(flat);
-    delete rec.id;
-    const newId = await idbAdd("routes", rec);
-    state.result = normalizeSavedRoute({ ...flat, id: newId });
+    // Snapshot indipendente con tappe self-contained; salvato TRA I PROPRI GIRI come un giro nativo
+    // (via localApi → IndexedDB + sync outbox). Le tappe NON finiscono nell'anagrafica.
+    const flat = _makeImportedSelfContained(route.payload || route, name);
+    const saved = await api("/api/routes", { method: "POST", body: JSON.stringify(flat) });
+    try { sessionStorage.removeItem("pendingShareImport"); } catch {} // import committato: niente retry
+    state.result = normalizeSavedRoute({ ...flat, id: saved.id });
     await refreshSavedRoutes();
     hideSpinner();
     setActiveTab("result");
@@ -8096,14 +8144,23 @@ function renderSetupForm() {
   </form>`;
 }
 
-function renderAuthScreen(isSetup = false) {
+function renderAuthScreen(isSetup = false, opts = {}) {
+  document.body.classList.add("auth-only");
   let activeTab = isSetup ? "setup" : "login";
+
+  // Avvisi contestuali (sessione scaduta / import in attesa / dati locali da adottare).
+  const notices = [];
+  if (opts.expired) notices.push("La sessione è scaduta: accedi di nuovo. I dati su questo dispositivo sono al sicuro.");
+  if (opts.pendingShare) notices.push("Accedi o registrati per importare il giro condiviso.");
+  if (opts.adoptNotice) notices.push("Hai già dei dati su questo dispositivo: verranno associati all'account con cui accedi o ti registri.");
+  const noticesHtml = notices.map(n => `<p class="auth-subtitle">${n}</p>`).join("");
 
   const renderInner = () => {
     app.innerHTML = `
       <div class="auth-screen">
         <div class="auth-card">
           <div class="auth-logo">${_svg('<polygon points="3 11 22 2 13 21 11 13 3 11"/>',24)} Percorsi Lavoro</div>
+          ${noticesHtml}
           ${isSetup
             ? `<p class="auth-subtitle">Prima configurazione — crea il tuo account</p>`
             : `<div class="auth-tabs">
@@ -8151,8 +8208,7 @@ function renderAuthScreen(isSetup = false) {
           });
           const result = await res.json().catch(() => ({}));
           if (!res.ok) throw new Error(result.error || `Errore server (${res.status})`);
-          state.user = result;
-          await initApp();
+          await onAuthSuccess(result);
         } catch (err) {
           if (errEl) errEl.textContent = err.message === "The string did not match the expected pattern." ? "Errore di rete — riprova" : err.message;
         } finally {
@@ -8165,6 +8221,161 @@ function renderAuthScreen(isSetup = false) {
   renderInner();
 }
 
+// ── sessione: marcatore locale + avvio offline ─────────────────────────────────
+// La sessione "vera" è il cookie HttpOnly (non leggibile da JS) con scadenza 30gg sliding.
+// Per far PARTIRE l'app OFFLINE senza un check di rete bloccante, salviamo in localStorage un
+// marcatore NON sensibile (id/username/nickname): se c'è, l'app parte subito e ri-valida in
+// background. Il marcatore non concede accessi: ogni chiamata al server resta protetta dal cookie.
+const SESSION_MARKER_KEY = "session.user";
+
+function _saveSessionMarker(user) {
+  try {
+    localStorage.setItem(SESSION_MARKER_KEY, JSON.stringify({
+      id: user.id, username: user.username, nickname: user.nickname ?? null
+    }));
+  } catch {}
+}
+function _loadSessionMarker() {
+  try {
+    const u = JSON.parse(localStorage.getItem(SESSION_MARKER_KEY) || "null");
+    return (u && u.id != null && u.username) ? u : null;
+  } catch { return null; }
+}
+function _clearSessionMarker() {
+  try { localStorage.removeItem(SESSION_MARKER_KEY); } catch {}
+}
+
+async function _hasLocalData() {
+  try {
+    const [a, r, f, p] = await Promise.all([
+      idbGetAll("addresses"), idbGetAll("routes"), idbGetAll("folders"), idbGetAll("multiday_plans")
+    ]);
+    return (a.length + r.length + f.length + p.length) > 0;
+  } catch { return false; }
+}
+
+// Primo login dopo l'update: i dati creati quando l'app era "anonima" vivono SOLO in IndexedDB
+// (l'outbox era disabilitato), il server non li ha. Li ADOTTIAMO nell'account reale accodandoli
+// all'outbox e svuotandolo (flushOutbox riconcilia gli id assegnati dal server). Operazione NON
+// distruttiva ed eseguita una sola volta per dispositivo (flag `_adoptedAccount`).
+async function adoptLocalDataIntoAccount(userId) {
+  try {
+    if (localStorage.getItem("_adoptedAccount")) return;
+    // Un dispositivo che ha GIÀ sincronizzato (era loggato su una versione precedente) ha i suoi dati
+    // sul server: NON ri-adottare, altrimenti si creano duplicati. L'adozione serve solo ai dati
+    // creati quando l'app era anonima (mai sincronizzati → `_lastSync` assente).
+    if (localStorage.getItem("_lastSync")) { localStorage.setItem("_adoptedAccount", String(userId)); return; }
+    const [addresses, folders, routes, plans, settings] = await Promise.all([
+      idbGetAll("addresses"), idbGetAll("folders"), idbGetAll("routes"), idbGetAll("multiday_plans"),
+      idbGet("settings", "main").then(s => s?.value || null)
+    ]);
+    const total = addresses.length + folders.length + routes.length + plans.length;
+    if (!total && !settings) { localStorage.setItem("_adoptedAccount", String(userId)); return; }
+
+    // FASE 1 — settings + anagrafica + cartelle. Si flusha PRIMA dei giri: così il server assegna gli
+    // id definitivi agli indirizzi (la sequenza id è GLOBALE su Postgres → quasi sempre diversi dagli
+    // id locali) e flushOutbox ri-mappa gli id locali nell'archivio.
+    if (settings) await _outboxEnqueue({ store: null, method: "PUT", path: "/api/settings", body: JSON.stringify(settings), recId: null });
+    for (const a of addresses) await _outboxEnqueue({ store: "addresses", method: "POST", path: "/api/addresses", body: JSON.stringify(a), recId: a.id });
+    for (const f of folders)   await _outboxEnqueue({ store: "folders", method: "POST", path: "/api/folders", body: JSON.stringify(f), recId: f.id });
+    await flushOutbox();
+
+    // Ri-mappa vecchioId→nuovoId degli indirizzi (chiave naturale: indirizzo+cliente) e applicala
+    // alle tappe dei giri/piani PRIMA di adottarli: senza questo, le tappe punterebbero a id di
+    // archivio inesistenti e si romperebbe lo storico visite (calendario "segretaria").
+    const newAddresses = await idbGetAll("addresses");
+    const akey = a => `${String(a.fullAddress || "").trim().toLowerCase()}|${String(a.customer || "").trim().toLowerCase()}`;
+    const newByKey = new Map(newAddresses.map(a => [akey(a), a.id]));
+    const idRemap = new Map();
+    for (const old of addresses) { const nid = newByKey.get(akey(old)); if (nid != null && nid !== old.id) idRemap.set(old.id, nid); }
+
+    // FASE 2 — piani + giri, con addressId ri-mappati (aggiornando anche il record locale).
+    for (const p of plans) {
+      if (idRemap.size) { _remapAddressIdsDeep(p, idRemap); await idbPut("multiday_plans", p); }
+      await _outboxEnqueue({ store: "multiday_plans", method: "POST", path: "/api/multiday-plans", body: JSON.stringify(p), recId: p.id });
+    }
+    for (const r of routes) {
+      if (idRemap.size) { _remapAddressIdsDeep(r, idRemap); await idbPut("routes", r); }
+      await _outboxEnqueue({ store: "routes", method: "POST", path: "/api/routes", body: JSON.stringify(_routeRecordToFlat(r)), recId: r.id });
+    }
+    await flushOutbox();
+    localStorage.setItem("_adoptedAccount", String(userId));
+  } catch { /* riproveremo: l'outbox resta in coda */ }
+}
+
+// Ri-mappa gli addressId delle tappe (rows/plannedStops/stops, anche dentro .payload) secondo idRemap.
+function _remapAddressIdsDeep(rec, idRemap) {
+  const fixArr = arr => { if (Array.isArray(arr)) for (const s of arr) { if (s && idRemap.has(s.addressId)) s.addressId = idRemap.get(s.addressId); } };
+  fixArr(rec.plannedStops); fixArr(rec.rows); fixArr(rec.stops);
+  if (rec.payload && typeof rec.payload === "object") { fixArr(rec.payload.rows); fixArr(rec.payload.plannedStops); fixArr(rec.payload.stops); }
+}
+
+// Riprende un import condiviso messo in attesa (destinatario che ha dovuto prima autenticarsi).
+// Il token resta in sessionStorage finché l'import non riesce (handleShareImport lo rimuove a buon
+// fine): così un fallimento di rete non lo perde.
+async function _resumePendingShareImport() {
+  let token = null;
+  try { token = sessionStorage.getItem("pendingShareImport"); } catch {}
+  if (!token) return;
+  await handleShareImport(token);
+}
+
+// Avvio del sync/backup in background + ripresa import condiviso. Non blocca l'UI.
+// L'import condiviso viene avviato DOPO il primo sync: il pull iniziale (`_idbReplaceAll`) non deve
+// poter sovrascrivere il giro appena importato prima che la sua POST raggiunga il server.
+function _kickBackgroundSync() {
+  syncFromServer()
+    .then(() => {
+      _weeklyBackupIfDue().catch(() => {});
+      return Promise.all([refreshAddressesForRoute(), refreshSavedRoutes(), refreshMultiDayPlans(), refreshFolders()])
+        .then(() => render()).catch(() => {});
+    })
+    .catch(() => {})
+    .finally(() => { _resumePendingShareImport().catch(() => {}); });
+}
+
+// Autenticazione riuscita (login / registrazione / setup / me valido): entra in modalità operativa.
+async function onAuthSuccess(user) {
+  state.user = user;
+  state._authVerified = true;
+  _saveSessionMarker(user);
+  await adoptLocalDataIntoAccount(user.id); // non distruttivo, una volta sola
+  await initApp();
+  hideSplash();
+  _kickBackgroundSync();
+}
+
+// Ri-validazione opportunistica della sessione (back-online / foreground). Non blocca l'avvio:
+//  - 200 → sessione valida: abilita sync e (se in attesa) l'import condiviso
+//  - 401 → sessione scaduta: torna al login senza cancellare i dati locali
+//  - rete assente → resta operativa offline con la sessione in cache
+let _revalidating = false;
+async function revalidateSession({ initialBoot = false } = {}) {
+  if (_revalidating) return;
+  _revalidating = true;
+  try {
+    const res = await fetch(window.location.origin + "/api/auth/me");
+    if (res.ok) {
+      const me = await res.json().catch(() => ({}));
+      state.user = me;
+      state._authVerified = true;
+      _saveSessionMarker(me);
+      if (initialBoot) await adoptLocalDataIntoAccount(me.id);
+      _kickBackgroundSync();
+    } else if (res.status === 401) {
+      const body = await res.json().catch(() => ({}));
+      state._authVerified = false;
+      _clearSessionMarker();
+      state.user = null;
+      renderAuthScreen(body.setup === true, { adoptNotice: await _hasLocalData(), expired: true });
+    }
+  } catch {
+    /* offline: resta operativa con la sessione in cache */
+  } finally {
+    _revalidating = false;
+  }
+}
+
 // ── init ──────────────────────────────────────────────────────────────────────
 
 async function initApp() {
@@ -8175,31 +8386,36 @@ async function initApp() {
 
 async function init() {
   const shareTokenMatch = window.location.pathname.match(/^\/share\/([a-zA-Z0-9_-]+)/);
+  if (shareTokenMatch) { try { sessionStorage.setItem("pendingShareImport", shareTokenMatch[1]); } catch {} }
 
-  // Prova auth — se riesce, sincronizza dal server; se fallisce, usa solo IndexedDB locale
+  const marker = _loadSessionMarker();
+
+  // OFFLINE-FIRST: se esiste una sessione in cache, l'app parte SUBITO con i dati locali, senza
+  // aspettare la rete (nessun check bloccante all'avvio). La sessione si ri-valida in background.
+  if (marker) {
+    state.user = marker;
+    state._authVerified = false;
+    await initApp();
+    hideSplash();
+    revalidateSession({ initialBoot: true });
+    return;
+  }
+
+  // Nessuna sessione in cache: serve autenticarsi (la prima volta richiede connettività).
+  // L'app NON entra in modalità operativa senza sessione.
+  let setupNeeded = false;
   try {
     const meRes = await fetch(window.location.origin + "/api/auth/me");
     if (meRes.ok) {
-      const me = await meRes.json().catch(() => ({}));
-      state.user = me;
-      state._authVerified = true;
-      state._syncEnabled = true;
-      // Sync server → IndexedDB in background (non blocca l'avvio)
-      syncFromServer().then(() => {
-        _weeklyBackupIfDue().catch(() => {});
-        // Ricarica i dati aggiornati dal server nell'UI
-        Promise.all([refreshAddressesForRoute(), refreshSavedRoutes(), refreshMultiDayPlans(), refreshFolders()])
-          .then(() => render()).catch(() => {});
-      }).catch(() => {});
+      await onAuthSuccess(await meRes.json().catch(() => ({})));
+      return;
     }
-    // Se non autenticato: usa solo IndexedDB (nessun sync server)
-  } catch { /* rete assente — usa solo IndexedDB */ }
+    const body = await meRes.json().catch(() => ({}));
+    setupNeeded = body.setup === true;
+  } catch { /* offline e nessuna sessione in cache: login possibile solo quando torna la rete */ }
 
-  // Avvio immediato con dati locali (IndexedDB), indipendentemente dall'auth
-  state.user = state.user || { username: "locale", id: 0 };
-  await initApp();
   hideSplash();
-  if (shareTokenMatch) handleShareImport(shareTokenMatch[1]);
+  renderAuthScreen(setupNeeded, { adoptNotice: await _hasLocalData(), pendingShare: !!shareTokenMatch });
 }
 
 applyTheme();
@@ -8209,10 +8425,22 @@ window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () 
 });
 bindEvents();
 
-// bfcache / visibilitychange: app è locale, non serve verifica sessione
+// Ri-valida la sessione in cache solo se non è ancora stata confermata in questa sessione
+// (es. avvio offline da marcatore). Una volta confermata non serve ripeterla.
+function _maybeRevalidate() {
+  if (state.user && !state._authVerified) revalidateSession().catch(() => {});
+}
 
-// Tornata la connessione: svuota la coda delle mutazioni offline verso il server
-window.addEventListener("online", () => { flushOutbox().catch(() => {}); });
+// Tornata la connessione: svuota la coda offline e (se serve) ri-valida la sessione.
+window.addEventListener("online", () => {
+  if (!state.user) return;
+  flushOutbox().catch(() => {});
+  _maybeRevalidate();
+});
+
+// iOS bfcache / app tornata in foreground: ri-verifica la sessione senza ricaricare la pagina.
+window.addEventListener("pageshow", (e) => { if (e.persisted) _maybeRevalidate(); });
+document.addEventListener("visibilitychange", () => { if (!document.hidden) _maybeRevalidate(); });
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {

@@ -919,8 +919,12 @@ export async function initSharedRoutesTable() {
   }
 }
 
+// Durata del link di condivisione: il link è importabile per 7 giorni, poi scade.
+// La scadenza blocca solo NUOVI import; le copie già importate restano permanenti.
+export const SHARE_LINK_TTL_DAYS = 7;
+
 export async function createSharedRoute(token, userId, routeJson) {
-  const expiresAt = new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString();
+  const expiresAt = new Date(Date.now() + SHARE_LINK_TTL_DAYS * 24 * 60 * 60 * 1000).toISOString();
   await runSql(`
     INSERT INTO shared_routes (token, user_id, route_json, expires_at)
     VALUES (${sqlValue(token)}, ${sqlValue(Number(userId))}, ${sqlValue(routeJson)}, ${sqlValue(expiresAt)});

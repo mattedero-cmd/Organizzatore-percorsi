@@ -44,6 +44,7 @@ import {
   purgeExpiredSharedRoutes,
   createSharedRoute,
   getSharedRoute,
+  SHARE_LINK_TTL_DAYS,
   adminListUsers,
   adminListSessions,
   adminDeleteUserSessions,
@@ -597,23 +598,30 @@ async function handleApi(request, response) {
       return sendJson(response, 404, { error: "Rotta non trovata" });
     }
 
-    // ── Share routes (GET public, no auth needed) ─────────────────────────────
+    // ── Share routes (GET: richiede sessione — nessun accesso anonimo, nemmeno in lettura) ──
     const shareMatch = url.pathname.match(/^\/api\/share\/([a-zA-Z0-9_-]+)$/);
     if (shareMatch && method === "GET") {
+      // Il destinatario deve essere autenticato. Senza sessione → 401+needsAuth: il client
+      // lo manda al login/registrazione e, dopo l'accesso, riprende il flusso di import.
+      const viewerId = await authenticate(request);
+      if (!viewerId) return sendJson(response, 401, { error: "Accesso richiesto", needsAuth: true });
       const route = await getSharedRoute(shareMatch[1]);
       if (!route) return sendJson(response, 404, { error: "Link scaduto o non trovato" });
       return sendJson(response, 200, route);
     }
 
-    // App è local-first: nessuna autenticazione server-side richiesta
-    const userId = (await authenticate(request)) || 1;
-
+    // Configurazione pubblica dell'app (solo chiavi browser pubbliche): nessuna sessione richiesta.
     if (method === "GET" && url.pathname === "/api/config") {
       return sendJson(response, 200, {
         googleMapsKey: process.env.GOOGLE_MAPS_API_KEY || "",
         googleClientId: process.env.GOOGLE_CLIENT_ID || ""
       });
     }
+
+    // Login obbligatorio: ogni endpoint dati richiede una sessione valida.
+    // Nessun fallback a user_id=1, nessun bucket condiviso anonimo.
+    const userId = await authenticate(request);
+    if (!userId) return sendJson(response, 401, { error: "Non autenticato" });
 
     if (method === "GET" && url.pathname === "/api/addresses") {
       const addresses = await listAddresses(url.searchParams.get("search") || "", userId);
@@ -820,7 +828,7 @@ async function handleApi(request, response) {
         startAddress: body.start?.address || body.startAddress || "",
         endLabel: body.end?.label || body.endLabel || "",
         endAddress: body.end?.address || body.endAddress || ""
-      }, userId);
+      }, userId, body.source || null);
       return sendJson(response, 201, saved);
     }
 
@@ -914,7 +922,7 @@ async function handleApi(request, response) {
       const host = request.headers.host || "";
       const proto = process.env.NODE_ENV === "production" ? "https" : "http";
       const shareUrl = `${proto}://${host}/share/${token}`;
-      return sendJson(response, 200, { token, url: shareUrl, expiresInDays: 5 });
+      return sendJson(response, 200, { token, url: shareUrl, expiresInDays: SHARE_LINK_TTL_DAYS });
     }
 
     if (method === "POST" && url.pathname === "/api/voice/parse") {

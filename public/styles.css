@@ -3862,6 +3862,9 @@ details[open] .bsheet-guide-arrow { transform: rotate(180deg); }
   padding: 20px;
   background: var(--bg);
 }
+/* Schermata di accesso (login obbligatorio): nasconde l'UI operativa finché non c'è sessione */
+body.auth-only .topbar,
+body.auth-only .tabs { display: none; }
 .auth-card {
   background: var(--bg2);
   border: 1px solid var(--line);
