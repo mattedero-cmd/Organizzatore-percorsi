@@ -1129,6 +1129,7 @@ function renderMenu() {
       closeMenu();
       renderAuthScreen(false);
     });
+    ov.querySelector("#sync-now-btn")?.addEventListener("click", () => { syncNow(); });
     ov.querySelector("#settings-form")?.addEventListener("submit", async e => {
       e.preventDefault();
       const v = readForm(e.target);
@@ -1382,6 +1383,42 @@ const _iconStyles = [
   { id: "outline", label: "Outline",  src: "/icons/icon-192-outline.svg" },
 ];
 
+function _lastSyncLabel() {
+  let iso = null; try { iso = localStorage.getItem("_lastSync"); } catch {}
+  if (!iso) return "mai";
+  try {
+    const d = new Date(iso);
+    const mins = Math.round((Date.now() - d.getTime()) / 60000);
+    if (mins < 1) return "adesso";
+    if (mins < 60) return `${mins} min fa`;
+    return d.toLocaleString("it-IT", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+  } catch { return "sconosciuta"; }
+}
+
+// Sincronizzazione MANUALE con feedback esplicito (l'utente vuole sapere se funziona in background):
+// ricontrolla la connessione, scarica i dati dal server, aggiorna l'UI e mostra l'esito con un toast.
+async function syncNow() {
+  showToast("Sincronizzazione in corso…");
+  let online = false;
+  try {
+    const [health, config] = await Promise.all([
+      api("/api/health", { timeoutMs: 20000 }).catch(() => null),
+      api("/api/config", { timeoutMs: 20000 }).catch(() => null),
+    ]);
+    if (health) { online = true; state.mapApiConfigured = !!health.mapApiConfigured; state.whisperConfigured = !!health.whisperConfigured; }
+    if (config) { online = true; state.googleMapsKey = config.googleMapsKey || state.googleMapsKey; }
+    if (online) {
+      state._authVerified = state._authVerified || !!(state.user && state.user.id);
+      state._syncEnabled = true;
+      await syncFromServer();
+      await Promise.all([refreshAddressesForRoute(), refreshSavedRoutes(), refreshMultiDayPlans(), refreshFolders()]);
+    }
+  } catch { /* trattato sotto */ }
+  render();
+  if (state.menuOpen && state.menuSection === "account") openMenu("account"); // aggiorna la scheda stato
+  showToast(online ? "Sincronizzato col server ✓" : "Server non raggiungibile — riprova tra qualche secondo");
+}
+
 function renderMenuAccount() {
   const nick = state.user?.nickname || "";
   const iconStyle = state.settings?.iconStyle || "color";
@@ -1401,6 +1438,14 @@ function renderMenuAccount() {
         <div class="stop-meta" style="margin-bottom:8px;">Sei in <strong>modalità locale</strong> (non collegato al server). Accedi al tuo account per <strong>riscaricare e sincronizzare</strong> i tuoi giri e contatti.</div>
         <button type="button" class="btn primary" id="account-login-btn" style="width:100%;">${I.arrowR ? I.arrowR(14) : ""} Accedi / Sincronizza</button>
       </div>` : ""}
+
+      <div class="account-section-title">Sincronizzazione</div>
+      <div class="card" style="padding:12px;">
+        <div class="row" style="justify-content:space-between;gap:8px;"><span class="stop-meta">Stato</span><span><strong>${state._syncEnabled ? "Collegato al server" : "Solo locale"}</strong></span></div>
+        <div class="row" style="justify-content:space-between;gap:8px;"><span class="stop-meta">Ultima sincronizzazione</span><span class="stop-meta">${_lastSyncLabel()}</span></div>
+        <div class="row" style="justify-content:space-between;gap:8px;"><span class="stop-meta">Distanze</span><span class="stop-meta">${state.mapApiConfigured ? "Google Maps (reali)" : "stima locale"}</span></div>
+        <button type="button" class="btn" id="sync-now-btn" style="width:100%;margin-top:8px;">${I.refresh ? I.refresh(14) : ""} Sincronizza ora</button>
+      </div>
 
       <div class="account-section-title">Profilo</div>
       <form id="nickname-form" class="change-pw-form" autocomplete="off">
@@ -1772,7 +1817,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.075 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.076 &mdash; giugno 2026</p>
         </div>
       </div>
 

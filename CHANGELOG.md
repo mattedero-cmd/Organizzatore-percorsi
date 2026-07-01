@@ -1,3 +1,6 @@
+## v5.076 — 2026-06-28
+- Visibilità sincronizzazione (l'utente non aveva modo di sapere se l'app fosse connessa/sincronizzata). Menu Account → nuova sezione "Sincronizzazione": Stato (Collegato al server / Solo locale), Ultima sincronizzazione (quando), Distanze (Google Maps reali / stima locale), e pulsante "Sincronizza ora". `syncNow()` ricontrolla connessione (health/config), scarica i dati dal server, aggiorna l'UI e mostra l'esito con un toast esplicito ("Sincronizzato col server ✓" o "Server non raggiungibile — riprova"). Così si vede subito se sta funzionando. `_lastSyncLabel()` legge `_lastSync`.
+
 ## v5.075 — 2026-06-28
 - Login/sync: alzato il timeout a 30s (un DB Postgres "in pausa" può metterci 20-30s a svegliarsi al primo accesso; prima 15s/20s abortivano con "Fetch is aborted"). Messaggio d'errore amichevole in caso di abort ("Server non raggiungibile — si sta avviando, riprova tra qualche secondo") invece dell'errore tecnico. Così, con DB freddo, basta riprovare il login e riesce.
 
