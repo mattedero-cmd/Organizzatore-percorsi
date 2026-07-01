@@ -279,7 +279,8 @@ function _addrMatches(addr, q) {
 async function _serverFetch(path, options = {}) {
   const res = await fetch(window.location.origin + path, {
     headers: { "Content-Type": "application/json", ...(options.headers || {}) },
-    ...options
+    ...options,
+    signal: options.signal || timeoutSignal(options.timeoutMs || 20000)
   });
   if (!res.ok) throw new Error(`sync error ${res.status}`);
   return res.json().catch(() => ({}));
@@ -1755,7 +1756,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.072 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.073 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -8197,15 +8198,10 @@ async function init() {
       state.user = me;
       state._authVerified = true;
       state._syncEnabled = true;
-      // Sync server → IndexedDB in background (non blocca l'avvio)
-      syncFromServer().then(() => {
-        _weeklyBackupIfDue().catch(() => {});
-        // Ricarica i dati aggiornati dal server nell'UI
-        Promise.all([refreshAddressesForRoute(), refreshSavedRoutes(), refreshMultiDayPlans(), refreshFolders()])
-          .then(() => render()).catch(() => {});
-      }).catch(() => {});
     }
-    // Se non autenticato: usa solo IndexedDB (nessun sync server)
+    // Se l'auth veloce fallisce (server lento/in deploy): NON blocchiamo l'avvio; il sync in
+    // background sotto proverà comunque (col cookie di sessione) e ripopolerà i dati appena il server
+    // risponde. Così un server lento non lascia il telefono "vuoto".
   } catch { /* rete assente — usa solo IndexedDB */ }
 
   // Avvio immediato con dati locali (IndexedDB), indipendentemente dall'auth
@@ -8213,6 +8209,16 @@ async function init() {
   await initApp();
   hideSplash();
   if (shareTokenMatch) handleShareImport(shareTokenMatch[1]);
+
+  // SYNC IN BACKGROUND, SEMPRE (anche se l'auth veloce è scaduta per server lento): se il cookie è
+  // valido e il server risponde, scarica i dati dal server in IndexedDB e ri-renderizza. Se non
+  // autenticato / server giù, fallisce in silenzio e resta il locale. Questo fa RITORNARE i dati da
+  // soli dopo un avvio "a vuoto" per server non ancora pronto.
+  syncFromServer().then(() => {
+    _weeklyBackupIfDue().catch(() => {});
+    Promise.all([refreshAddressesForRoute(), refreshSavedRoutes(), refreshMultiDayPlans(), refreshFolders()])
+      .then(() => render()).catch(() => {});
+  }).catch(() => {});
 }
 
 applyTheme();
