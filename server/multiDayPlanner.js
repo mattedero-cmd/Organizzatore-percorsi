@@ -674,6 +674,7 @@ export async function planMultiDay(payload, settings = {}, restStops = []) {
     log,
   };
   log(`=== PIANO MULTI-GIORNO ${baseDate} ===`);
+  log(`MOTORE: per-zona + fillPartial (v5.071) — se NON vedi questa riga, il server è ancora vecchio`);
   log(`finestra ${formatTime(startMin)}–${formatTime(endMin)} (budget ${budgetMin}min) · pranzo ${opts.lunchMin}min`);
 
   const ensureCoords = async (s) => {
