@@ -660,11 +660,21 @@ async function localApi(path, options = {}) {
   throw new Error(`localApi: path non gestito: ${method} ${path}`);
 }
 
+// Segnale di timeout universale (AbortController + setTimeout; supportato ovunque, a differenza di
+// AbortSignal.timeout che è iOS 16+). Senza timeout, un server lento/bloccato appende l'app allo
+// splash o le chiamate restano appese per sempre.
+function timeoutSignal(ms) {
+  const c = new AbortController();
+  setTimeout(() => { try { c.abort(); } catch {} }, ms);
+  return c.signal;
+}
+
 async function api(path, options = {}) {
   if (_isLocal(path)) return localApi(path, options);
   const res = await fetch(window.location.origin + path, {
     headers: { "Content-Type": "application/json", ...(options.headers || {}) },
-    ...options
+    ...options,
+    signal: options.signal || timeoutSignal(options.timeoutMs || 60000)
   });
   const payload = await res.json().catch(() => ({}));
   if (res.status === 401) {
@@ -1745,7 +1755,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.071 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.072 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -2322,9 +2332,9 @@ async function migrateContactNotes() {
 
 async function loadInitialData() {
   const [health, config, settings] = await Promise.all([
-    api("/api/health").catch(() => ({})),
-    api("/api/config").catch(() => ({})),
-    api("/api/settings").catch(() => state.settings)
+    api("/api/health", { timeoutMs: 6000 }).catch(() => ({})),
+    api("/api/config", { timeoutMs: 6000 }).catch(() => ({})),
+    api("/api/settings", { timeoutMs: 6000 }).catch(() => state.settings)
   ]);
   state.mapApiConfigured = health.mapApiConfigured || false;
   state.whisperConfigured = health.whisperConfigured || false;
@@ -8176,9 +8186,12 @@ async function initApp() {
 async function init() {
   const shareTokenMatch = window.location.pathname.match(/^\/share\/([a-zA-Z0-9_-]+)/);
 
-  // Prova auth — se riesce, sincronizza dal server; se fallisce, usa solo IndexedDB locale
+  // Prova auth — se riesce, sincronizza dal server; se fallisce, usa solo IndexedDB locale.
+  // TIMEOUT OBBLIGATORIO: senza, se il server è lento/bloccato (cold start Vercel, deploy in corso)
+  // questo await non ritorna MAI e l'app resta bloccata sullo splash. Col timeout si prosegue in
+  // locale (IndexedDB) e l'app si apre comunque.
   try {
-    const meRes = await fetch(window.location.origin + "/api/auth/me");
+    const meRes = await fetch(window.location.origin + "/api/auth/me", { signal: timeoutSignal(6000) });
     if (meRes.ok) {
       const me = await meRes.json().catch(() => ({}));
       state.user = me;
@@ -8220,6 +8233,10 @@ if ("serviceWorker" in navigator) {
   });
 }
 
+// SAFETY NET: qualunque cosa succeda nel boot, lo splash non deve restare per sempre.
+setTimeout(() => { try { hideSplash(); } catch {} }, 9000);
+
 init().catch(err => {
+  try { hideSplash(); } catch {}
   app.innerHTML = `<section class="panel"><h2>Errore avvio</h2><div class="empty">${escapeHtml(err.message)}</div></section>`;
 });

@@ -1,3 +1,6 @@
+## v5.072 — 2026-06-28
+- FIX CRITICO avvio: l'app restava bloccata sullo splash iniziale. Causa: nel boot (`init` → `loadInitialData`) le fetch a `/api/auth/me`, `/api/health`, `/api/config`, `/api/settings` NON avevano timeout — con server lento/bloccato (cold start o deploy Vercel in corso) l'`await` non ritornava mai e `hideSplash()` non veniva chiamato (i `.catch` intercettano i reject, non gli hang). Fix: helper `timeoutSignal(ms)` (AbortController+setTimeout, universale, non `AbortSignal.timeout` che è iOS 16+); `api()` applica un timeout (default 60s; 6s per le chiamate di boot); `/api/auth/me` 6s; SAFETY NET che forza `hideSplash()` dopo 9s comunque vada. Così l'app si apre SEMPRE (in locale via IndexedDB se il server non risponde), coerente col design local-first.
+
 ## v5.071 — 2026-06-28
 - Multi-giorno: aggiunta una riga di versione nella Diagnostica (`MOTORE: per-zona + fillPartial (v5.071)`) per capire a colpo d'occhio se il server sta girando la nuova logica o un build vecchio (deploy Vercel in ritardo/collisioni tra sessioni). Nessun cambio alla logica di raggruppamento. Bump per forzare un deploy pulito.
 
