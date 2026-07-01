@@ -1114,8 +1114,18 @@ function renderMenu() {
     });
     ov.querySelector("#bsheet-close")?.addEventListener("click", () => closeMenu());
     ov.querySelector("#logout-btn")?.addEventListener("click", async () => {
-      await fetch(window.location.origin + "/api/auth/logout", { method: "POST" });
+      // Timeout obbligatorio: senza, se il server è lento/giù il logout resta appeso e non succede
+      // nulla. Si esce comunque in locale e si mostra la schermata di accesso.
+      try { await fetch(window.location.origin + "/api/auth/logout", { method: "POST", signal: timeoutSignal(6000) }); } catch {}
       state.user = null;
+      state._authVerified = false;
+      state._syncEnabled = false;
+      closeMenu();
+      renderAuthScreen(false);
+    });
+    ov.querySelector("#account-login-btn")?.addEventListener("click", () => {
+      // Sei in modalità locale (non autenticato): vai direttamente all'accesso per riconnettere e
+      // sincronizzare i tuoi dati dal server, senza dover prima "uscire".
       closeMenu();
       renderAuthScreen(false);
     });
@@ -1385,6 +1395,12 @@ function renderMenuAccount() {
           <div class="account-profile-role">${nick ? escapeHtml(nick) : '<span style="color:var(--muted);font-style:italic">Nessun nickname</span>'}</div>
         </div>
       </div>
+
+      ${!state._authVerified ? `
+      <div class="card" style="padding:12px;border-color:var(--primary);margin-top:8px;">
+        <div class="stop-meta" style="margin-bottom:8px;">Sei in <strong>modalità locale</strong> (non collegato al server). Accedi al tuo account per <strong>riscaricare e sincronizzare</strong> i tuoi giri e contatti.</div>
+        <button type="button" class="btn primary" id="account-login-btn" style="width:100%;">${I.arrowR ? I.arrowR(14) : ""} Accedi / Sincronizza</button>
+      </div>` : ""}
 
       <div class="account-section-title">Profilo</div>
       <form id="nickname-form" class="change-pw-form" autocomplete="off">
@@ -1756,7 +1772,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.073 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.074 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -8158,12 +8174,20 @@ function renderAuthScreen(isSetup = false) {
           const res = await fetch(endpoint, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ username, password, remember })
+            body: JSON.stringify({ username, password, remember }),
+            signal: timeoutSignal(15000)
           });
           const result = await res.json().catch(() => ({}));
           if (!res.ok) throw new Error(result.error || `Errore server (${res.status})`);
           state.user = result;
+          state._authVerified = true;
+          state._syncEnabled = true;
           await initApp();
+          // Appena loggato: scarica i dati dal server nel locale e ri-renderizza (i tuoi dati tornano).
+          syncFromServer().then(() => {
+            Promise.all([refreshAddressesForRoute(), refreshSavedRoutes(), refreshMultiDayPlans(), refreshFolders()])
+              .then(() => render()).catch(() => {});
+          }).catch(() => {});
         } catch (err) {
           if (errEl) errEl.textContent = err.message === "The string did not match the expected pattern." ? "Errore di rete — riprova" : err.message;
         } finally {
