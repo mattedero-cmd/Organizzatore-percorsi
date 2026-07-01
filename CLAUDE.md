@@ -99,6 +99,8 @@ server/
 - Il codice in `db.js` gestisce entrambi — usa `getDbMode()` per distinguere
 - Le migrazioni sono in `migrateAuth()` in `db.js` — vengono eseguite all'avvio
 - Per aggiungere una colonna: aggiungi `ALTER TABLE ... ADD COLUMN ...` dentro `migrateAuth()` con `IF NOT EXISTS` (SQLite) o `DO $$ ... EXCEPTION WHEN duplicate_column` (Postgres)
+- ⚠️ **REGOLA CRITICA (v5.077)**: le migrazioni girano SOLO quando `SCHEMA_VERSION` (in cima a `db.js`) cambia — l'esito è registrato nella tabella `schema_meta` e i cold start successivi le saltano (1 query invece di ~50: era la causa dei 504 a catena e del consumo folle di operazioni Prisma). **Se aggiungi/modifichi una migrazione DEVI incrementare `SCHEMA_VERSION`**, altrimenti in produzione non verrà mai eseguita.
+- Il pool pg ha `query_timeout: 8000`: query appese → errore leggibile (esposto da `/api/health` in `dbError`), non 504. Un boot fallito viene ritentato dopo 30s (`ensureInit` in `index.js`).
 
 ---
 

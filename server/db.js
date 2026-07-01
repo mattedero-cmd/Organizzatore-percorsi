@@ -150,6 +150,32 @@ export async function runSql(sql, json = false) {
   return trimmed ? JSON.parse(trimmed) : [];
 }
 
+// ── Versione dello schema DB ──────────────────────────────────────────────────
+// Le migrazioni (CREATE TABLE + decine di ALTER) girano SOLO quando questo numero
+// cambia: l'esito viene registrato in `schema_meta` e i cold start successivi fanno
+// UNA sola query di verifica invece di ~50. Su Vercel questo taglia i tempi di
+// avvio (niente più 504 a catena) e il consumo di operazioni Prisma (~50× in meno).
+// ⚠️ SE AGGIUNGI UNA MIGRAZIONE (nuova colonna/tabella): INCREMENTA SCHEMA_VERSION,
+// altrimenti in produzione la tua migrazione NON verrà mai eseguita.
+const SCHEMA_VERSION = 1;
+
+async function schemaUpToDate() {
+  try {
+    const rows = await runSql("SELECT version FROM schema_meta WHERE id = 1;", true);
+    return Number(rows[0]?.version) >= SCHEMA_VERSION;
+  } catch (err) {
+    // Tabella assente (prima esecuzione dopo questo update) → esegui le migrazioni.
+    const msg = String(err?.message || "");
+    if (err?.code === "42P01" || /schema_meta/i.test(msg) || /no such table/i.test(msg) || /does not exist/i.test(msg)) return false;
+    throw err; // errore di CONNESSIONE: propaga subito (niente migrazione al buio)
+  }
+}
+
+async function markSchemaUpToDate() {
+  await runSql(`CREATE TABLE IF NOT EXISTS schema_meta (id INTEGER PRIMARY KEY CHECK (id = 1), version INTEGER NOT NULL);`);
+  await runSql(`INSERT INTO schema_meta (id, version) VALUES (1, ${SCHEMA_VERSION}) ON CONFLICT (id) DO UPDATE SET version = ${SCHEMA_VERSION};`);
+}
+
 export async function initDb(rootDir) {
   const connectionString = postgresUrl();
   if (connectionString) {
@@ -162,14 +188,28 @@ export async function initDb(rootDir) {
       // uccide la funzione serverless prima che il catch possa girare.
       connectionTimeoutMillis: 8000,
       idleTimeoutMillis: 20000,
+      // Timeout per singola query: un DB che ACCETTA la connessione ma non risponde
+      // alle query non deve appendere la funzione fino al 504 — meglio un errore
+      // leggibile (health lo espone in dbError) e il retry successivo.
+      query_timeout: 8000,
       max: 3
     });
+    if (await schemaUpToDate()) {
+      console.log(`DB schema v${SCHEMA_VERSION} già aggiornato — init rapido (migrazioni saltate)`);
+      return "postgres";
+    }
     await initPostgresDb();
+    await markSchemaUpToDate();
     return "postgres";
   }
 
   databasePath = path.resolve(rootDir, process.env.DATABASE_PATH || "./data/work-routes.sqlite");
   fs.mkdirSync(path.dirname(databasePath), { recursive: true });
+
+  if (await schemaUpToDate()) {
+    console.log(`DB schema v${SCHEMA_VERSION} già aggiornato — init rapido (migrazioni saltate)`);
+    return databasePath;
+  }
 
   await runSql(`
     PRAGMA journal_mode = WAL;
@@ -257,6 +297,7 @@ export async function initDb(rootDir) {
   await migrateUserSettingsCols();
   await migrateUserNickname();
   await migrateAuth();
+  await markSchemaUpToDate();
 
   return databasePath;
 }

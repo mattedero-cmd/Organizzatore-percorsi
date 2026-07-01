@@ -1,3 +1,10 @@
+## v5.077 — 2026-07-01
+FIX 504 a catena + consumo operazioni Prisma (100k/mese bruciate):
+- **Causa trovata nei runtime log**: ogni chiamata `/api/*` moriva in **504**. Ad ogni cold start Vercel il server rifaceva TUTTE le migrazioni schema (~50 query: CREATE + decine di ALTER/controlli colonne) prima di rispondere; col DB Prisma lento/freddo sforava il limite funzione → richiesta uccisa a metà → l'app riprovava → altre ~50 query. Circolo vizioso: nessuna risposta all'utente E ~7.000 operazioni Prisma bruciate in un giorno (100k sforate a giugno → DB bloccato da Prisma → "app rotta").
+- **Fix — migrazioni una volta sola**: nuova tabella `schema_meta` + costante `SCHEMA_VERSION` in `db.js`. Le migrazioni girano solo quando la versione cambia; i cold start successivi fanno UNA query di verifica. ⚠️ Regola nuova: chi aggiunge una migrazione DEVE incrementare `SCHEMA_VERSION` (vedi CLAUDE.md).
+- **Fix — errori leggibili invece di 504**: `query_timeout: 8000` sul pool pg — un DB che accetta la connessione ma non risponde alle query ora produce un errore esposto da `/api/health` in `dbError`, invece di appendere la funzione fino al 504.
+- **Fix — boot error non permanente**: un'istanza col boot fallito riprova dopo 30s (prima restava avvelenata a 503 finché non veniva riciclata, anche a DB risvegliato).
+
 ## v5.076 — 2026-06-28
 - Visibilità sincronizzazione (l'utente non aveva modo di sapere se l'app fosse connessa/sincronizzata). Menu Account → nuova sezione "Sincronizzazione": Stato (Collegato al server / Solo locale), Ultima sincronizzazione (quando), Distanze (Google Maps reali / stima locale), e pulsante "Sincronizza ora". `syncNow()` ricontrolla connessione (health/config), scarica i dati dal server, aggiorna l'UI e mostra l'esito con un toast esplicito ("Sincronizzato col server ✓" o "Server non raggiungibile — riprova"). Così si vede subito se sta funzionando. `_lastSyncLabel()` legge `_lastSync`.
 

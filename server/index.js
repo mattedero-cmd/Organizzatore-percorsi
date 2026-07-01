@@ -90,16 +90,23 @@ loadEnv(rootDir);
 // altra API risponde 503 invece di far crashare la funzione.
 let _initialized = false;
 let bootError = null;
+let bootErrorAt = 0;
 
 async function ensureInit() {
   if (_initialized) return;
-  if (bootError) throw bootError;
+  // Un errore di boot non è per sempre: dopo 30s si riprova (il DB può essersi
+  // svegliato nel frattempo). Prima un'istanza "avvelenata" rispondeva 503 a vita.
+  if (bootError) {
+    if (Date.now() - bootErrorAt < 30000) throw bootError;
+    bootError = null;
+  }
   try {
     await initDb(rootDir);
     await initApiStatsTable();
     _initialized = true;
   } catch (err) {
     bootError = err;
+    bootErrorAt = Date.now();
     console.error("BOOT FAILED — init DB/stats:", err);
     throw err;
   }
@@ -339,9 +346,9 @@ async function handleApi(request, response) {
 
   try {
     if (method === "GET" && url.pathname === "/api/health") {
-      // Avvia l'init lazy (no-op se già fatto o già fallito).
-      // Non propagare l'errore qui: vogliamo sempre rispondere su /api/health.
-      if (!_initialized && !bootError) {
+      // Avvia l'init lazy. ensureInit gestisce da sé il caso "già fallito di recente"
+      // (rilancia subito) e il retry dopo 30s. Non propagare: health risponde sempre.
+      if (!_initialized) {
         try { await ensureInit(); } catch { /* bootError è già impostato */ }
       }
       // Diagnostica: se l'init è fallito (bootError) il DB non è mai stato
