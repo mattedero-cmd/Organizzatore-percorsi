@@ -176,6 +176,192 @@ async function markSchemaUpToDate() {
   await runSql(`INSERT INTO schema_meta (id, version) VALUES (1, ${SCHEMA_VERSION}) ON CONFLICT (id) DO UPDATE SET version = ${SCHEMA_VERSION};`);
 }
 
+// ── Schema Postgres in UNA SOLA query ─────────────────────────────────────────
+// Tutto lo schema (tabelle + colonne aggiunte negli anni) in un'unica stringa
+// idempotente (IF NOT EXISTS ovunque): 1 round-trip invece dei ~100 delle vecchie
+// migrazioni passo-passo. Fondamentale con un DB lento/strozzato (Prisma free):
+// il vecchio init a ~100 query non riusciva MAI a completare entro il limite
+// funzione Vercel → 504 a catena. Deve restare allineata a migrate*() (SQLite).
+const PG_SCHEMA_DDL = `
+    CREATE TABLE IF NOT EXISTS addresses (
+      id SERIAL PRIMARY KEY,
+      customer TEXT NOT NULL,
+      location TEXT DEFAULT '',
+      full_address TEXT NOT NULL,
+      notes TEXT DEFAULT '',
+      open_morning TEXT DEFAULT '',
+      close_morning TEXT DEFAULT '',
+      open_afternoon TEXT DEFAULT '',
+      close_afternoon TEXT DEFAULT '',
+      default_duration INTEGER DEFAULT 45,
+      lat DOUBLE PRECISION,
+      lng DOUBLE PRECISION,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS settings (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      km_rate DOUBLE PRECISION NOT NULL DEFAULT 0.65,
+      drive_hour_rate DOUBLE PRECISION NOT NULL DEFAULT 22,
+      work_hour_rate DOUBLE PRECISION NOT NULL DEFAULT 60
+    );
+    CREATE TABLE IF NOT EXISTS planned_routes (
+      id SERIAL PRIMARY KEY,
+      name TEXT DEFAULT '',
+      scheduled_date TEXT DEFAULT '',
+      start_label TEXT DEFAULT '',
+      start_address TEXT DEFAULT '',
+      end_label TEXT DEFAULT '',
+      end_address TEXT DEFAULT '',
+      start_time TEXT DEFAULT '',
+      first_arrival_required TEXT DEFAULT '',
+      total_km DOUBLE PRECISION DEFAULT 0,
+      total_drive_minutes INTEGER DEFAULT 0,
+      total_work_minutes INTEGER DEFAULT 0,
+      total_cost DOUBLE PRECISION DEFAULT 0,
+      weather_captured_at TEXT DEFAULT '',
+      payload_json TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS users (
+      id SERIAL PRIMARY KEY,
+      username TEXT NOT NULL UNIQUE,
+      password_hash TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS sessions (
+      token TEXT PRIMARY KEY,
+      user_id INTEGER NOT NULL,
+      expires_at TIMESTAMPTZ NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS user_settings (
+      user_id INTEGER PRIMARY KEY,
+      km_rate DOUBLE PRECISION NOT NULL DEFAULT 0.65,
+      drive_hour_rate DOUBLE PRECISION NOT NULL DEFAULT 22,
+      work_hour_rate DOUBLE PRECISION NOT NULL DEFAULT 60,
+      navigator_pref TEXT DEFAULT 'google',
+      theme_pref TEXT DEFAULT 'auto',
+      lunch_break_minutes INTEGER DEFAULT 45,
+      lunch_break_enabled INTEGER DEFAULT 1,
+      default_start_label TEXT DEFAULT '',
+      default_start_address TEXT DEFAULT '',
+      rest_interval_min INTEGER DEFAULT 120,
+      rest_max_deviation_min INTEGER DEFAULT 40,
+      rest_duration_min INTEGER DEFAULT 15,
+      drive_markup_min_per_hour DOUBLE PRECISION DEFAULT 10,
+      earliest_break_time TEXT DEFAULT '08:00',
+      max_detour_km DOUBLE PRECISION DEFAULT 1.5,
+      max_return_time TEXT DEFAULT ''
+    );
+    CREATE TABLE IF NOT EXISTS folders (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER,
+      name TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE TABLE IF NOT EXISTS multiday_plans (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER,
+      name TEXT NOT NULL DEFAULT '',
+      payload_json TEXT NOT NULL DEFAULT '{}',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE TABLE IF NOT EXISTS shared_routes (
+      token TEXT PRIMARY KEY,
+      user_id INTEGER NOT NULL,
+      route_json TEXT NOT NULL,
+      expires_at TIMESTAMPTZ NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS schema_meta (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      version INTEGER NOT NULL
+    );
+    ALTER TABLE planned_routes ADD COLUMN IF NOT EXISTS scheduled_date TEXT DEFAULT '';
+    ALTER TABLE planned_routes ADD COLUMN IF NOT EXISTS weather_captured_at TEXT DEFAULT '';
+    ALTER TABLE planned_routes ADD COLUMN IF NOT EXISTS user_id INTEGER;
+    ALTER TABLE planned_routes ADD COLUMN IF NOT EXISTS source TEXT DEFAULT NULL;
+    ALTER TABLE planned_routes ADD COLUMN IF NOT EXISTS notes TEXT DEFAULT NULL;
+    ALTER TABLE planned_routes ADD COLUMN IF NOT EXISTS folder_id INTEGER;
+    ALTER TABLE addresses ADD COLUMN IF NOT EXISTS phone TEXT DEFAULT '';
+    ALTER TABLE addresses ADD COLUMN IF NOT EXISTS email TEXT DEFAULT '';
+    ALTER TABLE addresses ADD COLUMN IF NOT EXISTS phone2 TEXT DEFAULT '';
+    ALTER TABLE addresses ADD COLUMN IF NOT EXISTS phone_type TEXT DEFAULT 'cell';
+    ALTER TABLE addresses ADD COLUMN IF NOT EXISTS phone2_type TEXT DEFAULT 'fisso';
+    ALTER TABLE addresses ADD COLUMN IF NOT EXISTS phone_name TEXT DEFAULT '';
+    ALTER TABLE addresses ADD COLUMN IF NOT EXISTS phone2_name TEXT DEFAULT '';
+    ALTER TABLE addresses ADD COLUMN IF NOT EXISTS phone_preferred TEXT DEFAULT 'phone';
+    ALTER TABLE addresses ADD COLUMN IF NOT EXISTS address_type TEXT DEFAULT 'customer';
+    ALTER TABLE addresses ADD COLUMN IF NOT EXISTS weekly_hours TEXT DEFAULT NULL;
+    ALTER TABLE addresses ADD COLUMN IF NOT EXISTS is_rest_stop INTEGER DEFAULT 0;
+    ALTER TABLE addresses ADD COLUMN IF NOT EXISTS is_lunch_stop INTEGER DEFAULT 0;
+    ALTER TABLE addresses ADD COLUMN IF NOT EXISTS place_id TEXT DEFAULT NULL;
+    ALTER TABLE addresses ADD COLUMN IF NOT EXISTS activity TEXT DEFAULT '';
+    ALTER TABLE addresses ADD COLUMN IF NOT EXISTS user_id INTEGER;
+    ALTER TABLE settings ADD COLUMN IF NOT EXISTS navigator_pref TEXT DEFAULT 'google';
+    ALTER TABLE settings ADD COLUMN IF NOT EXISTS theme_pref TEXT DEFAULT 'auto';
+    ALTER TABLE settings ADD COLUMN IF NOT EXISTS lunch_break_minutes INTEGER DEFAULT 45;
+    ALTER TABLE settings ADD COLUMN IF NOT EXISTS lunch_break_enabled INTEGER DEFAULT 1;
+    ALTER TABLE settings ADD COLUMN IF NOT EXISTS default_start_label TEXT DEFAULT '';
+    ALTER TABLE settings ADD COLUMN IF NOT EXISTS default_start_address TEXT DEFAULT '';
+    ALTER TABLE settings ADD COLUMN IF NOT EXISTS rest_interval_min INTEGER DEFAULT 120;
+    ALTER TABLE settings ADD COLUMN IF NOT EXISTS rest_max_deviation_min INTEGER DEFAULT 40;
+    ALTER TABLE settings ADD COLUMN IF NOT EXISTS rest_duration_min INTEGER DEFAULT 15;
+    ALTER TABLE settings ADD COLUMN IF NOT EXISTS drive_markup_min_per_hour INTEGER DEFAULT 10;
+    ALTER TABLE settings ADD COLUMN IF NOT EXISTS earliest_break_time TEXT DEFAULT '08:00';
+    ALTER TABLE settings ADD COLUMN IF NOT EXISTS max_detour_km REAL DEFAULT 1.5;
+    ALTER TABLE settings ADD COLUMN IF NOT EXISTS max_detour_min REAL DEFAULT 10;
+    ALTER TABLE settings ADD COLUMN IF NOT EXISTS max_return_time TEXT DEFAULT '';
+    ALTER TABLE settings ADD COLUMN IF NOT EXISTS theme_mode TEXT DEFAULT 'auto';
+    ALTER TABLE settings ADD COLUMN IF NOT EXISTS theme_palette TEXT DEFAULT 'default';
+    ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS theme_mode TEXT DEFAULT 'auto';
+    ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS theme_palette TEXT DEFAULT 'default';
+    ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS icon_style TEXT DEFAULT 'color';
+    ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS lunch_open_time TEXT DEFAULT '11:30';
+    ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS lunch_close_time TEXT DEFAULT '14:00';
+    ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS no_break_early_min INTEGER DEFAULT 120;
+    ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS no_break_before_home_min INTEGER DEFAULT 60;
+    ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS no_break_before_lunch_min INTEGER DEFAULT 60;
+    ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS no_break_after_lunch_min INTEGER DEFAULT 120;
+    ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS brand_color TEXT DEFAULT '';
+    ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS brand_color2 TEXT DEFAULT '';
+    ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS max_detour_min REAL DEFAULT 10;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS nickname TEXT DEFAULT NULL;
+    INSERT INTO settings (id, km_rate, drive_hour_rate, work_hour_rate)
+    VALUES (1, 0.65, 22, 60)
+    ON CONFLICT (id) DO NOTHING;
+`;
+
+// Check salute istantaneo, INDIPENDENTE dall'init (niente migrazioni): connessione
+// dedicata con timeout corti → /api/health risponde SEMPRE entro pochi secondi,
+// con l'errore reale del DB in chiaro invece di un 504 muto.
+export async function quickDbCheck() {
+  const connectionString = postgresUrl();
+  if (!connectionString) {
+    if (!databasePath) return { ok: false, mode: "sqlite", error: "DB locale non ancora inizializzato" };
+    try { await runSql("SELECT 1", true); return { ok: true, mode: "sqlite", error: null }; }
+    catch (e) { return { ok: false, mode: "sqlite", error: e?.message || String(e) }; }
+  }
+  let client;
+  try {
+    const { Client } = await import("pg");
+    client = new Client({
+      connectionString,
+      ssl: connectionString.includes("localhost") ? false : { rejectUnauthorized: false },
+      connectionTimeoutMillis: 4000,
+      query_timeout: 4000
+    });
+    await client.connect();
+    await client.query("SELECT 1");
+    return { ok: true, mode: "postgres", error: null };
+  } catch (e) {
+    return { ok: false, mode: "postgres", error: e?.message || String(e) };
+  } finally {
+    if (client) client.end().catch(() => {});
+  }
+}
+
 export async function initDb(rootDir) {
   const connectionString = postgresUrl();
   if (connectionString) {
@@ -198,8 +384,11 @@ export async function initDb(rootDir) {
       console.log(`DB schema v${SCHEMA_VERSION} già aggiornato — init rapido (migrazioni saltate)`);
       return "postgres";
     }
-    await initPostgresDb();
+    // Prima esecuzione (o versione schema cambiata): TUTTO lo schema in 1 query.
+    await runSql(PG_SCHEMA_DDL);
+    await migrateWeeklyHours(); // backfill dati orari legacy → 1 SELECT (+ update solo se servono)
     await markSchemaUpToDate();
+    console.log(`DB schema portato a v${SCHEMA_VERSION} (DDL unica)`);
     return "postgres";
   }
 
@@ -302,92 +491,7 @@ export async function initDb(rootDir) {
   return databasePath;
 }
 
-async function initPostgresDb() {
-  await runSql(`
-    CREATE TABLE IF NOT EXISTS addresses (
-      id SERIAL PRIMARY KEY,
-      customer TEXT NOT NULL,
-      location TEXT DEFAULT '',
-      full_address TEXT NOT NULL,
-      notes TEXT DEFAULT '',
-      open_morning TEXT DEFAULT '',
-      close_morning TEXT DEFAULT '',
-      open_afternoon TEXT DEFAULT '',
-      close_afternoon TEXT DEFAULT '',
-      default_duration INTEGER DEFAULT 45,
-      lat DOUBLE PRECISION,
-      lng DOUBLE PRECISION,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-    CREATE TABLE IF NOT EXISTS settings (
-      id INTEGER PRIMARY KEY CHECK (id = 1),
-      km_rate DOUBLE PRECISION NOT NULL DEFAULT 0.65,
-      drive_hour_rate DOUBLE PRECISION NOT NULL DEFAULT 22,
-      work_hour_rate DOUBLE PRECISION NOT NULL DEFAULT 60
-    );
-    CREATE TABLE IF NOT EXISTS planned_routes (
-      id SERIAL PRIMARY KEY,
-      name TEXT DEFAULT '',
-      scheduled_date TEXT DEFAULT '',
-      start_label TEXT DEFAULT '',
-      start_address TEXT DEFAULT '',
-      end_label TEXT DEFAULT '',
-      end_address TEXT DEFAULT '',
-      start_time TEXT DEFAULT '',
-      first_arrival_required TEXT DEFAULT '',
-      total_km DOUBLE PRECISION DEFAULT 0,
-      total_drive_minutes INTEGER DEFAULT 0,
-      total_work_minutes INTEGER DEFAULT 0,
-      total_cost DOUBLE PRECISION DEFAULT 0,
-      weather_captured_at TEXT DEFAULT '',
-      payload_json TEXT NOT NULL,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-    CREATE TABLE IF NOT EXISTS users (
-      id SERIAL PRIMARY KEY,
-      username TEXT NOT NULL UNIQUE,
-      password_hash TEXT NOT NULL,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-    CREATE TABLE IF NOT EXISTS sessions (
-      token TEXT PRIMARY KEY,
-      user_id INTEGER NOT NULL,
-      expires_at TIMESTAMPTZ NOT NULL,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-    CREATE TABLE IF NOT EXISTS user_settings (
-      user_id INTEGER PRIMARY KEY,
-      km_rate DOUBLE PRECISION NOT NULL DEFAULT 0.65,
-      drive_hour_rate DOUBLE PRECISION NOT NULL DEFAULT 22,
-      work_hour_rate DOUBLE PRECISION NOT NULL DEFAULT 60,
-      navigator_pref TEXT DEFAULT 'google',
-      theme_pref TEXT DEFAULT 'auto',
-      lunch_break_minutes INTEGER DEFAULT 45,
-      lunch_break_enabled INTEGER DEFAULT 1,
-      default_start_label TEXT DEFAULT '',
-      default_start_address TEXT DEFAULT '',
-      rest_interval_min INTEGER DEFAULT 120,
-      rest_max_deviation_min INTEGER DEFAULT 40,
-      rest_duration_min INTEGER DEFAULT 15,
-      drive_markup_min_per_hour DOUBLE PRECISION DEFAULT 10,
-      earliest_break_time TEXT DEFAULT '08:00',
-      max_detour_km DOUBLE PRECISION DEFAULT 1.5,
-      max_return_time TEXT DEFAULT ''
-    );
-    INSERT INTO settings (id, km_rate, drive_hour_rate, work_hour_rate)
-    VALUES (1, 0.65, 22, 60)
-    ON CONFLICT (id) DO NOTHING;
-  `);
-
-  await migratePlannedRoutes();
-  await migrateWeeklyHours();
-
-  await migrateSettingsColumns();
-  await migrateUserSettingsCols();
-  await migrateUserNickname();
-  await migrateAuth();
-}
+// (initPostgresDb rimossa in v5.078: lo schema Postgres vive in PG_SCHEMA_DDL, applicato in 1 query)
 
 async function tableColumns(tableName) {
   if (dbMode === "postgres") {

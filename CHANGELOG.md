@@ -1,3 +1,8 @@
+## v5.078 — 2026-07-01
+Il DB Prisma strozzato mandava in 504 anche la v5.077 (persino il primo init non completava). Due contromisure radicali:
+- **`/api/health` istantaneo e indipendente**: nuova `quickDbCheck()` (db.js) — connessione dedicata con timeout 4s+4s, NIENTE init/migrazioni. Health risponde SEMPRE entro ~8s (anche su piano Vercel Hobby 10s), con l'errore DB reale in `dbError`. Misurato: 0,05-0,1s con DB su/giù in locale.
+- **Schema Postgres in UNA query**: `PG_SCHEMA_DDL` (db.js) — tutte le tabelle + tutte le colonne storiche in un'unica stringa idempotente (`IF NOT EXISTS` ovunque, incluso `ADD COLUMN IF NOT EXISTS`). Il primo init passa da ~100 round-trip a **3** (check versione + DDL + marcatura; +1 SELECT backfill orari). Con un DB che risponde lento, ora l'init ce la fa comunque. `initPostgresDb` rimossa (lo schema Postgres vive SOLO in `PG_SCHEMA_DDL`); le `migrate*()` restano per SQLite. **Verificato: schema generato dalla DDL unica = identico colonna per colonna a quello del vecchio percorso** (diff su information_schema).
+
 ## v5.077 — 2026-07-01
 FIX 504 a catena + consumo operazioni Prisma (100k/mese bruciate):
 - **Causa trovata nei runtime log**: ogni chiamata `/api/*` moriva in **504**. Ad ogni cold start Vercel il server rifaceva TUTTE le migrazioni schema (~50 query: CREATE + decine di ALTER/controlli colonne) prima di rispondere; col DB Prisma lento/freddo sforava il limite funzione → richiesta uccisa a metà → l'app riprovava → altre ~50 query. Circolo vizioso: nessuna risposta all'utente E ~7.000 operazioni Prisma bruciate in un giorno (100k sforate a giugno → DB bloccato da Prisma → "app rotta").

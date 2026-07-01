@@ -51,7 +51,8 @@ import {
   adminGetStats,
   getDbMode,
   getDbPath,
-  runSql
+  runSql,
+  quickDbCheck
 } from "./db.js";
 import { hashPassword, verifyPassword, generateToken } from "./auth.js";
 import { loadEnv } from "./env.js";
@@ -346,30 +347,16 @@ async function handleApi(request, response) {
 
   try {
     if (method === "GET" && url.pathname === "/api/health") {
-      // Avvia l'init lazy. ensureInit gestisce da sé il caso "già fallito di recente"
-      // (rilancia subito) e il retry dopo 30s. Non propagare: health risponde sempre.
-      if (!_initialized) {
-        try { await ensureInit(); } catch { /* bootError è già impostato */ }
-      }
-      // Diagnostica: se l'init è fallito (bootError) il DB non è mai stato
-      // inizializzato — riportiamo l'errore di boot. Altrimenti test reale SELECT 1.
-      let dbOk = false;
-      let dbError = null;
-      if (bootError) {
-        dbError = `BOOT: ${bootError?.message || String(bootError)}`;
-      } else {
-        try {
-          await runSql("SELECT 1", true);
-          dbOk = true;
-        } catch (err) {
-          dbError = err?.message || String(err);
-        }
-      }
+      // Diagnostica ISTANTANEA e indipendente dall'init: quickDbCheck usa una
+      // connessione dedicata con timeout corti (≤8s totali), NIENTE migrazioni.
+      // Così /api/health risponde SEMPRE — anche col DB strozzato che manda in
+      // 504 il resto — e dbError riporta l'errore reale invece del silenzio.
+      const db = await quickDbCheck();
       return sendJson(response, 200, {
-        ok: dbOk,
-        dbMode: getDbMode(),
-        dbOk,
-        dbError,
+        ok: db.ok,
+        dbMode: db.mode || getDbMode(),
+        dbOk: db.ok,
+        dbError: db.error || (bootError ? `BOOT: ${bootError?.message || String(bootError)}` : null),
         bootFailed: Boolean(bootError),
         databaseUrlConfigured: Boolean(
           process.env.DATABASE_URL || process.env.POSTGRES_URL || process.env.POSTGRES_PRISMA_URL
