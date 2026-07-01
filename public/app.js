@@ -280,7 +280,7 @@ async function _serverFetch(path, options = {}) {
   const res = await fetch(window.location.origin + path, {
     headers: { "Content-Type": "application/json", ...(options.headers || {}) },
     ...options,
-    signal: options.signal || timeoutSignal(options.timeoutMs || 20000)
+    signal: options.signal || timeoutSignal(options.timeoutMs || 30000)
   });
   if (!res.ok) throw new Error(`sync error ${res.status}`);
   return res.json().catch(() => ({}));
@@ -1772,7 +1772,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.074 &mdash; giugno 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.075 &mdash; giugno 2026</p>
         </div>
       </div>
 
@@ -8175,7 +8175,7 @@ function renderAuthScreen(isSetup = false) {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ username, password, remember }),
-            signal: timeoutSignal(15000)
+            signal: timeoutSignal(30000)   // ampio: un DB Postgres "in pausa" può metterci 20-30s a svegliarsi
           });
           const result = await res.json().catch(() => ({}));
           if (!res.ok) throw new Error(result.error || `Errore server (${res.status})`);
@@ -8189,7 +8189,10 @@ function renderAuthScreen(isSetup = false) {
               .then(() => render()).catch(() => {});
           }).catch(() => {});
         } catch (err) {
-          if (errEl) errEl.textContent = err.message === "The string did not match the expected pattern." ? "Errore di rete — riprova" : err.message;
+          const aborted = err?.name === "AbortError" || /abort/i.test(err?.message || "");
+          if (errEl) errEl.textContent = aborted
+            ? "Server non raggiungibile — si sta avviando, riprova tra qualche secondo"
+            : (err.message === "The string did not match the expected pattern." ? "Errore di rete — riprova" : err.message);
         } finally {
           btn.disabled = false;
         }

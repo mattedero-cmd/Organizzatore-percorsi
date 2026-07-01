@@ -1,3 +1,6 @@
+## v5.075 — 2026-06-28
+- Login/sync: alzato il timeout a 30s (un DB Postgres "in pausa" può metterci 20-30s a svegliarsi al primo accesso; prima 15s/20s abortivano con "Fetch is aborted"). Messaggio d'errore amichevole in caso di abort ("Server non raggiungibile — si sta avviando, riprova tra qualche secondo") invece dell'errore tecnico. Così, con DB freddo, basta riprovare il login e riesce.
+
 ## v5.074 — 2026-06-28
 - FIX "intrappolato in locale, non posso loggarmi né uscire": in modalità local-first l'app apre con un utente fittizio "locale", quindi non mostra il login; e i pulsanti Esci/Accedi facevano `fetch` SENZA timeout → col server lento restavano appesi e non succedeva nulla. Fix: (1) logout con timeout 6s + prosegue comunque (svuota utente e mostra la schermata di accesso anche se il server non risponde); (2) login/registrazione/setup con timeout 15s + al successo `syncFromServer` scarica subito i dati e ri-renderizza; (3) nuovo pulsante "Accedi / Sincronizza" nel menu Account quando NON autenticati (`!state._authVerified`), che porta direttamente all'accesso senza dover prima uscire. Così dopo un avvio in locale l'utente può accedere al proprio account e riavere i dati.
 
