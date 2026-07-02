@@ -74,8 +74,14 @@ const publicDir = path.join(rootDir, "public");
 // nei Vercel Function Logs anche quando il modulo muore durante il caricamento.
 process.on("uncaughtException", (err) => {
   console.error("FATAL uncaughtException:", err?.stack || err);
+  // Un processo con stato corrotto NON deve continuare a ricevere traffico da
+  // "zombie" (richieste accettate e mai risposte): logga e poi esci, così la
+  // piattaforma ricicla l'istanza pulita. (Bug confermato dalla diagnostica.)
+  setTimeout(() => process.exit(1), 150).unref();
 });
 process.on("unhandledRejection", (reason) => {
+  // Solo log: tutte le promise delle richieste sono ora catchate (v5.079) e il
+  // watchdog chiude comunque ogni risposta rimasta aperta.
   console.error("FATAL unhandledRejection:", reason?.stack || reason);
 });
 
@@ -640,15 +646,19 @@ async function handleApi(request, response) {
       return sendJson(response, 200, route);
     }
 
-    // App è local-first: nessuna autenticazione server-side richiesta
-    const userId = (await authenticate(request)) || 1;
-
+    // Config pubblica (solo chiavi browser): serve anche prima del login.
     if (method === "GET" && url.pathname === "/api/config") {
       return sendJson(response, 200, {
         googleMapsKey: process.env.GOOGLE_MAPS_API_KEY || "",
         googleClientId: process.env.GOOGLE_CLIENT_ID || ""
       });
     }
+
+    // ONLINE-FIRST (v5.080): gli endpoint dati richiedono una sessione valida.
+    // Rimosso il fallback `|| 1` dell'era local-first: una sessione scaduta deve
+    // dare 401 (il client rimanda al login), NON leggere/scrivere un bucket condiviso.
+    const userId = await authenticate(request);
+    if (!userId) return sendJson(response, 401, { error: "Non autenticato" });
 
     if (method === "GET" && url.pathname === "/api/addresses") {
       const addresses = await listAddresses(url.searchParams.get("search") || "", userId);
@@ -855,7 +865,7 @@ async function handleApi(request, response) {
         startAddress: body.start?.address || body.startAddress || "",
         endLabel: body.end?.label || body.endLabel || "",
         endAddress: body.end?.address || body.endAddress || ""
-      }, userId);
+      }, userId, body.source || null);
       return sendJson(response, 201, saved);
     }
 
@@ -1134,7 +1144,11 @@ ${addressList}
   }
 }
 
-const server = http.createServer((request, response) => {
+// Handler unico di TUTTE le richieste. v5.080: esportato ed usato DIRETTAMENTE da
+// Vercel come funzione serverless nativa (api/index.js) — niente più http.Server
+// esportato + bridge/proxy del runtime, che era il livello dove le richieste
+// restavano appese. In locale lo stesso handler gira dentro http.createServer.
+export function requestHandler(request, response) {
   // WATCHDOG (v5.079): NESSUNA richiesta può restare senza risposta oltre il
   // budget. Qualunque bug/attesa futura viene tagliata con un 503 leggibile
   // invece di appendere l'invocazione (su Vercel: fino a ~300s l'una).
@@ -1169,15 +1183,17 @@ const server = http.createServer((request, response) => {
     console.error("Request handler error:", err?.stack || err);
     forceEnd(response, 500, { error: "Errore interno del server" });
   }
-});
+}
 
-server.on("error", (err) => {
-  // Non crashare su EADDRINUSE (es. sviluppo locale con porta già in uso)
-  console.error("Server listen error:", err?.code, err?.message);
-});
-server.listen(PORT, HOST, () => {
-  console.log(`Work Route Planner attivo su http://${HOST}:${PORT}`);
-});
-
-// Export esplicito per @vercel/node ESM — alcune versioni lo richiedono
-export default server;
+// Sviluppo locale: server HTTP classico. Su Vercel NON si ascolta nessuna porta:
+// la funzione serverless (api/index.js) invoca requestHandler direttamente.
+if (!process.env.VERCEL) {
+  const server = http.createServer(requestHandler);
+  server.on("error", (err) => {
+    // Non crashare su EADDRINUSE (es. sviluppo locale con porta già in uso)
+    console.error("Server listen error:", err?.code, err?.message);
+  });
+  server.listen(PORT, HOST, () => {
+    console.log(`Work Route Planner attivo su http://${HOST}:${PORT}`);
+  });
+}

@@ -78,12 +78,23 @@ public/
     app.js            # Logica admin
 
 server/
-  index.js            # HTTP server Node.js (no Express) — tutte le route API
+  index.js            # Tutte le route API in requestHandler (esportato); http.Server SOLO in locale
   db.js               # Accesso DB: SQLite (locale) / PostgreSQL (Vercel)
   auth.js             # hashPassword, verifyPassword, generateToken
   planner.js          # Logica pianificazione percorso e soste
   multiDayPlanner.js  # Pianificazione multi-giorno (V5) — vedi sotto
+
+api/
+  index.js            # Entry Vercel (v5.080): funzione serverless nativa → requestHandler
 ```
+
+> **Deploy su Vercel (v5.080)**: `vercel.json` usa `functions` + `rewrites` (NON più
+> `builds`/`routes` legacy): `/api/(.*)` → `api/index.js` (maxDuration 60), `/share/(.*)` →
+> `/index.html`, statici serviti dalla piattaforma da `public/`. NON reintrodurre l'export
+> di un `http.Server` con `listen()`: era il livello dove le richieste restavano appese
+> (il bridge del runtime le proxava e ogni errore fuori handler le lasciava senza risposta).
+> In `server/index.js` restano: watchdog per-richiesta (25s/60s), `forceEnd`/`sendJson`
+> mai-throw, URL parse con base fissa `http://internal` dentro try.
 
 > **Multi-giorno (V5):** prima di toccare `server/multiDayPlanner.js`, l'endpoint
 > `/api/plan-multiday` o la UI `renderResultMultiDay`, **leggi SEMPRE `docs/MULTI_GIORNO.md`**
@@ -124,12 +135,22 @@ Le soste (`type:"rest"`) e le pause pranzo (`type:"lunch"`) sono **vere tappe de
 
 ---
 
-## Sessioni utente
+## Sessioni utente e modello dati (ONLINE-FIRST, v5.080)
 
-- Token casuale 32 byte hex, salvato in cookie `HttpOnly; SameSite=Lax`
-- Scadenza 30 giorni con **sliding expiry**: ogni chiamata a `/api/auth/me` estende la sessione
-- `state._authVerified`: flag che indica che l'utente ha completato almeno un login nella sessione corrente. Il 401 su API secondarie fa logout **solo** se questo flag è `true`. Evita falsi logout su app appena aperta.
-- **bfcache iOS Safari**: `pageshow` (e.persisted) e `visibilitychange` ri-verificano `/api/auth/me` senza ricaricare la pagina — fix per utenti che trovavano l'app "dentro ma slogati"
+- **L'app è ONLINE-FIRST per decisione del titolare** (dopo il guasto dell'era local-first
+  v5.065-5.079): il server è la fonte dei dati, il login è la porta d'ingresso. NON
+  reintrodurre modalità locale/utenti fittizi/sync in background senza sua richiesta esplicita.
+- `_isLocal()` → sempre false: ogni `api()` va al server. `localApi`/outbox/sync restano nel
+  codice come DORMIENTI: servono solo alla bonifica una-tantum (`_bonificaOutbox`) che al primo
+  login invia le modifiche accodate offline durante il guasto. Una entry rifiutata dal server
+  con 4xx (salvo 401/408/429) viene SCARTATA (non deve avvelenare la coda).
+- Senza sessione: `render()` mostra `renderAuthScreen` (body.auth-only nasconde header/tab).
+  401 da `api()` → logout + schermata di accesso. Server irraggiungibile all'avvio →
+  `renderServerDown` con pulsante Riprova (MAI silenzio).
+- Lato server il fallback `user_id=1` è RIMOSSO: endpoint dati → 401 senza sessione.
+  `/api/config` e `/api/health` pubblici (health usa `quickDbCheck`, niente init).
+- Token casuale 32 byte hex, cookie `HttpOnly; SameSite=Lax`, 30 giorni sliding
+  (ogni `/api/auth/me` estende la sessione).
 
 ---
 
@@ -156,15 +177,20 @@ Non usare `stopPropagation()` sui container dei pulsanti — rompe tutto. È pre
 
 ---
 
-## Condivisione giri
+## Condivisione giri (v5.080)
 
-- Tabella `shared_routes`: `(token, user_id, route_json, created_at, expires_at)`
+- Tabella `shared_routes`: `(token, user_id, route_json, created_at, expires_at)` — `route_json`
+  è uno SNAPSHOT embedded del giro (copia indipendente, non un link vivo).
 - Scadenza 5 giorni; pulizia automatica ogni 6h con `setInterval`
-- URL pubblica: `/share/:token` → serve `index.html`, il frontend intercetta il path
-- `GET /api/share/:token` — endpoint pubblico, nessuna auth richiesta
-- `POST /api/routes/:id/share` — crea il token, richiede auth
-- `POST /api/share/:token/import` — importa nel proprio account, richiede auth
-- I giri importati hanno `source = "imported"` nel DB e appaiono in viola nell'UI
+- `/share/:token` (rewrite → `index.html`): il client salva il token in
+  `sessionStorage.pendingShareImport`; se non loggato → login, poi `onLoginOk` riprende l'import.
+- `GET /api/share/:token` — pubblico (sola lettura dello snapshot)
+- `POST /api/routes/:id/share` — richiede sessione; il client legge il giro DAL SERVER
+- **Import (client, `handleShareImport`)**: richiede login; la copia viene salvata SUL SERVER
+  del destinatario via `POST /api/routes` con `source:"imported"` e tappe SELF-CONTAINED
+  (`addressId` azzerati: gli id dell'archivio del mittente non hanno senso per il destinatario;
+  nome/indirizzo/coordinate restano dentro il giro). L'originale del mittente resta intatto.
+- I giri importati appaiono in viola nell'UI
 
 ---
 

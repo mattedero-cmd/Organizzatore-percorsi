@@ -380,6 +380,10 @@ export async function initDb(rootDir) {
       query_timeout: 8000,
       max: 3
     });
+    // Senza questo listener, l'errore di un client IDLE del pool (es. il server
+    // Postgres che chiude la connessione) diventa una uncaughtException che
+    // ammazza/avvelena il processo. Qui basta loggare: il pool si rigenera da sé.
+    pgPool.on("error", (err) => console.error("pgPool idle client error:", err?.message || err));
     if (await schemaUpToDate()) {
       console.log(`DB schema v${SCHEMA_VERSION} già aggiornato — init rapido (migrazioni saltate)`);
       return "postgres";

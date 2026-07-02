@@ -260,13 +260,15 @@ function idbDelete(store, key) {
   }));
 }
 
-// Paths handled locally by IndexedDB (not sent to server)
-const _LOCAL_PREFIXES = ["/api/addresses", "/api/routes", "/api/settings", "/api/folders", "/api/multiday-plans"];
+// ONLINE-FIRST (v5.080, richiesta del titolare): il server è tornato la fonte dei
+// dati, come prima della v5.065. NESSUN percorso è più gestito da IndexedDB:
+// tutte le chiamate api() vanno al server. Il codice localApi/outbox/sync resta
+// sotto, dormiente, solo per la BONIFICA una-tantum dell'outbox al primo login
+// (le modifiche fatte offline durante il periodo di guasto non vanno perse).
+const _LOCAL_PREFIXES = [];
 
-function _isLocal(path) {
-  const bare = path.split("?")[0];
-  if (/^\/api\/routes\/\d+\/share$/.test(bare)) return false;
-  return _LOCAL_PREFIXES.some(p => bare === p || bare.startsWith(p + "/"));
+function _isLocal() {
+  return false;
 }
 
 function _addrMatches(addr, q) {
@@ -282,7 +284,11 @@ async function _serverFetch(path, options = {}) {
     ...options,
     signal: options.signal || timeoutSignal(options.timeoutMs || 30000)
   });
-  if (!res.ok) throw new Error(`sync error ${res.status}`);
+  if (!res.ok) {
+    const err = new Error(`sync error ${res.status}`);
+    err.status = res.status; // il chiamante distingue rifiuto permanente (4xx) da guasto temporaneo
+    throw err;
+  }
   return res.json().catch(() => ({}));
 }
 
@@ -336,12 +342,25 @@ async function flushOutbox() {
         const resp = await _serverFetch(path, { method: e.method, body: e.body || undefined });
         if (e.method === "POST" && e.store && resp?.id != null && e.recId != null && resp.id !== e.recId) {
           idMap[e.recId] = resp.id;
-          const rec = await idbGet(e.store, e.recId);
-          if (rec) { await idbDelete(e.store, e.recId); await idbPut(e.store, { ...rec, id: resp.id }); }
+          // Il remap del record locale è best-effort: se IndexedDB fa i capricci NON deve
+          // bloccare la coda (la scrittura sul server è già riuscita).
+          try {
+            const rec = await idbGet(e.store, e.recId);
+            if (rec) { await idbDelete(e.store, e.recId); await idbPut(e.store, { ...rec, id: resp.id }); }
+          } catch { /* remap locale saltato */ }
         }
         await idbDelete("outbox", e.seq);
-      } catch {
-        break; // server irraggiungibile: riprova al prossimo flush mantenendo l'ordine
+      } catch (err) {
+        // Rifiuto PERMANENTE del server (4xx, tranne 408/429): ritentare è inutile e
+        // avvelena la coda per sempre (bug confermato: una entry rifiutata in testa
+        // bloccava tutte le successive e riprovava a ogni avvio → tempesta di richieste).
+        const st = Number(err?.status || 0);
+        if (st >= 400 && st < 500 && st !== 401 && st !== 408 && st !== 429) {
+          console.warn(`Outbox: modifica rifiutata dal server (${st}) — scartata:`, e.method, e.path);
+          await idbDelete("outbox", e.seq).catch(() => {});
+          continue;
+        }
+        break; // guasto temporaneo (rete/5xx/timeout/401): riprova al prossimo flush mantenendo l'ordine
       }
     }
   } finally {
@@ -679,20 +698,15 @@ async function api(path, options = {}) {
   });
   const payload = await res.json().catch(() => ({}));
   if (res.status === 401) {
-    // App local-first: una sessione scaduta disabilita solo il sync, non sloggia
-    // (i dati restano in IndexedDB). Non azzerare state.user per non mostrare il login.
-    if (state._authVerified) {
-      state._authVerified = false;
-      state._syncEnabled = false;
-    }
+    // Online-first: sessione scaduta = si torna al login (com'era prima della v5.065).
+    // Nessuna "modalità locale" silenziosa.
+    state.user = null;
+    state._authVerified = false;
+    state._syncEnabled = false;
+    renderAuthScreen(false);
     throw new Error("Sessione scaduta. Effettua di nuovo il login.");
   }
   if (!res.ok) throw new Error(payload.error || `Errore ${res.status}`);
-  // /api/plan è server-authoritative (salva il giro lato server e assegna l'id): ne teniamo
-  // una copia COMPLETA in IndexedDB così la lista e l'apertura giri funzionano anche offline.
-  if (path === "/api/plan" && payload?.id) {
-    await idbPut("routes", _routeToLocalRecord(payload)).catch(() => {});
-  }
   return payload;
 }
 
@@ -1398,25 +1412,20 @@ function _lastSyncLabel() {
 // Sincronizzazione MANUALE con feedback esplicito (l'utente vuole sapere se funziona in background):
 // ricontrolla la connessione, scarica i dati dal server, aggiorna l'UI e mostra l'esito con un toast.
 async function syncNow() {
-  showToast("Sincronizzazione in corso…");
-  let online = false;
+  // Online-first: i dati vivono sul server; "Sincronizza ora" = ricarica tutto dal server.
+  showToast("Aggiornamento dal server…");
   try {
-    const [health, config] = await Promise.all([
-      api("/api/health", { timeoutMs: 20000 }).catch(() => null),
-      api("/api/config", { timeoutMs: 20000 }).catch(() => null),
-    ]);
-    if (health) { online = true; state.mapApiConfigured = !!health.mapApiConfigured; state.whisperConfigured = !!health.whisperConfigured; }
-    if (config) { online = true; state.googleMapsKey = config.googleMapsKey || state.googleMapsKey; }
-    if (online) {
-      state._authVerified = state._authVerified || !!(state.user && state.user.id);
-      state._syncEnabled = true;
-      await syncFromServer();
-      await Promise.all([refreshAddressesForRoute(), refreshSavedRoutes(), refreshMultiDayPlans(), refreshFolders()]);
-    }
-  } catch { /* trattato sotto */ }
-  render();
-  if (state.menuOpen && state.menuSection === "account") openMenu("account"); // aggiorna la scheda stato
-  showToast(online ? "Sincronizzato col server ✓" : "Server non raggiungibile — riprova tra qualche secondo");
+    await loadInitialData();
+    await refreshFolders();
+    try { localStorage.setItem("_lastSync", new Date().toISOString()); } catch {}
+    render();
+    if (state.menuOpen && state.menuSection === "account") openMenu("account");
+    showToast("Aggiornato dal server ✓");
+  } catch {
+    render();
+    if (state.menuOpen && state.menuSection === "account") openMenu("account");
+    showToast("Server non raggiungibile — riprova tra qualche secondo");
+  }
 }
 
 function renderMenuAccount() {
@@ -1817,7 +1826,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.079 &mdash; luglio 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.080 &mdash; luglio 2026</p>
         </div>
       </div>
 
@@ -1827,6 +1836,15 @@ function renderMenuInfo() {
       <ul class="info-list">
         <li>${state.mapApiConfigured ? _svg('<polyline points="20 6 9 17 4 12"/>', 14) + " Google Maps attivo — percorsi reali e ottimizzazione avanzata" : _svg('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>', 14) + " Google Maps non configurato — stime distanze locali"}</li>
         <li>${state.whisperConfigured ? _svg('<polyline points="20 6 9 17 4 12"/>', 14) + " Comandi vocali attivi (Whisper)" : _svg('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>', 14) + " Comandi vocali non configurati"}</li>
+      </ul>
+
+      <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v5.080 — l'app torna ONLINE (riepilogo)</p>
+      <ul class="info-list">
+        <li>Si entra col proprio account: giri, contatti e impostazioni vivono sul server e ti seguono su ogni dispositivo. Sparita la "modalità locale" silenziosa che non sincronizzava.</li>
+        <li>Risolto il guasto che teneva l'app "in caricamento per sempre": richieste che non ricevevano mai risposta (aggravate dai bot) intasavano il server. Ora ogni richiesta riceve SEMPRE una risposta entro pochi secondi.</li>
+        <li>Avvio del database ~50 volte più leggero: stop al consumo anomalo di operazioni (a giugno aveva superato il limite gratuito e bloccato tutto).</li>
+        <li>Se il server è irraggiungibile l'app lo dice chiaramente, con pulsante Riprova — mai più silenzio.</li>
+        <li>Le modifiche fatte offline durante il periodo di guasto vengono inviate al server al primo accesso: nessuna perdita.</li>
       </ul>
 
       <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v5.070</p>
@@ -4467,7 +4485,9 @@ function renderMenuStats() {
 // ── render dispatch ───────────────────────────────────────────────────────────
 
 function render() {
-  // Nessun blocco su state.user: l'app gira sempre con dati locali
+  // Online-first: senza sessione non esiste modalità operativa — si mostra il login.
+  if (!state.user) { renderAuthScreen(false); return; }
+  document.body.classList.remove("auth-only");
   if (state.activeTab === "route") renderRoute();
   else if (state.activeTab === "saved") renderSaved();
   else if (state.activeTab === "archive") renderArchive();
@@ -4520,12 +4540,11 @@ function addressToStop(address, durationOverride = null) {
 async function shareRoute(routeId) {
   try {
     showSpinner("Generazione link…");
-    // Prendi il giro da IndexedDB e invialo "piatto" (rows in cima): l'import lo legge così.
-    const localRoute = await idbGet("routes", Number(routeId));
-    if (!localRoute) throw new Error("Giro non trovato");
+    // Online-first: il giro si legge dal server e si invia "piatto" allo snapshot di condivisione.
+    const raw = await api(`/api/routes/${routeId}`);
     const data = await api(`/api/routes/${routeId}/share`, {
       method: "POST",
-      body: JSON.stringify({ routeData: _routeRecordToFlat(localRoute) })
+      body: JSON.stringify({ routeData: _routeRecordToFlat(raw) })
     });
     hideSpinner();
     const url = data.url;
@@ -4534,7 +4553,7 @@ async function shareRoute(routeId) {
       await navigator.share({ title: routeName, text: `Giro di lavoro: ${routeName}`, url }).catch(() => {});
     } else {
       await navigator.clipboard.writeText(url).catch(() => {});
-      showToast("Link copiato — scade tra 5 giorni");
+      showToast(`Link copiato — scade tra ${data.expiresInDays || 5} giorni`);
     }
   } catch (e) {
     hideSpinner();
@@ -4543,27 +4562,41 @@ async function shareRoute(routeId) {
 }
 
 async function handleShareImport(token) {
+  // Online-first: per importare serve essere loggati (il giro si salva sul TUO account).
+  // Senza sessione il token resta in attesa e si passa dal login; onLoginOk riprende da qui.
+  if (!state.user) {
+    try { sessionStorage.setItem("pendingShareImport", token); } catch {}
+    renderAuthScreen(false);
+    return;
+  }
   try {
     showSpinner("Caricamento giro…");
-    const route = await fetch(window.location.origin + `/api/share/${token}`).then(r => r.ok ? r.json() : Promise.reject(new Error("Link scaduto o non valido")));
+    const res = await fetch(window.location.origin + `/api/share/${token}`, { signal: timeoutSignal(20000) });
+    if (!res.ok) throw new Error(res.status === 404 ? "Link scaduto o non valido" : `Errore ${res.status}`);
+    const route = await res.json();
     hideSpinner();
 
     // Mostra preview e chiede conferma
     const name = route.name || "Giro condiviso";
     const stops = (route.rows || route.plannedStops || []).filter(s => !s.type);
-    const stopNames = stops.slice(0, 5).map(s => `• ${s.customer || s.customer}`).join("\n");
+    const stopNames = stops.slice(0, 5).map(s => `• ${s.customer || s.location || "Tappa"}`).join("\n");
     const more = stops.length > 5 ? `\n… e altri ${stops.length - 5}` : "";
-    const confirm = window.confirm(`Importare il giro "${name}"?\n\n${stopNames}${more}\n\nVerrà aggiunto ai tuoi giri salvati.`);
-    if (!confirm) return;
+    const ok = window.confirm(`Importare il giro "${name}"?\n\n${stopNames}${more}\n\nVerrà aggiunto ai tuoi giri salvati.`);
+    try { sessionStorage.removeItem("pendingShareImport"); } catch {}
+    if (!ok) { history.replaceState(null, "", "/"); return; }
 
     showSpinner("Importazione…");
-    // Recupera il giro condiviso (piatto) e salvalo in IndexedDB nel wrapper canonico.
-    const sharedRoute = await fetch(window.location.origin + `/api/share/${token}`).then(r => r.ok ? r.json() : Promise.reject(new Error("Link scaduto")));
-    const flat = { ...(sharedRoute.payload || sharedRoute), source: "imported", name };
-    const rec = _routeToLocalRecord(flat);
-    delete rec.id;
-    const newId = await idbAdd("routes", rec);
-    state.result = normalizeSavedRoute({ ...flat, id: newId });
+    // Copia INDIPENDENTE salvata sul server tra i giri del destinatario. Tappe
+    // self-contained: azzera addressId (gli id dell'archivio del mittente non hanno
+    // senso in quello del destinatario; nome/indirizzo/coordinate restano nel giro).
+    const strip = arr => Array.isArray(arr) ? arr.map(s => (s && typeof s === "object") ? { ...s, addressId: null } : s) : arr;
+    const flat = { ...(route.payload || route), source: "imported", name };
+    flat.rows = strip(flat.rows);
+    flat.plannedStops = strip(flat.plannedStops);
+    flat.stops = strip(flat.stops);
+    delete flat.id;
+    const saved = await api("/api/routes", { method: "POST", body: JSON.stringify(flat) });
+    state.result = normalizeSavedRoute({ ...flat, id: saved.id });
     await refreshSavedRoutes();
     hideSpinner();
     setActiveTab("result");
@@ -8169,6 +8202,7 @@ function renderSetupForm() {
 }
 
 function renderAuthScreen(isSetup = false) {
+  document.body.classList.add("auth-only"); // nasconde header/tab dell'UI operativa
   let activeTab = isSetup ? "setup" : "login";
 
   const renderInner = () => {
@@ -8224,15 +8258,7 @@ function renderAuthScreen(isSetup = false) {
           });
           const result = await res.json().catch(() => ({}));
           if (!res.ok) throw new Error(result.error || `Errore server (${res.status})`);
-          state.user = result;
-          state._authVerified = true;
-          state._syncEnabled = true;
-          await initApp();
-          // Appena loggato: scarica i dati dal server nel locale e ri-renderizza (i tuoi dati tornano).
-          syncFromServer().then(() => {
-            Promise.all([refreshAddressesForRoute(), refreshSavedRoutes(), refreshMultiDayPlans(), refreshFolders()])
-              .then(() => render()).catch(() => {});
-          }).catch(() => {});
+          await onLoginOk(result);
         } catch (err) {
           const aborted = err?.name === "AbortError" || /abort/i.test(err?.message || "");
           if (errEl) errEl.textContent = aborted
@@ -8256,41 +8282,85 @@ async function initApp() {
   render();
 }
 
-async function init() {
-  const shareTokenMatch = window.location.pathname.match(/^\/share\/([a-zA-Z0-9_-]+)/);
-
-  // Prova auth — se riesce, sincronizza dal server; se fallisce, usa solo IndexedDB locale.
-  // TIMEOUT OBBLIGATORIO: senza, se il server è lento/bloccato (cold start Vercel, deploy in corso)
-  // questo await non ritorna MAI e l'app resta bloccata sullo splash. Col timeout si prosegue in
-  // locale (IndexedDB) e l'app si apre comunque.
+// Bonifica UNA-TANTUM: le modifiche fatte offline nelle settimane di guasto sono
+// rimaste nell'outbox durabile (IndexedDB) — al primo login utile le spediamo al
+// server, così non si perde nulla. Dopo, l'outbox non viene più alimentato.
+async function _bonificaOutbox() {
   try {
-    const meRes = await fetch(window.location.origin + "/api/auth/me", { signal: timeoutSignal(6000) });
-    if (meRes.ok) {
-      const me = await meRes.json().catch(() => ({}));
-      state.user = me;
-      state._authVerified = true;
-      state._syncEnabled = true;
-    }
-    // Se l'auth veloce fallisce (server lento/in deploy): NON blocchiamo l'avvio; il sync in
-    // background sotto proverà comunque (col cookie di sessione) e ripopolerà i dati appena il server
-    // risponde. Così un server lento non lascia il telefono "vuoto".
-  } catch { /* rete assente — usa solo IndexedDB */ }
+    const pending = await idbGetAll("outbox");
+    if (!pending.length) return false;
+    showToast(`Invio di ${pending.length} modifiche fatte offline…`);
+    state._syncEnabled = true; // sblocca la guardia legacy di flushOutbox
+    await flushOutbox();
+    const left = await idbGetAll("outbox");
+    showToast(left.length
+      ? `${left.length} modifiche non ancora inviate — riproverò al prossimo avvio`
+      : "Modifiche offline inviate al server ✓");
+    return left.length < pending.length;
+  } catch { return false; }
+}
 
-  // Avvio immediato con dati locali (IndexedDB), indipendentemente dall'auth
-  state.user = state.user || { username: "locale", id: 0 };
+// Login riuscito (o sessione valida all'avvio): entra in modalità operativa.
+async function onLoginOk(user) {
+  state.user = user;
+  state._authVerified = true;
+  state._syncEnabled = true;
+  document.body.classList.remove("auth-only");
   await initApp();
   hideSplash();
-  if (shareTokenMatch) handleShareImport(shareTokenMatch[1]);
-
-  // SYNC IN BACKGROUND, SEMPRE (anche se l'auth veloce è scaduta per server lento): se il cookie è
-  // valido e il server risponde, scarica i dati dal server in IndexedDB e ri-renderizza. Se non
-  // autenticato / server giù, fallisce in silenzio e resta il locale. Questo fa RITORNARE i dati da
-  // soli dopo un avvio "a vuoto" per server non ancora pronto.
-  syncFromServer().then(() => {
-    _weeklyBackupIfDue().catch(() => {});
+  try { localStorage.setItem("_lastSync", new Date().toISOString()); } catch {}
+  _bonificaOutbox().then((sent) => {
+    if (!sent) return;
+    // dopo l'invio delle modifiche offline, ricarica le liste (gli id possono cambiare)
     Promise.all([refreshAddressesForRoute(), refreshSavedRoutes(), refreshMultiDayPlans(), refreshFolders()])
       .then(() => render()).catch(() => {});
   }).catch(() => {});
+  let tok = null; try { tok = sessionStorage.getItem("pendingShareImport"); } catch {}
+  if (tok) handleShareImport(tok);
+}
+
+// Server irraggiungibile all'avvio: schermata chiara con Riprova — MAI silenzio.
+function renderServerDown(detail) {
+  document.body.classList.add("auth-only");
+  app.innerHTML = `
+    <div class="auth-screen">
+      <div class="auth-card">
+        <div class="auth-logo">${_svg('<polygon points="3 11 22 2 13 21 11 13 3 11"/>',24)} Percorsi Lavoro</div>
+        <p class="auth-subtitle">Il server non risponde in questo momento${detail ? ` (${escapeHtml(detail)})` : ""}.</p>
+        <p class="auth-hint">I tuoi dati sono al sicuro sul server. Controlla la connessione e riprova.</p>
+        <button class="btn primary" id="retry-boot" style="width:100%">Riprova</button>
+      </div>
+    </div>`;
+  app.querySelector("#retry-boot")?.addEventListener("click", () => {
+    showToast("Riprovo…");
+    init().catch(() => renderServerDown());
+  });
+}
+
+async function init() {
+  const shareTokenMatch = window.location.pathname.match(/^\/share\/([a-zA-Z0-9_-]+)/);
+  if (shareTokenMatch) {
+    try { sessionStorage.setItem("pendingShareImport", shareTokenMatch[1]); } catch {}
+    history.replaceState(null, "", "/");
+  }
+
+  // ONLINE-FIRST (v5.080): il login è la porta d'ingresso, il server è la fonte dei
+  // dati — come prima della v5.065. Niente utente fittizio, niente modalità locale.
+  try {
+    const meRes = await fetch(window.location.origin + "/api/auth/me", { signal: timeoutSignal(15000) });
+    if (meRes.ok) {
+      const me = await meRes.json().catch(() => ({}));
+      await onLoginOk(me);
+      return;
+    }
+    // 401: nessuna sessione → login (o setup se non esistono ancora utenti)
+    const body = await meRes.json().catch(() => ({}));
+    hideSplash();
+    renderAuthScreen(body.setup === true);
+  } catch (err) {
+    hideSplash();
+    renderServerDown(err?.name === "AbortError" ? "timeout" : "");
+  }
 }
 
 applyTheme();
@@ -8300,10 +8370,9 @@ window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () 
 });
 bindEvents();
 
-// bfcache / visibilitychange: app è locale, non serve verifica sessione
-
-// Tornata la connessione: svuota la coda delle mutazioni offline verso il server
-window.addEventListener("online", () => { flushOutbox().catch(() => {}); });
+// Tornata la connessione: se restano modifiche offline in coda (periodo di guasto),
+// riprova a inviarle. Online-first: nessun'altra logica di sync in background.
+window.addEventListener("online", () => { if (state.user) _bonificaOutbox().catch(() => {}); });
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
