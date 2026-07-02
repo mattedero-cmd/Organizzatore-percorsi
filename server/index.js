@@ -211,9 +211,34 @@ const SECURITY_HEADERS = {
   "Permissions-Policy": "geolocation=(self), camera=(), microphone=(self)"
 };
 
+// Chiusura INFALLIBILE della risposta: mai lanciare, mai lasciare socket appesi.
+// (v5.079 — su Vercel una risposta mai chiusa tiene l'invocazione appesa fino a
+// ~300s: bastavano i bot con header sporchi per saturare le istanze Fluid.)
+function forceEnd(response, status, payload) {
+  try {
+    if (response.writableEnded) return;
+    if (!response.headersSent) {
+      response.writeHead(status, { "Content-Type": "application/json; charset=utf-8", ...SECURITY_HEADERS });
+    }
+    response.end(JSON.stringify(payload));
+  } catch {
+    try { response.destroy(); } catch { /* già chiusa */ }
+  }
+}
+
 function sendJson(response, status, payload) {
-  response.writeHead(status, { "Content-Type": "application/json; charset=utf-8", ...SECURITY_HEADERS });
-  response.end(JSON.stringify(payload));
+  // Header già inviati (errore a risposta iniziata): NON ritentare writeHead —
+  // rilancerebbe dentro il catch del chiamante lasciando il socket aperto per sempre.
+  if (response.headersSent) {
+    try { response.end(); } catch { try { response.destroy(); } catch { /* noop */ } }
+    return;
+  }
+  try {
+    response.writeHead(status, { "Content-Type": "application/json; charset=utf-8", ...SECURITY_HEADERS });
+    response.end(JSON.stringify(payload));
+  } catch {
+    try { response.destroy(); } catch { /* noop */ }
+  }
 }
 
 function parseBody(request) {
@@ -300,8 +325,16 @@ async function serveIndex(request, response, filePath) {
 }
 
 function serveStatic(request, response) {
-  const url = new URL(request.url, `http://${request.headers.host}`);
-  const pathname = decodeURIComponent(url.pathname === "/" ? "/index.html" : url.pathname);
+  let url;
+  let pathname;
+  try {
+    url = new URL(request.url || "/", "http://internal"); // base fissa: Host dei bot irrilevante
+    pathname = decodeURIComponent(url.pathname === "/" ? "/index.html" : url.pathname);
+  } catch {
+    response.writeHead(400, SECURITY_HEADERS);
+    response.end("Bad request");
+    return;
+  }
   const safePath = path.normalize(pathname).replace(/^(\.\.[/\\])+/, "");
   const filePath = path.join(publicDir, safePath);
 
@@ -312,7 +345,7 @@ function serveStatic(request, response) {
   }
 
   if (safePath === "/index.html" || url.pathname === "/" || url.pathname.startsWith("/share/")) {
-    serveIndex(request, response, path.join(publicDir, "index.html"));
+    serveIndex(request, response, path.join(publicDir, "index.html")).catch(() => forceEnd(response, 500, { error: "Errore interno" }));
     return;
   }
 
@@ -342,8 +375,16 @@ function serveStatic(request, response) {
 const recentPlanRequests = new Map();
 
 async function handleApi(request, response) {
-  const url = new URL(request.url, `http://${request.headers.host}`);
   const method = request.method || "GET";
+  let url;
+  try {
+    // Base FISSA: il parsing del path non deve dipendere dall'header Host, che i
+    // bot mandano malformato — prima `new URL(url, http://host)` era fuori dal try
+    // e un Host sporco appendeva la richiesta per sempre (unhandledRejection muta).
+    url = new URL(request.url || "/", "http://internal");
+  } catch {
+    return forceEnd(response, 400, { error: "Richiesta non valida" });
+  }
 
   try {
     if (method === "GET" && url.pathname === "/api/health") {
@@ -976,6 +1017,7 @@ ${addressList}
 
       trackCall("openai", "chat_completions");
       const oaiRes = await fetch("https://api.openai.com/v1/chat/completions", {
+        signal: AbortSignal.timeout(25000),
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -1036,6 +1078,7 @@ ${addressList}
       form.append("language", "it");
       trackCall("openai", "whisper");
       const oaiRes = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+        signal: AbortSignal.timeout(50000),
         method: "POST",
         headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
         body: form
@@ -1061,9 +1104,9 @@ ${addressList}
         if (existing) await updateAddress(addr.id, addr, userId).catch(() => {});
         else await createAddress(addr, userId).catch(() => {});
       }
-      // Ripristina cartelle
+      // Ripristina cartelle (lista letta UNA volta, non a ogni giro del ciclo)
+      const allFolders = await listFolders(userId).catch(() => []);
       for (const folder of (body.folders || [])) {
-        const allFolders = await listFolders(userId).catch(() => []);
         const exists = allFolders.find(f => f.id === folder.id);
         if (!exists) await createFolder(folder.name, userId).catch(() => {});
         else await renameFolder(folder.id, folder.name, userId).catch(() => {});
@@ -1092,17 +1135,40 @@ ${addressList}
 }
 
 const server = http.createServer((request, response) => {
-  if (request.url?.startsWith("/api/")) {
-    handleApi(request, response);
-    return;
+  // WATCHDOG (v5.079): NESSUNA richiesta può restare senza risposta oltre il
+  // budget. Qualunque bug/attesa futura viene tagliata con un 503 leggibile
+  // invece di appendere l'invocazione (su Vercel: fino a ~300s l'una).
+  const reqPath = String(request.url || "");
+  const isSlow = /^\/api\/(plan|plan-multiday|voice\/|backup)/.test(reqPath);
+  const budgetMs = Number(process.env.WATCHDOG_MS) || (isSlow ? 60000 : 25000);
+  const watchdog = setTimeout(() => {
+    console.error(`WATCHDOG: risposta forzata dopo ${budgetMs}ms su ${request.method} ${reqPath}`);
+    forceEnd(response, 503, { error: "Il server non è riuscito a rispondere in tempo. Riprova tra qualche secondo." });
+  }, budgetMs);
+  if (watchdog.unref) watchdog.unref();
+  response.on("close", () => clearTimeout(watchdog));
+
+  try {
+    if (reqPath.startsWith("/api/")) {
+      // La promise NON deve mai sfuggire: una rejection non gestita lascerebbe
+      // il socket aperto per sempre (l'handler globale logga ma non risponde).
+      handleApi(request, response).catch((err) => {
+        console.error("handleApi rejection:", err?.stack || err);
+        forceEnd(response, 500, { error: "Errore interno del server" });
+      });
+      return;
+    }
+    // /share/:token → serve index.html (la PWA gestisce il routing)
+    if (reqPath.match(/^\/share\/[a-zA-Z0-9_-]+/)) {
+      const filePath = path.join(rootDir, "public", "index.html");
+      serveIndex(request, response, filePath).catch(() => forceEnd(response, 500, { error: "Errore interno" }));
+      return;
+    }
+    serveStatic(request, response);
+  } catch (err) {
+    console.error("Request handler error:", err?.stack || err);
+    forceEnd(response, 500, { error: "Errore interno del server" });
   }
-  // /share/:token → serve index.html (la PWA gestisce il routing)
-  if (request.url?.match(/^\/share\/[a-zA-Z0-9_-]+/)) {
-    const filePath = path.join(rootDir, "public", "index.html");
-    serveIndex(request, response, filePath);
-    return;
-  }
-  serveStatic(request, response);
 });
 
 server.on("error", (err) => {

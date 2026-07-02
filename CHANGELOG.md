@@ -1,3 +1,11 @@
+## v5.079 — 2026-07-02
+TROVATA la causa del sito "appeso per sempre" (diagnostica multi-agente + riproduzione locale): richieste che non ricevevano MAI una risposta.
+- **Bug 1 (critico)**: `new URL(request.url, http://Host)` era FUORI dal try/catch (sia in `handleApi` sia in `serveStatic`): un header `Host` malformato (i bot che scansionano *.vercel.app ne mandano di continuo) lanciava `Invalid URL` PRIMA di ogni risposta; la rejection veniva inghiottita da `unhandledRejection` e il socket restava aperto per sempre. Su Vercel ogni richiesta così appesa tiene occupata un'invocazione ~300s → le istanze Fluid si saturano → anche le richieste legittime restano "in caricamento" all'infinito (senza nemmeno un 504). Spiega il consumo anomalo: 222 GB-Hrs provisioned con 22 minuti di CPU. **Riprodotto in locale, poi verificato il fix: risposta in 45ms.** Fix: base URL fissa (`http://internal`, l'Host non serve per il path) + parse dentro try.
+- **Bug 2 (critico)**: `sendJson` nel catch finale poteva rilanciare (`ERR_HTTP_HEADERS_SENT` se l'errore arrivava a risposta iniziata) → di nuovo socket appeso. Fix: `sendJson` non lancia mai; nuova `forceEnd()` che chiude la risposta in modo infallibile.
+- **Bug 3 (critico)**: la promise di `handleApi` (e di `serveIndex`) non era mai awaitata/catchata nel callback di `createServer`. Fix: `.catch(...)` con `forceEnd` su tutti i punti d'ingresso.
+- **WATCHDOG**: timer per OGNI richiesta — se il server non ha risposto entro il budget (25s; 60s per plan/multiday/voice/backup), risposta 503 forzata e leggibile. Nessuna richiesta può più restare appesa, qualunque bug futuro ci sia. Verificato (503 esatto al millisecondo col budget di test).
+- Timeout aggiunti alle fetch OpenAI (voice understand 25s, transcribe 50s — prima NESSUNO). `/api/backup`: `listFolders` letta una volta sola (era N+1 nel ciclo cartelle).
+
 ## v5.078 — 2026-07-01
 Il DB Prisma strozzato mandava in 504 anche la v5.077 (persino il primo init non completava). Due contromisure radicali:
 - **`/api/health` istantaneo e indipendente**: nuova `quickDbCheck()` (db.js) — connessione dedicata con timeout 4s+4s, NIENTE init/migrazioni. Health risponde SEMPRE entro ~8s (anche su piano Vercel Hobby 10s), con l'errore DB reale in `dbError`. Misurato: 0,05-0,1s con DB su/giù in locale.
