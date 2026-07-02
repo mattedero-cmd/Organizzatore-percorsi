@@ -1,3 +1,9 @@
+## v5.081 — 2026-07-02
+RECUPERO DATI DISPOSITIVO (il caso reale post-v5.080: login ok ma account server VUOTO — i giri dell'era local-first sono rimasti solo in IndexedDB sul telefono, mai riusciti a salire durante il guasto):
+- **`recuperaDatiDispositivo()`**: carica sull'account corrente contatti, giri, cartelle, piani e impostazioni rimasti in IndexedDB. IDEMPOTENTE (match per indirizzo+cliente / nome+data / nome): rilanciabile senza doppioni. Gli `addressId` delle tappe vengono RIMAPPATI sui nuovi id d'archivio del server (preserva lo storico visite); i giri vengono riassegnati alle cartelle ricreate.
+- **Proposta automatica al login**: se l'account sul server è vuoto ma il dispositivo ha dati locali, l'app propone il recupero (il no viene ricordato). Pulsante manuale sempre disponibile: Menu → Account → "Carica i dati salvati su questo dispositivo".
+- Verifica browser: 7/7 (prompt, recupero completo, remap addressId, cartella, niente doppioni al secondo giro) + suite online-first 16/16 invariata.
+
 ## v5.080 — 2026-07-02
 **RITORNO ONLINE-FIRST** (richiesta esplicita del titolare dopo le settimane di guasto dell'era local-first) + entry Vercel nativa:
 - **Server = fonte dei dati, login = porta d'ingresso** (come prima della v5.065): rimosso l'instradamento IndexedDB (`_isLocal` → false), l'utente fittizio `{username:"locale", id:0}`, il sync bidirezionale in background e il backup settimanale. Una 401 riporta al login; senza sessione l'app mostra SOLO la schermata di accesso; se il server è irraggiungibile → schermata "Riprova" esplicita (mai silenzio). `syncNow` = ricarica dal server.

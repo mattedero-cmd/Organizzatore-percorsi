@@ -1144,6 +1144,7 @@ function renderMenu() {
       renderAuthScreen(false);
     });
     ov.querySelector("#sync-now-btn")?.addEventListener("click", () => { syncNow(); });
+    ov.querySelector("#recover-device-btn")?.addEventListener("click", () => { closeMenu(); recuperaDatiDispositivo(); });
     ov.querySelector("#settings-form")?.addEventListener("submit", async e => {
       e.preventDefault();
       const v = readForm(e.target);
@@ -1454,6 +1455,8 @@ function renderMenuAccount() {
         <div class="row" style="justify-content:space-between;gap:8px;"><span class="stop-meta">Ultima sincronizzazione</span><span class="stop-meta">${_lastSyncLabel()}</span></div>
         <div class="row" style="justify-content:space-between;gap:8px;"><span class="stop-meta">Distanze</span><span class="stop-meta">${state.mapApiConfigured ? "Google Maps (reali)" : "stima locale"}</span></div>
         <button type="button" class="btn" id="sync-now-btn" style="width:100%;margin-top:8px;">${I.refresh ? I.refresh(14) : ""} Sincronizza ora</button>
+        <button type="button" class="btn" id="recover-device-btn" style="width:100%;margin-top:8px;">${I.arrowR ? I.arrowR(14) : ""} Carica i dati salvati su questo dispositivo</button>
+        <div class="stop-meta" style="margin-top:6px;">Se sul telefono vedi giri/contatti che qui mancano: questo pulsante li carica sul tuo account (senza creare doppioni).</div>
       </div>
 
       <div class="account-section-title">Profilo</div>
@@ -1826,7 +1829,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.080 &mdash; luglio 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.081 &mdash; luglio 2026</p>
         </div>
       </div>
 
@@ -8315,8 +8318,124 @@ async function onLoginOk(user) {
     Promise.all([refreshAddressesForRoute(), refreshSavedRoutes(), refreshMultiDayPlans(), refreshFolders()])
       .then(() => render()).catch(() => {});
   }).catch(() => {});
+  // RECUPERO era local-first: se l'account sul server è VUOTO ma questo dispositivo
+  // ha ancora giri/contatti in IndexedDB (mai riusciti a salire durante il guasto),
+  // proponi di caricarli ora. Il rifiuto viene ricordato (resta il pulsante in Account).
+  try {
+    const serverVuoto = (state.savedRoutes || []).length === 0 && (state.allAddresses || []).length === 0;
+    let rifiutato = false; try { rifiutato = localStorage.getItem("_recuperoRifiutato") === "1"; } catch {}
+    if (serverVuoto && !rifiutato) {
+      const counts = await _localDataCounts();
+      if (counts.routes > 0 || counts.addresses > 0) {
+        const ok = window.confirm(`Su questo dispositivo ci sono ${counts.routes} giri e ${counts.addresses} contatti che non sono ancora sul tuo account.\n\nVuoi caricarli adesso sul server?`);
+        if (ok) await recuperaDatiDispositivo();
+        else { try { localStorage.setItem("_recuperoRifiutato", "1"); } catch {} showToast("Puoi recuperarli quando vuoi da Menu → Account"); }
+      }
+    }
+  } catch { /* il pulsante manuale in Account resta disponibile */ }
   let tok = null; try { tok = sessionStorage.getItem("pendingShareImport"); } catch {}
   if (tok) handleShareImport(tok);
+}
+
+// Conta i dati locali (IndexedDB) rimasti su questo dispositivo dall'era local-first.
+async function _localDataCounts() {
+  try {
+    const [a, r] = await Promise.all([idbGetAll("addresses"), idbGetAll("routes")]);
+    return { addresses: a.length, routes: r.length };
+  } catch { return { addresses: 0, routes: 0 }; }
+}
+
+// RECUPERO: carica sull'account corrente i dati rimasti in IndexedDB. IDEMPOTENTE:
+// salta ciò che sul server c'è già (contatti per indirizzo+cliente, giri per nome+data,
+// cartelle/piani per nome) — si può rilanciare senza creare doppioni. Gli `addressId`
+// delle tappe vengono RIMAPPATI sui nuovi id d'archivio del server (senza questo si
+// romperebbe lo storico visite dei clienti).
+async function recuperaDatiDispositivo() {
+  showSpinner("Recupero dei dati dal dispositivo…");
+  try {
+    const [locAddr, locRoutes, locFolders, locPlans, locSettings] = await Promise.all([
+      idbGetAll("addresses").catch(() => []),
+      idbGetAll("routes").catch(() => []),
+      idbGetAll("folders").catch(() => []),
+      idbGetAll("multiday_plans").catch(() => []),
+      idbGet("settings", "main").then(s => s?.value || null).catch(() => null)
+    ]);
+    const [srvAddr, srvRoutes, srvFolders, srvPlans] = await Promise.all([
+      api("/api/addresses"), api("/api/routes"), api("/api/folders"), api("/api/multiday-plans").catch(() => [])
+    ]);
+
+    // 1) Contatti (con mappa vecchioId → nuovoId per il remap delle tappe)
+    const akey = a => `${(a.fullAddress || "").trim().toLowerCase()}|${(a.customer || "").trim().toLowerCase()}`;
+    const srvByKey = new Map(srvAddr.map(a => [akey(a), a.id]));
+    const idRemap = new Map();
+    let nA = 0;
+    for (const a of locAddr) {
+      const k = akey(a);
+      if (srvByKey.has(k)) { if (a.id != null) idRemap.set(a.id, srvByKey.get(k)); continue; }
+      const { id: _oldId, ...body } = a;
+      const created = await api("/api/addresses", { method: "POST", body: JSON.stringify(body) });
+      if (a.id != null && created?.id != null) idRemap.set(a.id, created.id);
+      srvByKey.set(k, created?.id);
+      nA++;
+    }
+
+    // 2) Cartelle
+    const fRemap = new Map();
+    const srvFolderByName = new Map(srvFolders.map(f => [(f.name || "").trim().toLowerCase(), f.id]));
+    for (const f of locFolders) {
+      const k = (f.name || "").trim().toLowerCase();
+      if (srvFolderByName.has(k)) { fRemap.set(f.id, srvFolderByName.get(k)); continue; }
+      const created = await api("/api/folders", { method: "POST", body: JSON.stringify({ name: f.name }) }).catch(() => null);
+      if (created?.id != null) { fRemap.set(f.id, created.id); srvFolderByName.set(k, created.id); }
+    }
+
+    // 3) Giri (tappe rimappate sui nuovi id d'archivio)
+    const rkey = r => `${(r.name || "").trim().toLowerCase()}|${r.scheduledDate || ""}`;
+    const srvRouteKeys = new Set(srvRoutes.map(rkey));
+    const remapStops = arr => Array.isArray(arr)
+      ? arr.map(s => (s && s.addressId != null && idRemap.has(s.addressId)) ? { ...s, addressId: idRemap.get(s.addressId) } : s)
+      : arr;
+    let nR = 0;
+    for (const rec of locRoutes) {
+      const flat = _routeRecordToFlat(rec);
+      if (srvRouteKeys.has(rkey(flat))) continue;
+      const { id: _oldId, ...body } = flat;
+      body.rows = remapStops(body.rows);
+      body.plannedStops = remapStops(body.plannedStops);
+      body.stops = remapStops(body.stops);
+      const created = await api("/api/routes", { method: "POST", body: JSON.stringify(body) });
+      const fid = rec.folderId != null ? (fRemap.get(rec.folderId) ?? null) : null;
+      if (created?.id != null && fid != null) {
+        await api(`/api/routes/${created.id}/folder`, { method: "PUT", body: JSON.stringify({ folderId: fid }) }).catch(() => {});
+      }
+      srvRouteKeys.add(rkey(flat));
+      nR++;
+    }
+
+    // 4) Piani multi-giorno
+    const pkey = p => (p.name || "").trim().toLowerCase();
+    const srvPlanKeys = new Set(srvPlans.map(pkey));
+    let nP = 0;
+    for (const p of locPlans) {
+      if (srvPlanKeys.has(pkey(p))) continue;
+      const payload = { ...(p.payload || {}) };
+      payload.stops = remapStops(payload.stops);
+      await api("/api/multiday-plans", { method: "POST", body: JSON.stringify({ name: p.name, payload }) }).catch(() => {});
+      nP++;
+    }
+
+    // 5) Impostazioni personali
+    if (locSettings) await api("/api/settings", { method: "PUT", body: JSON.stringify(locSettings) }).catch(() => {});
+
+    await loadInitialData();
+    await refreshFolders();
+    hideSpinner();
+    render();
+    showToast(`Recupero completato: ${nR} giri e ${nA} contatti caricati sul tuo account ✓`);
+  } catch (e) {
+    hideSpinner();
+    showToast("Recupero non completato (" + e.message + ") — riprova da Menu → Account");
+  }
 }
 
 // Server irraggiungibile all'avvio: schermata chiara con Riprova — MAI silenzio.
