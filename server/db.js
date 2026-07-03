@@ -9,7 +9,7 @@ let databasePath;
 let pgPool;
 let dbMode = "sqlite";
 
-function postgresUrl() {
+export function postgresUrl() {
   const namedUrl = process.env.DATABASE_URL
     || process.env.POSTGRES_URL
     || process.env.POSTGRES_PRISMA_URL

@@ -63,6 +63,7 @@ import { routeShape } from "./googleMapsService.js";
 import { parseVoiceCommand } from "./voiceParser.js";
 import { attachWeather, shouldRefreshWeather } from "./weatherService.js";
 import { trackCall, initApiStatsTable, getApiStats, getApiStatsDetail } from "./apiStats.js";
+import { inspectOldDbs, importOldDb } from "./dbImport.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -619,6 +620,19 @@ async function handleApi(request, response) {
         return sendJson(response, 200, { ok: true });
       }
 
+      // ── Recupero database precedente (v5.082) ──────────────────────────────
+      // GET: ispeziona (SOLA LETTURA) i database "candidati" trovati nelle env var
+      // (postgres:// diversi da quello attivo) → conteggi + utenti, per riconoscere
+      // il database vecchio. POST: copia i dati del candidato scelto nel database
+      // attivo (idempotente, la sorgente non viene modificata).
+      if (method === "GET" && url.pathname === "/api/admin/old-dbs") {
+        return sendJson(response, 200, await inspectOldDbs());
+      }
+      if (method === "POST" && url.pathname === "/api/admin/import-old-db") {
+        const body = await parseBody(request);
+        return sendJson(response, 200, await importOldDb(body.index));
+      }
+
       if (method === "POST" && url.pathname === "/api/admin/purge-sessions") {
         await purgeExpiredSessions();
         return sendJson(response, 200, { ok: true });
@@ -1153,7 +1167,7 @@ export function requestHandler(request, response) {
   // budget. Qualunque bug/attesa futura viene tagliata con un 503 leggibile
   // invece di appendere l'invocazione (su Vercel: fino a ~300s l'una).
   const reqPath = String(request.url || "");
-  const isSlow = /^\/api\/(plan|plan-multiday|voice\/|backup)/.test(reqPath);
+  const isSlow = /^\/api\/(plan|plan-multiday|voice\/|backup|admin\/(old-dbs|import-old-db))/.test(reqPath);
   const budgetMs = Number(process.env.WATCHDOG_MS) || (isSlow ? 60000 : 25000);
   const watchdog = setTimeout(() => {
     console.error(`WATCHDOG: risposta forzata dopo ${budgetMs}ms su ${request.method} ${reqPath}`);

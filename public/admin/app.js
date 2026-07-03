@@ -247,6 +247,54 @@ async function refreshAll() {
   }
 }
 
+// ── Recupero database precedente (v5.082) ─────────────────────────────────────
+const oldDbsBtn = document.getElementById("scan-old-dbs");
+const oldDbsBox = document.getElementById("old-dbs-result");
+
+oldDbsBtn?.addEventListener("click", async () => {
+  oldDbsBox.textContent = "Ricerca in corso (può richiedere fino a un minuto)…";
+  oldDbsBtn.disabled = true;
+  try {
+    const data = await adminApi("/api/admin/old-dbs");
+    if (!data.candidates.length) {
+      oldDbsBox.textContent = "Nessun altro database trovato nelle variabili d'ambiente del progetto.";
+      return;
+    }
+    oldDbsBox.innerHTML = data.candidates.map(c => {
+      if (!c.ok) return `<div style="margin:0.6rem 0;padding:0.6rem;border:1px solid #334155;border-radius:8px;">Database <strong>${esc(c.host)}</strong> — non raggiungibile (${esc(c.error || "errore")})</div>`;
+      const n = c.counts || {};
+      return `<div style="margin:0.6rem 0;padding:0.6rem;border:1px solid #334155;border-radius:8px;">
+        <div><strong>${esc(c.host)}</strong> <span style="color:#64748b;">(${esc((c.envKeys || []).join(", "))})</span></div>
+        <div style="margin:0.35rem 0;">Utenti: <strong>${n.users ?? 0}</strong> · Giri: <strong>${n.planned_routes ?? 0}</strong> · Contatti: <strong>${n.addresses ?? 0}</strong> · Cartelle: ${n.folders ?? 0} · Piani: ${n.multiday_plans ?? 0}</div>
+        ${c.usernames?.length ? `<div style="color:#94a3b8;">Account trovati: ${c.usernames.map(esc).join(", ")}</div>` : ""}
+        ${(n.planned_routes || n.addresses || n.users) ? `<button onclick="importOldDb(${c.index}, '${esc(c.host)}')" style="margin-top:0.5rem;background:#2563eb;color:#fff;border:none;border-radius:6px;padding:0.4rem 0.9rem;font-size:0.82rem;cursor:pointer;">Importa questi dati nel database attuale</button>` : `<div style="color:#64748b;">(vuoto — niente da importare)</div>`}
+      </div>`;
+    }).join("");
+  } catch (err) {
+    oldDbsBox.textContent = "Errore: " + err.message;
+  } finally {
+    oldDbsBtn.disabled = false;
+  }
+});
+
+window.importOldDb = async function(index, host) {
+  if (!confirm(`Importare TUTTI i dati (utenti, giri, contatti, cartelle, piani) da "${host}" nel database attuale?\n\nNiente doppioni: ciò che esiste già viene saltato. Il database di origine NON viene modificato.`)) return;
+  oldDbsBox.innerHTML = "Importazione in corso — non chiudere la pagina (fino a un minuto)…";
+  try {
+    const r = await adminApi("/api/admin/import-old-db", { method: "POST", body: JSON.stringify({ index }) });
+    const rep = r.report || {};
+    const riga = (label, k) => `${label}: ${rep[k]?.copied ?? 0} importati (su ${rep[k]?.source ?? 0})`;
+    oldDbsBox.innerHTML = `<div style="padding:0.6rem;border:1px solid #16a34a;border-radius:8px;color:#e2e8f0;">
+      <strong>Importazione da ${esc(r.host)} completata ✓</strong><br>
+      ${riga("Utenti", "users")}<br>${riga("Giri", "planned_routes")}<br>${riga("Contatti", "addresses")}<br>${riga("Cartelle", "folders")}<br>${riga("Piani multi-giorno", "multiday_plans")}
+      <div style="margin-top:0.4rem;color:#94a3b8;">Ora apri l'app e accedi: i dati sono nel database attuale. Gli account importati funzionano con le loro vecchie password.</div>
+    </div>`;
+    await refreshAll();
+  } catch (err) {
+    oldDbsBox.innerHTML = `<span style="color:#f87171;">Importazione fallita: ${esc(err.message)} — riprova.</span>`;
+  }
+};
+
 // ── Actions ───────────────────────────────────────────────────────────────────
 window.kickUser = async function(id, username) {
   if (!confirm(`Terminare tutte le sessioni di "${username}"?`)) return;
