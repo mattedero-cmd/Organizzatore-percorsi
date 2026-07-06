@@ -1829,7 +1829,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.082 &mdash; luglio 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.083 &mdash; luglio 2026</p>
         </div>
       </div>
 
@@ -4517,7 +4517,7 @@ function updateRouteFromForm() {
     customCustomer: v.customCustomer, customLocation: v.customLocation,
     customAddress: v.customAddress, customDuration: hhmmToMins(v.customDuration) || 45,
     transcript: v.transcript || "",
-    lunchBreak: Boolean(v.lunchBreak),
+    lunchBreak: v.lunchBreak === "on" || v.lunchBreak === true,
     lunchBreakMinutes: Number(v.lunchBreakMinutes || 45),
     lunchFixedTime: v.lunchFixedTime || "",
     departureLatest: v.departureLatest || ""
@@ -5842,6 +5842,11 @@ async function replanWithOrder(manualOrder) {
           weeklyHours: row.weeklyHours || null,
           durationMinutes: row.durationMinutes, lat: row.lat, lng: row.lng
         })),
+        // Preserva lo stato pausa pranzo del giro: senza questi campi il server
+        // reinserirebbe il pranzo dal default impostazioni (bug: pranzo "risorto" dopo riordino).
+        lunchBreak: result.lunchBreak ?? result.rows.some(r => r.type === "lunch"),
+        lunchBreakMinutes: result.lunchBreakMinutes || state.settings.lunchBreakMinutes || 45,
+        lunchFixedTime: result.lunchFixedTime || "",
         manualOrder
       })
     });
@@ -8073,6 +8078,7 @@ function bindEvents() {
           if (!stops.length) { showToast("Nessuna tappa da ricalcolare"); return; }
           state.route = {
             ...state.route,
+            id: res?.id ?? state.route.id ?? null, // preserva l'id: ricalcolo IN PLACE, non un duplicato
             scheduledDate: newDate,
             name: res?.name || state.route.name,
             startLabel: res?.start?.label || res?.startLabel || state.route.startLabel,
@@ -8103,9 +8109,14 @@ function bindEvents() {
         try {
           showToast("Ricalcolo in corso…");
           const raw = await api(`/api/routes/${id}`);
-          const stops = (raw.plannedStops || raw.payload?.plannedStops || []).map(s => ({ ...s, uid: s.uid || crypto.randomUUID() }));
+          // Ricostruisci le tappe dalle righe del giro (il payload salvato ha rows, non plannedStops)
+          const stopsFromRows = rebuildStopsFromResultRows(raw.rows);
+          const stops = stopsFromRows.length ? stopsFromRows
+            : (raw.plannedStops || raw.payload?.plannedStops || []).map(s => ({ ...s, uid: s.uid || crypto.randomUUID() }));
+          if (!stops.length) { showToast("Nessuna tappa da ricalcolare"); return; }
           state.route = {
             ...state.route,
+            id: Number(id), // preserva l'id: ricalcolo IN PLACE, non un duplicato
             name: raw.name || state.route.name,
             scheduledDate: newDate,
             startLabel: raw.start?.label || raw.startLabel || state.route.startLabel,
