@@ -787,6 +787,7 @@ const state = {
   dirtyStops: new Set(),
   resultLunchEnabled: null,
   lunchFixedSpot: null, // locale pranzo scelto a mano nella vista risultato (persiste via la riga pranzo userPicked)
+  resultRestEnabled: null, // soste automatiche on/off per il giro corrente (null = usa lo stato salvato del giro)
   showCosts: false,
   resultCostRates: null,
   manualOrderRows: null,
@@ -1830,7 +1831,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.086 &mdash; luglio 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.087 &mdash; luglio 2026</p>
         </div>
       </div>
 
@@ -3994,6 +3995,7 @@ function renderResult() {
         <div class="row" style="gap:8px;flex-wrap:wrap;">
           <button class="btn" data-tab-jump="saved">${I.list(14)} Giri</button>
           <button class="btn${result.rows?.some(r => r.type === "lunch") ? " primary" : ""}" id="toggle-lunch-break" title="${result.rows?.some(r => r.type === "lunch") ? "Rimuovi pausa pranzo" : "Aggiungi pausa pranzo"}">${I.fork(14)} ${result.rows?.some(r => r.type === "lunch") ? "Togli pranzo" : "Aggiungi pranzo"}</button>
+          <button class="btn${result.restBreaks !== false ? " primary" : ""}" id="toggle-rest-breaks" title="${result.restBreaks !== false ? "Disattiva le soste automatiche" : "Riattiva le soste automatiche"}">${I.coffee(14)} ${result.restBreaks !== false ? "Togli soste" : "Soste auto"}</button>
           ${result.id ? `<button class="btn" id="share-route-btn" data-share-route="${result.id}" title="Condividi giro">${I.share(14)} Condividi</button>` : ""}
           <button class="btn" id="print-route-btn" title="Stampa o salva come PDF">${I.print(14)} PDF</button>
           <button class="btn" id="copy-debug-log-btn" title="Copia log soste negli appunti">${I.copy(14)} Log</button>
@@ -4730,6 +4732,8 @@ async function replanFromResult() {
     : state.resultLunchEnabled !== null
       ? state.resultLunchEnabled
       : result.rows.some(r => r.type === "lunch"); // preserva lo stato pranzo CORRENTE del giro (eliminato resta eliminato)
+  // Soste automatiche: stato del giro (disattivate → non tornano al replan). null = usa lo stato salvato.
+  const restBreaks = state.resultRestEnabled !== null ? state.resultRestEnabled : (result.restBreaks !== false);
   const routePayload = {
     name: result.name || "Percorso giornaliero",
     id: result.id,
@@ -4747,7 +4751,8 @@ async function replanFromResult() {
     lunchBreak,
     lunchBreakMinutes: Number(v.lunchBreakMinutes || result.lunchBreakMinutes || 45),
     lunchFixedTime: v.lunchFixedTime || result.lunchFixedTime || "",
-    lunchFixedSpot: lunchFixedSpot || undefined // locale pranzo scelto a mano (posizione decisa dal planner)
+    lunchFixedSpot: lunchFixedSpot || undefined, // locale pranzo scelto a mano (posizione decisa dal planner)
+    restBreaks // soste automatiche on/off del giro
   };
 
   state.planning = true;
@@ -4760,6 +4765,7 @@ async function replanFromResult() {
     state.expandedPanels = new Set();
     state.resultLunchEnabled = null;
     state.lunchFixedSpot = null; // consumato: ora il locale pranzo vive nella riga userPicked del risultato
+    state.resultRestEnabled = null; // consumato: lo stato soste ora vive in result.restBreaks
     state.showCosts = false;
     state.resultCostRates = null;
     state.dirtyStops = new Set();
@@ -4948,6 +4954,7 @@ async function planCurrentRoute() {
     state.expandedPanels = new Set();
     state.resultLunchEnabled = null;
     state.lunchFixedSpot = null; // giro nuovo: nessun locale pranzo ereditato
+    state.resultRestEnabled = null; // giro nuovo: soste automatiche secondo il default
     state.showCosts = false;
     state.resultCostRates = null;
     state.dirtyStops = new Set();
@@ -5885,6 +5892,7 @@ async function replanWithOrder(manualOrder) {
         // Mantieni anche il LOCALE pranzo scelto a mano dopo un riordino
         lunchFixedSpot: (() => { const p = result.rows.find(x => x.type === "lunch" && x.userPicked && x.lat != null);
           return p ? { customer: p.customer, address: p.address, lat: p.lat, lng: p.lng, weeklyHours: p.weeklyHours || null, addressId: p.addressId ?? null } : undefined; })(),
+        restBreaks: state.resultRestEnabled !== null ? state.resultRestEnabled : (result.restBreaks !== false), // preserva stato soste
         manualOrder
       })
     });
@@ -7147,6 +7155,15 @@ function bindEvents() {
       return;
     }
 
+    if (e.target.closest("#toggle-rest-breaks")) {
+      if (!state.result) return;
+      const restsOn = normalizeSavedRoute(state.result).restBreaks !== false;
+      state.resultRestEnabled = !restsOn; // inverti e ricalcola (replanFromResult usa questo stato)
+      showToast(restsOn ? "Disattivo le soste automatiche…" : "Riattivo le soste automatiche…");
+      await replanFromResult();
+      return;
+    }
+
     if (e.target.closest("#toggle-lunch-break")) {
       if (!state.result) return;
       const hasLunch = state.result.rows?.some(r => r.type === "lunch");
@@ -7177,6 +7194,7 @@ function bindEvents() {
             manualOrder: true,
             lunchBreak: wantLunch,
             lunchFixedSpot: wantLunch ? (state.lunchFixedSpot || undefined) : undefined, // conserva il locale scelto se riaccendi il pranzo
+            restBreaks: state.resultRestEnabled !== null ? state.resultRestEnabled : (result.restBreaks !== false), // preserva stato soste
             lunchBreakMinutes: result.lunchBreakMinutes || state.settings.lunchBreakMinutes || 45,
             stops: customerRows.filter((r, i, arr) => !r.stopPart || arr.findIndex(x => x.stopUid === r.stopUid) === i).map(row => ({
               uid: row.stopUid || crypto.randomUUID(),
@@ -7406,6 +7424,11 @@ function bindEvents() {
           // Pranzo eliminato: dimentica il locale scelto e non reinserirlo al replan
           state.lunchFixedSpot = null;
           state.resultLunchEnabled = false;
+        } else if (removed?.type === "rest" && !removed?.userPicked) {
+          // Sosta AUTOMATICA eliminata: senza soppressione il planner la reinserirebbe.
+          // Disattiva le soste automatiche per questo giro (le soste scelte a mano restano).
+          state.resultRestEnabled = false;
+          showToast("Soste automatiche disattivate per questo giro");
         }
         replanFromResult();
       }
@@ -7661,6 +7684,7 @@ function bindEvents() {
     state.expandedPanels = new Set();
     state.resultLunchEnabled = null;
     state.lunchFixedSpot = null; // giro aperto: il locale pranzo si deriva dalle sue righe, non da uno stato residuo
+    state.resultRestEnabled = null; // giro aperto: le soste seguono lo stato salvato del giro (result.restBreaks)
     state.dirtyStops = new Set();
         setActiveTab("result");
       } catch (err) {

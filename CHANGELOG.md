@@ -5,6 +5,14 @@ FIX: giri salvati che si duplicano quando li modifichi + pausa pranzo non rispet
 - **Pausa pranzo #2**: riordinando le tappe (`replanWithOrder`) il payload non includeva `lunchBreak`, così il server reinseriva il pranzo dal default impostazioni. Ora inoltra `lunchBreak/lunchBreakMinutes/lunchFixedTime` del giro → la pausa non "risorge".
 - Verificato end-to-end sul server reale: reschedule con id → nessun duplicato (senza id se ne creava uno, confermato); giro senza pranzo che resta senza pranzo dopo modifica e dopo riordino.
 
+## v5.087 — 2026-07-06
+Soste automatiche: ora si possono togliere (prima "risorgevano").
+- **Bug**: eliminare una sosta automatica non funzionava — il planner la re-inseriva a ogni ricalcolo (le soste sono derivate dalla guida cumulata, senza soppressione).
+- **Fix**: flag di giro `restBreaks` (default on). Nella vista risultato c'è il pulsante **"Togli soste" / "Soste auto"**; eliminare una sosta automatica disattiva le soste per quel giro. Lo stato viene salvato col giro (persiste a riapertura e ricalcolo). Le soste **scelte a mano** restano tappe reali ed eliminabili singolarmente.
+- Verificato col planner (togli → 0 soste, persiste, riattiva → tornano) e con browser reale (pulsante che toglie/rimette le soste su un giro salvato).
+
+> Nota: la SOSTA scelta a mano può ancora spostarsi se cade nel "buco" di un cliente spezzato dagli orari (stesso caso limite del pranzo pre-v5.085) — non toccato qui, è un caso raro.
+
 ## v5.086 — 2026-07-06
 Rifinitura pranzo scelto a mano: se il ristorante scelto è LONTANO dal corridoio del giro, il tragitto reale (andata) viene ora conteggiato nei tempi invece di essere azzerato — così la giornata (e l'orario di rientro) non risulta sottostimata. Il caso normale (locale sul percorso) è invariato.
 

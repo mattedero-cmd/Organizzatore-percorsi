@@ -683,6 +683,7 @@ async function insertBreaks(rows, options) {
     scheduledDate = null,
     lunchFixedTime = null,
     lunchFixedSpot = null, // locale scelto a mano dall'utente: forza SOLO la posizione geografica del pranzo, non l'orario
+    restBreaksEnabled = true, // false → nessuna sosta automatica (l'utente le ha disattivate/eliminate per questo giro)
     homeLat = null, homeLng = null
   } = options;
 
@@ -1012,6 +1013,8 @@ async function insertBreaks(rows, options) {
   // driveOffset: minutes into the drive-to-row-i where the break is inserted.
   // 0 = at the start of the leg (end of previous stop); >0 = mid-leg.
   const tryInsert = async (beforeIndex, refLat, refLng, fromLat, fromLng, toLat, toLng, driveOffset = 0, breakTimeMin = null) => {
+    // Soste automatiche disattivate per questo giro → non inserire nessuna sosta
+    if (!restBreaksEnabled) return false;
     // Skip if already have an insertion at this exact position
     if (insertions.some(ins => ins.beforeIndex === beforeIndex && Math.abs((ins.driveOffset||0) - driveOffset) < 5)) {
       cumulative = 0;
@@ -1394,6 +1397,8 @@ export async function planRoute(payload, settings, restStops = []) {
   const { rows: enrichedRows, addedMinutes, debugLog } = await insertBreaks(best.rows, {
     lunchBreakEnabled, lunchBreakMinutes, lunchFixedTime,
     lunchFixedSpot: payload.lunchFixedSpot || null,
+    restBreaksEnabled: payload.restBreaks !== false, // false → nessuna sosta automatica per questo giro
+
     restStops: activeRestStops,
     restaurantStops: activeRestaurantStops,
     dayStart: parseTime(best.summary.dayStart),
@@ -1494,6 +1499,7 @@ export async function planRoute(payload, settings, restStops = []) {
     lunchBreak: lunchBreakEnabled,
     lunchBreakMinutes,
     lunchFixedTime: lunchFixedTime || "",
+    restBreaks: payload.restBreaks !== false, // stato soste automatiche del giro (persiste al salvataggio/riapertura)
     maxReturnTime: payload.departureLatest || "",
     mapMode: [...new Set(best.rows.map((row) => row.legSource).concat(best.finalLeg.source))].join(", "),
     debugLog: debugLog || []
