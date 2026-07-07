@@ -21,6 +21,7 @@ import {
   deleteRoute,
   listMultiDayPlans,
   saveMultiDayPlan,
+  updateMultiDayPlan,
   deleteMultiDayPlan,
   listFolders,
   createFolder,
@@ -753,6 +754,12 @@ async function handleApi(request, response) {
       if (recent && Date.now() - recent.at < 10000 && recent.promise) {
         return sendJson(response, 200, await recent.promise);
       }
+      // Un replan che punta a un id specifico NON deve MAI creare un nuovo giro: se l'id
+      // non esiste (o non è dell'utente) → 404, così una modifica non genera un doppione.
+      if (body.id) {
+        const existing = await getRoute(body.id, userId);
+        if (!existing) return sendJson(response, 404, { error: "Giro non trovato" });
+      }
       const planPromise = (async () => {
       const settings = await getSettings(userId);
       const allAddresses = await listAddresses("", userId);
@@ -853,6 +860,15 @@ async function handleApi(request, response) {
       return sendJson(response, 201, saved);
     }
     const mdPlanMatch = url.pathname.match(/^\/api\/multiday-plans\/(\d+)$/);
+    if (mdPlanMatch && method === "PUT") {
+      // Ri-salvare un giro multi-giorno caricato aggiorna in place, NON crea un doppione
+      const body = await parseBody(request);
+      if (!body.payload || !Array.isArray(body.payload.stops) || !body.payload.stops.length) {
+        return sendJson(response, 400, { error: "Nessuna tappa da salvare" });
+      }
+      const saved = await updateMultiDayPlan(mdPlanMatch[1], body.name, body.payload, userId);
+      return sendJson(response, 200, saved);
+    }
     if (mdPlanMatch && method === "DELETE") {
       await deleteMultiDayPlan(mdPlanMatch[1], userId);
       return sendJson(response, 200, { ok: true });

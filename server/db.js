@@ -705,6 +705,15 @@ export async function saveMultiDayPlan(name, payload, userId = null) {
   return { id: rows[0]?.id };
 }
 
+// Aggiorna un piano multi-giorno esistente (ri-salvare un giro caricato NON deve duplicarlo)
+export async function updateMultiDayPlan(id, name, payload, userId = null) {
+  const userFilter = userId != null ? ` AND user_id = ${sqlValue(Number(userId))}` : "";
+  const nameVal = sqlValue(String(name || "").trim() || "Giro");
+  const json = sqlValue(JSON.stringify(payload || {}));
+  await runSql(`UPDATE multiday_plans SET name = ${nameVal}, payload_json = ${json} WHERE id = ${sqlValue(Number(id))}${userFilter};`);
+  return { id: Number(id) };
+}
+
 export async function deleteMultiDayPlan(id, userId = null) {
   const userFilter = userId != null ? ` AND user_id = ${sqlValue(Number(userId))}` : "";
   await runSql(`DELETE FROM multiday_plans WHERE id = ${sqlValue(Number(id))}${userFilter};`);

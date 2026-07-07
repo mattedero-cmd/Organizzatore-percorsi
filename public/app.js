@@ -1829,7 +1829,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.083 &mdash; luglio 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.084 &mdash; luglio 2026</p>
         </div>
       </div>
 
@@ -2339,10 +2339,14 @@ async function mdSavePlan() {
   const name = (prompt("Nome del giro da salvare:", state.mdBaseReq?.scheduledDate ? `Giro ${state.mdBaseReq.scheduledDate}` : "Giro multi-giorno") || "").trim();
   if (!name) return;
   try {
-    await api("/api/multiday-plans", {
-      method: "POST",
-      body: JSON.stringify({ name, payload: { baseReq: state.mdBaseReq || {}, stops: state.mdStops } })
-    });
+    const body = JSON.stringify({ name, payload: { baseReq: state.mdBaseReq || {}, stops: state.mdStops } });
+    if (state.mdSavedPlanId) {
+      // Giro già salvato/caricato: aggiorna in place, non creare un doppione
+      await api(`/api/multiday-plans/${state.mdSavedPlanId}`, { method: "PUT", body });
+    } else {
+      const saved = await api("/api/multiday-plans", { method: "POST", body });
+      state.mdSavedPlanId = saved?.id ?? null; // salvataggi successivi aggiornano questo giro
+    }
     await refreshMultiDayPlans();
     showToast("Giro salvato");
     if (state.activeTab === "route") render();
@@ -2365,6 +2369,7 @@ async function recalcSavedMultiDay(id) {
     const res = await api("/api/plan-multiday", { method: "POST", body: JSON.stringify({ ...baseReq, stops }) });
     state.mdBaseReq = baseReq;
     state.mdStops = stops.map(s => ({ ...s }));
+    state.mdSavedPlanId = plan.id; // ri-salvare aggiorna QUESTO giro, non ne crea un altro
     state.resultMultiDay = res;
     initMdEdit(res);
     setActiveTab("result");
@@ -4972,6 +4977,7 @@ async function planMultiDayAction() {
     };
     state.mdBaseReq = baseReq;
     state.mdStops = r.stops.map(s => ({ ...s })); // tappe originali (per Salva giro / ricalcolo)
+    state.mdSavedPlanId = null; // giro NUOVO: il primo salvataggio crea, non aggiorna
     const res = await api("/api/plan-multiday", {
       method: "POST",
       body: JSON.stringify({ ...baseReq, stops: r.stops })
@@ -5768,6 +5774,12 @@ async function importFromGoogleContacts() {
 // ── save address form ─────────────────────────────────────────────────────────
 
 async function saveAddressForm(form) {
+  // Guardia anti doppio-submit: un secondo tap su "Salva" mentre il primo è ancora in corso
+  // (tipico con server lento) NON deve creare un doppione. Rimane attiva per tutta la durata,
+  // incluso il refresh finale, così la scheda non si duplica mai per una modifica.
+  if (state._savingAddress) return;
+  state._savingAddress = true;
+  try {
   const v = readForm(form);
   const wh = readWeeklyHours();
   const payload = {
@@ -5791,13 +5803,18 @@ async function saveAddressForm(form) {
     await api("/api/addresses", { method: "POST", body: JSON.stringify(payload) });
   }
   if (!state.importWizard) {
-    state.addressForm = { ...emptyForm };
+    // Prima ricarica i dati (l'id resta valido durante l'attesa), POI azzera e ridisegna:
+    // così, se durante il refresh lento arriva un altro submit, resta una PUT, mai una POST.
     await refreshAllData();
+    state.addressForm = { ...emptyForm };
     render();
   } else {
     await refreshAllData();
   }
   showToast("Contatto salvato");
+  } finally {
+    state._savingAddress = false;
+  }
 }
 
 // ── manual order helpers ──────────────────────────────────────────────────────
@@ -7722,6 +7739,7 @@ function bindEvents() {
     const editAddr = e.target.closest("[data-edit-address]");
     if (editAddr) {
       const addr = state.allAddresses.find(a => String(a.id) === editAddr.dataset.editAddress) || state.addresses.find(a => String(a.id) === editAddr.dataset.editAddress);
+      if (!addr || addr.id == null) { showToast("Contatto non trovato, riprova"); return; } // niente form senza id → niente doppione al salvataggio
       state.addressForm = { ...emptyForm, ...addr };
       render();
       requestAnimationFrame(() => document.getElementById("address-form")?.scrollIntoView({ behavior: "smooth", block: "start" }));
@@ -8429,6 +8447,7 @@ async function recuperaDatiDispositivo() {
     let nP = 0;
     for (const p of locPlans) {
       if (srvPlanKeys.has(pkey(p))) continue;
+      srvPlanKeys.add(pkey(p)); // evita doppioni tra due piani locali con lo stesso nome
       const payload = { ...(p.payload || {}) };
       payload.stops = remapStops(payload.stops);
       await api("/api/multiday-plans", { method: "POST", body: JSON.stringify({ name: p.name, payload }) }).catch(() => {});

@@ -5,6 +5,14 @@ FIX: giri salvati che si duplicano quando li modifichi + pausa pranzo non rispet
 - **Pausa pranzo #2**: riordinando le tappe (`replanWithOrder`) il payload non includeva `lunchBreak`, così il server reinseriva il pranzo dal default impostazioni. Ora inoltra `lunchBreak/lunchBreakMinutes/lunchFixedTime` del giro → la pausa non "risorge".
 - Verificato end-to-end sul server reale: reschedule con id → nessun duplicato (senza id se ne creava uno, confermato); giro senza pranzo che resta senza pranzo dopo modifica e dopo riordino.
 
+## v5.084 — 2026-07-06
+FIX: caccia a TUTTI i bug di duplicazione (una scheda/giro non si deve mai duplicare quando lo modifichi).
+- **Cliente in anagrafica (il bug segnalato)**: modificando un contatto (es. il "tempo abituale") poteva crearsi un doppione. Causa: dopo il salvataggio (PUT) l'id del form veniva azzerato PRIMA del refresh dei dati (round-trip di rete lento); un secondo tap su "Salva" in quella finestra ripartiva come POST → nuova scheda. Fix: guardia anti doppio-submit in `saveAddressForm` + refresh PRIMA di azzerare l'id + guardia in apertura modifica (mai un form senza id).
+- **Giri multi-giorno**: ri-salvare un giro caricato creava un doppione (c'era solo POST, nessun update). Aggiunto `PUT /api/multiday-plans/:id` + `updateMultiDayPlan`; il client ora tiene l'id del giro caricato e aggiorna in place.
+- **Ricalcolo giro (single-day)**: se un replan puntava a un id inesistente/di altro utente, il server creava un nuovo giro. Ora risponde 404 e non crea nulla (una modifica non genera mai un doppione).
+- **Recupero dati dispositivo**: due piani multi-giorno locali con lo stesso nome venivano importati entrambi; aggiunta la dedup mancante.
+- Tutto verificato: server reale (multi-day in place, /api/plan 404) e browser reale via Playwright (modifica cliente in place, niente doppione anche col doppio tap su server lento).
+
 ## v5.082 — 2026-07-02
 RECUPERO DEL DATABASE PRECEDENTE (la scoperta chiave: il 25/6, durante la crisi, al progetto è stato agganciato un database Prisma NUOVO e vuoto — emerald-engine; tutti i dati e gli utenti sono rimasti in quello vecchio del 1/6 — cobalt-globe, mai cancellato):
 - **`server/dbImport.js`**: trova i database "candidati" tra le env var (valori postgres:// diversi da quello attivo), li ISPEZIONA in sola lettura (conteggi + username, per riconoscerli) e su conferma ne COPIA i dati nel database attivo. Idempotente (`ON CONFLICT DO NOTHING`, rilanciabile senza doppioni), a blocchi (max 40 righe/400KB per statement), sequenze id riallineate, SORGENTE MAI MODIFICATA. L'utente id-1 del vecchio DB si fonde con l'account admin attuale (id-1): i suoi giri passano all'account attuale; gli altri utenti vengono ricreati con le loro password.
