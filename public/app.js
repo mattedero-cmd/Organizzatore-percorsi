@@ -786,6 +786,7 @@ const state = {
   expandedPanels: new Set(),
   dirtyStops: new Set(),
   resultLunchEnabled: null,
+  lunchFixedSpot: null, // locale pranzo scelto a mano nella vista risultato (persiste via la riga pranzo userPicked)
   showCosts: false,
   resultCostRates: null,
   manualOrderRows: null,
@@ -1829,7 +1830,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.084 &mdash; luglio 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.085 &mdash; luglio 2026</p>
         </div>
       </div>
 
@@ -4646,6 +4647,9 @@ function rebuildStopsFromResultRows(rows) {
     //   (restano gestiti automaticamente e modificabili).
     if (r.type === "lunch" || r.type === "rest") {
       if (!r.userPicked || r.lat == null || !r.address) return;
+      // Il PRANZO scelto a mano NON diventa una tappa (deriverebbe fuori posto): il suo
+      // locale viaggia come lunchFixedSpot e il planner lo tiene a metà giornata.
+      if (r.type === "lunch") return;
       out.push({
         uid: crypto.randomUUID(),
         addressId: r.addressId ?? null,   // collega all'archivio se la sosta ne proviene
@@ -4708,13 +4712,24 @@ async function replanFromResult() {
   if (!stops.length) { showToast("Nessuna tappa nel giro"); return; }
 
   const timingMode = v.timingMode || result.timingMode || "first_open_minus";
-  // Se l'utente ha scelto un ristorante per la pausa pranzo, quella tappa È il pranzo:
-  // disabilita l'auto-inserimento per non avere una doppia pausa.
-  const lunchAssigned = stops.some(s => s.breakOrigin === "lunch");
-  const lunchBreak = lunchAssigned ? false
+  // Pranzo con locale scelto a mano: il planner lo tiene a metà giornata (lunchBreak:true)
+  // forzando SOLO il locale. Lo spot arriva dallo stato (scelta appena fatta) o dalla riga
+  // pranzo del giro (userPicked → persiste tra replan e riaperture).
+  const pickedLunchRow = result.rows.find(r => r.type === "lunch" && r.userPicked && r.lat != null);
+  const lunchFixedSpot = state.lunchFixedSpot
+    || (pickedLunchRow ? {
+        customer: pickedLunchRow.customer || "Pausa pranzo", address: pickedLunchRow.address || "",
+        lat: pickedLunchRow.lat, lng: pickedLunchRow.lng,
+        weeklyHours: pickedLunchRow.weeklyHours || null, addressId: pickedLunchRow.addressId ?? null
+      } : null);
+  // Se l'utente ha scelto una SOSTA (rest) manuale, quella tappa è già nei stops: nessun auto-inserimento del pranzo solo per quello.
+  const lunchAssigned = stops.some(s => s.breakOrigin === "lunch"); // (legacy: pranzo-come-tappa dei giri vecchi)
+  const lunchBreak = state.resultLunchEnabled === false ? false  // pranzo disattivato esplicitamente → vince
+    : lunchFixedSpot ? true
+    : lunchAssigned ? false
     : state.resultLunchEnabled !== null
       ? state.resultLunchEnabled
-      : (v.lunchBreak === "on" || v.lunchBreak === true);
+      : result.rows.some(r => r.type === "lunch"); // preserva lo stato pranzo CORRENTE del giro (eliminato resta eliminato)
   const routePayload = {
     name: result.name || "Percorso giornaliero",
     id: result.id,
@@ -4731,7 +4746,8 @@ async function replanFromResult() {
     manualOrder: true,
     lunchBreak,
     lunchBreakMinutes: Number(v.lunchBreakMinutes || result.lunchBreakMinutes || 45),
-    lunchFixedTime: v.lunchFixedTime || result.lunchFixedTime || ""
+    lunchFixedTime: v.lunchFixedTime || result.lunchFixedTime || "",
+    lunchFixedSpot: lunchFixedSpot || undefined // locale pranzo scelto a mano (posizione decisa dal planner)
   };
 
   state.planning = true;
@@ -4743,6 +4759,7 @@ async function replanFromResult() {
     state.expandedStops = new Set();
     state.expandedPanels = new Set();
     state.resultLunchEnabled = null;
+    state.lunchFixedSpot = null; // consumato: ora il locale pranzo vive nella riga userPicked del risultato
     state.showCosts = false;
     state.resultCostRates = null;
     state.dirtyStops = new Set();
@@ -4930,6 +4947,7 @@ async function planCurrentRoute() {
     state.expandedStops = new Set();
     state.expandedPanels = new Set();
     state.resultLunchEnabled = null;
+    state.lunchFixedSpot = null; // giro nuovo: nessun locale pranzo ereditato
     state.showCosts = false;
     state.resultCostRates = null;
     state.dirtyStops = new Set();
@@ -5864,6 +5882,9 @@ async function replanWithOrder(manualOrder) {
         lunchBreak: result.lunchBreak ?? result.rows.some(r => r.type === "lunch"),
         lunchBreakMinutes: result.lunchBreakMinutes || state.settings.lunchBreakMinutes || 45,
         lunchFixedTime: result.lunchFixedTime || "",
+        // Mantieni anche il LOCALE pranzo scelto a mano dopo un riordino
+        lunchFixedSpot: (() => { const p = result.rows.find(x => x.type === "lunch" && x.userPicked && x.lat != null);
+          return p ? { customer: p.customer, address: p.address, lat: p.lat, lng: p.lng, weeklyHours: p.weeklyHours || null, addressId: p.addressId ?? null } : undefined; })(),
         manualOrder
       })
     });
@@ -6409,7 +6430,19 @@ function openBreakPicker(rowIdx, breakType) {
     lngEl: { value: row.lng != null ? String(row.lng) : "" },
     breakType,
     onUseDirectly: (label, address, lat, lng, weeklyHours) => {
-      row.customer = label || (address ? address.split(",")[0] : "") || (breakType === "lunch" ? "Pausa pranzo" : "Sosta");
+      if (breakType === "lunch") {
+        // Il PRANZO resta posizionato a metà giornata dal planner: cambiamo SOLO il locale,
+        // non l'orario. Passiamo il locale scelto come lunchFixedSpot (vedi replanFromResult).
+        state.lunchFixedSpot = {
+          customer: label || (address ? address.split(",")[0] : "") || "Pausa pranzo",
+          address: address || "", lat: lat ?? null, lng: lng ?? null,
+          weeklyHours: weeklyHours || null, addressId: null
+        };
+        replanFromResult();
+        return;
+      }
+      // SOSTA: scelta manuale → diventa una tappa fissa persistente
+      row.customer = label || (address ? address.split(",")[0] : "") || "Sosta";
       row.location = "";
       row.address = address || "";
       row.lat = lat ?? null;
@@ -7117,6 +7150,8 @@ function bindEvents() {
     if (e.target.closest("#toggle-lunch-break")) {
       if (!state.result) return;
       const hasLunch = state.result.rows?.some(r => r.type === "lunch");
+      const wantLunch = !hasLunch;
+      if (!wantLunch) state.lunchFixedSpot = null; // spegni il pranzo → dimentica il locale scelto
       // Toggle lunch break by replanning with inverted setting
       const result = normalizeSavedRoute(state.result);
       const customerRows = result.rows.filter(r => !r.type);
@@ -7140,7 +7175,8 @@ function bindEvents() {
             maxReturnTime: result.maxReturnTime,
             rates: state.settings,
             manualOrder: true,
-            lunchBreak: !hasLunch,
+            lunchBreak: wantLunch,
+            lunchFixedSpot: wantLunch ? (state.lunchFixedSpot || undefined) : undefined, // conserva il locale scelto se riaccendi il pranzo
             lunchBreakMinutes: result.lunchBreakMinutes || state.settings.lunchBreakMinutes || 45,
             stops: customerRows.filter((r, i, arr) => !r.stopPart || arr.findIndex(x => x.stopUid === r.stopUid) === i).map(row => ({
               uid: row.stopUid || crypto.randomUUID(),
@@ -7364,7 +7400,13 @@ function bindEvents() {
     if (e.target.closest("[data-break-delete]")) {
       const idx = Number(e.target.closest("[data-break-delete]").dataset.breakDelete);
       if (!isNaN(idx) && state.result?.rows) {
+        const removed = state.result.rows[idx];
         state.result.rows.splice(idx, 1);
+        if (removed?.type === "lunch") {
+          // Pranzo eliminato: dimentica il locale scelto e non reinserirlo al replan
+          state.lunchFixedSpot = null;
+          state.resultLunchEnabled = false;
+        }
         replanFromResult();
       }
       return;
@@ -7618,6 +7660,7 @@ function bindEvents() {
     state.expandedStops = new Set();
     state.expandedPanels = new Set();
     state.resultLunchEnabled = null;
+    state.lunchFixedSpot = null; // giro aperto: il locale pranzo si deriva dalle sue righe, non da uno stato residuo
     state.dirtyStops = new Set();
         setActiveTab("result");
       } catch (err) {

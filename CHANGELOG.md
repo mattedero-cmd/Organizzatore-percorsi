@@ -5,6 +5,15 @@ FIX: giri salvati che si duplicano quando li modifichi + pausa pranzo non rispet
 - **Pausa pranzo #2**: riordinando le tappe (`replanWithOrder`) il payload non includeva `lunchBreak`, così il server reinseriva il pranzo dal default impostazioni. Ora inoltra `lunchBreak/lunchBreakMinutes/lunchFixedTime` del giro → la pausa non "risorge".
 - Verificato end-to-end sul server reale: reschedule con id → nessun duplicato (senza id se ne creava uno, confermato); giro senza pranzo che resta senza pranzo dopo modifica e dopo riordino.
 
+## v5.085 — 2026-07-06
+FIX: cambiare il LUOGO del pranzo non deve cambiare l'ORARIO.
+- **Bug**: creato un giro con pranzo a metà giornata, cambiando il ristorante il pranzo finiva a fine giornata e l'orario usciva dalla finestra. Causa (riprodotta col planner): il pranzo scelto a mano diventava una "tappa" senza finestra oraria; se un cliente era spezzato dalla chiusura (mattina/pomeriggio), `rebuildStopsFromResultRows` riuniva le due parti e il pranzo — che stava nel mezzo — finiva DOPO tutta la tappa, trascinando i tempi.
+- **Fix**: il pranzo scelto a mano non è più una tappa. Il locale scelto viaggia come `lunchFixedSpot` e il replan usa `lunchBreak:true`: il planner mantiene la POSIZIONE TEMPORALE (metà giornata / gap chiusura) e forza SOLO il locale (`makeLunchEntry` short-circuit, bypassa ricerca archivio e limite deviazione). Persistenza via la riga pranzo `userPicked:true` (ri-derivata al replan/riordino/riapertura, senza contaminare altri giri).
+- **Gestione pranzo**: eliminare il pranzo ora lo tiene eliminato (non "risorge" al replan); lo stato pranzo (acceso/spento) del giro viene preservato ai ricalcoli; il toggle pranzo conserva/dimentica coerentemente il locale scelto.
+- Verificato col planner reale: creazione (pranzo a metà giornata), cambio locale (resta a metà giornata col ristorante scelto), persistenza tra replan, eliminazione.
+
+> Nota: restano da valutare a parte alcuni casi limite pre-esistenti del planner sulle tappe spezzate e la gestione delle SOSTE (sosta scelta a mano che deriva fuori posto, sosta d'archivio non eliminabile) — non toccati qui per non rischiare regressioni sulla logica di creazione.
+
 ## v5.084 — 2026-07-06
 FIX: caccia a TUTTI i bug di duplicazione (una scheda/giro non si deve mai duplicare quando lo modifichi).
 - **Cliente in anagrafica (il bug segnalato)**: modificando un contatto (es. il "tempo abituale") poteva crearsi un doppione. Causa: dopo il salvataggio (PUT) l'id del form veniva azzerato PRIMA del refresh dei dati (round-trip di rete lento); un secondo tap su "Salva" in quella finestra ripartiva come POST → nuova scheda. Fix: guardia anti doppio-submit in `saveAddressForm` + refresh PRIMA di azzerare l'id + guardia in apertura modifica (mai un form senza id).

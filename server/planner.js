@@ -682,6 +682,7 @@ async function insertBreaks(rows, options) {
     finalArrival = 20 * 60,
     scheduledDate = null,
     lunchFixedTime = null,
+    lunchFixedSpot = null, // locale scelto a mano dall'utente: forza SOLO la posizione geografica del pranzo, non l'orario
     homeLat = null, homeLng = null
   } = options;
 
@@ -742,6 +743,21 @@ async function insertBreaks(rows, options) {
       }
       return Math.round(haversineKm({ lat: from.lat, lng: from.lng }, { lat: cand.lat, lng: cand.lng }) / 50 * 60);
     };
+
+    // Locale scelto a mano: usa QUESTO (posizione fissa), mantenendo la posizione temporale
+    // calcolata dal planner. Niente ricerca in archivio, niente filtro deviazione: l'utente
+    // ha scelto esplicitamente questo ristorante.
+    if (lunchFixedSpot && lunchFixedSpot.lat != null && lunchFixedSpot.lng != null) {
+      const tm = calcTravelMin(lunchFixedSpot, fromRow, toRow);
+      const travelMin = Number.isFinite(tm) ? tm : 0;
+      L(`  → PRANZO scelto a mano "${lunchFixedSpot.customer || lunchFixedSpot.address || ""}" travelMin=${travelMin}`);
+      return { beforeIndex, type: "lunch", duration: lunchBreakMinutes, travelMinutes: travelMin, travelKm: travelMin / 60 * 50,
+        customer: lunchFixedSpot.customer || "Pausa pranzo", location: lunchFixedSpot.location || "",
+        address: lunchFixedSpot.address || lunchFixedSpot.fullAddress || "",
+        lat: lunchFixedSpot.lat, lng: lunchFixedSpot.lng, weeklyHours: lunchFixedSpot.weeklyHours || null,
+        notes: lunchFixedSpot.notes || "", addressId: lunchFixedSpot.addressId ?? null,
+        placeAssigned: true, userPicked: true };
+    }
 
     const savedSpots = findNearestRestStop(restaurantStops, fromRow?.lat, fromRow?.lng, toRow?.lat, toRow?.lng, _maxDetourKmL, lunchTimeMin, scheduledDate);
     for (const spot of savedSpots) {
@@ -1180,6 +1196,7 @@ async function insertBreaks(rows, options) {
         notes: brk.notes || "",
         addressId: brk.addressId ?? null,
         placeAssigned: brk.placeAssigned === true,
+        userPicked: brk.userPicked === true, // locale pranzo scelto a mano: persiste per il replan/riapertura
         departureTime: formatTime(refDep),
         arrivalTime: formatTime(refDep + travelMin),
         serviceStartTime: formatTime(refDep + travelMin),
@@ -1371,6 +1388,7 @@ export async function planRoute(payload, settings, restStops = []) {
   const actualFinalArrival = parseTime(best.finalLeg.arrivalTime);
   const { rows: enrichedRows, addedMinutes, debugLog } = await insertBreaks(best.rows, {
     lunchBreakEnabled, lunchBreakMinutes, lunchFixedTime,
+    lunchFixedSpot: payload.lunchFixedSpot || null,
     restStops: activeRestStops,
     restaurantStops: activeRestaurantStops,
     dayStart: parseTime(best.summary.dayStart),
