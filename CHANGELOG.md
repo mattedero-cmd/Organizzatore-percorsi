@@ -5,6 +5,9 @@ FIX: giri salvati che si duplicano quando li modifichi + pausa pranzo non rispet
 - **Pausa pranzo #2**: riordinando le tappe (`replanWithOrder`) il payload non includeva `lunchBreak`, così il server reinseriva il pranzo dal default impostazioni. Ora inoltra `lunchBreak/lunchBreakMinutes/lunchFixedTime` del giro → la pausa non "risorge".
 - Verificato end-to-end sul server reale: reschedule con id → nessun duplicato (senza id se ne creava uno, confermato); giro senza pranzo che resta senza pranzo dopo modifica e dopo riordino.
 
+## v5.086 — 2026-07-06
+Rifinitura pranzo scelto a mano: se il ristorante scelto è LONTANO dal corridoio del giro, il tragitto reale (andata) viene ora conteggiato nei tempi invece di essere azzerato — così la giornata (e l'orario di rientro) non risulta sottostimata. Il caso normale (locale sul percorso) è invariato.
+
 ## v5.085 — 2026-07-06
 FIX: cambiare il LUOGO del pranzo non deve cambiare l'ORARIO.
 - **Bug**: creato un giro con pranzo a metà giornata, cambiando il ristorante il pranzo finiva a fine giornata e l'orario usciva dalla finestra. Causa (riprodotta col planner): il pranzo scelto a mano diventava una "tappa" senza finestra oraria; se un cliente era spezzato dalla chiusura (mattina/pomeriggio), `rebuildStopsFromResultRows` riuniva le due parti e il pranzo — che stava nel mezzo — finiva DOPO tutta la tappa, trascinando i tempi.

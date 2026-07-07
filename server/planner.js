@@ -749,7 +749,12 @@ async function insertBreaks(rows, options) {
     // ha scelto esplicitamente questo ristorante.
     if (lunchFixedSpot && lunchFixedSpot.lat != null && lunchFixedSpot.lng != null) {
       const tm = calcTravelMin(lunchFixedSpot, fromRow, toRow);
-      const travelMin = Number.isFinite(tm) ? tm : 0;
+      // Locale fuori corridoio (calcTravelMin = Infinity): conta comunque il tragitto reale
+      // (haversine dalla tappa precedente), non azzerarlo, così la giornata non è sottostimata.
+      const travelMin = Number.isFinite(tm) ? tm
+        : (fromRow?.lat != null && fromRow?.lng != null
+            ? Math.round(haversineKm({ lat: fromRow.lat, lng: fromRow.lng }, { lat: lunchFixedSpot.lat, lng: lunchFixedSpot.lng }) / 50 * 60)
+            : 0);
       L(`  → PRANZO scelto a mano "${lunchFixedSpot.customer || lunchFixedSpot.address || ""}" travelMin=${travelMin}`);
       return { beforeIndex, type: "lunch", duration: lunchBreakMinutes, travelMinutes: travelMin, travelKm: travelMin / 60 * 50,
         customer: lunchFixedSpot.customer || "Pausa pranzo", location: lunchFixedSpot.location || "",
