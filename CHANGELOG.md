@@ -1,3 +1,10 @@
+## v5.094 — 2026-07-08
+Pranzo "in guida": il tragitto verso il ristorante ora è valutato — niente doppio conteggio.
+- **Bug**: quando il pranzo veniva messo a un locale sul percorso verso una tappa lunga (es. Albergo Aida, a 2 minuti da QC Terme), la guida precedente→ristorante veniva contata IN PIÙ rispetto alla guida piena precedente→tappa. Risultato: un "vuoto" (fino a 40 min) tra fine pranzo e inizio tappa, che variava con l'orario di partenza. La posizione reale del ristorante (vicino alla tappa) non veniva mai valutata.
+- **Fix (planner)**: un break "in guida" (pranzo/sosta a un locale sul corridoio) ora ASSORBE la guida della tappa seguente: il tratto precedente→locale è parte del tratto precedente→tappa, non un'aggiunta. La guida residua della tappa si riduce di conseguenza e lo shift temporale conta solo la durata pausa (+ eventuale extra fuori corridoio). Tempo aggiunto = solo la durata del pranzo, a qualsiasi partenza.
+- Sostituisce l'approccio v5.093 (deferimento "a destinazione"), che nascondeva la guida invece di attribuirla.
+- Verificato: Sanae 12:09 → pranzo (guida 23) → QC 13:34 (guida 17) = +45 min netti (la sola pausa), identico a 08:00/08:20/08:40; casi prima/dopo/split/attesa, pick e delete invariati.
+
 ## v5.093 — 2026-07-06
 Pranzo prima di una tappa lunga: niente più "vuoto" al variare della partenza.
 - **Bug**: con una tappa lunga (es. QC Terme, che scavalca la finestra pranzo) raggiunta da una guida lunga, spostando la partenza avanti di 20 min il pranzo veniva messo "in guida" verso la tappa e restava la guida (40 min) come vuoto tra fine pranzo e inizio tappa; con la partenza prima invece il pranzo finiva subito prima della tappa, senza vuoto.

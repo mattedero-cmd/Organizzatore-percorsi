@@ -905,19 +905,6 @@ async function insertBreaks(rows, options) {
           const gapStart = isSplitPair ? parseTime(rows[i].serviceEndTime) : null;
           const gapEnd   = isSplitPair ? parseTime(nextRow.arrivalTime) : null;
           const gapMin   = (gapStart != null && gapEnd != null) ? gapEnd - gapStart : 0;
-          // Si sta guidando verso una tappa LUNGA che inizia nella finestra e finisce dopo,
-          // raggiunta da una guida significativa? Allora conviene pranzare A DESTINAZIONE
-          // (subito prima di quella tappa), non "in guida" a metà tratta — altrimenti la guida
-          // verso la tappa resta come vuoto dopo il pranzo. Lo fa la 3b (pranzo prima della tappa).
-          const curIsLongWindowHost = !rows[i].stopPart && (() => {
-            const cs = parseTime(rows[i].serviceStartTime ?? rows[i].arrivalTime);
-            const ce = parseTime(rows[i].serviceEndTime);
-            return cs != null && ce != null && cs >= LUNCH_OPEN && cs < LUNCH_CLOSE && ce > LUNCH_CLOSE && (ce - cs) > lunchBreakMinutes;
-          })();
-          if (!isSplitPair && curIsLongWindowHost && (rows[i].driveMinutes || 0) >= 20) {
-            L(`  → pranzo a destinazione, prima di "${rows[i].customer}" (tappa lunga in finestra, guida ${rows[i].driveMinutes}min): niente vuoto`);
-            continue; // non piazzare "in guida": ci pensa la 3b (pranzo a destinazione)
-          }
           if (isSplitPair && gapMin >= lunchBreakMinutes) {
             // Tappa spezzata per chiusura: il pranzo va nel GAP di chiusura (fra mattina e
             // pomeriggio), non prima della tappa — così si lavora il mattino, si mangia
@@ -1267,6 +1254,12 @@ async function insertBreaks(rows, options) {
   const result = [];
   let timeShift = 0;
   let pending = [...insertions];
+  // Un break "in guida" (pranzo/sosta a un locale sul percorso verso la tappa seguente)
+  // condivide il tragitto con quella tappa: il tratto precedente→locale è parte del
+  // tratto precedente→tappa. Senza assorbirlo, la guida verrebbe contata due volte
+  // (travel del break + guida piena della tappa) creando un "vuoto" dopo il break.
+  // Qui accumuliamo, per indice di tappa, i minuti di guida già "consumati" dal break.
+  const driveAbsorb = new Map();
 
   for (let i = 0; i <= rows.length; i++) {
     while (pending.length && pending[0].beforeIndex === i) {
@@ -1310,7 +1303,21 @@ async function insertBreaks(rows, options) {
         km: Number(travelKm.toFixed(1)),
         legSource: "break"
       });
-      if (!brk.noTimeShift) timeShift += travelMin + brk.duration;
+      // Assorbimento guida: se il break è "in guida" verso la tappa rows[i] (locale sul
+      // percorso, non orario fisso), il tratto precedente→locale sovrappone la guida
+      // precedente→tappa. Riduciamo la guida residua della tappa e NON contiamo travelMin
+      // due volte nello shift (solo l'eventuale extra fuori corridoio + la durata pausa).
+      let absorb = 0;
+      const followStop = i < rows.length ? rows[i] : null;
+      const canAbsorb = !brk.lunchForFixed && travelMin > 0 && followStop && !followStop.type
+        && !(followStop.stopPart === "afternoon" && !followStop.dynamicSplit)
+        && !followStop.fixedWindow;
+      if (canAbsorb) {
+        const already = driveAbsorb.get(i) || 0;
+        absorb = Math.min(travelMin, Math.max(0, (followStop.driveMinutes || 0) - already));
+        if (absorb > 0) driveAbsorb.set(i, already + absorb);
+      }
+      if (!brk.noTimeShift) timeShift += (travelMin - absorb) + brk.duration;
     }
     if (i < rows.length) {
       const r = rows[i];
@@ -1343,7 +1350,20 @@ async function insertBreaks(rows, options) {
           legSource: r.legSource
         });
       } else {
-        result.push(shiftRowTimes(rows[i], timeShift));
+        const shifted = shiftRowTimes(rows[i], timeShift);
+        const ab = driveAbsorb.get(i) || 0;
+        if (ab > 0) {
+          const origDrive = shifted.driveMinutes || 0;
+          const nd = Math.max(0, origDrive - ab);
+          result.push({
+            ...shifted,
+            driveMinutes: nd,
+            baseDriveMinutes: Math.max(0, (shifted.baseDriveMinutes ?? origDrive) - ab),
+            km: origDrive > 0 ? Number(((shifted.km || 0) * nd / origDrive).toFixed(1)) : (shifted.km || 0)
+          });
+        } else {
+          result.push(shifted);
+        }
       }
       // An afternoon split part (opening-hours or fixed-window) has absolute service
       // times, and subsequent stops were planned from its absolute end. Breaks before
