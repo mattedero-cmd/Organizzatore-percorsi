@@ -5,6 +5,12 @@ FIX: giri salvati che si duplicano quando li modifichi + pausa pranzo non rispet
 - **Pausa pranzo #2**: riordinando le tappe (`replanWithOrder`) il payload non includeva `lunchBreak`, così il server reinseriva il pranzo dal default impostazioni. Ora inoltra `lunchBreak/lunchBreakMinutes/lunchFixedTime` del giro → la pausa non "risorge".
 - Verificato end-to-end sul server reale: reschedule con id → nessun duplicato (senza id se ne creava uno, confermato); giro senza pranzo che resta senza pranzo dopo modifica e dopo riordino.
 
+## v5.092 — 2026-07-06
+Pranzo nell'attesa: se si arriva a un cliente CHIUSO per pranzo (o comunque c'è un'attesa che cade nella finestra 11:30–14:00), ora si mangia nell'attesa.
+- **Caso aggiunto**: arrivo a locale chiuso (es. cliente chiuso 12–15, si arriva alle 12:30) → il pranzo viene messo nell'attesa (~12:45) senza spostare la tappa, che parte alla riapertura. Prima in questo caso il pranzo non veniva messo.
+- Generalizzato: qualsiasi attesa prima di una tappa che cade nella finestra pranzo → si mangia lì. Copre anche il caso "inizia in finestra con attesa" già presente.
+- Verificato col planner (arrivo a locale chiuso → pranzo @12:45 nell'attesa; casi prima/dopo/split invariati; regressione ok; pranzo disattivato assente).
+
 ## v5.091 — 2026-07-06
 Pranzo flessibile su tappa lunga: ora segue la logica reale (prima / dopo / spezza) invece di spezzare sempre.
 - **Inizia dentro la finestra (11:30–14:00) e finisce dopo** → pranzo PRIMA della tappa, senza spezzarla (se c'è attesa il pranzo sta nell'attesa e la tappa non slitta; altrimenti la tappa slitta dopo il pranzo, solo se non sfora l'orario di chiusura del cliente — se sforerebbe, ripiega sullo split).

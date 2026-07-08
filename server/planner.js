@@ -947,32 +947,45 @@ async function insertBreaks(rows, options) {
         if (rows[i].stopPart === "afternoon" || rows[i].type) continue;
         const svcStart = parseTime(rows[i].serviceStartTime ?? rows[i].arrivalTime);
         const svcEnd = parseTime(rows[i].serviceEndTime);
+        const arrival = parseTime(rows[i].arrivalTime ?? rows[i].serviceStartTime);
         if (svcStart == null || svcEnd == null) continue;
-        // Interessano solo le tappe che finiscono DOPO la finestra e iniziano PRIMA della sua fine.
-        // ("finisce dentro la finestra" → gestito dalla sezione 3, pranzo DOPO; "inizia dopo le 14"
-        //  → nessuno slot di mezzogiorno qui).
+
+        // 0) ATTESA prima della tappa che cade nella finestra pranzo (es. si arriva mentre il
+        //    cliente è chiuso per pranzo e si aspetta la riapertura) → si mangia NELL'attesa,
+        //    senza spostare la tappa. Copre anche il caso "inizia in finestra con attesa".
+        if (arrival != null && (svcStart - arrival) >= lunchBreakMinutes && arrival < LUNCH_CLOSE && svcStart > LUNCH_OPEN) {
+          // orario pranzo: ~12:45 se ci sta, comunque dentro l'attesa e concluso prima dell'inizio tappa
+          let lunchAt = Math.max(arrival, Math.min(idealMin, LUNCH_CLOSE - lunchBreakMinutes));
+          lunchAt = Math.max(arrival, Math.min(lunchAt, svcStart - lunchBreakMinutes));
+          L(`  → PRANZO nell'attesa prima di "${rows[i].customer}" @${formatTime(lunchAt)} (arrivo ${formatTime(arrival)}, tappa alle ${formatTime(svcStart)})`);
+          const lunchEntry = await makeLunchEntry(i, rows[i - 1] ?? null, rows[i], lunchAt);
+          lunchEntry.lunchForFixed = true;
+          lunchEntry.fixedLunchAt = lunchAt;
+          lunchEntry.noTimeShift = true; // sta nell'attesa: la tappa non si sposta
+          insertions.push(lunchEntry);
+          placed = true;
+          break;
+        }
+
+        // Le regole "in servizio" valgono solo per tappe che finiscono DOPO la finestra e
+        // iniziano PRIMA della sua fine. ("finisce dentro" → sezione 3, pranzo DOPO).
         if (svcEnd <= LUNCH_CLOSE || svcStart >= LUNCH_CLOSE) continue;
 
-        // A) INIZIA dentro la finestra e finisce DOPO → pranzo PRIMA della tappa, senza spezzarla
-        //    (preferenza utente: non frammentare l'intervento). Possibile se c'è attesa prima
-        //    della tappa, oppure se far slittare la tappa non sfora l'orario di chiusura del cliente.
+        // A) INIZIA dentro la finestra e finisce DOPO, SENZA attesa utile → pranzo PRIMA facendo
+        //    slittare la tappa, ma solo se non sfora l'orario di chiusura del cliente; altrimenti split.
         if (svcStart >= LUNCH_OPEN) {
-          const arrival = parseTime(rows[i].arrivalTime ?? rows[i].serviceStartTime);
-          const hasSlack = arrival != null && (svcStart - arrival) >= lunchBreakMinutes; // attesa prima della tappa
           const closeMin = Math.max(parseTime(rows[i].closeAfternoon) ?? -1, parseTime(rows[i].closeMorning) ?? -1);
-          const shiftFits = closeMin < 0 || (svcEnd + lunchBreakMinutes) <= closeMin; // slittando non chiude fuori orario
-          if (hasSlack || shiftFits) {
-            const lunchAt = hasSlack ? (svcStart - lunchBreakMinutes) : svcStart; // attesa: finisce all'inizio tappa; altrimenti la tappa slitta
-            L(`  → PRANZO prima di "${rows[i].customer}" @${formatTime(lunchAt)} (inizia in finestra, finisce dopo${hasSlack ? ", nell'attesa" : ""})`);
-            const lunchEntry = await makeLunchEntry(i, rows[i - 1] ?? null, rows[i], lunchAt);
+          const shiftFits = closeMin < 0 || (svcEnd + lunchBreakMinutes) <= closeMin;
+          if (shiftFits) {
+            L(`  → PRANZO prima di "${rows[i].customer}" @${formatTime(svcStart)} (inizia in finestra, finisce dopo)`);
+            const lunchEntry = await makeLunchEntry(i, rows[i - 1] ?? null, rows[i], svcStart);
             lunchEntry.lunchForFixed = true;
-            lunchEntry.fixedLunchAt = lunchAt;
-            if (hasSlack) lunchEntry.noTimeShift = true; // sta nell'attesa: non spostare la tappa
+            lunchEntry.fixedLunchAt = svcStart;
             insertions.push(lunchEntry);
             placed = true;
             break;
           }
-          // niente attesa e slittare sforerebbe la chiusura → spezza (sotto)
+          // slittare sforerebbe la chiusura → spezza (sotto)
         }
         // C) SCAVALCA la finestra (o A che non entra "prima") → spezzala a metà giornata
         //    (~12:45, dentro il suo servizio e nella finestra).
