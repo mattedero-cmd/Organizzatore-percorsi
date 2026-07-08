@@ -5,6 +5,14 @@ FIX: giri salvati che si duplicano quando li modifichi + pausa pranzo non rispet
 - **Pausa pranzo #2**: riordinando le tappe (`replanWithOrder`) il payload non includeva `lunchBreak`, così il server reinseriva il pranzo dal default impostazioni. Ora inoltra `lunchBreak/lunchBreakMinutes/lunchFixedTime` del giro → la pausa non "risorge".
 - Verificato end-to-end sul server reale: reschedule con id → nessun duplicato (senza id se ne creava uno, confermato); giro senza pranzo che resta senza pranzo dopo modifica e dopo riordino.
 
+## v5.091 — 2026-07-06
+Pranzo flessibile su tappa lunga: ora segue la logica reale (prima / dopo / spezza) invece di spezzare sempre.
+- **Inizia dentro la finestra (11:30–14:00) e finisce dopo** → pranzo PRIMA della tappa, senza spezzarla (se c'è attesa il pranzo sta nell'attesa e la tappa non slitta; altrimenti la tappa slitta dopo il pranzo, solo se non sfora l'orario di chiusura del cliente — se sforerebbe, ripiega sullo split).
+- **Inizia prima della finestra e finisce dopo (a cavallo)** → spezza a metà giornata (~12:45).
+- **Inizia prima e finisce dentro** → pranzo DOPO l'intervento (già così).
+- Gli orari di apertura/chiusura del cliente restano vincolanti (chiusura pranzo del cliente → si mangia nella chiusura, come già avviene). Il locale del pranzo tiene conto degli orari del ristorante (ricerca in archivio).
+- Verificato col planner su tutti i casi (prima/dopo/split, con e senza attesa, cliente aperto/chiuso) + regressione (pranzo naturale invariato, pranzo disattivato assente).
+
 ## v5.090 — 2026-07-06
 Pausa pranzo flessibile: NON sparisce più su una tappa lunga che scavalca la finestra pranzo.
 - **Bug (riprodotto)**: giro salvato con pranzo a orario FISSO su una tappa lunga (es. inizia alle 12:05 e dura 4h). Togliendo la spunta "alle" (orario fisso) e ricalcolando, il pranzo SPARIVA: il planner metteva il pranzo flessibile solo se una tappa "finiva" dentro la finestra 11:30–14:00, ma una tappa che la scavalca non offriva alcuno slot naturale.
