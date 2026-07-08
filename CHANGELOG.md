@@ -1,3 +1,9 @@
+## v5.093 — 2026-07-06
+Pranzo prima di una tappa lunga: niente più "vuoto" al variare della partenza.
+- **Bug**: con una tappa lunga (es. QC Terme, che scavalca la finestra pranzo) raggiunta da una guida lunga, spostando la partenza avanti di 20 min il pranzo veniva messo "in guida" verso la tappa e restava la guida (40 min) come vuoto tra fine pranzo e inizio tappa; con la partenza prima invece il pranzo finiva subito prima della tappa, senza vuoto.
+- **Fix (planner)**: se si sta guidando verso una tappa lunga che inizia nella finestra e finisce dopo, il pranzo viene messo A DESTINAZIONE (subito prima della tappa), non a metà tratta — così il pranzo slitta insieme alla partenza e non lascia buchi. Solo quando altrimenti resterebbe il vuoto (tappa lunga, guida ≥ 20 min).
+- Verificato: il vuoto sparisce a tutte le partenze (08:00/08:20/08:40); casi prima/dopo/split/attesa e pranzo naturale invariati.
+
 ## v5.083 — 2026-07-06
 FIX: giri salvati che si duplicano quando li modifichi + pausa pranzo non rispettata.
 - **Duplicazione (mai più)**: cambiare la DATA di un giro salvato — sia dall'input data dentro il risultato, sia dal campo data sulla scheda del giro (reschedule) — ricostruiva `state.route` SENZA l'`id`, quindi `planCurrentRoute` inviava `id: undefined` e il server CREAVA un nuovo giro invece di aggiornare quello esistente. Ora entrambe le strade preservano l'`id` → ricalcolo IN PLACE. (Il reschedule ricostruiva anche le tappe da `plannedStops`, assente nel payload → tappe vuote: ora usa `rebuildStopsFromResultRows(rows)`.)

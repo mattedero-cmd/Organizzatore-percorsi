@@ -905,6 +905,19 @@ async function insertBreaks(rows, options) {
           const gapStart = isSplitPair ? parseTime(rows[i].serviceEndTime) : null;
           const gapEnd   = isSplitPair ? parseTime(nextRow.arrivalTime) : null;
           const gapMin   = (gapStart != null && gapEnd != null) ? gapEnd - gapStart : 0;
+          // Si sta guidando verso una tappa LUNGA che inizia nella finestra e finisce dopo,
+          // raggiunta da una guida significativa? Allora conviene pranzare A DESTINAZIONE
+          // (subito prima di quella tappa), non "in guida" a metà tratta — altrimenti la guida
+          // verso la tappa resta come vuoto dopo il pranzo. Lo fa la 3b (pranzo prima della tappa).
+          const curIsLongWindowHost = !rows[i].stopPart && (() => {
+            const cs = parseTime(rows[i].serviceStartTime ?? rows[i].arrivalTime);
+            const ce = parseTime(rows[i].serviceEndTime);
+            return cs != null && ce != null && cs >= LUNCH_OPEN && cs < LUNCH_CLOSE && ce > LUNCH_CLOSE && (ce - cs) > lunchBreakMinutes;
+          })();
+          if (!isSplitPair && curIsLongWindowHost && (rows[i].driveMinutes || 0) >= 20) {
+            L(`  → pranzo a destinazione, prima di "${rows[i].customer}" (tappa lunga in finestra, guida ${rows[i].driveMinutes}min): niente vuoto`);
+            continue; // non piazzare "in guida": ci pensa la 3b (pranzo a destinazione)
+          }
           if (isSplitPair && gapMin >= lunchBreakMinutes) {
             // Tappa spezzata per chiusura: il pranzo va nel GAP di chiusura (fra mattina e
             // pomeriggio), non prima della tappa — così si lavora il mattino, si mangia
