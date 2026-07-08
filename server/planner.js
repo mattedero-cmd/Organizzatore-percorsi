@@ -783,6 +783,25 @@ async function insertBreaks(rows, options) {
     return { beforeIndex, type: "lunch", duration: lunchBreakMinutes, customer: "", travelMinutes: 0, travelKm: 0, lat: estLat, lng: estLng };
   };
 
+  // Spezza la tappa in rows[splitIdx] a `lunchMin` (mattina: arrivo→lunchMin, pomeriggio:
+  // lunchMin→fine) e inserisce il pranzo nel mezzo, all'orario esatto. Stessa logica
+  // dell'orario fisso (sezione 2), riusabile anche dal fallback automatico.
+  const splitStopForLunch = async (splitIdx, lunchMin) => {
+    const row = rows[splitIdx];
+    const svcStart = parseTime(row.serviceStartTime ?? row.arrivalTime);
+    const svcEnd = parseTime(row.serviceEndTime);
+    const morningRow = { ...row, stopPart: "morning", dynamicSplit: true, lunchIncluded: true,
+      durationMinutes: lunchMin - svcStart, serviceEndTime: formatTime(lunchMin), departureTime: formatTime(lunchMin) };
+    const afternoonRow = { ...row, stopPart: "afternoon", dynamicSplit: true, lunchIncluded: true,
+      durationMinutes: svcEnd - lunchMin, arrivalTime: formatTime(lunchMin), serviceStartTime: formatTime(lunchMin),
+      serviceEndTime: formatTime(svcEnd), departureTime: row.departureTime, driveMinutes: 0, baseDriveMinutes: 0, driveBufferMinutes: 0, km: 0 };
+    rows.splice(splitIdx, 1, morningRow, afternoonRow);
+    const lunchEntry = await makeLunchEntry(splitIdx + 1, morningRow, afternoonRow, lunchMin);
+    lunchEntry.lunchForFixed = true;
+    lunchEntry.fixedLunchAt = lunchMin;
+    insertions.push(lunchEntry);
+  };
+
   if (lunchBreakEnabled) {
     let placed = false;
 
@@ -915,6 +934,30 @@ async function insertBreaks(rows, options) {
         L(`  fallback: lastEnd=${formatTime(lastEnd)} ${lastEnd >= LUNCH_OPEN && lastEnd <= LUNCH_CLOSE ? "IN_FINESTRA" : "fuori → nessun pranzo"}`);
         if (lastEnd >= LUNCH_OPEN && lastEnd <= LUNCH_CLOSE) {
           insertions.push(await makeLunchEntry(rows.length, rows[rows.length - 1], null, lastEnd));
+        }
+      }
+    }
+
+    // 3b. Fallback finestra: nessuno slot naturale, ma una tappa è in servizio a cavallo della
+    //     finestra pranzo (es. tappa lunga che scavalca le 14:00). Senza questo, togliendo
+    //     l'orario fisso il pranzo spariva del tutto.
+    if (!placed && !insertions.some(ins => ins.type === "lunch")) {
+      const idealMin = Math.round((LUNCH_OPEN + LUNCH_CLOSE) / 2); // ~12:45
+      for (let i = 0; i < rows.length; i++) {
+        if (rows[i].stopPart === "afternoon" || rows[i].type) continue;
+        const svcStart = parseTime(rows[i].serviceStartTime ?? rows[i].arrivalTime);
+        const svcEnd = parseTime(rows[i].serviceEndTime);
+        if (svcStart == null || svcEnd == null) continue;
+        // Tappa in servizio A CAVALLO della finestra pranzo e abbastanza lunga → spezzala a
+        // metà giornata (la mattina si lavora, si mangia, poi si riprende). Sceglie l'orario
+        // "ideale" (~12:45) portato dentro il servizio della tappa e nella finestra.
+        const overlaps = svcStart < LUNCH_CLOSE && svcEnd > LUNCH_OPEN;
+        if (overlaps && (svcEnd - svcStart) > lunchBreakMinutes) {
+          const lunchMin = Math.min(Math.max(idealMin, svcStart + 1), Math.min(svcEnd - 1, LUNCH_CLOSE));
+          L(`  → PRANZO spezzando "${rows[i].customer}" a ${formatTime(lunchMin)} (tappa a cavallo della finestra, nessuno slot naturale)`);
+          await splitStopForLunch(i, lunchMin);
+          placed = true;
+          break;
         }
       }
     }

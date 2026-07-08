@@ -5,6 +5,12 @@ FIX: giri salvati che si duplicano quando li modifichi + pausa pranzo non rispet
 - **Pausa pranzo #2**: riordinando le tappe (`replanWithOrder`) il payload non includeva `lunchBreak`, così il server reinseriva il pranzo dal default impostazioni. Ora inoltra `lunchBreak/lunchBreakMinutes/lunchFixedTime` del giro → la pausa non "risorge".
 - Verificato end-to-end sul server reale: reschedule con id → nessun duplicato (senza id se ne creava uno, confermato); giro senza pranzo che resta senza pranzo dopo modifica e dopo riordino.
 
+## v5.090 — 2026-07-06
+Pausa pranzo flessibile: NON sparisce più su una tappa lunga che scavalca la finestra pranzo.
+- **Bug (riprodotto)**: giro salvato con pranzo a orario FISSO su una tappa lunga (es. inizia alle 12:05 e dura 4h). Togliendo la spunta "alle" (orario fisso) e ricalcolando, il pranzo SPARIVA: il planner metteva il pranzo flessibile solo se una tappa "finiva" dentro la finestra 11:30–14:00, ma una tappa che la scavalca non offriva alcuno slot naturale.
+- **Fix (planner)**: nuovo fallback — se il pranzo è attivo ma nessuno slot naturale esiste e una tappa è in servizio a cavallo della finestra pranzo (ed è più lunga della pausa), la tappa viene SPEZZATA a metà giornata (~12:45, dentro il suo orario) e il pranzo inserito nel mezzo. Riusa la stessa logica di split dell'orario fisso. È puramente additivo: si attiva solo quando altrimenti non ci sarebbe pranzo, quindi i giri con pranzo già piazzato non cambiano.
+- Verificato col planner (caso tappa 12:05/4h e tappa lunga 420min → pranzo @12:45; caso normale invariato) e con browser reale (giro salvato: tolta "alle" + Ricalcola → il pranzo resta, flessibile).
+
 ## v5.089 — 2026-07-06
 Pausa pranzo — spunta "alle" (orario fisso) più coerente nel form Percorso.
 - La spunta "alle" nel form Percorso non veniva salvata nello stato: toglierla poteva essere annullata al primo re-render (l'orario fisso "tornava"). Ora togliere/mettere "alle" viene memorizzato subito (come già avviene dentro il risultato) e NON tocca la spunta "Pausa pranzo".
