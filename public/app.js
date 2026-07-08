@@ -1192,7 +1192,9 @@ function renderMenu() {
       state.themePalette = state.settings.themePalette || "default";
       state.route.lunchBreak = state.settings.lunchBreakEnabled !== false;
       state.route.lunchBreakMinutes = state.settings.lunchBreakMinutes || 45;
-      if (state.settings.defaultStartLabel || state.settings.defaultStartAddress) {
+      // Pre-compila la partenza dal default SOLO se il form è ancora vuoto: salvare le
+      // impostazioni non deve MAI sovrascrivere una partenza/arrivo già impostati a mano.
+      if ((state.settings.defaultStartLabel || state.settings.defaultStartAddress) && !state.route.startAddress) {
         state.route.startLabel = state.settings.defaultStartLabel || state.route.startLabel;
         state.route.startAddress = state.settings.defaultStartAddress || state.route.startAddress;
         if (state.route.endSameAsStart) {
@@ -1831,7 +1833,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.087 &mdash; luglio 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.088 &mdash; luglio 2026</p>
         </div>
       </div>
 
@@ -2437,7 +2439,8 @@ async function loadInitialData() {
   if (settings.brandColor) state.settings = { ...state.settings, brandColor: settings.brandColor };
   state.route.lunchBreak = settings.lunchBreakEnabled !== false;
   state.route.lunchBreakMinutes = settings.lunchBreakMinutes || 45;
-  if (settings.defaultStartLabel || settings.defaultStartAddress) {
+  // Pre-compila la partenza dal default solo se il form è vuoto (non sovrascrivere una scelta manuale)
+  if ((settings.defaultStartLabel || settings.defaultStartAddress) && !state.route.startAddress) {
     state.route.startLabel = settings.defaultStartLabel || state.route.startLabel;
     state.route.startAddress = settings.defaultStartAddress || state.route.startAddress;
     if (state.route.endSameAsStart) {
@@ -5856,6 +5859,9 @@ function getOrderableStops(result) {
 async function replanWithOrder(manualOrder) {
   const result = normalizeSavedRoute(state.result);
   const rows = manualOrder ? getOrderableStops(result) : result.rows.filter(r => !r.type && (!r.stopPart || r.stopPart === "morning"));
+  // Tutte le righe cliente (mattina+pomeriggio): servono a RIUNIRE la durata di una tappa
+  // spezzata dal pranzo, altrimenti il riordino manderebbe solo la durata della mattina.
+  const customerRows = result.rows.filter(x => !x.type);
   const r = state.route;
   state.planning = true;
   render();
@@ -5882,7 +5888,19 @@ async function replanWithOrder(manualOrder) {
           openMorning: row.openMorning, closeMorning: row.closeMorning,
           openAfternoon: row.openAfternoon, closeAfternoon: row.closeAfternoon,
           weeklyHours: row.weeklyHours || null,
-          durationMinutes: row.durationMinutes, lat: row.lat, lng: row.lng
+          // Durata: se la tappa è spezzata dal pranzo, riunisci mattina+pomeriggio (non solo la mattina).
+          durationMinutes: row.timeWindowMode === "fixed"
+            ? Math.max(0, (row.timeTo && row.timeFrom ? hhmmToMins(row.timeTo) - hhmmToMins(row.timeFrom) : 0))
+            : (row.stopPart === "morning"
+                ? customerRows.filter(x => (x.stopUid || x.uid) === (row.stopUid || row.uid)).reduce((t, x) => t + Number(x.durationMinutes || 0), 0)
+                : Number(row.durationMinutes || 0)),
+          // Preserva finestra oraria personalizzata e flag "prima tappa" anche dopo il riordino
+          timeFrom: row.timeFrom || undefined,
+          timeTo: row.timeTo || undefined,
+          timeWindowMode: row.timeWindowMode || undefined,
+          fixedFirst: row.fixedFirst || undefined,
+          ignoreHours: row.ignoreHours || undefined,
+          lat: row.lat, lng: row.lng
         })),
         // Preserva lo stato pausa pranzo del giro: senza questi campi il server
         // reinserirebbe il pranzo dal default impostazioni (bug: pranzo "risorto" dopo riordino).

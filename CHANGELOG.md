@@ -5,6 +5,12 @@ FIX: giri salvati che si duplicano quando li modifichi + pausa pranzo non rispet
 - **Pausa pranzo #2**: riordinando le tappe (`replanWithOrder`) il payload non includeva `lunchBreak`, così il server reinseriva il pranzo dal default impostazioni. Ora inoltra `lunchBreak/lunchBreakMinutes/lunchFixedTime` del giro → la pausa non "risorge".
 - Verificato end-to-end sul server reale: reschedule con id → nessun duplicato (senza id se ne creava uno, confermato); giro senza pranzo che resta senza pranzo dopo modifica e dopo riordino.
 
+## v5.088 — 2026-07-06
+Due fix su riordino tappe e impostazioni:
+- **Riordino con tappa spezzata dal pranzo**: riordinando le tappe, una tappa spezzata dalla pausa pranzo prendeva come durata solo quella della MATTINA — mezzo intervento andava perso. Causa: `replanWithOrder` inviava `row.durationMinutes` (solo il troncone mattutino) invece di riunire mattina+pomeriggio come già fa il ricalcolo normale. Ora la durata viene riunita (e vengono preservati anche finestra oraria personalizzata e flag "prima tappa" dopo il riordino).
+- **Impostazioni che resettavano partenza/arrivo**: salvare le Impostazioni sovrascriveva la partenza/arrivo del percorso col "punto di partenza predefinito", anche se ne avevi impostato uno a mano. Ora il predefinito pre-compila SOLO quando il campo è vuoto: salvare le impostazioni non cancella più una partenza/arrivo scelti a mano.
+- Verificato col planner: tappa spezzata da 180 min che dopo il riordino resta 180 (prima diventava ~169, solo la mattina); tappa non spezzata invariata.
+
 ## v5.087 — 2026-07-06
 Soste automatiche: ora si possono togliere (prima "risorgevano").
 - **Bug**: eliminare una sosta automatica non funzionava — il planner la re-inseriva a ogni ricalcolo (le soste sono derivate dalla guida cumulata, senza soppressione).
