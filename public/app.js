@@ -1833,7 +1833,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.088 &mdash; luglio 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.089 &mdash; luglio 2026</p>
         </div>
       </div>
 
@@ -3012,6 +3012,9 @@ function renderRoute() {
         fixedTime.disabled = !lunchFixedEnabled.checked;
         if (lunchFixedEnabled.checked && !fixedTime.value) fixedTime.value = "12:30";
       }
+      // Persisti la scelta: togliere "alle" NON deve toccare la pausa pranzo, e la scelta
+      // non deve essere annullata al primo re-render (prima lo stato non veniva salvato).
+      state.route.lunchFixedTime = lunchFixedEnabled.checked ? (fixedTime?.value || "12:30") : "";
     });
   }
 

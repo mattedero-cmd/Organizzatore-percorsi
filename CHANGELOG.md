@@ -5,6 +5,11 @@ FIX: giri salvati che si duplicano quando li modifichi + pausa pranzo non rispet
 - **Pausa pranzo #2**: riordinando le tappe (`replanWithOrder`) il payload non includeva `lunchBreak`, così il server reinseriva il pranzo dal default impostazioni. Ora inoltra `lunchBreak/lunchBreakMinutes/lunchFixedTime` del giro → la pausa non "risorge".
 - Verificato end-to-end sul server reale: reschedule con id → nessun duplicato (senza id se ne creava uno, confermato); giro senza pranzo che resta senza pranzo dopo modifica e dopo riordino.
 
+## v5.089 — 2026-07-06
+Pausa pranzo — spunta "alle" (orario fisso) più coerente nel form Percorso.
+- La spunta "alle" nel form Percorso non veniva salvata nello stato: toglierla poteva essere annullata al primo re-render (l'orario fisso "tornava"). Ora togliere/mettere "alle" viene memorizzato subito (come già avviene dentro il risultato) e NON tocca la spunta "Pausa pranzo".
+- Nota: nel risultato togliere "alle" già funziona (il pranzo resta, a orario libero) — verificato con browser reale su un giro con pranzo a orario fisso: tolta "alle" la pausa resta e il ricalcolo la mette a orario flessibile.
+
 ## v5.088 — 2026-07-06
 Due fix su riordino tappe e impostazioni:
 - **Riordino con tappa spezzata dal pranzo**: riordinando le tappe, una tappa spezzata dalla pausa pranzo prendeva come durata solo quella della MATTINA — mezzo intervento andava perso. Causa: `replanWithOrder` inviava `row.durationMinutes` (solo il troncone mattutino) invece di riunire mattina+pomeriggio come già fa il ricalcolo normale. Ora la durata viene riunita (e vengono preservati anche finestra oraria personalizzata e flag "prima tappa" dopo il riordino).
