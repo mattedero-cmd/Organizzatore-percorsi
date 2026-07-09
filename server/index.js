@@ -57,7 +57,7 @@ import {
 } from "./db.js";
 import { hashPassword, verifyPassword, generateToken } from "./auth.js";
 import { loadEnv } from "./env.js";
-import { isOpenAtTime } from "./googleMapsService.js";
+import { isOpenAtTime, resolvePlace } from "./googleMapsService.js";
 import { planRoute } from "./planner.js";
 import { planMultiDay } from "./multiDayPlanner.js";
 import { routeShape } from "./googleMapsService.js";
@@ -763,6 +763,26 @@ async function handleApi(request, response) {
       const planPromise = (async () => {
       const settings = await getSettings(userId);
       const allAddresses = await listAddresses("", userId);
+      // Geocoda lato server le tappe/partenza/arrivo SENZA coordinate: senza lat/lng
+      // l'ottimizzazione non può calcolare le distanze e l'ordine resta invariato (le tappe
+      // "non si ottimizzano"). Capita se il client non ha geocodificato (chiave Maps assente
+      // lato client, o contatti d'archivio salvati senza coordinate). resolvePlace ritorna
+      // subito quando le coordinate ci sono già: nessun costo per chi le ha (es. archivio Maps).
+      const _ensureCoords = async (place) => {
+        if (!place) return;
+        const has = place.lat != null && place.lng != null && Number(place.lat) !== 0 && Number(place.lng) !== 0;
+        if (has) return;
+        if (!(place.fullAddress || place.address)) return;
+        try {
+          const c = await resolvePlace(place);
+          if (c && c.lat != null && c.lng != null) { place.lat = c.lat; place.lng = c.lng; }
+        } catch { /* lascia com'è: il planner userà la stima locale */ }
+      };
+      await Promise.all([
+        _ensureCoords(body.start),
+        body.end && !body.end.sameAsStart ? _ensureCoords(body.end) : null,
+        ...(Array.isArray(body.stops) ? body.stops.map(_ensureCoords) : [])
+      ]);
       let route = await planRoute(body, settings, allAddresses);
       route = await attachWeather(route, { rowTimeoutMs: 3000 });
 

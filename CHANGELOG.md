@@ -1,3 +1,9 @@
+## v5.102 — 2026-07-09
+Fix: "Ottimizza" non riordinava le tappe per alcuni utenti (tappe senza coordinate).
+- **Bug**: se le tappe non avevano coordinate (lat/lng) — es. contatti d'archivio salvati senza geocodifica, o client senza chiave Google Maps che non geocodifica — il planner non poteva calcolare le distanze e l'ottimizzazione lasciava l'ordine invariato ("il giro si crea ma le tappe non sono ottimizzate"). Per chi aveva già le coordinate (archivio geocodificato da Maps) funzionava.
+- **Fix (server)**: in `/api/plan` ora partenza/arrivo/tappe **senza coordinate vengono geocodificate lato server** (`resolvePlace`: Google se configurato, altrimenti stima locale per città) prima della pianificazione. `resolvePlace` ritorna subito quando le coordinate ci sono già → nessun costo per chi le ha.
+- Verificato: giro con tappe senza coordinate (Milano/Verona/Rovereto) ora viene riordinato lungo il corridoio geografico invece di restare nell'ordine di inserimento.
+
 ## v5.101 — 2026-07-09
 Pausa pranzo non più forzata quando la giornata non tocca la finestra pranzo.
 - **Bug**: con il pranzo selezionato (o con orario fisso), se nessuna tappa entrava nella finestra pranzo — es. giornata 08:50–10:30 con finestra 11:30–14:00 — il pranzo veniva comunque inserito forzatamente (a 12:30, fuori dalla giornata). Ora: se la giornata lavorativa (dalla prima tappa all'ultima) NON si sovrappone alla finestra pranzo, il pranzo NON viene inserito.
