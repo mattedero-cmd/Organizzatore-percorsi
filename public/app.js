@@ -1847,7 +1847,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.096 &mdash; luglio 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.097 &mdash; luglio 2026</p>
         </div>
       </div>
 
@@ -3828,6 +3828,7 @@ function stopDetailExtra(result, row, addr, stopIdx) {
           <label class="stop-opt-check"><input type="checkbox" data-rv-stop="${stopIdx}:fixedFirst" ${row.fixedFirst ? "checked" : ""} /><span>Prima tappa</span></label>
           <label class="stop-opt-check"><input type="checkbox" data-rv-stop="${stopIdx}:ignoreHours" ${row.ignoreHours ? "checked" : ""} /><span>Ignora orari</span></label>
         </div>
+        <label class="stop-window-field" style="width:100%;align-items:stretch">Note tappa<textarea rows="2" data-rv-stop="${stopIdx}:notes" placeholder="Note per questa tappa…" style="width:100%;resize:vertical;font:inherit">${escapeHtml(row.notes || "")}</textarea></label>
         <button type="button" class="btn${state.dirtyStops.has(String(stopIdx)) ? " primary" : ""} rv-stop-replan-btn">${I.navigate(14)} Ricalcola</button>
       </div>`);
   }
@@ -4069,7 +4070,9 @@ function renderResult() {
           const phoneBtn = !isAfternoon
             ? (prefPhone
                 ? `<a class="btn icon-btn" href="tel:${escapeHtml(prefPhone.number)}" title="${escapeHtml(prefPhone.number)}">${phoneIcon(prefPhone.type)}</a>`
-                : `<a class="btn icon-btn" href="tel:" title="Chiama">${I.phone(15)}</a>`)
+                : phone
+                  ? `<a class="btn icon-btn" href="tel:${escapeHtml(phone)}" title="${escapeHtml(phone)}">${I.phone(15)}</a>`
+                  : `<a class="btn icon-btn" href="tel:" title="Chiama">${I.phone(15)}</a>`)
             : "";
           const warnLevel = worstWarningLevel(row.warnings);
           const cardClass = warnLevel === "error" ? " card-error" : warnLevel === "warn" ? " card-warn" : "";
@@ -4712,6 +4715,7 @@ function rebuildStopsFromResultRows(rows) {
       addressId: r.addressId ?? null,
       customer: r.customer, location: r.location,
       fullAddress: r.address || r.fullAddress, notes: r.notes,
+      phone: r.phone || addr?.phone || "", email: r.email || addr?.email || "",
       durationMinutes: totalDuration || 45,
       lat: r.lat, lng: r.lng,
       weeklyHours: r.weeklyHours || addr?.weeklyHours || null,
@@ -4916,6 +4920,7 @@ function renderResultEditPanels(result) {
             <input type="hidden" id="rv-custom-lat" value="" />
             <input type="hidden" id="rv-custom-lng" value="" />
             <input type="hidden" id="rv-custom-hours" value="" />
+            <input type="hidden" id="rv-custom-phone" value="" />
             <label class="field">Durata<input id="rv-custom-duration" type="time" step="300" value="${minsToHHMM(state.settings.defaultStopDuration || 45)}" data-duration-hhmm /></label>
           </div>
           <div class="actions" style="margin-top:8px;">
@@ -6510,7 +6515,7 @@ function openBreakPicker(rowIdx, breakType) {
   });
 }
 
-function openMapPickerForField({ labelEl, addressEl, latEl, lngEl, hoursEl, onConfirm, onUseDirectly, breakType }) {
+function openMapPickerForField({ labelEl, addressEl, latEl, lngEl, hoursEl, phoneEl, onConfirm, onUseDirectly, breakType }) {
   const startLat = Number(latEl?.value) || 46.07;
   const startLng = Number(lngEl?.value) || 11.12;
   let pickedLat = startLat, pickedLng = startLng;
@@ -6638,7 +6643,7 @@ function openMapPickerForField({ labelEl, addressEl, latEl, lngEl, hoursEl, onCo
         e.stop();
         new google.maps.places.PlacesService(map).getDetails({
           placeId: e.placeId,
-          fields: ["name", "formatted_address", "geometry", "opening_hours"]
+          fields: ["name", "formatted_address", "geometry", "opening_hours", "formatted_phone_number", "international_phone_number"]
         }, (place, status) => {
           if (status === google.maps.places.PlacesServiceStatus.OK && place.geometry) {
             pickedPlace = place;
@@ -6654,7 +6659,7 @@ function openMapPickerForField({ labelEl, addressEl, latEl, lngEl, hoursEl, onCo
 
     const searchInput = document.getElementById("map-picker-field-search");
     const autocomplete = new google.maps.places.Autocomplete(searchInput, {
-      fields: ["name", "formatted_address", "geometry", "opening_hours"],
+      fields: ["name", "formatted_address", "geometry", "opening_hours", "formatted_phone_number", "international_phone_number"],
       componentRestrictions: { country: "it" }
     });
     autocomplete.addListener("place_changed", () => {
@@ -6671,6 +6676,9 @@ function openMapPickerForField({ labelEl, addressEl, latEl, lngEl, hoursEl, onCo
       if (lngEl) lngEl.value = Number(pickedLng).toFixed(6);
       const weeklyHours = googlePeriodsToWeeklyHours(pickedPlace?.opening_hours?.periods);
       if (hoursEl) hoursEl.value = weeklyHours ? JSON.stringify(weeklyHours) : "";
+      // Numero di telefono dalla scheda Google (l'email NON è esposta dalle Places API).
+      const phone = pickedPlace?.formatted_phone_number || pickedPlace?.international_phone_number || "";
+      if (phoneEl) phoneEl.value = phone;
       let label = "", address = "";
       if (pickedPlace) {
         label = pickedPlace.name || "";
@@ -6697,7 +6705,7 @@ function openMapPickerForField({ labelEl, addressEl, latEl, lngEl, hoursEl, onCo
       } else {
         showToast("Solo coordinate impostate — indirizzo non trovato, compila il campo a mano");
       }
-      if (onConfirm) onConfirm(label, address, pickedLat, pickedLng, weeklyHours);
+      if (onConfirm) onConfirm(label, address, pickedLat, pickedLng, weeklyHours, phone);
       modal.remove();
     };
 
@@ -6710,7 +6718,8 @@ function openMapPickerForField({ labelEl, addressEl, latEl, lngEl, hoursEl, onCo
         const address = pickedPlace?.formatted_address || pickedAddress || "";
         if (!address) { showToast("Seleziona un luogo sulla mappa"); return; }
         const weeklyHours = googlePeriodsToWeeklyHours(pickedPlace?.opening_hours?.periods);
-        onUseDirectly(label, address, pickedLat, pickedLng, weeklyHours);
+        const phone = pickedPlace?.formatted_phone_number || pickedPlace?.international_phone_number || "";
+        onUseDirectly(label, address, pickedLat, pickedLng, weeklyHours, phone);
         modal.remove();
       };
     } else {
@@ -6787,6 +6796,15 @@ function bindEvents() {
         const row = getRvStopRow(idx);
         if (row) {
           row.durationMinutes = hhmmToMins(rvs.value) || row.durationMinutes;
+          state.dirtyStops.add(idx);
+          const btn = rvs.closest(".rv-stop-edit")?.querySelector(".rv-stop-replan-btn");
+          if (btn) btn.classList.add("primary");
+        }
+      } else if (key === "notes") {
+        // Note per la singola tappa: aggiorna la riga; si salvano al Ricalcola (id preservato).
+        const row = getRvStopRow(idx);
+        if (row) {
+          row.notes = rvs.value;
           state.dirtyStops.add(idx);
           const btn = rvs.closest(".rv-stop-edit")?.querySelector(".rv-stop-replan-btn");
           if (btn) btn.classList.add("primary");
@@ -7433,6 +7451,7 @@ function bindEvents() {
         location: document.getElementById("rv-custom-location")?.value?.trim() || "",
         fullAddress: addr,
         durationMinutes: hhmmToMins(document.getElementById("rv-custom-duration")?.value) || 45,
+        phone: document.getElementById("rv-custom-phone")?.value?.trim() || "",
         weeklyHours, lat, lng, recognized: !!lat, temporary: true
       });
       state.expandedPanels.add("rv-add-stop-panel");
@@ -7453,7 +7472,8 @@ function bindEvents() {
       try {
         const saved = await api("/api/addresses", { method: "POST", body: JSON.stringify({
           customer, location: document.getElementById("rv-custom-location")?.value?.trim() || "",
-          fullAddress: addr, lat, lng, defaultDuration: duration, weeklyHours: weeklyHours || null
+          fullAddress: addr, lat, lng, defaultDuration: duration, weeklyHours: weeklyHours || null,
+          phone: document.getElementById("rv-custom-phone")?.value?.trim() || ""
         })});
         state.allAddresses.unshift(saved);
         if (!state.resultPendingStops) state.resultPendingStops = [];
@@ -7578,7 +7598,8 @@ function bindEvents() {
         addressEl: document.getElementById("rv-custom-address"),
         latEl: document.getElementById("rv-custom-lat"),
         lngEl: document.getElementById("rv-custom-lng"),
-        hoursEl: document.getElementById("rv-custom-hours")
+        hoursEl: document.getElementById("rv-custom-hours"),
+        phoneEl: document.getElementById("rv-custom-phone")
       });
       return;
     }

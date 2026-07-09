@@ -1,3 +1,9 @@
+## v5.097 — 2026-07-08
+Telefono dalla scheda Google sulle tappe da Maps + note per singola tappa.
+- **Telefono da Maps**: scegliendo una tappa sulla mappa (anche "Usa senza salvare"), il numero di telefono della scheda Google viene ora recuperato e associato alla tappa — pulsante Chiama e WhatsApp funzionano subito. *(Nota: le Places API di Google NON espongono l'email, quindi la mail non può essere recuperata da Maps; resta compilabile a mano / dall'archivio.)*
+- **Note per singola tappa**: nel pannello "Impostazioni tappa" (dentro il risultato) c'è ora un campo **Note tappa**, oltre alle note del giro. Le note si salvano al Ricalcolo e persistono con il giro; vengono mostrate nel dettaglio della tappa.
+- Plumbing `phone`/`email`/`notes` propagato attraverso il planner (normalizeStop → righe risultato → ricostruzione) e preservato nei replan.
+
 ## v5.096 — 2026-07-08
 Durata intervento di default personalizzabile nelle impostazioni.
 - Nuovo campo **"Durata intervento di default"** in Impostazioni → Partenza e rientro. Le nuove tappe (aggiunta manuale/"Usa senza salvare", tappe personalizzate, contatti d'archivio senza durata propria) partono da questo valore invece del fisso 45 min. Utile per giri di consegne con durata breve ripetuta.
