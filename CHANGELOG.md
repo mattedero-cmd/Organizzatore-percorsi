@@ -1,3 +1,9 @@
+## v5.099 — 2026-07-09
+Fix al flusso "tappa da Maps" nel form nuovo giro: durata di default, telefono, arrotondamento.
+- **Durata di default ignorata**: `state.route.customDuration` era inizializzato a `45`, quindi mascherava sempre la "Durata intervento di default" delle impostazioni. Ora parte da `null` → le nuove tappe manuali/da Maps del nuovo giro usano davvero la durata di default impostata.
+- **Telefono da Maps non caricato (nuovo giro)**: il picker `rp-custom-map-btn` non recuperava/passava il numero. Ora `onConfirm`/`onUseDirectly` ricevono il telefono dalla scheda Google e lo attaccano alla tappa (hidden `rp-custom-phone`) → Chiama/WhatsApp funzionano. *(L'email non è esposta da Google Places.)*
+- **Durata usata ≠ durata mostrata (3 min invece di 5)**: l'arrotondamento a 5 min avveniva solo su `change`, che scattava DOPO il click sul pulsante "Usa senza salvare" → veniva usato il valore non arrotondato. Ora si arrotonda anche su `input` (un `type="time"` ha sempre un valore completo, quindi è sicuro) e in `updateRouteFromForm`: il valore salvato coincide sempre con quello mostrato.
+
 ## v5.098 — 2026-07-09
 Fix header sotto la status bar iOS.
 - La barra del menu (`.topbar`, fixed, con `viewport-fit=cover`) finiva sotto l'ora/segnale del telefono su iPhone con notch/isola. Ora il padding-top include `env(safe-area-inset-top)` (base + media query mobile), e la spaziatura del contenuto (`.tabs`, `.app`) cresce di conseguenza per non nascondere nulla sotto l'header.

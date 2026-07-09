@@ -781,7 +781,8 @@ const state = {
     firstArrivalRequired: "",
     selectedAddressId: "",
     customCustomer: "", customLocation: "", customAddress: "",
-    customDuration: 45,
+    customDuration: null, // null → usa la durata di default dalle impostazioni (non forzare 45)
+    customPhone: "",
     customWeeklyHours: null,
     customLat: null, customLng: null,
     id: null,
@@ -1847,7 +1848,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.098 &mdash; luglio 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.099 &mdash; luglio 2026</p>
         </div>
       </div>
 
@@ -2947,6 +2948,7 @@ function renderRoute() {
               ${state.googleMapsKey ? `<div class="field full" style="padding-top:0"><button type="button" class="btn" id="rp-custom-map-btn">${I.map(14)} Scegli sulla mappa</button></div>` : ""}
               <input type="hidden" id="rp-custom-lat" value="${r.customLat || ''}" />
               <input type="hidden" id="rp-custom-lng" value="${r.customLng || ''}" />
+              <input type="hidden" id="rp-custom-phone" value="${escapeHtml(r.customPhone || '')}" />
               <label class="field">Durata<input name="customDuration" type="time" step="300" value="${minsToHHMM(r.customDuration || state.settings.defaultStopDuration || 45)}" data-duration-hhmm /></label>
             </div>
             ${renderWeeklyHoursSection(r.customWeeklyHours || null)}
@@ -4556,7 +4558,7 @@ function updateRouteFromForm() {
     firstArrivalRequired: v.firstArrivalRequired || "",
     selectedAddressId: v.selectedAddressId || state.route.selectedAddressId,
     customCustomer: v.customCustomer, customLocation: v.customLocation,
-    customAddress: v.customAddress, customDuration: hhmmToMins(v.customDuration) || 45,
+    customAddress: v.customAddress, customDuration: hhmmToMins(snapTime5(v.customDuration)) || state.settings.defaultStopDuration || 45,
     transcript: v.transcript || "",
     lunchBreak: v.lunchBreak === "on" || v.lunchBreak === true,
     lunchBreakMinutes: Number(v.lunchBreakMinutes || 45),
@@ -6748,6 +6750,13 @@ function bindEvents() {
   });
 
   app.addEventListener("input", e => {
+    // Scatti di 5 minuti: un input type="time" ha SEMPRE un valore completo (HH:MM),
+    // quindi arrotondare qui è sicuro e garantisce che lo STATO catturato durante lo
+    // scroll (e la lettura al click su un pulsante) usi già il valore arrotondato.
+    if (e.target.matches && e.target.matches('input[type="time"]') && e.target.value) {
+      const snapped = snapTime5(e.target.value);
+      if (snapped !== e.target.value) e.target.value = snapped;
+    }
     // stop field updates
     const sf = e.target.closest("[data-stop]");
     if (sf) {
@@ -7800,13 +7809,14 @@ function bindEvents() {
         customer: state.route.customCustomer || state.route.customAddress.split(",")[0] || "Tappa provvisoria",
         location: state.route.customLocation || "",
         fullAddress: state.route.customAddress,
-        durationMinutes: state.route.customDuration || 45,
+        durationMinutes: state.route.customDuration || state.settings.defaultStopDuration || 45,
+        phone: (document.getElementById("rp-custom-phone")?.value || state.route.customPhone || "").trim(),
         weeklyHours: wh,
         lat, lng,
         recognized: true,
         temporary: true
       });
-      Object.assign(state.route, { customCustomer: "", customLocation: "", customAddress: "", customDuration: 45, customWeeklyHours: null, customLat: null, customLng: null });
+      Object.assign(state.route, { customCustomer: "", customLocation: "", customAddress: "", customDuration: null, customPhone: "", customWeeklyHours: null, customLat: null, customLng: null });
       render();
       showToast(wh ? "Tappa aggiunta con orari (non salvata in archivio)" : "Tappa aggiunta (non salvata in archivio)");
       return;
@@ -7822,17 +7832,19 @@ function bindEvents() {
           customer: state.route.customCustomer, location: state.route.customLocation,
           fullAddress: state.route.customAddress,
           weeklyHours: wh || null,
-          defaultDuration: state.route.customDuration
+          defaultDuration: state.route.customDuration || state.settings.defaultStopDuration || 45,
+          phone: (document.getElementById("rp-custom-phone")?.value || state.route.customPhone || "").trim()
         })
       }).catch(() => null);
       await refreshAllData();
       state.route.stops.push({
         uid: crypto.randomUUID(),
         addressId: saved?.id, customer: state.route.customCustomer, location: state.route.customLocation,
-        fullAddress: state.route.customAddress, durationMinutes: state.route.customDuration,
+        fullAddress: state.route.customAddress, durationMinutes: state.route.customDuration || state.settings.defaultStopDuration || 45,
+        phone: (document.getElementById("rp-custom-phone")?.value || state.route.customPhone || "").trim(),
         weeklyHours: wh, recognized: true
       });
-      Object.assign(state.route, { customCustomer: "", customLocation: "", customAddress: "", customDuration: 45, customWeeklyHours: null, customLat: null, customLng: null });
+      Object.assign(state.route, { customCustomer: "", customLocation: "", customAddress: "", customDuration: null, customPhone: "", customWeeklyHours: null, customLat: null, customLng: null });
       render();
       showToast("Tappa aggiunta e salvata");
       return;
@@ -8039,28 +8051,31 @@ function bindEvents() {
         addressEl: document.querySelector("#rp-custom-address"),
         latEl: document.querySelector("#rp-custom-lat"),
         lngEl: document.querySelector("#rp-custom-lng"),
-        onConfirm: (label, address, lat, lng, weeklyHours) => {
+        phoneEl: document.querySelector("#rp-custom-phone"),
+        onConfirm: (label, address, lat, lng, weeklyHours, phone) => {
           if (label) state.route.customCustomer = label;
           if (address) state.route.customAddress = address;
           if (lat) state.route.customLat = lat;
           if (lng) state.route.customLng = lng;
           if (weeklyHours) state.route.customWeeklyHours = weeklyHours;
+          if (phone) state.route.customPhone = phone;
           render();
         },
-        onUseDirectly: (label, address, lat, lng, weeklyHours) => {
+        onUseDirectly: (label, address, lat, lng, weeklyHours, phone) => {
           state.route.stops.push({
             uid: crypto.randomUUID(),
             addressId: null,
             customer: label || address.split(",")[0] || "Tappa provvisoria",
             location: "",
             fullAddress: address,
-            durationMinutes: state.route.customDuration || 45,
+            durationMinutes: state.route.customDuration || state.settings.defaultStopDuration || 45,
+            phone: phone || "",
             weeklyHours: weeklyHours || null,
             lat, lng,
             recognized: true,
             temporary: true
           });
-          Object.assign(state.route, { customCustomer: "", customLocation: "", customAddress: "", customDuration: 45, customWeeklyHours: null, customLat: null, customLng: null });
+          Object.assign(state.route, { customCustomer: "", customLocation: "", customAddress: "", customDuration: null, customPhone: "", customWeeklyHours: null, customLat: null, customLng: null });
           render();
           showToast(weeklyHours ? "Tappa aggiunta con orari da Maps (non salvata in archivio)" : "Tappa aggiunta (non salvata in archivio)");
         }
