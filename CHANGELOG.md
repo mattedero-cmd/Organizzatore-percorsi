@@ -1,3 +1,9 @@
+## v5.095 — 2026-07-08
+Tre comodità: scatti da 5 minuti, WhatsApp senza numero, ricalcolo automatico all'eliminazione.
+- **Orari a scatti di 5 minuti**: durata intervento, orari di arrivo/partenza e ogni campo orario ora si arrotondano al multiplo di 5 più vicino. (`step="300"` non bastava: la ruota nativa iOS lo ignora e mostra scatti da 1 min — ora arrotondiamo al volo al `change`.)
+- **WhatsApp senza numero**: se la tappa non ha un numero associato, il pulsante non apre più un link rotto (`wa.me/?text=` → "impossibile aprire questo link"): mostra un avviso "Nessun numero WhatsApp per questa tappa".
+- **Eliminazione tappa → ricalcolo automatico**: rimuovendo una tappa dal risultato, orari e rientro si aggiornano subito, senza dover premere Ricalcola a mano.
+
 ## v5.094 — 2026-07-08
 Pranzo "in guida": il tragitto verso il ristorante ora è valutato — niente doppio conteggio.
 - **Bug**: quando il pranzo veniva messo a un locale sul percorso verso una tappa lunga (es. Albergo Aida, a 2 minuti da QC Terme), la guida precedente→ristorante veniva contata IN PIÙ rispetto alla guida piena precedente→tappa. Risultato: un "vuoto" (fino a 40 min) tra fine pranzo e inizio tappa, che variava con l'orario di partenza. La posizione reale del ristorante (vicino alla tappa) non veniva mai valutata.

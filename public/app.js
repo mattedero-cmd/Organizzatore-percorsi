@@ -94,6 +94,18 @@ function preferredPhone(a) {
   return null;
 }
 
+// Arrotonda un orario "HH:MM" al multiplo di 5 minuti più vicino. L'attributo step="300"
+// non vincola la ruota nativa dei time picker su iOS (mostra sempre scatti da 1 min), quindi
+// arrotondiamo al volo quando il campo cambia — così gli orari sono sempre multipli di 5.
+function snapTime5(hhmm) {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(hhmm || "");
+  if (!m) return hhmm;
+  let h = Number(m[1]), mi = Number(m[2]);
+  mi = Math.round(mi / 5) * 5;
+  if (mi >= 60) { mi = 0; h = (h + 1) % 24; }
+  return String(h).padStart(2, "0") + ":" + String(mi).padStart(2, "0");
+}
+
 function formatPhoneForWhatsApp(phone) {
   let n = String(phone || "").replace(/[\s\-().+]/g, ""); // strip anche il '+'
   if (!n) return null;
@@ -1833,7 +1845,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.094 &mdash; luglio 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.095 &mdash; luglio 2026</p>
         </div>
       </div>
 
@@ -6897,6 +6909,12 @@ function bindEvents() {
 
   // timeFrom/timeTo stop-form + rv-row: render su "change" (picker iOS chiuso)
   app.addEventListener("change", e => {
+    // Scatti di 5 minuti su TUTTI i campi orario/durata (type="time"): arrotonda il valore
+    // al multiplo di 5 più vicino, poi lascia proseguire gli altri handler col valore snappato.
+    if (e.target.matches && e.target.matches('input[type="time"]') && e.target.value) {
+      const snapped = snapTime5(e.target.value);
+      if (snapped !== e.target.value) e.target.value = snapped;
+    }
     // saved routes: filtri data / condivisione — aggiorna solo la lista
     if (e.target.id === "saved-search-from") { state.savedSearch.dateFrom = e.target.value; updateSavedList(); return; }
     if (e.target.id === "saved-search-to") { state.savedSearch.dateTo = e.target.value; updateSavedList(); return; }
@@ -7507,10 +7525,13 @@ function bindEvents() {
       const phone = prefPhone?.number || addr?.phone || row.phone || "";
       const waPhone = formatPhoneForWhatsApp(phone);
       const msg = buildWhatsAppMessage(result, row);
-      // If no number: open WhatsApp without a recipient so the user can search manually
-      const url = waPhone
-        ? `https://wa.me/${waPhone}${msg ? "?text=" + encodeURIComponent(msg) : ""}`
-        : `https://wa.me/${msg ? "?text=" + encodeURIComponent(msg) : ""}`;
+      // Senza numero: `wa.me/?text=` dà "impossibile aprire questo link" su molti dispositivi.
+      // Meglio avvisare che il numero manca invece di aprire un link rotto.
+      if (!waPhone) {
+        showToast("Nessun numero WhatsApp per questa tappa");
+        return;
+      }
+      const url = `https://wa.me/${waPhone}${msg ? "?text=" + encodeURIComponent(msg) : ""}`;
       window.open(url, "_blank", "noopener");
       return;
     }
@@ -7529,8 +7550,10 @@ function bindEvents() {
         if (removedRow.stopUid) return r.stopUid !== removedRow.stopUid;
         return r.stopNumber !== removedRow.stopNumber;
       });
-      showToast(`${removedRow.customer} rimosso — premi Ricalcola`);
-      renderResult();
+      showToast(`${removedRow.customer} rimosso — ricalcolo…`);
+      // Ricalcolo automatico: eliminando una tappa gli orari (e il rientro) si aggiornano
+      // subito, senza dover premere Ricalcola a mano.
+      replanFromResult();
       return;
     }
 
