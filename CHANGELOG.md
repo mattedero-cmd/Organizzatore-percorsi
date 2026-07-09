@@ -1,3 +1,8 @@
+## v5.096 — 2026-07-08
+Durata intervento di default personalizzabile nelle impostazioni.
+- Nuovo campo **"Durata intervento di default"** in Impostazioni → Partenza e rientro. Le nuove tappe (aggiunta manuale/"Usa senza salvare", tappe personalizzate, contatti d'archivio senza durata propria) partono da questo valore invece del fisso 45 min. Utile per giri di consegne con durata breve ripetuta.
+- DB: nuova colonna `default_stop_duration` in `user_settings` (SCHEMA_VERSION → 2; migrazione SQLite + Postgres). Roundtrip verificato.
+
 ## v5.095 — 2026-07-08
 Tre comodità: scatti da 5 minuti, WhatsApp senza numero, ricalcolo automatico all'eliminazione.
 - **Orari a scatti di 5 minuti**: durata intervento, orari di arrivo/partenza e ogni campo orario ora si arrotondano al multiplo di 5 più vicino. (`step="300"` non bastava: la ruota nativa iOS lo ignora e mostra scatti da 1 min — ora arrotondiamo al volo al `change`.)

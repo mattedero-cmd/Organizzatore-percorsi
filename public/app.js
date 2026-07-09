@@ -1187,7 +1187,8 @@ function renderMenu() {
         noBreakBeforeLunchMin: Number(v.noBreakBeforeLunchMin ?? 60),
         noBreakAfterLunchMin: Number(v.noBreakAfterLunchMin ?? 120),
         brandColor: v.brandColor || state.settings.brandColor || "",
-        brandColor2: v.brandColor2 || state.settings.brandColor2 || ""
+        brandColor2: v.brandColor2 || state.settings.brandColor2 || "",
+        defaultStopDuration: hhmmToMins(v.defaultStopDuration) || 45
       };
       let saved;
       try {
@@ -1563,6 +1564,7 @@ function renderMenuSettings() {
             <div id="settings-start-sugg" class="stop-suggestions" style="display:none;"></div>
           </div>
           ${irow("Orario rientro massimo", timeInput("maxReturnTime", s.maxReturnTime))}
+          ${irow("Durata intervento di default", timeInput("defaultStopDuration", minsToHHMM(s.defaultStopDuration || 45)))}
         </div>
 
         ${secTitle('<path d="M17 8h1a4 4 0 1 1 0 8h-1"/><path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V8z"/><line x1="6" y1="2" x2="6" y2="4"/><line x1="10" y1="2" x2="10" y2="4"/><line x1="14" y1="2" x2="14" y2="4"/>', "Soste automatiche")}
@@ -1845,7 +1847,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.095 &mdash; luglio 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.096 &mdash; luglio 2026</p>
         </div>
       </div>
 
@@ -2945,7 +2947,7 @@ function renderRoute() {
               ${state.googleMapsKey ? `<div class="field full" style="padding-top:0"><button type="button" class="btn" id="rp-custom-map-btn">${I.map(14)} Scegli sulla mappa</button></div>` : ""}
               <input type="hidden" id="rp-custom-lat" value="${r.customLat || ''}" />
               <input type="hidden" id="rp-custom-lng" value="${r.customLng || ''}" />
-              <label class="field">Durata<input name="customDuration" type="time" step="300" value="${minsToHHMM(r.customDuration || 45)}" data-duration-hhmm /></label>
+              <label class="field">Durata<input name="customDuration" type="time" step="300" value="${minsToHHMM(r.customDuration || state.settings.defaultStopDuration || 45)}" data-duration-hhmm /></label>
             </div>
             ${renderWeeklyHoursSection(r.customWeeklyHours || null)}
             <div class="actions" style="margin-top:8px;">
@@ -4569,7 +4571,7 @@ function addressToStop(address, durationOverride = null) {
     openMorning: address.openMorning, closeMorning: address.closeMorning,
     openAfternoon: address.openAfternoon, closeAfternoon: address.closeAfternoon,
     weeklyHours: address.weeklyHours || null,
-    durationMinutes: Number(durationOverride || address.defaultDuration || 45),
+    durationMinutes: Number(durationOverride || address.defaultDuration || state.settings.defaultStopDuration || 45),
     lat: address.lat, lng: address.lng, recognized: true
   };
 }
@@ -4914,7 +4916,7 @@ function renderResultEditPanels(result) {
             <input type="hidden" id="rv-custom-lat" value="" />
             <input type="hidden" id="rv-custom-lng" value="" />
             <input type="hidden" id="rv-custom-hours" value="" />
-            <label class="field">Durata<input id="rv-custom-duration" type="time" step="300" value="00:45" data-duration-hhmm /></label>
+            <label class="field">Durata<input id="rv-custom-duration" type="time" step="300" value="${minsToHHMM(state.settings.defaultStopDuration || 45)}" data-duration-hhmm /></label>
           </div>
           <div class="actions" style="margin-top:8px;">
             <button type="button" class="btn ghost" id="rv-add-temp-stop">+ Usa senza salvare</button>

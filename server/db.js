@@ -93,7 +93,8 @@ function rowToSettings(row) {
     noBreakBeforeLunchMin: Number(row.no_break_before_lunch_min ?? 60),
     noBreakAfterLunchMin: Number(row.no_break_after_lunch_min ?? 120),
     brandColor: row.brand_color ?? "",
-    brandColor2: row.brand_color2 ?? ""
+    brandColor2: row.brand_color2 ?? "",
+    defaultStopDuration: Number(row.default_stop_duration ?? 45)
   };
 }
 
@@ -157,7 +158,7 @@ export async function runSql(sql, json = false) {
 // avvio (niente più 504 a catena) e il consumo di operazioni Prisma (~50× in meno).
 // ⚠️ SE AGGIUNGI UNA MIGRAZIONE (nuova colonna/tabella): INCREMENTA SCHEMA_VERSION,
 // altrimenti in produzione la tua migrazione NON verrà mai eseguita.
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 
 async function schemaUpToDate() {
   try {
@@ -327,6 +328,7 @@ const PG_SCHEMA_DDL = `
     ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS brand_color TEXT DEFAULT '';
     ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS brand_color2 TEXT DEFAULT '';
     ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS max_detour_min REAL DEFAULT 10;
+    ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS default_stop_duration INTEGER DEFAULT 45;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS nickname TEXT DEFAULT NULL;
     INSERT INTO settings (id, km_rate, drive_hour_rate, work_hour_rate)
     VALUES (1, 0.65, 22, 60)
@@ -619,6 +621,7 @@ async function migrateUserSettingsCols() {
     ["brand_color", "TEXT DEFAULT ''"],
     ["brand_color2", "TEXT DEFAULT ''"],
     ["max_detour_min", "REAL DEFAULT 10"],
+    ["default_stop_duration", "INTEGER DEFAULT 45"],
   ];
   for (const [col, def] of toAdd) {
     if (!cols.includes(col)) {
@@ -847,7 +850,8 @@ export async function updateSettings(userId, settings) {
     no_break_before_lunch_min: Number(settings.noBreakBeforeLunchMin ?? 60),
     no_break_after_lunch_min: Number(settings.noBreakAfterLunchMin ?? 120),
     brand_color: /^#[0-9a-fA-F]{6}$/.test(settings.brandColor || "") ? settings.brandColor : "",
-    brand_color2: /^#[0-9a-fA-F]{6}$/.test(settings.brandColor2 || "") ? settings.brandColor2 : ""
+    brand_color2: /^#[0-9a-fA-F]{6}$/.test(settings.brandColor2 || "") ? settings.brandColor2 : "",
+    default_stop_duration: Number(settings.defaultStopDuration ?? 45)
   };
   const cols = Object.keys(vals).join(", ");
   const sqlVals = Object.values(vals).map(v => typeof v === "string" ? sqlValue(v) : String(v)).join(", ");
