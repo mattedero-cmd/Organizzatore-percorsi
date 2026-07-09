@@ -806,7 +806,18 @@ async function insertBreaks(rows, options) {
     insertions.push(lunchEntry);
   };
 
-  if (lunchBreakEnabled) {
+  // La pausa pranzo va inserita SOLO se la giornata lavorativa tocca davvero la finestra
+  // pranzo. Se la giornata finisce prima dell'apertura della finestra, o inizia dopo la sua
+  // chiusura (o comunque non si sovrappone), NON va inserita — nemmeno se il pranzo è
+  // selezionato o ha un orario fisso. (Es. giornata 08:50–10:30 con finestra 11:30–14:00.)
+  const _lunchFirstStop = rows.find(r => !r.type);
+  const _lunchLastStop = [...rows].reverse().find(r => !r.type);
+  const _dayStart = _lunchFirstStop ? parseTime(_lunchFirstStop.arrivalTime ?? _lunchFirstStop.serviceStartTime) : null;
+  const _dayEnd = _lunchLastStop ? parseTime(_lunchLastStop.serviceEndTime) : null;
+  const dayTouchesLunch = _dayStart != null && _dayEnd != null
+    && Math.max(_dayStart, LUNCH_OPEN) < Math.min(_dayEnd, LUNCH_CLOSE);
+
+  if (lunchBreakEnabled && dayTouchesLunch) {
     let placed = false;
 
     // 1. Fixed-window stop spanning lunch: insert lunch at fixed time (no timeShift)
@@ -1249,6 +1260,17 @@ async function insertBreaks(rows, options) {
       const searchLat = (lastRow?.lat != null && homeLat != null) ? lastRow.lat + (homeLat - lastRow.lat) * frac : lastRow?.lat;
       const searchLng = (lastRow?.lng != null && homeLng != null) ? lastRow.lng + (homeLng - lastRow.lng) * frac : lastRow?.lng;
       await tryInsert(rows.length, searchLat, searchLng, lastRow?.lat, lastRow?.lng, homeLat, homeLng, 0, breakTime);
+    }
+  }
+
+  // Il pranzo non può essere la PRIMA attività della giornata: se la giornata inizia dentro
+  // la finestra pranzo, un pranzo verrebbe piazzato "in guida" prima della prima tappa
+  // (beforeIndex 0) — prima si lavora, poi si mangia. Va scartato SOLO se è un pranzo in
+  // guida (non `noTimeShift`): il pranzo consumato durante un'ATTESA forzata alla prima tappa
+  // (arrivo anticipato / cliente chiuso) NON è "la prima attività" e resta valido.
+  for (let k = insertions.length - 1; k >= 0; k--) {
+    if (insertions[k].type === "lunch" && insertions[k].beforeIndex === 0 && !insertions[k].noTimeShift) {
+      insertions.splice(k, 1);
     }
   }
 

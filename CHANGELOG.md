@@ -1,3 +1,9 @@
+## v5.101 — 2026-07-09
+Pausa pranzo non più forzata quando la giornata non tocca la finestra pranzo.
+- **Bug**: con il pranzo selezionato (o con orario fisso), se nessuna tappa entrava nella finestra pranzo — es. giornata 08:50–10:30 con finestra 11:30–14:00 — il pranzo veniva comunque inserito forzatamente (a 12:30, fuori dalla giornata). Ora: se la giornata lavorativa (dalla prima tappa all'ultima) NON si sovrappone alla finestra pranzo, il pranzo NON viene inserito.
+- **Pranzo mai come prima attività**: se la giornata inizia dentro la finestra pranzo, il pranzo non viene più piazzato "in guida" prima della prima tappa — prima si lavora, poi si mangia. (Il pranzo consumato durante un'ATTESA forzata alla prima tappa — arrivo anticipato o cliente chiuso — resta valido: lì la prima attività è l'attesa, non il pranzo.)
+- Verificato: giornata fuori finestra → niente pranzo; tappa lunga a cavallo → pranzo ok; prima tappa a mezzogiorno → pranzo dopo; casi attesa/prima/dopo/split invariati.
+
 ## v5.100 — 2026-07-09
 Fix: anche il titolo del menu (impostazioni) finiva sotto l'ora del telefono.
 - `.bsheet-header` (header sticky del menu a tendina/impostazioni) non teneva conto della status bar iOS: il titolo restava dietro l'orologio. Aggiunto `env(safe-area-inset-top)` al padding-top; lo sfondo sticky copre anche l'area della status bar. Completa il fix v5.098 sull'header principale — ora ogni superficie a tutto schermo (topbar, menu, map picker) sta sotto la barra di sistema.
