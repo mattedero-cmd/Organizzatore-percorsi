@@ -775,7 +775,9 @@ button {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 18px 22px 14px;
+  /* Rispetta la status bar iOS (viewport-fit=cover): senza questo l'header finisce
+     sotto l'ora del telefono. */
+  padding: calc(env(safe-area-inset-top, 0px) + 18px) 22px 14px;
   background: var(--bg2);
   border-bottom: 1px solid var(--line);
   backdrop-filter: blur(28px);
@@ -783,7 +785,7 @@ button {
 }
 
 .tabs {
-  margin-top: 70px;
+  margin-top: calc(70px + env(safe-area-inset-top, 0px));
 }
 
 .eyebrow {
@@ -2579,7 +2581,7 @@ tbody tr:last-child td {
 
   .topbar {
     align-items: flex-start;
-    padding: 15px;
+    padding: calc(env(safe-area-inset-top, 0px) + 15px) 15px 15px;
     /* position:fixed già impostato nel base, rimane invariato */
   }
 
@@ -2590,7 +2592,7 @@ tbody tr:last-child td {
     -webkit-overflow-scrolling: touch;
     padding: 12px;
     padding-bottom: calc(86px + env(safe-area-inset-bottom, 0px));
-    padding-top: 82px;
+    padding-top: calc(82px + env(safe-area-inset-top, 0px));
   }
 
   .grid,

@@ -1,3 +1,7 @@
+## v5.098 — 2026-07-09
+Fix header sotto la status bar iOS.
+- La barra del menu (`.topbar`, fixed, con `viewport-fit=cover`) finiva sotto l'ora/segnale del telefono su iPhone con notch/isola. Ora il padding-top include `env(safe-area-inset-top)` (base + media query mobile), e la spaziatura del contenuto (`.tabs`, `.app`) cresce di conseguenza per non nascondere nulla sotto l'header.
+
 ## v5.097 — 2026-07-08
 Telefono dalla scheda Google sulle tappe da Maps + note per singola tappa.
 - **Telefono da Maps**: scegliendo una tappa sulla mappa (anche "Usa senza salvare"), il numero di telefono della scheda Google viene ora recuperato e associato alla tappa — pulsante Chiama e WhatsApp funzionano subito. *(Nota: le Places API di Google NON espongono l'email, quindi la mail non può essere recuperata da Maps; resta compilabile a mano / dall'archivio.)*
