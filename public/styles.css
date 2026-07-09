@@ -3493,7 +3493,9 @@ tbody tr:last-child td {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 14px 16px 12px;
+  /* Rispetta la status bar iOS: il titolo del menu non deve finire sotto l'ora del telefono.
+     L'header è sticky top:0 e il suo sfondo copre anche l'area della status bar. */
+  padding: calc(env(safe-area-inset-top, 0px) + 14px) 16px 12px;
   border-bottom: 1px solid var(--line);
   margin-bottom: 4px;
   position: sticky;

@@ -1,3 +1,8 @@
+## v5.100 — 2026-07-09
+Fix: anche il titolo del menu (impostazioni) finiva sotto l'ora del telefono.
+- `.bsheet-header` (header sticky del menu a tendina/impostazioni) non teneva conto della status bar iOS: il titolo restava dietro l'orologio. Aggiunto `env(safe-area-inset-top)` al padding-top; lo sfondo sticky copre anche l'area della status bar. Completa il fix v5.098 sull'header principale — ora ogni superficie a tutto schermo (topbar, menu, map picker) sta sotto la barra di sistema.
+- Aggiornata la sezione "Novità v5.100" in renderMenuInfo (riepilogo v5.091–5.100).
+
 ## v5.099 — 2026-07-09
 Fix al flusso "tappa da Maps" nel form nuovo giro: durata di default, telefono, arrotondamento.
 - **Durata di default ignorata**: `state.route.customDuration` era inizializzato a `45`, quindi mascherava sempre la "Durata intervento di default" delle impostazioni. Ora parte da `null` → le nuove tappe manuali/da Maps del nuovo giro usano davvero la durata di default impostata.

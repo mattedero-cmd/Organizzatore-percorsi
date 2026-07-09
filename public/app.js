@@ -1848,7 +1848,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.099 &mdash; luglio 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.100 &mdash; luglio 2026</p>
         </div>
       </div>
 
@@ -1858,6 +1858,17 @@ function renderMenuInfo() {
       <ul class="info-list">
         <li>${state.mapApiConfigured ? _svg('<polyline points="20 6 9 17 4 12"/>', 14) + " Google Maps attivo — percorsi reali e ottimizzazione avanzata" : _svg('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>', 14) + " Google Maps non configurato — stime distanze locali"}</li>
         <li>${state.whisperConfigured ? _svg('<polyline points="20 6 9 17 4 12"/>', 14) + " Comandi vocali attivi (Whisper)" : _svg('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>', 14) + " Comandi vocali non configurati"}</li>
+      </ul>
+
+      <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v5.100 — comodità e rifiniture (riepilogo v5.091–5.100)</p>
+      <ul class="info-list">
+        <li><b>Pranzo "in guida"</b>: il tragitto verso il ristorante sul percorso è ora valutato correttamente — niente più "vuoto" tra fine pranzo e tappa successiva.</li>
+        <li><b>Orari a scatti di 5 minuti</b>: durata, arrivo/partenza e ogni campo orario si arrotondano a 5 min; il valore usato coincide sempre con quello mostrato.</li>
+        <li><b>Durata intervento di default</b> personalizzabile nelle impostazioni: comodo per i giri di consegne con durata breve ripetuta.</li>
+        <li><b>Tappe da Maps</b>: il numero di telefono della scheda Google viene caricato (Chiama/WhatsApp funzionano); WhatsApp senza numero non dà più errore.</li>
+        <li><b>Note per singola tappa</b>, oltre alle note del giro.</li>
+        <li><b>Eliminazione tappa</b>: ricalcolo automatico (orari e rientro aggiornati subito).</li>
+        <li><b>Header sotto la status bar</b>: titolo dell'app e del menu non finiscono più dietro l'ora del telefono su iPhone.</li>
       </ul>
 
       <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v5.090 — meno bug, più controllo (riepilogo v5.081–5.090)</p>
