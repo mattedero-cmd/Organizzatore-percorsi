@@ -333,7 +333,25 @@ const MERGE_RETURN_MARGIN = 15;
 // niente salto), Tione→Riva 0.39 / Cavalese→SenJan 0.19 (inclusi). Vedi docs/MULTI_GIORNO.md.
 const TAU_PARTIAL = 0.45;     // soglia directness per assorbire un gruppo cross-zona
 const SLACK_MIN = 75;         // una giornata è "povera" se finisce > SLACK_MIN prima di maxReturnTime
-const CORRIDOR_DETOUR = 25;   // detour max (min) del gruppo rispetto al corridoio seme→casa
+const CORRIDOR_DETOUR = 25;   // detour max (min) del gruppo rispetto al corridoio seme→casa (pavimento)
+// Il detour ammesso SCALA col corridoio: per un corridoio lungo (San Candido 169') una diramazione
+// da ~30-35' (Ortisei, Merano) è legittima (modello utente: "brevi rami dell'asse → giornata del
+// Nord"), mentre 25' fissi la escludevano. Per i corridoi corti resta il pavimento di 25'
+// (comportamento invariato). detourMax = max(CORRIDOR_DETOUR, frazione × tempo(seme→casa)).
+const CORRIDOR_DETOUR_FRACTION = 0.20;
+
+// ── DISSOLUZIONE GIORNATE (dissolveDays) ─────────────────────────────────────────────────────
+// Dopo fillPartial/fillDays può sopravvivere una MEZZA GIORNATA (es. Cles+Mezzolombardo chiusa alle
+// 10:52 con 458' di margine): fillPartial per progetto non svuota mai un donatore (gate anti-furto)
+// e fillDays la respinge col gate per-tappa. Questa fase prova a SVUOTARE l'intera giornata
+// distribuendo TUTTI i suoi gruppi nelle altre giornate (commit-or-rollback): si accetta solo se
+// OGNI gruppo trova posto (oracolo reale + margine sul rientro) e la guida totale aggiunta ai
+// riceventi è NETTAMENTE inferiore alla guida della giornata eliminata (guadagno km reale, non
+// una soglia geometrica). La directness verso il seme ricevente resta come guardia anti-mescolanza
+// (le valli in direzioni diverse hanno directness ≥ ~0.7 e restano escluse).
+const TAU_DISSOLVE = 0.65;          // guardia anti-mescolanza (più lasca di TAU_PARTIAL: qui decide l'economia)
+const DISSOLVE_GROUP_DETOUR = 60;   // Δguida reale max (min) per singolo gruppo spostato
+const DISSOLVE_MIN_GAIN = 30;       // guadagno minimo di guida (min) perché la dissoluzione convenga
 
 const homeMinG = (g, home, opts) => Math.min(...g.map(s => legMin(home, s, opts)));
 const groupGapMin = (a, b, opts) => { let m = Infinity; for (const x of a) for (const y of b) { const t = legMin(x, y, opts); if (t < m) m = t; } return m; };
@@ -358,6 +376,9 @@ function seedGroupOf(dayStops, allGroups, home, opts) {
 // allGroups = groupColocated(stops); ogni giornata è un array PIATTO di tappe.
 async function fillPartial(days, allGroups, home, opts, dayFeasible, endMin) {
   const groupsInDay = d => allGroups.filter(g => g.some(s => d.includes(s)));
+  // ANTI-PING-PONG: un gruppo assorbito da una giornata povera non può essere ri-rubato da
+  // un'altra povera nella stessa fase (Diagnostica reale: Egna faceva Merano→Fassa→Merano).
+  const moved = new Set();
   // Ordine deterministico: giornate dal seme più LONTANO al più vicino (riempi prima le lontane).
   const order = days.map((d, i) => ({ i, far: Math.max(...d.map(s => legMin(home, s, opts))) }))
     .sort((a, b) => b.far - a.far).map(x => x.i);
@@ -369,21 +390,27 @@ async function fillPartial(days, allGroups, home, opts, dayFeasible, endMin) {
     let slack = (endMin ?? f0.dayEndWithBreaks) - f0.dayEndWithBreaks;
     if (slack <= SLACK_MIN) continue;                 // giornata già piena
     const seedG = seedGroupOf(P, allGroups, home, opts);  // FISSO per tutta la fase
+    const detourMax = Math.max(CORRIDOR_DETOUR, CORRIDOR_DETOUR_FRACTION * homeMinG(seedG, home, opts));
     // Candidati = gruppi NON-seme di OGNI altra giornata, sul corridoio del seme.
-    const cand = [];
+    const cand = [], rejected = [];
     for (let j = 0; j < days.length; j++) {
       if (j === i || !days[j].length) continue;
       const seedJ = seedGroupOf(days[j], allGroups, home, opts);
       for (const g of groupsInDay(days[j])) {
         if (g === seedJ) continue;                    // mai cedere il seme del donatore
+        if (moved.has(g)) continue;                   // già assorbito da una povera: non si ri-ruba
         const dir = directnessGG(seedG, g, home, opts);
         if (dir > TAU_PARTIAL) continue;
-        if (corridorDetourGG(seedG, g, home, opts) > CORRIDOR_DETOUR) continue;
-        cand.push({ g, j, dir, sav: savingsGG(seedG, g, home, opts) });
+        const det = corridorDetourGG(seedG, g, home, opts);
+        if (det > detourMax) { rejected.push({ g, det }); continue; }
+        cand.push({ g, j, dir, det, sav: savingsGG(seedG, g, home, opts) });
       }
     }
     cand.sort((a, b) => b.sav - a.sav);               // savings decrescente (Clarke-Wright)
-    if (opts.log && cand.length) opts.log(`UNIONE PARZIALE — giornata "${nameOf(seedG[0])}" povera (slack ${Math.round(slack)}min), candidati: ${cand.map(c => `${nameOf(c.g[0])}(dir ${c.dir.toFixed(2)},sav ${Math.round(c.sav)})`).join(", ")}`);
+    if (opts.log && (cand.length || rejected.length)) {
+      opts.log(`UNIONE PARZIALE — giornata "${nameOf(seedG[0])}" povera (slack ${Math.round(slack)}min, detourMax ${Math.round(detourMax)}'), candidati: ${cand.map(c => `${nameOf(c.g[0])}(dir ${c.dir.toFixed(2)},det ${Math.round(c.det)}',sav ${Math.round(c.sav)})`).join(", ") || "nessuno"}`);
+      for (const r of rejected) opts.log(`   · "${nameOf(r.g[0])}" fuori corridoio (det ${Math.round(r.det)}' > max ${Math.round(detourMax)}')`);
+    }
     for (const c of cand) {
       if (!days[c.j].some(s => c.g.includes(s))) continue;   // già spostato altrove
       // GATE ANTI-FURTO: il donatore SENZA g deve restare non-vuoto e fattibile.
@@ -398,6 +425,7 @@ async function fillPartial(days, allGroups, home, opts, dayFeasible, endMin) {
         continue;
       }
       P = [...P, ...c.g]; days[i] = P; days[c.j] = donorRest;
+      moved.add(c.g);   // bloccato: non può essere ri-rubato in questa fase
       if (opts.log) opts.log(`   ✓ "${nameOf(c.g[0])}" spostato da "${nameOf(seedGroupOf(days[c.j].length ? days[c.j] : c.g, allGroups, home, opts)[0])}" → "${nameOf(seedG[0])}"`);
       slack = endMin != null && fP.dayEndWithBreaks != null ? endMin - fP.dayEndWithBreaks : slack;
       if (slack <= SLACK_MIN) break;                  // povera ora piena
@@ -447,6 +475,106 @@ async function fillDays(daysIn, home, opts, dayFeasible, endMin) {
         days[i] = [...days[i], ...days[bestJ]];
         days.splice(bestJ, 1);
         changed = true;
+      }
+    }
+  }
+  return days;
+}
+
+// DISSOLUZIONE: prova a SVUOTARE le giornate marginali (mezze giornate sopravvissute a
+// fillPartial/fillDays) distribuendo TUTTI i loro gruppi nelle altre giornate. Commit-or-rollback:
+// la giornata sparisce solo se OGNI gruppo trova posto (oracolo reale, margine sul rientro,
+// Δguida per gruppo contenuto, directness anti-mescolanza) E la guida totale aggiunta ai riceventi
+// è nettamente minore della guida della giornata eliminata (guadagno reale ≥ DISSOLVE_MIN_GAIN).
+// Es. Diagnostica 2026-07-11: Cles+Mezzolombardo (giornata da 135' di guida, chiusa alle 10:52)
+// → assorbiti dalla giornata Merano/Bolzano sul corridoio A22 con ~55' di guida in più: −1 giornata.
+// NB sulla data: come per fillPartial/fillDays, l'oracolo valida con l'indice-giornata corrente,
+// che non coincide con la data finale (l'ordine near→far viene applicato DOPO). È un'approssimazione
+// pre-esistente di tutte le fasi: il planRoute finale usa la data vera e la Diagnostica segnala
+// eventuali FUORI CHIUSURA.
+async function dissolveDays(daysIn, allGroups, home, opts, dayFeasible, endMin, zoneIdxOfStop) {
+  let days = [...daysIn];
+  const loggedFail = new Set();   // niente righe "NON svuotata" duplicate tra i passi
+  let changed = true;
+  while (changed && days.length > 1) {
+    changed = false;
+    // Solo le vere MEZZE GIORNATE sono candidate: povere (slack > SLACK_MIN) e piccole (≤3 gruppi).
+    // Evita di smontare giornate sane e tiene basso il costo oracolo.
+    const info = [];
+    for (let i = 0; i < days.length; i++) {
+      const f = await dayFeasible(orderDayFarFirst(days[i], home, opts), i);
+      const slack = (f.ok && endMin != null && f.dayEndWithBreaks != null) ? endMin - f.dayEndWithBreaks : null;
+      const nGroups = allGroups.filter(g => g.some(s => days[i].includes(s))).length;
+      const marginal = f.ok && slack != null && slack > SLACK_MIN && nGroups > 0 && nGroups <= 3;
+      info.push({ i, driveMin: f.ok ? f.driveMin : null, marginal });
+    }
+    const order = info.filter(x => x.marginal && x.driveMin != null)
+      .sort((a, b) => a.driveMin - b.driveMin).map(x => x.i);
+    for (const di of order) {
+      const D = days[di];
+      if (!D?.length) continue;
+      const dDrive = info.find(x => x.i === di)?.driveMin;
+      if (dDrive == null) continue;
+      const dGroups = allGroups.filter(g => g.some(s => D.includes(s)));
+      // REGOLA DI ZONA (anti-mescolanza, es. Cavalese NON può finire nella giornata del Nord):
+      // un gruppo può andare SOLO in una giornata che contiene già gruppi della SUA zona (i suoi
+      // partner naturali), OPPURE ovunque se la sua INTERA zona sta nella giornata che si dissolve
+      // (una zona-resto intera che si aggancia al corridoio, es. Cles+Mezzolombardo → Merano).
+      const zoneOf = (g) => zoneIdxOfStop ? zoneIdxOfStop.get(g[0]) : null;
+      const wholeZoneInD = (g) => {
+        const z = zoneOf(g);
+        if (z == null) return true;
+        for (const [s, zi] of zoneIdxOfStop) if (zi === z && !D.includes(s)) return false;
+        return true;
+      };
+      // Prova (su copia): piazza i gruppi dal più lontano da casa (i vicini si agganciano dopo).
+      const trial = days.map((d, k) => (k === di ? [] : [...d]));
+      const trialDrive = new Map();   // driveMin di base per giornata (null = infattibile, NON ricalcolare)
+      const moves = [];
+      let totalDelta = 0, okAll = true, failWhy = "";
+      const gOrder = [...dGroups].sort((a, b) => homeMinG(b, home, opts) - homeMinG(a, home, opts));
+      for (const g of gOrder) {
+        const freeZone = wholeZoneInD(g);
+        const gz = zoneOf(g);
+        let best = null;
+        for (let j = 0; j < trial.length; j++) {
+          if (j === di || !trial[j].length) continue;
+          if (!freeZone && gz != null && !trial[j].some(s => zoneIdxOfStop.get(s) === gz)) continue; // zona diversa
+          const seedJ = seedGroupOf(trial[j], allGroups, home, opts);
+          if (directnessGG(seedJ, g, home, opts) > TAU_DISSOLVE) continue;   // altra valle
+          let base;
+          if (trialDrive.has(j)) base = trialDrive.get(j);
+          else {
+            const fb = await dayFeasible(orderDayFarFirst(trial[j], home, opts), j);
+            base = fb.ok ? fb.driveMin : null;
+            trialDrive.set(j, base);
+          }
+          if (base == null) continue;
+          const f = await dayFeasible(orderDayFarFirst([...trial[j], ...g], home, opts), j);
+          if (!f.ok || f.driveMin == null) continue;
+          if (endMin != null && f.dayEndWithBreaks != null && f.dayEndWithBreaks > endMin - MERGE_RETURN_MARGIN) continue;
+          const delta = f.driveMin - base;
+          if (delta > DISSOLVE_GROUP_DETOUR) continue;
+          if (!best || delta < best.delta) best = { j, delta, f };
+        }
+        if (!best) { okAll = false; failWhy = `"${nameOf(g[0])}" senza giornata ricevente`; break; }
+        trial[best.j] = [...trial[best.j], ...g];
+        trialDrive.set(best.j, best.f.driveMin);
+        totalDelta += best.delta;
+        moves.push({ g, j: best.j, delta: best.delta });
+      }
+      const gain = dDrive - totalDelta;
+      if (okAll && gain >= DISSOLVE_MIN_GAIN) {
+        if (opts.log) opts.log(`DISSOLUZIONE — giornata "${nameOf(D[0])}" (guida ${Math.round(dDrive)}') svuotata: ${moves.map(m => `"${nameOf(m.g[0])}"→[${nameOf((days[m.j] || [])[0])}] (Δ${Math.round(m.delta)}')`).join(", ")} · guida risparmiata ~${Math.round(gain)}'`);
+        days = trial.filter(d => d.length);
+        changed = true;
+        break;   // indici cambiati: ricomincia il giro
+      } else {
+        const sig = D.map(nameOf).join("|");
+        if (opts.log && !loggedFail.has(sig)) {
+          loggedFail.add(sig);
+          opts.log(`DISSOLUZIONE — giornata "${nameOf(D[0])}" (guida ${Math.round(dDrive)}') NON svuotata: ${okAll ? `guadagno ${Math.round(gain)}' < ${DISSOLVE_MIN_GAIN}'` : failWhy}`);
+        }
       }
     }
   }
@@ -579,6 +707,22 @@ export async function buildDayClusters(stops, home, budgetMin, opts = {}, dayFea
     }
   }
 
+  // DISSOLUZIONE delle giornate marginali: svuota le mezze giornate residue distribuendo i loro
+  // gruppi nelle altre (solo se ogni gruppo trova posto e la guida totale risparmiata è reale).
+  if (dayFeasible && days.length > 1) {
+    // Mappa tappa→indice zona per la regola anti-mescolanza della dissoluzione.
+    const zoneIdxOfStop = new Map();
+    zones.forEach((z, zi) => { for (const g of z.members) for (const s of g) zoneIdxOfStop.set(s, zi); });
+    const before = days.length;
+    const dissolved = await dissolveDays(days, allGroups, home, opts, dayFeasible, opts.endMin, zoneIdxOfStop);
+    days.length = 0;
+    for (const d of dissolved) days.push(d);
+    if (opts.log && days.length !== before) {
+      opts.log(`DOPO DISSOLUZIONE (${days.length} giornate): ` +
+        days.map((d, i) => `G${i + 1}[${d.map(nameOf).join(", ")}]`).join("  ·  "));
+    }
+  }
+
   // "Tappe rimaste indietro": le giornate da UNA sola tappa che NON si sono unite a nessuna (sono
   // isolate). Se ne restano ≥2 le riempio insieme in una giornata (al bisogno due); una tappa
   // davvero sola resta isolata (inevitabile). `growDays` riempie un giorno e sfora solo al bisogno.
@@ -674,7 +818,7 @@ export async function planMultiDay(payload, settings = {}, restStops = []) {
     log,
   };
   log(`=== PIANO MULTI-GIORNO ${baseDate} ===`);
-  log(`MOTORE: per-zona + fillPartial (v5.071) — se NON vedi questa riga, il server è ancora vecchio`);
+  log(`MOTORE: per-zona + fillPartial + dissoluzione (v5.103) — se NON vedi questa riga, il server è ancora vecchio`);
   log(`finestra ${formatTime(startMin)}–${formatTime(endMin)} (budget ${budgetMin}min) · pranzo ${opts.lunchMin}min`);
 
   const ensureCoords = async (s) => {

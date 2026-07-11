@@ -1,3 +1,10 @@
+## v5.103 — 2026-07-11
+Multi-giorno: DISSOLUZIONE delle mezze giornate + corridoio scalare + anti-ping-pong.
+- **Dissoluzione (`dissolveDays`)**: le mezze giornate sopravvissute a fillPartial/fillDays (es. Cles+Mezzolombardo chiusa alle 10:52 con 458' di margine — Diagnostica 2026-07-11) vengono SVUOTATE distribuendo tutti i loro gruppi nelle altre giornate. Commit-or-rollback con criterio ECONOMICO: ogni gruppo deve trovare posto (oracolo reale + margine rientro, Δguida ≤ 60'/gruppo, directness ≤ 0.65 anti-mescolanza) e la guida totale aggiunta deve essere inferiore alla guida della giornata eliminata di ≥ 30'. Richiesta utente: «vengono ancora 5,5 giornate, possono diventare 4,5 con 200km in meno».
+- **Corridoio scalare (fillPartial)**: `detourMax = max(25', 0.20 × tempo(seme→casa))` — per il corridoio del Nord (169') ammette diramazioni fino a ~34' (Ortisei/Merano, modello utente); per i corridoi corti nulla cambia. La Diagnostica ora logga anche i candidati respinti con det/detMax per tarare sul giro reale.
+- **Anti-ping-pong (fillPartial)**: un gruppo assorbito da una giornata povera è bloccato per il resto della fase (prima Egna faceva Merano→Fassa→Merano).
+- Validato su simulazione offline con la MATRICE REALE del log (coppie esatte + shortest-path): il vecchio motore riproduce esattamente le 6 giornate reali; il nuovo → 5 giornate (Cles+Mezzolombardo dissolti nella giornata Merano/Bolzano/Egna). E2E generico: output identico al vecchio. docs/MULTI_GIORNO.md aggiornato.
+
 ## v5.102 — 2026-07-09
 Fix: "Ottimizza" non riordinava le tappe per alcuni utenti (tappe senza coordinate).
 - **Bug**: se le tappe non avevano coordinate (lat/lng) — es. contatti d'archivio salvati senza geocodifica, o client senza chiave Google Maps che non geocodifica — il planner non poteva calcolare le distanze e l'ottimizzazione lasciava l'ordine invariato ("il giro si crea ma le tappe non sono ottimizzate"). Per chi aveva già le coordinate (archivio geocodificato da Maps) funzionava.

@@ -54,7 +54,7 @@ lontana alla più vicina; i resti vicini si accorpano alla fine.**
   CHIUSURA, e timing della 1ª tappa (orari risolti + se è scattato il calcolo a ritroso).
 - **Chiedere SEMPRE all'utente di incollare questo log** prima di toccare i raggruppamenti.
 
-## Algoritmo attuale (passi) — v5.070 (PER-ZONA + unione PARZIALE sul corridoio)
+## Algoritmo attuale (passi) — v5.103 (PER-ZONA + unione PARZIALE + DISSOLUZIONE)
 > ATTENZIONE: il GREEDY GLOBALE (v5.030–v5.044) è stato ANNULLATO — sul giro reale faceva SNAKE e
 > FRAMMENTAVA (vedi sotto "Cosa è stato provato e NON va"). Si costruisce SEMPRE per-zona.
 1. `buildLegTimeMatrix(home, stops)` → matrice tempi reali; `legMin(a,b)` usa la matrice (+buffer) o fallback.
@@ -75,11 +75,47 @@ lontana alla più vicina; i resti vicini si accorpano alla fine.**
    separate. (Esito di un design-panel multi-agente; vedi CHANGELOG v5.070.)
 6. **FASE DI RIEMPIMENTO** (`fillDays`): unisce le GIORNATE INTERE adiacenti compatibili residue
    (deviazione-per-tappa ≤ `MERGE_DETOUR_PER_STOP` 22' + fattibilità). Tione/Riva+Rovereto, Primiero+Valsugana.
-7. Orfani vicino casa accorpati; ordine finale near→far.
-8. Per ogni giornata: ordine **far-first** bloccato (`orderDayFarFirst`) → `planRoute` (orari/soste/pranzo reali).
-9. **Date solo feriali**: `addWorkdaysISO` salta sabato/domenica; `dayIndex` → data del giorno lavorativo.
+7. **DISSOLUZIONE** (`dissolveDays`, v5.103): le MEZZE GIORNATE sopravvissute (es. Cles+Mezzolombardo
+   chiusa alle 10:52 con 458' di margine — Diagnostica 2026-07-11) vengono SVUOTATE distribuendo TUTTI
+   i loro gruppi atomici nelle altre giornate. Commit-or-rollback: si accetta solo se OGNI gruppo trova
+   posto (oracolo reale + margine `MERGE_RETURN_MARGIN` sul rientro, Δguida per gruppo ≤
+   `DISSOLVE_GROUP_DETOUR` 60', directness verso il seme ricevente ≤ `TAU_DISSOLVE` 0.65 anti-mescolanza)
+   E la guida totale aggiunta ai riceventi è inferiore alla guida della giornata eliminata di almeno
+   `DISSOLVE_MIN_GAIN` 30' (guadagno km REALE, non soglia geometrica). Motivazione: `fillPartial` per
+   progetto non svuota mai un donatore (gate anti-furto) e `fillDays` respinge questi merge col gate
+   per-tappa — serviva una fase dedicata con criterio economico. Richiesta esplicita dell'utente
+   («vengono ancora 5,5 giornate, possono diventare 4,5 con 200km in meno»).
+8. Orfani vicino casa accorpati; ordine finale near→far.
+9. Per ogni giornata: ordine **far-first** bloccato (`orderDayFarFirst`) → `planRoute` (orari/soste/pranzo reali).
+10. **Date solo feriali**: `addWorkdaysISO` salta sabato/domenica; `dayIndex` → data del giorno lavorativo.
 
-### Tarature `fillPartial`: `TAU_PARTIAL` 0.45, `SLACK_MIN` 75', `CORRIDOR_DETOUR` 25' (tutte sulla Diagnostica reale).
+### Tarature `fillPartial`: `TAU_PARTIAL` 0.45, `SLACK_MIN` 75', `CORRIDOR_DETOUR` 25' (pavimento).
+- **v5.103 — detour scalare**: il detour ammesso dal corridoio ora SCALA con la lunghezza del corridoio:
+  `detourMax = max(25', 0.20 × tempo(seme→casa))`. Per corridoi corti nulla cambia (pavimento 25');
+  per San Candido (169') ammette diramazioni fino a ~34' (modello utente: Ortisei/Merano sono rami
+  leciti dell'asse del Nord). La Diagnostica ora logga anche i candidati RESPINTI con `det` e `detMax`
+  → si tara sulla prossima Diagnostica reale.
+- **v5.103 — anti-ping-pong**: un gruppo assorbito da una giornata povera è BLOCCATO per il resto della
+  fase (Diagnostica 2026-07-11: Egna faceva Merano→Fassa→Merano, spreco puro).
+
+### Tarature `dissolveDays` (v5.103): `TAU_DISSOLVE` 0.65, `DISSOLVE_GROUP_DETOUR` 60', `DISSOLVE_MIN_GAIN` 30'.
+Guardie aggiunte dopo review avversaria multi-agente:
+- **Marginalità**: candidate SOLO le vere mezze giornate (slack > `SLACK_MIN` e ≤ 3 gruppi) — non si
+  smontano giornate sane e il costo oracolo resta contenuto.
+- **REGOLA DI ZONA** (il vero anti-mescolanza, `TAU_DISSOLVE` da solo NON basta — ammetterebbe
+  Cavalese→giornata del Nord con dir ~0.62): un gruppo può andare solo in una giornata che contiene
+  già gruppi della SUA zona (i partner naturali), OPPURE ovunque se la sua INTERA zona sta nella
+  giornata che si dissolve (zona-resto intera che si aggancia al corridoio: Cles+Mezzolombardo→Merano).
+- Commit-or-rollback: se anche UN gruppo non trova posto, la giornata resta intatta (protegge le
+  giornate lontane: Fassa/Nord tentate e rifiutate correttamente nei test).
+- NB data: come fillPartial/fillDays, l'oracolo valida con l'indice-giornata provvisorio (l'ordine
+  near→far arriva dopo) — approssimazione pre-esistente comune a tutte le fasi; il planRoute finale
+  usa la data vera e segnala FUORI CHIUSURA in Diagnostica.
+Validate su simulazione offline con la MATRICE REALE del log 2026-07-11 (coppie esatte del log +
+completamento shortest-path, script `md_real.mjs`): il vecchio motore riproduce ESATTAMENTE le 6
+giornate reali; il nuovo dissolve Cles+Mezzolombardo nella giornata Merano/Bolzano/Egna → 5 giornate,
+guida totale −45/75'. Sul giro generico offline (haversine): output IDENTICO al vecchio (nessuna
+regressione). **Confermare sulla prossima Diagnostica reale.**
 
 ### Tarature (sulla Diagnostica, coi tempi reali)
 - `NEAR_HOME_RADIUS` (35') — raggio "vicino casa" accorpato in un'unica zona/giornata.
