@@ -90,15 +90,24 @@ lontana alla più vicina; i resti vicini si accorpano alla fine.**
 10. **Date solo feriali**: `addWorkdaysISO` salta sabato/domenica; `dayIndex` → data del giorno lavorativo.
 
 ### Tarature `fillPartial`: `TAU_PARTIAL` 0.45, `SLACK_MIN` 75', `CORRIDOR_DETOUR` 25' (pavimento).
-- **v5.103 — detour scalare**: il detour ammesso dal corridoio ora SCALA con la lunghezza del corridoio:
-  `detourMax = max(25', 0.20 × tempo(seme→casa))`. Per corridoi corti nulla cambia (pavimento 25');
-  per San Candido (169') ammette diramazioni fino a ~34' (modello utente: Ortisei/Merano sono rami
-  leciti dell'asse del Nord). La Diagnostica ora logga anche i candidati RESPINTI con `det` e `detMax`
-  → si tara sulla prossima Diagnostica reale.
+- **v5.103/v5.104 — detour scalare**: il detour ammesso dal corridoio SCALA con la lunghezza:
+  `detourMax = max(25', 0.35 × tempo(seme→casa))`. TARATO sulla Diagnostica reale 2026-07-12:
+  Ortisei→Nord ha det 53' (dentro con 0.35×169=59'; con 0.20 restava fuori), mentre restano esclusi
+  Cavalese→Merano 70'>31', Bressanone→Fassa 89'>38', Riva→Rovereto 69'>25'. Per corridoi corti
+  vale il pavimento 25' (comportamento storico). La Diagnostica logga i candidati RESPINTI con
+  `det`/`detMax`.
 - **v5.103 — anti-ping-pong**: un gruppo assorbito da una giornata povera è BLOCCATO per il resto della
   fase (Diagnostica 2026-07-11: Egna faceva Merano→Fassa→Merano, spreco puro).
 
-### Tarature `dissolveDays` (v5.103): `TAU_DISSOLVE` 0.65, `DISSOLVE_GROUP_DETOUR` 60', `DISSOLVE_MIN_GAIN` 30'.
+### Tarature `dissolveDays` (v5.104): `TAU_DISSOLVE` 0.75, `DISSOLVE_GROUP_DETOUR` 60', `DISSOLVE_MIN_GAIN` 30'.
+- **v5.104**: `TAU_DISSOLVE` 0.65→0.75 — la directness ancorata al seme lontano penalizza
+  intrinsecamente i gruppi vicino casa (una tappa SUL corridoio a detour zero vale
+  t_seme/(t_seme+t_g), alta se g è vicina): Cles→giornata Sen Jan dir 0.69 è il caso BUONO chiesto
+  dall'utente; le direzioni davvero sbagliate (via casa) stanno ≥~0.9. Le vere guardie anti-mescolanza
+  sono la REGOLA DI ZONA + economia + oracolo, non questa soglia.
+- **v5.104 — doppio ordine di piazzamento**: si tenta far-first e, se fallisce o non conviene,
+  near-first: piazzando prima il gruppo vicino (Mezzolombardo) il corridoio del ricevente si estende
+  verso casa e il gruppo dopo (Cles) diventa una diramazione economica (Δ49' invece di Δ62'>60).
 Guardie aggiunte dopo review avversaria multi-agente:
 - **Marginalità**: candidate SOLO le vere mezze giornate (slack > `SLACK_MIN` e ≤ 3 gruppi) — non si
   smontano giornate sane e il costo oracolo resta contenuto.

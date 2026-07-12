@@ -1,3 +1,11 @@
+## v5.104 — 2026-07-12
+Multi-giorno: tarature dalla Diagnostica reale — Ortisei candidato del Nord, dissoluzione sbloccata.
+- **Diagnostica reale 2026-07-12 (v5.103)**: Ortisei respinto dal corridoio Nord con det 53' > max 34'; la dissoluzione di Cles+Mezzolombardo falliva ("senza giornata ricevente"). L'utente: «Se Ortisei finisse nel giro di San Candido allora Mezzolombardo e Cles potrebbero andare nel giro di Sen Jan e si risolverebbe».
+- **`CORRIDOR_DETOUR_FRACTION` 0.20 → 0.35**: Ortisei (det 53' ≤ 0.35×169=59') diventa candidato del Nord. Coi numeri REALI del log restano esclusi tutti gli altri respinti (Cavalese→Merano 70'>31', Bressanone→Fassa 89'>38', Riva→Rovereto 69'>25').
+- **`TAU_DISSOLVE` 0.65 → 0.75**: la directness ancorata al seme lontano penalizza intrinsecamente i gruppi vicino casa (Cles→giornata Sen Jan dir 0.69 è il caso BUONO); le direzioni sbagliate stanno ≥~0.9. Le vere guardie restano regola di zona + economia + oracolo.
+- **Dissoluzione a doppio ordine**: si tenta far-first e poi near-first — piazzando prima Mezzolombardo il corridoio si estende e Cles diventa una diramazione da Δ49' (far-first da solo costava Δ62' > 60).
+- Sim con matrice reale aggiornata (coppie rivelate dal log: SC↔Ortisei 115', SenJan↔Bressanone 94', Merano↔Cavalese 76', Merano↔Ortisei 78'): zone identiche al reale, 6→5 giornate, E2E generico invariato.
+
 ## v5.103 — 2026-07-11
 Multi-giorno: DISSOLUZIONE delle mezze giornate + corridoio scalare + anti-ping-pong.
 - **Dissoluzione (`dissolveDays`)**: le mezze giornate sopravvissute a fillPartial/fillDays (es. Cles+Mezzolombardo chiusa alle 10:52 con 458' di margine — Diagnostica 2026-07-11) vengono SVUOTATE distribuendo tutti i loro gruppi nelle altre giornate. Commit-or-rollback con criterio ECONOMICO: ogni gruppo deve trovare posto (oracolo reale + margine rientro, Δguida ≤ 60'/gruppo, directness ≤ 0.65 anti-mescolanza) e la guida totale aggiunta deve essere inferiore alla guida della giornata eliminata di ≥ 30'. Richiesta utente: «vengono ancora 5,5 giornate, possono diventare 4,5 con 200km in meno».

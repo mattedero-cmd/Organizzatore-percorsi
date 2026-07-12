@@ -335,10 +335,12 @@ const TAU_PARTIAL = 0.45;     // soglia directness per assorbire un gruppo cross
 const SLACK_MIN = 75;         // una giornata è "povera" se finisce > SLACK_MIN prima di maxReturnTime
 const CORRIDOR_DETOUR = 25;   // detour max (min) del gruppo rispetto al corridoio seme→casa (pavimento)
 // Il detour ammesso SCALA col corridoio: per un corridoio lungo (San Candido 169') una diramazione
-// da ~30-35' (Ortisei, Merano) è legittima (modello utente: "brevi rami dell'asse → giornata del
-// Nord"), mentre 25' fissi la escludevano. Per i corridoi corti resta il pavimento di 25'
-// (comportamento invariato). detourMax = max(CORRIDOR_DETOUR, frazione × tempo(seme→casa)).
-const CORRIDOR_DETOUR_FRACTION = 0.20;
+// da ~50' (Ortisei) è legittima (modello utente: "brevi rami dell'asse → giornata del Nord"),
+// mentre 25' fissi la escludevano. Per i corridoi corti resta il pavimento di 25'.
+// detourMax = max(CORRIDOR_DETOUR, frazione × tempo(seme→casa)).
+// TARATA sulla Diagnostica reale 2026-07-12: Ortisei→Nord det 53' (dentro con 0.35×169=59');
+// restano esclusi Cavalese→Merano 70'>31', Bressanone→Fassa 89'>38', Riva→Rovereto 69'>25'.
+const CORRIDOR_DETOUR_FRACTION = 0.35;
 
 // ── DISSOLUZIONE GIORNATE (dissolveDays) ─────────────────────────────────────────────────────
 // Dopo fillPartial/fillDays può sopravvivere una MEZZA GIORNATA (es. Cles+Mezzolombardo chiusa alle
@@ -349,7 +351,12 @@ const CORRIDOR_DETOUR_FRACTION = 0.20;
 // riceventi è NETTAMENTE inferiore alla guida della giornata eliminata (guadagno km reale, non
 // una soglia geometrica). La directness verso il seme ricevente resta come guardia anti-mescolanza
 // (le valli in direzioni diverse hanno directness ≥ ~0.7 e restano escluse).
-const TAU_DISSOLVE = 0.65;          // guardia anti-mescolanza (più lasca di TAU_PARTIAL: qui decide l'economia)
+// TAU_DISSOLVE: backstop grossolano — le vere guardie sono la REGOLA DI ZONA e l'economia.
+// La directness ancorata al seme lontano penalizza intrinsecamente i gruppi vicino casa
+// (per una tappa SUL corridoio a detour zero vale t_seme/(t_seme+t_g) → alta se g è vicina):
+// Diagnostica 2026-07-12: Cles→giornata Sen Jan dir 0.69 è il caso BUONO voluto dall'utente,
+// mentre le direzioni davvero sbagliate stanno ≥ ~0.9 (passano da casa). 0.75 le separa.
+const TAU_DISSOLVE = 0.75;          // guardia anti-mescolanza (backstop; decidono zona+economia)
 const DISSOLVE_GROUP_DETOUR = 60;   // Δguida reale max (min) per singolo gruppo spostato
 const DISSOLVE_MIN_GAIN = 30;       // guadagno minimo di guida (min) perché la dissoluzione convenga
 
@@ -527,42 +534,54 @@ async function dissolveDays(daysIn, allGroups, home, opts, dayFeasible, endMin, 
         for (const [s, zi] of zoneIdxOfStop) if (zi === z && !D.includes(s)) return false;
         return true;
       };
-      // Prova (su copia): piazza i gruppi dal più lontano da casa (i vicini si agganciano dopo).
-      const trial = days.map((d, k) => (k === di ? [] : [...d]));
-      const trialDrive = new Map();   // driveMin di base per giornata (null = infattibile, NON ricalcolare)
-      const moves = [];
-      let totalDelta = 0, okAll = true, failWhy = "";
-      const gOrder = [...dGroups].sort((a, b) => homeMinG(b, home, opts) - homeMinG(a, home, opts));
-      for (const g of gOrder) {
-        const freeZone = wholeZoneInD(g);
-        const gz = zoneOf(g);
-        let best = null;
-        for (let j = 0; j < trial.length; j++) {
-          if (j === di || !trial[j].length) continue;
-          if (!freeZone && gz != null && !trial[j].some(s => zoneIdxOfStop.get(s) === gz)) continue; // zona diversa
-          const seedJ = seedGroupOf(trial[j], allGroups, home, opts);
-          if (directnessGG(seedJ, g, home, opts) > TAU_DISSOLVE) continue;   // altra valle
-          let base;
-          if (trialDrive.has(j)) base = trialDrive.get(j);
-          else {
-            const fb = await dayFeasible(orderDayFarFirst(trial[j], home, opts), j);
-            base = fb.ok ? fb.driveMin : null;
-            trialDrive.set(j, base);
+      // Prova (su copia) in DUE ordini di piazzamento: far-first (i lontani ancorano) e
+      // near-first (il corridoio del ricevente si estende verso casa un gruppo alla volta —
+      // Diagnostica 2026-07-12: Cles da solo costa Δ62' > 60, ma piazzando PRIMA Mezzolombardo
+      // il corridoio arriva a Mezzolombardo e Cles diventa una diramazione da Δ49').
+      const attempt = async (gOrder) => {
+        const trial = days.map((d, k) => (k === di ? [] : [...d]));
+        const trialDrive = new Map();   // driveMin di base per giornata (null = infattibile, NON ricalcolare)
+        const moves = [];
+        let totalDelta = 0, okAll = true, failWhy = "";
+        for (const g of gOrder) {
+          const freeZone = wholeZoneInD(g);
+          const gz = zoneOf(g);
+          let best = null;
+          for (let j = 0; j < trial.length; j++) {
+            if (j === di || !trial[j].length) continue;
+            if (!freeZone && gz != null && !trial[j].some(s => zoneIdxOfStop.get(s) === gz)) continue; // zona diversa
+            const seedJ = seedGroupOf(trial[j], allGroups, home, opts);
+            if (directnessGG(seedJ, g, home, opts) > TAU_DISSOLVE) continue;   // altra valle
+            let base;
+            if (trialDrive.has(j)) base = trialDrive.get(j);
+            else {
+              const fb = await dayFeasible(orderDayFarFirst(trial[j], home, opts), j);
+              base = fb.ok ? fb.driveMin : null;
+              trialDrive.set(j, base);
+            }
+            if (base == null) continue;
+            const f = await dayFeasible(orderDayFarFirst([...trial[j], ...g], home, opts), j);
+            if (!f.ok || f.driveMin == null) continue;
+            if (endMin != null && f.dayEndWithBreaks != null && f.dayEndWithBreaks > endMin - MERGE_RETURN_MARGIN) continue;
+            const delta = f.driveMin - base;
+            if (delta > DISSOLVE_GROUP_DETOUR) continue;
+            if (!best || delta < best.delta) best = { j, delta, f };
           }
-          if (base == null) continue;
-          const f = await dayFeasible(orderDayFarFirst([...trial[j], ...g], home, opts), j);
-          if (!f.ok || f.driveMin == null) continue;
-          if (endMin != null && f.dayEndWithBreaks != null && f.dayEndWithBreaks > endMin - MERGE_RETURN_MARGIN) continue;
-          const delta = f.driveMin - base;
-          if (delta > DISSOLVE_GROUP_DETOUR) continue;
-          if (!best || delta < best.delta) best = { j, delta, f };
+          if (!best) { okAll = false; failWhy = `"${nameOf(g[0])}" senza giornata ricevente`; break; }
+          trial[best.j] = [...trial[best.j], ...g];
+          trialDrive.set(best.j, best.f.driveMin);
+          totalDelta += best.delta;
+          moves.push({ g, j: best.j, delta: best.delta });
         }
-        if (!best) { okAll = false; failWhy = `"${nameOf(g[0])}" senza giornata ricevente`; break; }
-        trial[best.j] = [...trial[best.j], ...g];
-        trialDrive.set(best.j, best.f.driveMin);
-        totalDelta += best.delta;
-        moves.push({ g, j: best.j, delta: best.delta });
+        return { trial, moves, totalDelta, okAll, failWhy };
+      };
+      const farFirst = [...dGroups].sort((a, b) => homeMinG(b, home, opts) - homeMinG(a, home, opts));
+      let att = await attempt(farFirst);
+      if (!att.okAll || dDrive - att.totalDelta < DISSOLVE_MIN_GAIN) {
+        const att2 = await attempt([...farFirst].reverse());   // near-first
+        if (att2.okAll && dDrive - att2.totalDelta >= DISSOLVE_MIN_GAIN) att = att2;
       }
+      const { trial, moves, totalDelta, okAll, failWhy } = att;
       const gain = dDrive - totalDelta;
       if (okAll && gain >= DISSOLVE_MIN_GAIN) {
         if (opts.log) opts.log(`DISSOLUZIONE — giornata "${nameOf(D[0])}" (guida ${Math.round(dDrive)}') svuotata: ${moves.map(m => `"${nameOf(m.g[0])}"→[${nameOf((days[m.j] || [])[0])}] (Δ${Math.round(m.delta)}')`).join(", ")} · guida risparmiata ~${Math.round(gain)}'`);
@@ -818,7 +837,7 @@ export async function planMultiDay(payload, settings = {}, restStops = []) {
     log,
   };
   log(`=== PIANO MULTI-GIORNO ${baseDate} ===`);
-  log(`MOTORE: per-zona + fillPartial + dissoluzione (v5.103) — se NON vedi questa riga, il server è ancora vecchio`);
+  log(`MOTORE: per-zona + fillPartial + dissoluzione (v5.104) — se NON vedi questa riga, il server è ancora vecchio`);
   log(`finestra ${formatTime(startMin)}–${formatTime(endMin)} (budget ${budgetMin}min) · pranzo ${opts.lunchMin}min`);
 
   const ensureCoords = async (s) => {
