@@ -1689,7 +1689,26 @@ export async function evaluateDayTiming(payload, settings = {}) {
 
   // Allowance pause (come il motore reale): pranzo se abilitato + soste sui tragitti lunghi.
   const lunchEnabled = settings.lunchBreakEnabled !== false && payload.lunchBreak !== false;
-  const lunchMin = lunchEnabled ? Number(payload.lunchBreakMinutes ?? settings.lunchBreakMinutes ?? 45) : 0;
+  let lunchMin = lunchEnabled ? Number(payload.lunchBreakMinutes ?? settings.lunchBreakMinutes ?? 45) : 0;
+  // PRANZO NELL'ATTESA (v5.105): il motore reale consuma il pranzo dentro un'ATTESA forzata
+  // (arrivo prima dell'apertura pomeridiana, es. Ortisei: arrivi ~13:05, apre 14:45) SENZA
+  // spostare la fine giornata (noTimeShift). Senza questo, l'oracolo sommava pranzo+attesa e
+  // sovrastimava di ~1h (Diagnostica 2026-07-12: oracolo "rientro 18:50" vs planRoute reale
+  // 17:20 sulla giornata Nord+Ortisei). Se il programma contiene un'attesa capiente che
+  // interseca la finestra pranzo, il pranzo NON si aggiunge in coda.
+  if (lunchMin > 0) {
+    const lunchOpen = parseTime(settings.lunchOpenTime || "11:30") ?? 690;
+    const lunchClose = parseTime(settings.lunchCloseTime || "14:00") ?? 840;
+    for (const r of evaluated.rows) {
+      if (r.type) continue;
+      const arr = parseTime(r.arrivalTime), svc = parseTime(r.serviceStartTime);
+      if (arr == null || svc == null) continue;
+      const wait = svc - arr;
+      // stessa regola del planner reale (sez. 3b): attesa ≥ pranzo, arrivo prima della chiusura
+      // della finestra pranzo, inizio servizio dopo la sua apertura → pranzo assorbito.
+      if (wait >= lunchMin && arr < lunchClose && svc > lunchOpen) { lunchMin = 0; break; }
+    }
+  }
   const restInterval = Number(settings.restIntervalMin ?? 120);
   const restDur = Number(settings.restDurationMin ?? 15);
   const restMin = restInterval > 0 ? Math.floor((evaluated.summary.totalDriveMinutes || 0) / restInterval) * restDur : 0;

@@ -142,6 +142,11 @@ valutate da `scheduleStop` sul programma pre-pausa. Restituisce `dayEndWithBreak
 quindi usabile come gate ad ogni passo di accrescimento. **Così il giorno multi-giorno si comporta
 ESATTAMENTE come la giornata singola** (richiesta esplicita dell'utente: «deve seguire il motore di
 creazione della giornata singola, con tappe, pranzo ecc tutto uguale»).
+**v5.105 — pranzo nell'attesa**: l'allowance del pranzo NON si aggiunge se il programma valutato
+contiene un'attesa ≥ pranzo che interseca la finestra pranzo (arrivo prima dell'apertura
+pomeridiana): il motore reale ci mangia dentro senza spostare la fine. Senza questo l'oracolo
+sovrastimava di ~1h e respingeva giornate valide (Diagnostica 2026-07-12: "rientro 18:50" vs
+reale 17:20 su Nord+Ortisei → Ortisei restava fuori e si sprecavano ~85km).
 
 ### Criterio "sul corridoio" (il cuore — evita di mescolare valli)
 Una tappa B entra nella giornata del seme F solo se è **sulla via da F a casa**:

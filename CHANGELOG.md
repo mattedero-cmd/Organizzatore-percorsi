@@ -1,3 +1,10 @@
+## v5.105 — 2026-07-12
+Multi-giorno: l'oracolo impara il "pranzo nell'attesa" — Ortisei entra nella giornata del Nord.
+- **Diagnostica reale v5.104**: Ortisei era finalmente CANDIDATO del Nord (dir 0.41, det 53'≤59') ma l'oracolo lo respingeva con "rientro 18:50", mentre il piano manuale dell'utente mostrava che il motore REALE chiude quella giornata alle **17:20** (90' di divergenza, ~85km sprecati).
+- **Causa**: `evaluateDayTiming` sommava SEMPRE il pranzo in coda alla giornata, ma il motore reale lo assorbe nell'ATTESA forzata dell'apertura pomeridiana (Ortisei: arrivi ~13:05, apre 14:45 — in quell'attesa si mangia, regola v5.09x del planner reale) senza spostare la fine.
+- **Fix**: se il programma valutato contiene un'attesa ≥ pranzo che interseca la finestra pranzo (stessa regola del planner reale: arrivo < chiusura finestra, inizio servizio > apertura), il pranzo NON si aggiunge in coda. Verificato: oracolo 17:31 vs reale 17:01 (residuo = allowance soste, prudente); prima 18:31.
+- Regressioni: E2E multi-giorno identico; suite pranzo giornata singola invariate.
+
 ## v5.104 — 2026-07-12
 Multi-giorno: tarature dalla Diagnostica reale — Ortisei candidato del Nord, dissoluzione sbloccata.
 - **Diagnostica reale 2026-07-12 (v5.103)**: Ortisei respinto dal corridoio Nord con det 53' > max 34'; la dissoluzione di Cles+Mezzolombardo falliva ("senza giornata ricevente"). L'utente: «Se Ortisei finisse nel giro di San Candido allora Mezzolombardo e Cles potrebbero andare nel giro di Sen Jan e si risolverebbe».
