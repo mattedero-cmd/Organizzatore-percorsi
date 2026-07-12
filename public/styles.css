@@ -4363,3 +4363,17 @@ html[data-brand2] .visit-history-details[open] .visit-history-toggle { color: va
   flex: 1;
   font-size: 0.8rem;
 }
+
+/* ── Multi-giorno: righe tappa trascinabili ── */
+/* Niente selezione testo: il long-press deve avviare il drag, non la selezione. */
+.md-stop-row {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  border-radius: 8px;
+}
+.md-grip {
+  /* area di tocco generosa (~44px) senza cambiare il layout */
+  padding: 12px 10px;
+  margin: -10px -4px -10px -6px;
+}

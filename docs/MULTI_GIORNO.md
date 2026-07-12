@@ -202,8 +202,18 @@ Lo **swap pass-through/terminale è stato RIMOSSO** (era la causa principale del
 - Conteggia il tempo delle **soste** sui tragitti lunghi.
 - `resolveStopWindows` gestisce weeklyHours per giorno, orario continuato, finestra utente, ignoreHours, closedToday.
 
+## Riorganizzazione manuale e "Crea i giri" (v5.106)
+- **Drag tappe tra giornate**: parte da TUTTA la riga (`mdPointerDown`): mouse subito; touch con
+  pressione prolungata 350ms (slop 10px → se il dito si muove prima vince lo scroll; `touchmove`
+  non-passivo con preventDefault solo a drag armato). `user-select:none` sulle righe (la selezione
+  del testo vinceva sul drag), maniglia con hit-area ~44px per il drag touch immediato.
+- **"Crea i giri"** (`mdCreateRoutes`, pulsante nella vista risultato quando le giornate sono
+  calcolate): per ogni giornata POST `/api/routes` col piano reale (nome "Giorno N — data",
+  scheduledDate della giornata) + `PUT /api/routes/:id/folder` verso una cartella creata al volo
+  (`POST /api/folders`, nome scelto dall'utente, default "Più giorni <data>"). Alla fine si apre
+  la cartella nei salvati. I giri creati sono giri VERI (navigabili/modificabili/ricalcolabili).
+
 ## Da fare (in ordine, solo con dati reali)
-- [ ] Tarare `ON_CORRIDOR_FRACTION` (ora 0.4) sul giro vero (Diagnostica): Ortisei/Merano dentro, Cavalese fuori.
-      Se mescola ancora → abbassare; se spezza valli che dovrebbero stare insieme → alzare.
+- [x] ~~Tarare la frazione corridoio~~ → fatta in v5.104 (0.35 sulla Diagnostica reale).
 - [ ] Scelta del **giorno della settimana** per zona (negozi tutti aperti) — marginale.
-- [ ] "Crea i giri" + cartella unica con nome (salvataggio del piano).
+- [x] ~~"Crea i giri" + cartella unica con nome~~ → fatta in v5.106.

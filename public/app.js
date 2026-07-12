@@ -1848,7 +1848,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.105 &mdash; luglio 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.106 &mdash; luglio 2026</p>
         </div>
       </div>
 
@@ -3960,7 +3960,10 @@ function renderResultMultiDay() {
           <h2 style="margin:0;">Pianificazione su ${edit.length} giorni</h2>
           <div class="stop-meta" style="margin-top:4px;">${totalStops} tappe · finestra ${escapeHtml(s.window || "")} · rientro a casa ogni sera</div>
         </div>
-        ${state.mdStops && state.mdStops.length ? `<button type="button" class="btn" id="md-save" title="Salva queste tappe per ricalcolarle in futuro" style="flex-shrink:0;">${I.save ? I.save(14) : ""} Salva giro</button>` : ""}
+        <div class="row" style="gap:6px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end;">
+          ${state.mdStops && state.mdStops.length ? `<button type="button" class="btn" id="md-save" title="Salva queste tappe per ricalcolarle in futuro">${I.save ? I.save(14) : ""} Salva giro</button>` : ""}
+          ${!dirty && res.days.some(d => d.plan) ? `<button type="button" class="btn primary" id="md-create-routes" title="Crea un giro navigabile per ogni giornata, in una cartella dedicata">${I.navigate(14)} Crea i giri</button>` : ""}
+        </div>
       </div>
       ${dirty
         ? `<div class="card" style="padding:10px;border-color:var(--primary);display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
@@ -3974,7 +3977,7 @@ function renderResultMultiDay() {
              <div class="metric"><div class="metric-label">Ore lavoro</div><div class="metric-value">${minutesLabel(s.totalWorkMinutes)}</div></div>
            </div>`}
       ${unassigned.length ? `<div class="badge badge-warn" style="display:block;margin:10px 0;padding:8px;">${unassigned.length} tappe senza indirizzo valido, non pianificate: ${escapeHtml(unassigned.join(", "))}</div>` : ""}
-      <p class="stop-meta" style="margin:10px 0 6px;">Trascina la maniglia per spostare una tappa tra le giornate; usa le frecce per le regolazioni fini. Spostare una tappa oltre l'ultima giornata crea un nuovo giorno.</p>
+      <p class="stop-meta" style="margin:10px 0 6px;">Tieni premuta una tappa (o trascina subito dalla maniglia) per spostarla tra le giornate; le frecce fanno le regolazioni fini. Oltre l'ultima giornata si crea un nuovo giorno.</p>
       <div style="display:flex;flex-direction:column;gap:12px;">
         ${daysHtml}
       </div>
@@ -5119,6 +5122,47 @@ function mdMove(key, dir) {
   render();
 }
 
+// "Crea i giri": ogni giornata del piano multi-giorno diventa un VERO giro salvato
+// (navigabile, modificabile, ricalcolabile come qualsiasi giro), tutti in una cartella dedicata.
+async function mdCreateRoutes() {
+  const res = state.resultMultiDay;
+  if (!res?.days?.length) return;
+  if (state.mdDirty) { showToast("Prima ricalcola le giornate"); return; }
+  const defName = `Più giorni ${res.baseDate || ""}`.trim();
+  const name = window.prompt("Nome della cartella per i giri:", defName);
+  if (!name) return;
+  state.planning = true;
+  showSpinner("Creo i giri…");
+  render();
+  try {
+    const folder = await api("/api/folders", { method: "POST", body: JSON.stringify({ name }) });
+    const fmtD = (iso) => { try { return new Date(iso + "T12:00:00").toLocaleDateString("it-IT", { weekday: "short", day: "numeric", month: "short" }); } catch { return iso || ""; } };
+    let created = 0;
+    for (const d of res.days) {
+      if (!d.plan) continue;
+      const routeName = `Giorno ${d.dayNumber} — ${fmtD(d.scheduledDate)}`;
+      const saved = await api("/api/routes", { method: "POST", body: JSON.stringify({
+        ...d.plan, id: undefined, name: routeName, scheduledDate: d.scheduledDate
+      }) });
+      if (saved?.id != null && folder?.id != null) {
+        await api(`/api/routes/${saved.id}/folder`, { method: "PUT", body: JSON.stringify({ folderId: folder.id }) });
+      }
+      created++;
+    }
+    await refreshFolders();
+    await refreshSavedRoutes();
+    state.savedFolderId = folder?.id ?? null;
+    showToast(`${created} giri creati nella cartella "${name}"`);
+    setActiveTab("saved");
+  } catch (e) {
+    showToast(e.message || "Errore nella creazione dei giri");
+  } finally {
+    hideSpinner();
+    state.planning = false;
+    render();
+  }
+}
+
 async function planMultiDayRecalc() {
   if (state.planning || !state.mdEdit) return;
   const manualDays = state.mdEdit.map(day => day.map(s => { const c = { ...s }; delete c._time; return c; }));
@@ -5148,28 +5192,55 @@ function clearMdMark() {
   if (mdMarkEl) { mdMarkEl.style.boxShadow = ""; mdMarkEl.style.outline = ""; mdMarkEl = null; }
 }
 function mdPointerDown(e) {
-  const handle = e.target.closest("[data-md-handle]");
-  if (!handle) return;
-  if (e.button != null && e.button !== 0) return;
   if (!state.mdEdit) return;
-  const [si, sj] = String(handle.getAttribute("data-md-handle")).split(":").map(Number);
-  if (!state.mdEdit[si] || state.mdEdit[si][sj] == null) return;
-  const card = handle.closest(".md-stop-row");
+  if (e.button != null && e.button !== 0) return;
+  if (e.target.closest("button")) return;            // frecce su/giù: non avviano il drag
+  // Il drag parte da TUTTA la riga, non solo dalla maniglia (feedback utente: "fatico a capire
+  // dove premere, vince la selezione"). Mouse e maniglia: subito. Touch sul resto della riga:
+  // PRESSIONE PROLUNGATA (350ms) così lo scroll verticale resta libero — se il dito si muove
+  // prima del timer, è uno scroll e il drag si annulla.
+  const card = e.target.closest(".md-stop-row");
   if (!card) return;
-  e.preventDefault();
-  const drag = { si, sj, clone: null, started: false, startX: e.clientX, startY: e.clientY, targetDay: si, targetIdx: sj };
+  const [si, sj] = String(card.getAttribute("data-md-row")).split(":").map(Number);
+  if (!state.mdEdit[si] || state.mdEdit[si][sj] == null) return;
+  const fromGrip = !!e.target.closest("[data-md-handle]");
+  const isTouch = e.pointerType && e.pointerType !== "mouse";
+  const drag = { si, sj, clone: null, started: false, armed: !isTouch || fromGrip,
+    startX: e.clientX, startY: e.clientY, targetDay: si, targetIdx: sj, lpTimer: null };
+  if (drag.armed) e.preventDefault();
+
+  const startVisual = (x, y) => {
+    drag.started = true;
+    const c = card.cloneNode(true);
+    Object.assign(c.style, { position: "fixed", left: "0", top: "0", width: card.offsetWidth + "px",
+      pointerEvents: "none", opacity: "0.92", zIndex: "9999", boxShadow: "0 8px 24px rgba(0,0,0,0.3)",
+      background: "var(--bg2)", borderRadius: "8px" });
+    c.style.transform = `translate(${x - card.offsetWidth / 2}px, ${y - 18}px)`;
+    document.body.appendChild(c);
+    drag.clone = c;
+    card.style.opacity = "0.35";
+  };
+  if (isTouch && !fromGrip) {
+    drag.lpTimer = setTimeout(() => {
+      drag.armed = true;
+      try { navigator.vibrate?.(15); } catch { /* niente vibrazione */ }
+      startVisual(drag.startX, drag.startY);
+    }, 350);
+  }
+  // Una volta armato il drag su touch, bisogna impedire al browser di prendersi lo scroll.
+  const onTouchMove = (ev) => { if (drag.armed) ev.preventDefault(); };
+  document.addEventListener("touchmove", onTouchMove, { passive: false });
 
   const onMove = (ev) => {
     const dx = ev.clientX - drag.startX, dy = ev.clientY - drag.startY;
+    if (!drag.armed) {
+      // pressione prolungata non ancora scattata: se il dito si muove, è uno scroll → annulla
+      if (Math.abs(dx) + Math.abs(dy) > 10) finish(true);
+      return;
+    }
     if (!drag.started) {
       if (Math.abs(dx) + Math.abs(dy) < 8) return;
-      drag.started = true;
-      const c = card.cloneNode(true);
-      Object.assign(c.style, { position: "fixed", left: "0", top: "0", width: card.offsetWidth + "px",
-        pointerEvents: "none", opacity: "0.92", zIndex: "9999", boxShadow: "0 8px 24px rgba(0,0,0,0.3)" });
-      document.body.appendChild(c);
-      drag.clone = c;
-      card.style.opacity = "0.35";
+      startVisual(ev.clientX, ev.clientY);
     }
     ev.preventDefault();
     if (drag.clone) drag.clone.style.transform = `translate(${ev.clientX - drag.clone.offsetWidth / 2}px, ${ev.clientY - 18}px)`;
@@ -5193,14 +5264,16 @@ function mdPointerDown(e) {
       mdMarkEl = overDay;
     }
   };
-  const finish = () => {
+  const finish = (aborted) => {
     window.removeEventListener("pointermove", onMove);
     window.removeEventListener("pointerup", finish);
     window.removeEventListener("pointercancel", finish);
+    document.removeEventListener("touchmove", onTouchMove);
+    if (drag.lpTimer) { clearTimeout(drag.lpTimer); drag.lpTimer = null; }
     clearMdMark();
     if (drag.clone) drag.clone.remove();
     card.style.opacity = "";
-    if (!drag.started) return;
+    if (aborted === true || !drag.started) return;
     const days = state.mdEdit;
     let { targetDay, targetIdx } = drag;
     if (targetDay == null || !days[targetDay]) { render(); return; }
@@ -7864,6 +7937,7 @@ function bindEvents() {
     if (e.target.closest("#plan-route")) { await planCurrentRoute(); return; }
     if (e.target.closest("#plan-multiday")) { await planMultiDayAction(); return; }
     if (e.target.closest("#md-save")) { await mdSavePlan(); return; }
+    if (e.target.closest("#md-create-routes")) { await mdCreateRoutes(); return; }
     const mdRecalcSaved = e.target.closest("[data-md-recalc-saved]");
     if (mdRecalcSaved) { await recalcSavedMultiDay(mdRecalcSaved.getAttribute("data-md-recalc-saved")); return; }
     const mdDelSaved = e.target.closest("[data-md-del-saved]");

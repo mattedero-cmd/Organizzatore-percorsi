@@ -1,3 +1,8 @@
+## v5.106 — 2026-07-12
+Multi-giorno: spostare le tappe è finalmente facile + "Crea i giri" in cartella dedicata.
+- **Trascinamento tappe**: il drag ora parte da TUTTA la riga (non più solo dalla minuscola maniglia): col mouse subito, su touch con PRESSIONE PROLUNGATA (350ms, con vibrazione) così lo scroll resta libero; se il dito si muove prima, vince lo scroll. La selezione del testo sulle righe è disattivata (era lei a "vincere" sul drag); la maniglia ha un'area di tocco ~44px e resta la via per il drag touch immediato. Verificato E2E: drag dal corpo riga senza selezione.
+- **"Crea i giri"** (nuovo pulsante nella vista multi-giorno, era l'ultimo punto della to-do): ogni giornata del piano diventa un VERO giro salvato — navigabile, modificabile, ricalcolabile — con nome "Giorno N — data" e la sua data; tutti dentro una **cartella dedicata** col nome scelto (default "Più giorni <data>"). Al termine si apre la cartella nei giri salvati. Verificato E2E: 4 giornate → 4 giri nella cartella, visibili nella UI.
+
 ## v5.105 — 2026-07-12
 Multi-giorno: l'oracolo impara il "pranzo nell'attesa" — Ortisei entra nella giornata del Nord.
 - **Diagnostica reale v5.104**: Ortisei era finalmente CANDIDATO del Nord (dir 0.41, det 53'≤59') ma l'oracolo lo respingeva con "rientro 18:50", mentre il piano manuale dell'utente mostrava che il motore REALE chiude quella giornata alle **17:20** (90' di divergenza, ~85km sprecati).
