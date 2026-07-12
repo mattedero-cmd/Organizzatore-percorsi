@@ -1848,7 +1848,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.106 &mdash; luglio 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.107 &mdash; luglio 2026</p>
         </div>
       </div>
 
@@ -4657,6 +4657,9 @@ async function handleShareImport(token) {
     delete flat.id;
     const saved = await api("/api/routes", { method: "POST", body: JSON.stringify(flat) });
     state.result = normalizeSavedRoute({ ...flat, id: saved.id });
+    state.resultMultiDay = null; // il giro importato è singolo: via l'eventuale piano multi-giorno
+    state.mdEdit = null;
+    state.mdDirty = false;
     await refreshSavedRoutes();
     hideSpinner();
     setActiveTab("result");
@@ -7849,6 +7852,12 @@ function bindEvents() {
         const raw = await api(`/api/routes/${openRoute.dataset.openRoute}`);
         state.result = normalizeSavedRoute({ ...raw.payload, id: raw.id, ...raw });
         delete state.result.payload; // evita il wrapper auto-annidato (footgun se ri-salvato)
+        // Giro SINGOLO aperto: la vista risultato non deve più mostrare il piano multi-giorno
+        // (renderResult dà precedenza a resultMultiDay: dopo "Crea i giri" restava in memoria
+        // e toccare un giro creato riapriva il piano invece della scheda del giro).
+        state.resultMultiDay = null;
+        state.mdEdit = null;
+        state.mdDirty = false;
         state.manualOrderRows = null;
     state.expandedStops = new Set();
     state.expandedPanels = new Set();

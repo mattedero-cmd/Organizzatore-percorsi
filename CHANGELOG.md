@@ -1,3 +1,9 @@
+## v5.107 — 2026-07-12
+Fix: i giri creati da "Crea i giri" si aprono come vere giornate singole.
+- **Bug**: dopo "Crea i giri" il piano multi-giorno restava in memoria (`state.resultMultiDay`) e `renderResult` gli dà precedenza: toccando un giro creato ("Giorno 2 — …") nei salvati si riapriva il PIANO multi-giorno invece della scheda del giro. Il giro salvato era corretto, ma la sua scheda non si vedeva mai (finché non ricaricavi l'app).
+- **Fix**: aprire un giro salvato (e importare un giro condiviso) azzera lo stato multi-giorno → si apre la **scheda giro vera**: tappe con Naviga/telefono/WhatsApp, percorso completo, pause, ricalcolo — una giornata singola a tutti gli effetti.
+- Verificato E2E sul flusso reale: piano → Crea i giri → tocca "Giorno 2" → scheda singola con navigazione (niente più vista piano).
+
 ## v5.106 — 2026-07-12
 Multi-giorno: spostare le tappe è finalmente facile + "Crea i giri" in cartella dedicata.
 - **Trascinamento tappe**: il drag ora parte da TUTTA la riga (non più solo dalla minuscola maniglia): col mouse subito, su touch con PRESSIONE PROLUNGATA (350ms, con vibrazione) così lo scroll resta libero; se il dito si muove prima, vince lo scroll. La selezione del testo sulle righe è disattivata (era lei a "vincere" sul drag); la maniglia ha un'area di tocco ~44px e resta la via per il drag touch immediato. Verificato E2E: drag dal corpo riga senza selezione.
