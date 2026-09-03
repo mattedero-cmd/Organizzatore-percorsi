@@ -1,3 +1,11 @@
+## v5.112 — 2026-07-23
+Archivio: nei risultati la SEDE è sempre visibile (e si vede quando manca).
+- Le schede dell'archivio mostravano nome/attività e indirizzo, ma **non la sede** (`location`) — proprio il dato che distingue fra loro i contatti con lo stesso nome.
+- Ora ogni scheda mostra **sempre** la sede, con icona dedicata e in evidenza; se manca, lo dice esplicitamente: *"Sede non indicata"*.
+- Stessa cosa per l'**attività**: se c'è è il titolo della scheda (invariato), se manca compare *"Attività non indicata"*.
+- Aggiunte le icone `pin` (sede) e `briefcase` (attività) allo stile SVG inline già in uso; il dato mancante usa la classe discreta `.archive-missing` (corsivo attenuato), senza badge decorativi estranei allo stile dell'app.
+- Verificato sui 4 casi: con attività+sede, con attività senza sede, senza attività con sede, senza nessuna delle due.
+
 ## v5.111 — 2026-07-23
 Ricerca archivio a prova di spazi (segnalazione utente: uno spazio in fondo al nome invalidava la ricerca).
 - **Salvataggio pulito**: nome, attività, sede e indirizzo dei contatti vengono normalizzati prima di salvarli — NBSP (lo spazio "invisibile" che arriva copiando da Google Maps) convertito in spazio normale, spazi multipli collassati, estremi tagliati. Non si creano più contatti con uno spazio in coda al nome.

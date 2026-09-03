@@ -4377,3 +4377,9 @@ html[data-brand2] .visit-history-details[open] .visit-history-toggle { color: va
   padding: 12px 10px;
   margin: -10px -4px -10px -6px;
 }
+
+/* Archivio: dato mancante (sede/attività) — discreto ma leggibile, niente badge decorativi */
+.archive-missing {
+  opacity: 0.65;
+  font-style: italic;
+}
