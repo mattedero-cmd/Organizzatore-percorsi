@@ -1851,7 +1851,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.108 &mdash; luglio 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.109 &mdash; luglio 2026</p>
         </div>
       </div>
 
@@ -6608,7 +6608,13 @@ function openBreakPicker(rowIdx, breakType) {
   });
 }
 
-function openMapPickerForField({ labelEl, addressEl, latEl, lngEl, hoursEl, phoneEl, onConfirm, onUseDirectly, breakType }) {
+// `fillOnly`: il picker COMPILA soltanto i campi della scheda e si chiude — niente
+// salvataggio in archivio da qui. Serve ai pannelli "tappa manuale" (nuovo percorso e
+// vista risultato), dove il salvataggio deve avvenire UNA SOLA VOLTA alla fine, con
+// "+ Salva e aggiungi", dopo che l'utente ha corretto nome cliente e sede. Prima il
+// pulsante "💾 Salva" del picker creava subito un contatto col nome grezzo di Google e
+// il successivo "+ Salva e aggiungi" ne creava un SECONDO → archivio pieno di doppioni.
+function openMapPickerForField({ labelEl, addressEl, latEl, lngEl, hoursEl, phoneEl, onConfirm, onUseDirectly, breakType, fillOnly }) {
   const startLat = Number(latEl?.value) || 46.07;
   const startLng = Number(lngEl?.value) || 11.12;
   let pickedLat = startLat, pickedLng = startLng;
@@ -6629,7 +6635,7 @@ function openMapPickerForField({ labelEl, addressEl, latEl, lngEl, hoursEl, phon
       <div class="map-picker-footer">
         <span id="map-picker-field-label" class="stop-meta">Tocca la mappa o cerca un luogo</span>
         <div style="display:flex;gap:6px;">
-          <button class="btn ghost" id="map-picker-field-save" title="Salva nell'archivio e usa">💾 Salva</button>
+          ${fillOnly ? "" : `<button class="btn ghost" id="map-picker-field-save" title="Salva nell'archivio e usa">💾 Salva</button>`}
           <button class="btn primary" id="map-picker-field-confirm">✓ Usa</button>
         </div>
       </div>
@@ -6818,7 +6824,8 @@ function openMapPickerForField({ labelEl, addressEl, latEl, lngEl, hoursEl, phon
     } else {
       confirmBtn.onclick = () => applyPick(false);
     }
-    document.getElementById("map-picker-field-save").onclick = () => applyPick(true);
+    const saveBtn = document.getElementById("map-picker-field-save");
+    if (saveBtn) saveBtn.onclick = () => applyPick(true);
     document.getElementById("map-picker-field-cancel").onclick = () => modal.remove();
   });
 }
@@ -7699,7 +7706,10 @@ function bindEvents() {
         latEl: document.getElementById("rv-custom-lat"),
         lngEl: document.getElementById("rv-custom-lng"),
         hoursEl: document.getElementById("rv-custom-hours"),
-        phoneEl: document.getElementById("rv-custom-phone")
+        phoneEl: document.getElementById("rv-custom-phone"),
+        // Come nel form percorso: compila e basta. Il salvataggio in archivio avviene una
+        // sola volta con "+ Salva e aggiungi", dopo aver corretto cliente e sede.
+        fillOnly: true
       });
       return;
     }
@@ -8155,6 +8165,9 @@ function bindEvents() {
         latEl: document.querySelector("#rp-custom-lat"),
         lngEl: document.querySelector("#rp-custom-lng"),
         phoneEl: document.querySelector("#rp-custom-phone"),
+        // Solo compilazione: si torna alla scheda per correggere cliente/sede, poi si
+        // salva UNA volta con "+ Salva e aggiungi" (o si usa senza salvare).
+        fillOnly: true,
         onConfirm: (label, address, lat, lng, weeklyHours, phone) => {
           // Maps compila solo i campi VUOTI: un nome scritto a mano dall'utente vince
           // sempre sul nome del luogo Google. Indirizzo/coordinate invece sì, sono il
@@ -8166,26 +8179,13 @@ function bindEvents() {
           if (weeklyHours) state.route.customWeeklyHours = weeklyHours;
           if (phone) state.route.customPhone = phone;
           render();
-          showToast(weeklyHours ? "Luogo e orari compilati da Maps" : "Luogo compilato da Maps (nessun orario disponibile)");
-        },
-        onUseDirectly: (label, address, lat, lng, weeklyHours, phone) => {
-          state.route.stops.push({
-            uid: crypto.randomUUID(),
-            addressId: null,
-            customer: label || address.split(",")[0] || "Tappa provvisoria",
-            location: "",
-            fullAddress: address,
-            durationMinutes: state.route.customDuration || state.settings.defaultStopDuration || 45,
-            phone: phone || "",
-            weeklyHours: weeklyHours || null,
-            lat, lng,
-            recognized: true,
-            temporary: true
-          });
-          Object.assign(state.route, { customCustomer: "", customLocation: "", customAddress: "", customDuration: null, customPhone: "", customWeeklyHours: null, customLat: null, customLng: null });
-          render();
-          showToast(weeklyHours ? "Tappa aggiunta con orari da Maps (non salvata in archivio)" : "Tappa aggiunta (non salvata in archivio)");
+          showToast(weeklyHours
+            ? "Luogo e orari compilati — controlla cliente e sede, poi salva"
+            : "Luogo compilato — controlla cliente e sede, poi salva");
         }
+        // NIENTE onUseDirectly: il picker non aggiunge più la tappa al volo. Si torna alla
+        // scheda, dove i due pulsanti finali restano disponibili DOPO la revisione:
+        // "+ Usa senza salvare" (tappa provvisoria) e "+ Salva e aggiungi" (archivio).
       });
       return;
     }

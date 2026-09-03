@@ -1,3 +1,11 @@
+## v5.109 — 2026-07-23
+Tappa manuale da Maps: niente più contatti doppi in archivio.
+- **Bug (grave)**: scegliendo un luogo sulla mappa dal pannello "+ Manuale", il pulsante **"💾 Salva"** del picker salvava SUBITO il contatto in archivio col nome grezzo di Google. L'utente poi correggeva nome cliente e sede nella scheda e premeva **"+ Salva e aggiungi"**, che salvava una **seconda volta** → ogni tappa manuale creava **due contatti** per lo stesso cliente.
+- **Fix — il flusso ora è quello giusto**: dal pannello tappa manuale (sia in "Nuovo percorso" sia nella vista risultato) il picker **compila soltanto** la scheda e si chiude (`fillOnly`), riportandoti ai campi con indirizzo, coordinate, orari e telefono già inseriti. Correggi nome cliente e sede, e **solo alla fine** decidi: "+ Salva e aggiungi" (un unico contatto in archivio, coi dati corretti) oppure "+ Usa senza salvare" (tappa provvisoria).
+- Il pulsante "💾 Salva" del picker non compare più in quel contesto (creava il doppione); resta invece dove ha senso, cioè scegliendo il locale di **soste e pausa pranzo**.
+- Il picker non aggiunge più la tappa "al volo" dal pannello manuale (prima "✓ Usa come tappa" la inseriva subito, senza darti modo di correggere nulla): quella funzione resta disponibile come "+ Usa senza salvare", ma **dopo** la revisione.
+- Verificato E2E: compilazione → correzione di nome e sede → "+ Salva e aggiungi" → **un solo** contatto in archivio, coi dati corretti.
+
 ## v5.108 — 2026-07-23
 Tappa manuale + "Scegli sulla mappa": il pannello non si richiude più e non perde i campi.
 - **Bug 1 — il pannello si "compattava"**: l'apertura del pannello "+ Manuale" viveva solo nel DOM (`manualPanel.style.display`), non in `state`. Ogni `render()` — incluso quello che chiude la scelta del luogo su Maps — ricostruiva l'HTML con `display:none`, quindi bisognava riaprirlo a mano ogni volta. Ora l'apertura sta in `state.rpManualOpen` e sopravvive al render.
