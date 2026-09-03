@@ -1,3 +1,9 @@
+## v5.113 — 2026-07-23
+Ricerca tappe da cellulare: si arriva finalmente ai risultati in fondo.
+- **Causa 1 — tetto di 8 risultati**: i suggerimenti erano limitati a 8 (6 in un caso). Con molti contatti omonimi (es. 20 filiali "Mediolanum FBO" in sedi diverse) quelle che servivano **non erano proprio nell'elenco**. Ora il limite è `MAX_SUGGESTIONS` = 40, condiviso da tutte le tendine (tappe, partenza/arrivo, vista risultato).
+- **Causa 2 — tendina più alta dello schermo**: l'altezza era fissa (240px), così su cellulare il fondo dell'elenco finiva **fuori dallo schermo** e le ultime voci restavano irraggiungibili anche se la lista scorreva. Ora `fitSuggestions()` calcola l'altezza sullo spazio reale sotto al campo (ricalcolata a ogni digitazione, a ogni render e al ruotare del telefono), con scorrimento fluido su iOS (`-webkit-overflow-scrolling`) e senza trascinare la pagina sotto (`overscroll-behavior: contain`).
+- Verificato su viewport iPhone con 20 contatti omonimi: **20 suggerimenti su 20**, elenco scorrevole, e scorrendo fino in fondo l'ultima voce è realmente visibile e cliccabile (prima restava oltre il bordo).
+
 ## v5.112 — 2026-07-23
 Archivio: nei risultati la SEDE è sempre visibile (e si vede quando manca).
 - Le schede dell'archivio mostravano nome/attività e indirizzo, ma **non la sede** (`location`) — proprio il dato che distingue fra loro i contatti con lo stesso nome.

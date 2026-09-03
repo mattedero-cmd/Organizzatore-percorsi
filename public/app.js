@@ -1336,7 +1336,7 @@ function renderMenu() {
           .filter(a => (a.customer + " " + (a.location || "") + " " + (a.fullAddress || "")).toLowerCase().includes(q));
         const priority = allFiltered.filter(a => a.addressType === "favorite" || a.addressType === "rest");
         const rest = allFiltered.filter(a => a.addressType !== "favorite" && a.addressType !== "rest");
-        const matches = [...priority, ...rest].slice(0, 8);
+        const matches = [...priority, ...rest].slice(0, MAX_SUGGESTIONS);
         startSugg.innerHTML = matches.map(a => `<div class="stop-suggestion" data-settings-start="${a.id}">
           ${a.addressType === "favorite" ? "⭐ " : a.addressType === "rest" ? "☕ " : a.addressType === "restaurant" ? "🍽 " : "👤 "}${escapeHtml(a.customer)}${a.location ? ` — ${escapeHtml(a.location)}` : ""}
           <br><small class="stop-meta">${escapeHtml(a.fullAddress || "")}</small>
@@ -1853,7 +1853,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.112 &mdash; luglio 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.113 &mdash; luglio 2026</p>
         </div>
       </div>
 
@@ -2749,10 +2749,15 @@ async function renderGoogleMap(result) {
 
 // ── render: route tab ─────────────────────────────────────────────────────────
 
+// Quanti suggerimenti mostrare cercando una tappa/indirizzo. Con molti contatti omonimi
+// (es. 20 filiali "Mediolanum FBO" in sedi diverse) il vecchio limite di 8 nascondeva
+// proprio quelle in fondo: l'elenco è scorrevole, quindi il tetto può essere alto.
+const MAX_SUGGESTIONS = 40;
+
 function renderStopSuggestions() {
   const q = state.stopSearchText.trim().toLowerCase();
   if (!q) return "";
-  const matches = rankAddressMatches(state.allAddresses, q).slice(0, 8);
+  const matches = rankAddressMatches(state.allAddresses, q).slice(0, MAX_SUGGESTIONS);
   if (!matches.length) return `<div class="stop-suggestion-empty">Nessun risultato</div>`;
   return matches.map(a => `
     <div class="stop-suggestion-item" data-suggest-id="${a.id}">
@@ -4554,6 +4559,19 @@ function renderMenuStats() {
 
 // ── render dispatch ───────────────────────────────────────────────────────────
 
+// Adatta l'altezza delle tendine dei suggerimenti allo spazio REALE sotto al campo: su
+// cellulare un'altezza fissa faceva finire il fondo dell'elenco fuori dallo schermo, quindi
+// le ultime voci restavano irraggiungibili anche se l'elenco scorreva.
+function fitSuggestions() {
+  document.querySelectorAll(".stop-suggestions").forEach(el => {
+    if (!el.innerHTML.trim() || el.offsetParent === null) return;
+    const spazio = window.innerHeight - el.getBoundingClientRect().top - 12;
+    el.style.maxHeight = Math.max(150, Math.min(spazio, 420)) + "px";
+  });
+}
+const scheduleFitSuggestions = () => setTimeout(fitSuggestions, 0);
+window.addEventListener("resize", scheduleFitSuggestions);
+
 function render() {
   // Online-first: senza sessione non esiste modalità operativa — si mostra il login.
   if (!state.user) { renderAuthScreen(false); return; }
@@ -4563,6 +4581,7 @@ function render() {
   else if (state.activeTab === "archive") renderArchive();
   else if (state.activeTab === "result") renderResult();
   else if (state.activeTab === "google-contacts") renderGoogleContactsTab();
+  scheduleFitSuggestions();
 }
 
 // ── route form helpers ────────────────────────────────────────────────────────
@@ -6853,6 +6872,10 @@ function bindEvents() {
     }
   });
 
+  // Le tendine dei suggerimenti si popolano dentro gli handler qui sotto: dopo ogni
+  // digitazione ne riadattiamo l'altezza allo spazio disponibile (vedi fitSuggestions).
+  app.addEventListener("input", scheduleFitSuggestions);
+
   app.addEventListener("input", e => {
     // Scatti di 5 minuti: un input type="time" ha SEMPRE un valore completo (HH:MM),
     // quindi arrotondare qui è sicuro e garantisce che lo STATO catturato durante lo
@@ -6987,7 +7010,7 @@ function bindEvents() {
       if (labelH) labelH.value = "";
       // Mostra suggerimenti dall'archivio
       if (suggEl) {
-        const matches = q.trim().length > 0 ? rankAddressMatches(state.allAddresses, q.trim().toLowerCase()).slice(0, 6) : [];
+        const matches = q.trim().length > 0 ? rankAddressMatches(state.allAddresses, q.trim().toLowerCase()).slice(0, MAX_SUGGESTIONS) : [];
         suggEl.innerHTML = matches.map(a => `
           <div class="stop-suggestion-item" data-rv-addr-sugg="${isStart ? "start" : "end"}" data-addr-id="${a.id}">
             <span class="stop-suggestion-name">${escapeHtml(addressName(a))}</span>
@@ -7014,7 +7037,7 @@ function bindEvents() {
       const addRow = document.getElementById("rv-add-saved-row");
       if (addRow) addRow.style.display = "none";
       if (!q) { sug.innerHTML = ""; return; }
-      const matches = rankAddressMatches(state.allAddresses, q).slice(0, 8);
+      const matches = rankAddressMatches(state.allAddresses, q).slice(0, MAX_SUGGESTIONS);
       sug.innerHTML = matches.length
         ? matches.map(a => `
           <div class="stop-suggestion-item" data-rv-suggest-id="${a.id}">
