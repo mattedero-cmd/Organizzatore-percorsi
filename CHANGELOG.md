@@ -1,3 +1,11 @@
+## v5.108 — 2026-07-23
+Tappa manuale + "Scegli sulla mappa": il pannello non si richiude più e non perde i campi.
+- **Bug 1 — il pannello si "compattava"**: l'apertura del pannello "+ Manuale" viveva solo nel DOM (`manualPanel.style.display`), non in `state`. Ogni `render()` — incluso quello che chiude la scelta del luogo su Maps — ricostruiva l'HTML con `display:none`, quindi bisognava riaprirlo a mano ogni volta. Ora l'apertura sta in `state.rpManualOpen` e sopravvive al render.
+- **Bug 2 — cancellava il nome della Sede** (e ogni campo digitato a mano): `onConfirm` del map picker salvava solo i dati di Maps in `state.route` e poi chiamava `render()`, che ricostruisce gli input **dai valori di `state.route`** — la Sede (e la Durata), digitate ma non ancora salvate, tornavano vuote. Ora prima di aprire la mappa si chiama `updateRouteFromForm()`, quindi quello che hai già scritto viene preservato.
+- **Il nome scritto a mano vince su Maps**: il Cliente viene compilato da Maps solo se il campo è **vuoto** (prima il nome del luogo Google sovrascriveva sempre quello inserito da te). Indirizzo e coordinate invece vengono sempre aggiornati — è il motivo per cui si apre la mappa.
+- **Orari più chiari**: un avviso dice se da Maps sono arrivati anche gli orari o se quel luogo non li espone (prima, col pannello che si chiudeva, non si vedeva nulla).
+- Verificato E2E (A/B col codice precedente): pannello e campi sopravvivono al render; prima il pannello si chiudeva.
+
 ## v5.107 — 2026-07-12
 Fix: i giri creati da "Crea i giri" si aprono come vere giornate singole.
 - **Bug**: dopo "Crea i giri" il piano multi-giorno restava in memoria (`state.resultMultiDay`) e `renderResult` gli dà precedenza: toccando un giro creato ("Giorno 2 — …") nei salvati si riapriva il PIANO multi-giorno invece della scheda del giro. Il giro salvato era corretto, ma la sua scheda non si vedeva mai (finché non ricaricavi l'app).

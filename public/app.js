@@ -797,6 +797,9 @@ const state = {
   result: null,
   expandedStops: new Set(),
   expandedPanels: new Set(),
+  // Pannello "+ Manuale" (form nuovo percorso) aperto: va in state, NON solo nel DOM —
+  // altrimenti ogni render() (es. dopo aver scelto un luogo sulla mappa) lo richiude.
+  rpManualOpen: false,
   dirtyStops: new Set(),
   resultLunchEnabled: null,
   lunchFixedSpot: null, // locale pranzo scelto a mano nella vista risultato (persiste via la riga pranzo userPicked)
@@ -1848,7 +1851,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.107 &mdash; luglio 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.108 &mdash; luglio 2026</p>
         </div>
       </div>
 
@@ -2949,7 +2952,7 @@ function renderRoute() {
             <button type="button" class="btn" id="add-saved-stop">${I.plus(14)} Aggiungi</button>
             <button type="button" class="btn ghost" id="rp-manual-stop-toggle">+ Manuale</button>
           </div>
-          <div id="rp-manual-stop-panel" style="display:none">
+          <div id="rp-manual-stop-panel" style="display:${state.rpManualOpen ? "block" : "none"}">
             <div class="form-grid route-fields" style="margin-top:8px;">
               <label class="field">Cliente<input name="customCustomer" id="rp-custom-customer" value="${escapeHtml(r.customCustomer)}" /></label>
               <label class="field">Sede<input name="customLocation" value="${escapeHtml(r.customLocation)}" /></label>
@@ -3018,7 +3021,8 @@ function renderRoute() {
   const manualPanel = document.getElementById("rp-manual-stop-panel");
   if (manualToggle && manualPanel) {
     manualToggle.addEventListener("click", () => {
-      manualPanel.style.display = manualPanel.style.display === "none" ? "block" : "none";
+      state.rpManualOpen = manualPanel.style.display === "none";
+      manualPanel.style.display = state.rpManualOpen ? "block" : "none";
     });
   }
 
@@ -8140,6 +8144,11 @@ function bindEvents() {
     if (e.target.closest("#use-current-pos")) { useCurrentPosition(); return; }
     if (e.target.closest("#open-map-picker")) { openMapPicker(); return; }
     if (e.target.closest("#rp-custom-map-btn")) {
+      // Salva PRIMA quello che l'utente ha già digitato a mano (Cliente, Sede, Indirizzo,
+      // Durata): onConfirm chiude con render(), che ricostruisce gli input da state.route —
+      // senza questo, i campi non ancora salvati (tipicamente la SEDE) venivano cancellati.
+      updateRouteFromForm();
+      state.rpManualOpen = true; // il pannello resta aperto dopo il render
       openMapPickerForField({
         labelEl: document.querySelector("#rp-custom-customer"),
         addressEl: document.querySelector("#rp-custom-address"),
@@ -8147,13 +8156,17 @@ function bindEvents() {
         lngEl: document.querySelector("#rp-custom-lng"),
         phoneEl: document.querySelector("#rp-custom-phone"),
         onConfirm: (label, address, lat, lng, weeklyHours, phone) => {
-          if (label) state.route.customCustomer = label;
+          // Maps compila solo i campi VUOTI: un nome scritto a mano dall'utente vince
+          // sempre sul nome del luogo Google. Indirizzo/coordinate invece sì, sono il
+          // motivo per cui si apre la mappa.
+          if (label && !state.route.customCustomer) state.route.customCustomer = label;
           if (address) state.route.customAddress = address;
           if (lat) state.route.customLat = lat;
           if (lng) state.route.customLng = lng;
           if (weeklyHours) state.route.customWeeklyHours = weeklyHours;
           if (phone) state.route.customPhone = phone;
           render();
+          showToast(weeklyHours ? "Luogo e orari compilati da Maps" : "Luogo compilato da Maps (nessun orario disponibile)");
         },
         onUseDirectly: (label, address, lat, lng, weeklyHours, phone) => {
           state.route.stops.push({
