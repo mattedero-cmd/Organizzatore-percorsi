@@ -795,9 +795,17 @@ export async function listAddresses(search = "", userId = null) {
   // da Google Maps), spazi multipli collassati, estremi tagliati. Uno spazio di troppo non
   // deve più invalidare la ricerca.
   const term = String(search || "").replace(/[\s ]+/g, " ").trim().toLowerCase();
+  // Ricerca per PAROLE: ogni parola digitata deve comparire in un punto qualsiasi del
+  // contatto (AND). Serve a restringere un'insegna molto diffusa aggiungendo la città —
+  // es. "Eni Cles". Prima si cercava la frase INTERA in un unico blocco: siccome fra i
+  // campi c'è un separatore (e l'attività può essere vuota), "Eni Cles" non trovava NULLA
+  // pur essendoci decine di contatti "Eni" con sede "Cles".
+  const words = term ? term.split(" ").filter(Boolean) : [];
   const userFilter = userId != null ? ` AND user_id = ${sqlValue(Number(userId))}` : "";
   if (dbMode === "postgres") {
-    const where = term ? `WHERE lower(concat_ws(' ', customer, activity, location, full_address, notes)) LIKE ${sqlValue(`%${term}%`)}${userFilter}` : (userFilter ? `WHERE 1=1${userFilter}` : "");
+    const hay = `lower(concat_ws(' ', customer, activity, location, full_address, notes))`;
+    const match = words.map(w => `${hay} LIKE ${sqlValue(`%${w}%`)}`).join(" AND ");
+    const where = words.length ? `WHERE (${match})${userFilter}` : (userFilter ? `WHERE 1=1${userFilter}` : "");
     const rows = await runSql(`SELECT * FROM addresses ${where} ORDER BY lower(nullif(trim(coalesce(activity,'')), '')) NULLS LAST, lower(nullif(trim(coalesce(customer,'')), '')) NULLS LAST, lower(coalesce(location,'')), id ASC;`, true);
     return rows.map(rowToAddress);
   }
@@ -805,7 +813,9 @@ export async function listAddresses(search = "", userId = null) {
   // `activity`/`location` sui contatti creati da Maps) perché l'intera concatenazione
   // diventasse NULL e la riga sparisse dalla ricerca (`NULL LIKE '%x%'` non è mai vero).
   // Ogni colonna va quindi protetta con coalesce, non solo `activity`.
-  const where = term ? `WHERE lower(coalesce(customer,'') || ' ' || coalesce(activity,'') || ' ' || coalesce(location,'') || ' ' || coalesce(full_address,'') || ' ' || coalesce(notes,'')) LIKE ${sqlValue(`%${term}%`)}${userFilter}` : (userFilter ? `WHERE 1=1${userFilter}` : "");
+  const hay = `lower(coalesce(customer,'') || ' ' || coalesce(activity,'') || ' ' || coalesce(location,'') || ' ' || coalesce(full_address,'') || ' ' || coalesce(notes,''))`;
+  const match = words.map(w => `${hay} LIKE ${sqlValue(`%${w}%`)}`).join(" AND ");
+  const where = words.length ? `WHERE (${match})${userFilter}` : (userFilter ? `WHERE 1=1${userFilter}` : "");
   const rows = await runSql(`SELECT * FROM addresses ${where} ORDER BY nullif(trim(coalesce(activity,'')), '') COLLATE NOCASE, nullif(trim(coalesce(customer,'')), '') COLLATE NOCASE, location COLLATE NOCASE, id ASC;`, true);
   return rows.map(rowToAddress);
 }

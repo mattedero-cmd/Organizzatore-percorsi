@@ -1853,7 +1853,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.113 &mdash; luglio 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.114 &mdash; luglio 2026</p>
         </div>
       </div>
 
@@ -2314,19 +2314,33 @@ function renderMenuInfo() {
 // Ranking per pertinenza: anche con 1-2 lettere i risultati "giusti" emergono
 // in cima invece di restare sepolti tra i match casuali in note e indirizzi
 function rankAddressMatches(list, query) {
-  const ql = (query || "").toLowerCase();
+  // Ricerca per PAROLE (come il server): ogni parola deve comparire da qualche parte nel
+  // contatto, così si restringe un'insegna diffusa aggiungendo la città ("Eni Cles").
+  // Il punteggio è dato dalla parola messa peggio: i match sul nome vengono prima di
+  // quelli su sede/indirizzo, e chi inizia con la parola cercata sta in cima.
+  const ql = (query || "").replace(/[\s ]+/g, " ").trim().toLowerCase();
   if (!ql) return list;
-  const score = (a) => {
+  const words = ql.split(" ").filter(Boolean);
+  const scoreWord = (a, w) => {
     const cust = (a.customer || "").toLowerCase();
     const act = (a.activity || "").toLowerCase();
     const name = act + " " + cust;
-    if (cust.startsWith(ql) || act.startsWith(ql)) return 0;
-    if (name.split(/\s+/).some(w => w.startsWith(ql))) return 1;
-    if (name.includes(ql)) return 2;
-    if ((a.location || "").toLowerCase().includes(ql)) return 3;
-    if ((a.fullAddress || "").toLowerCase().includes(ql)) return 4;
-    if ((a.notes || "").toLowerCase().includes(ql)) return 5;
+    if (cust.startsWith(w) || act.startsWith(w)) return 0;
+    if (name.split(/\s+/).some(t => t.startsWith(w))) return 1;
+    if (name.includes(w)) return 2;
+    if ((a.location || "").toLowerCase().includes(w)) return 3;
+    if ((a.fullAddress || "").toLowerCase().includes(w)) return 4;
+    if ((a.notes || "").toLowerCase().includes(w)) return 5;
     return -1;
+  };
+  const score = (a) => {
+    let worst = 0;
+    for (const w of words) {
+      const s = scoreWord(a, w);
+      if (s < 0) return -1;          // una parola non trovata → contatto escluso
+      if (s > worst) worst = s;
+    }
+    return worst;
   };
   return list
     .map(a => ({ a, s: score(a) }))
@@ -2757,13 +2771,20 @@ const MAX_SUGGESTIONS = 40;
 function renderStopSuggestions() {
   const q = state.stopSearchText.trim().toLowerCase();
   if (!q) return "";
-  const matches = rankAddressMatches(state.allAddresses, q).slice(0, MAX_SUGGESTIONS);
+  const all = rankAddressMatches(state.allAddresses, q);
+  const matches = all.slice(0, MAX_SUGGESTIONS);
   if (!matches.length) return `<div class="stop-suggestion-empty">Nessun risultato</div>`;
-  return matches.map(a => `
+  const items = matches.map(a => `
     <div class="stop-suggestion-item" data-suggest-id="${a.id}">
       <span class="stop-suggestion-name">${escapeHtml(addressName(a))}</span>
       <span class="stop-suggestion-addr">${escapeHtml(a.fullAddress)}</span>
     </div>`).join("");
+  // Con insegne molto diffuse (es. "Eni") i risultati possono essere centinaia: invece di
+  // troncare in silenzio, si dice quanti ne restano e come restringere.
+  const extra = all.length - matches.length;
+  return items + (extra > 0
+    ? `<div class="stop-suggestion-empty">Altri ${extra} risultati — aggiungi la città per restringere (es. “${escapeHtml(q)} ${escapeHtml(matches[0].location || "Trento")}”)</div>`
+    : "");
 }
 
 function renderStops() {

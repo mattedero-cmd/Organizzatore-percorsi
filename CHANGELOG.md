@@ -1,3 +1,10 @@
+## v5.114 — 2026-07-23
+Ricerca per parole: con insegne diffuse (es. "Eni", decine di sedi) si restringe scrivendo anche la città.
+- **Bug**: la ricerca cercava la **frase intera** dentro un unico blocco di testo (nome + attività + sede + indirizzo). Poiché fra i campi c'è un separatore — e l'attività è spesso vuota — cercare `"Eni Cles"` restituiva **0 risultati** pur avendo decine di "Eni" con sede "Cles". Il modo naturale per restringere semplicemente non funzionava, e con molti omonimi si era costretti a scorrere.
+- **Fix**: ricerca per **parole** in AND, sia lato server (SQLite e PostgreSQL) sia lato client — ogni parola digitata deve comparire da qualche parte nel contatto, **in qualsiasi ordine**. Il punteggio di ordinamento tiene conto della parola messa peggio, quindi i match sul nome restano in cima.
+- **Avviso invece del troncamento silenzioso**: se i risultati superano i 40 mostrati, in coda alla tendina compare *"Altri N risultati — aggiungi la città per restringere"* con un esempio pronto, invece di tagliare senza dirlo.
+- Verificato con 60 contatti "Eni": `"Eni"` → 40 mostrati + avviso "altri 20"; `"Eni Cles"` → **1**; `"cles eni"` (ordine invertito) → **1**; `"Eni Paese 42"` → **1**; `"Eni Sassari"` (inesistente) → 0.
+
 ## v5.113 — 2026-07-23
 Ricerca tappe da cellulare: si arriva finalmente ai risultati in fondo.
 - **Causa 1 — tetto di 8 risultati**: i suggerimenti erano limitati a 8 (6 in un caso). Con molti contatti omonimi (es. 20 filiali "Mediolanum FBO" in sedi diverse) quelle che servivano **non erano proprio nell'elenco**. Ora il limite è `MAX_SUGGESTIONS` = 40, condiviso da tutte le tendine (tappe, partenza/arrivo, vista risultato).
