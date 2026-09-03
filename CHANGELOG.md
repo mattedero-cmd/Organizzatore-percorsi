@@ -1,3 +1,10 @@
+## v5.111 — 2026-07-23
+Ricerca archivio a prova di spazi (segnalazione utente: uno spazio in fondo al nome invalidava la ricerca).
+- **Salvataggio pulito**: nome, attività, sede e indirizzo dei contatti vengono normalizzati prima di salvarli — NBSP (lo spazio "invisibile" che arriva copiando da Google Maps) convertito in spazio normale, spazi multipli collassati, estremi tagliati. Non si creano più contatti con uno spazio in coda al nome.
+- **Ricerca tollerante**: anche il testo cercato viene normalizzato allo stesso modo, quindi uno spazio di troppo (davanti, in fondo, o doppio in mezzo) non fa più sparire i risultati.
+- **Pulizia una-tantum dei contatti già salvati** (`normalizeAddressText`, SCHEMA_VERSION → 3): all'avvio gli spazi ai bordi dei contatti esistenti vengono ripuliti — l'UPDATE tocca solo le righe effettivamente sporche, su SQLite e PostgreSQL.
+- Verificato: contatti salvati come `"Intesa Sanpaolo "` e `"Intesa  Sanpaolo"` finiscono entrambi come `"Intesa Sanpaolo"`; le ricerche `"Intesa"`, `"Intesa Sanpaolo"`, `"Intesa Sanpaolo "` e `" Intesa"` restituiscono tutte i risultati corretti; un contatto già sporco in archivio viene ripulito all'avvio e ridiventa trovabile.
+
 ## v5.110 — 2026-07-23
 Ricerca in archivio: i contatti senza note (quasi tutti) erano invisibili.
 - **Bug (grave, SQLite)**: la ricerca concatenava i campi con `||` proteggendo con `coalesce` **solo** `activity`. In SQLite `'testo' || NULL` è **NULL**, e `NULL LIKE '%x%'` non è mai vero: bastava UNA colonna NULL — tipicamente `notes`, ma anche `location`/`activity` sui contatti creati da Maps — perché il contatto **sparisse del tutto dalla ricerca**.

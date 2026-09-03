@@ -25,6 +25,13 @@ export function postgresUrl() {
   }) || "";
 }
 
+// Campo testuale di un contatto, ripulito: NBSP (arriva copiando da Google Maps) reso
+// spazio normale, spazi multipli collassati, estremi tagliati. Uno spazio invisibile in
+// fondo al nome rendeva il contatto irreperibile nella ricerca.
+function txtField(v) {
+  return String(v ?? "").replace(/[\s\u00a0]+/g, " ").trim();
+}
+
 export function sqlValue(value) {
   if (value === null || value === undefined || value === "") return "NULL";
   if (typeof value === "number") return Number.isFinite(value) ? String(value) : "NULL";
@@ -158,7 +165,7 @@ export async function runSql(sql, json = false) {
 // avvio (niente più 504 a catena) e il consumo di operazioni Prisma (~50× in meno).
 // ⚠️ SE AGGIUNGI UNA MIGRAZIONE (nuova colonna/tabella): INCREMENTA SCHEMA_VERSION,
 // altrimenti in produzione la tua migrazione NON verrà mai eseguita.
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 
 async function schemaUpToDate() {
   try {
@@ -393,6 +400,7 @@ export async function initDb(rootDir) {
     // Prima esecuzione (o versione schema cambiata): TUTTO lo schema in 1 query.
     await runSql(PG_SCHEMA_DDL);
     await migrateWeeklyHours(); // backfill dati orari legacy → 1 SELECT (+ update solo se servono)
+    await normalizeAddressText();
     await markSchemaUpToDate();
     console.log(`DB schema portato a v${SCHEMA_VERSION} (DDL unica)`);
     return "postgres";
@@ -492,6 +500,7 @@ export async function initDb(rootDir) {
   await migrateUserSettingsCols();
   await migrateUserNickname();
   await migrateAuth();
+  await normalizeAddressText();
   await markSchemaUpToDate();
 
   return databasePath;
@@ -627,6 +636,20 @@ async function migrateUserSettingsCols() {
     if (!cols.includes(col)) {
       try { await runSql(`ALTER TABLE user_settings ADD COLUMN ${col} ${def};`); } catch (e) { if (!isAlreadyExistsError(e)) console.warn("migrateUserSettingsCols:", e.message); }
     }
+  }
+}
+
+// Ripulisce gli spazi ai bordi dei campi testuali dei contatti già salvati: uno spazio in
+// fondo al nome rendeva il contatto irreperibile cercandolo (caso reale segnalato).
+// `trim()` esiste sia in SQLite sia in Postgres; l'UPDATE tocca solo le righe sporche.
+async function normalizeAddressText() {
+  const cols = ["customer", "activity", "location", "full_address"];
+  const set = cols.map(c => `${c} = trim(${c})`).join(", ");
+  const where = cols.map(c => `${c} <> trim(${c})`).join(" OR ");
+  try {
+    await runSql(`UPDATE addresses SET ${set} WHERE ${where};`);
+  } catch (e) {
+    console.warn("normalizeAddressText:", e.message);
   }
 }
 
@@ -768,7 +791,10 @@ async function migrateWeeklyHours() {
 }
 
 export async function listAddresses(search = "", userId = null) {
-  const term = String(search || "").trim().toLowerCase();
+  // Normalizza il termine cercato: spazi unificati (anche NBSP, che arriva spesso copiando
+  // da Google Maps), spazi multipli collassati, estremi tagliati. Uno spazio di troppo non
+  // deve più invalidare la ricerca.
+  const term = String(search || "").replace(/[\s ]+/g, " ").trim().toLowerCase();
   const userFilter = userId != null ? ` AND user_id = ${sqlValue(Number(userId))}` : "";
   if (dbMode === "postgres") {
     const where = term ? `WHERE lower(concat_ws(' ', customer, activity, location, full_address, notes)) LIKE ${sqlValue(`%${term}%`)}${userFilter}` : (userFilter ? `WHERE 1=1${userFilter}` : "");
@@ -793,7 +819,7 @@ export async function getAddress(id, userId = null) {
 export async function createAddress(address, userId = null) {
   const userIdVal = userId != null ? sqlValue(Number(userId)) : "NULL";
   const cols = `customer, activity, location, full_address, address_type, phone, phone_type, phone_name, phone2, phone2_type, phone2_name, phone_preferred, email, notes, open_morning, close_morning, open_afternoon, close_afternoon, default_duration, weekly_hours, lat, lng, place_id, is_rest_stop, is_lunch_stop, user_id`;
-  const vals = `${sqlValue(address.customer || "Senza nome")}, ${sqlValue(address.activity || "")}, ${sqlValue(address.location || "")}, ${sqlValue(address.fullAddress || address.full_address || "")}, ${sqlValue(address.addressType || "customer")}, ${sqlValue(address.phone || "")}, ${sqlValue(address.phoneType || "cell")}, ${sqlValue(address.phoneName || "")}, ${sqlValue(address.phone2 || "")}, ${sqlValue(address.phone2Type || "fisso")}, ${sqlValue(address.phone2Name || "")}, ${sqlValue(address.phonePreferred || "phone")}, ${sqlValue(address.email || "")}, ${sqlValue(address.notes || "")}, ${sqlValue(address.openMorning || address.open_morning || "")}, ${sqlValue(address.closeMorning || address.close_morning || "")}, ${sqlValue(address.openAfternoon || address.open_afternoon || "")}, ${sqlValue(address.closeAfternoon || address.close_afternoon || "")}, ${sqlValue(Number(address.defaultDuration || address.default_duration || 45))}, ${sqlValue(address.weeklyHours ? JSON.stringify(address.weeklyHours) : null)}, ${sqlValue(address.lat === undefined ? null : Number(address.lat))}, ${sqlValue(address.lng === undefined ? null : Number(address.lng))}, ${sqlValue(address.placeId || address.place_id || null)}, ${sqlValue(address.isRestStop ? 1 : 0)}, ${sqlValue(address.isLunchStop ? 1 : 0)}, ${userIdVal}`;
+  const vals = `${sqlValue(txtField(address.customer) || "Senza nome")}, ${sqlValue(txtField(address.activity))}, ${sqlValue(txtField(address.location))}, ${sqlValue(txtField(address.fullAddress || address.full_address))}, ${sqlValue(address.addressType || "customer")}, ${sqlValue(address.phone || "")}, ${sqlValue(address.phoneType || "cell")}, ${sqlValue(address.phoneName || "")}, ${sqlValue(address.phone2 || "")}, ${sqlValue(address.phone2Type || "fisso")}, ${sqlValue(address.phone2Name || "")}, ${sqlValue(address.phonePreferred || "phone")}, ${sqlValue(address.email || "")}, ${sqlValue(address.notes || "")}, ${sqlValue(address.openMorning || address.open_morning || "")}, ${sqlValue(address.closeMorning || address.close_morning || "")}, ${sqlValue(address.openAfternoon || address.open_afternoon || "")}, ${sqlValue(address.closeAfternoon || address.close_afternoon || "")}, ${sqlValue(Number(address.defaultDuration || address.default_duration || 45))}, ${sqlValue(address.weeklyHours ? JSON.stringify(address.weeklyHours) : null)}, ${sqlValue(address.lat === undefined ? null : Number(address.lat))}, ${sqlValue(address.lng === undefined ? null : Number(address.lng))}, ${sqlValue(address.placeId || address.place_id || null)}, ${sqlValue(address.isRestStop ? 1 : 0)}, ${sqlValue(address.isLunchStop ? 1 : 0)}, ${userIdVal}`;
   if (dbMode === "postgres") {
     const rows = await runSql(`INSERT INTO addresses (${cols}) VALUES (${vals}) RETURNING *;`, true);
     return rowToAddress(rows[0]);
@@ -806,7 +832,7 @@ export async function createAddress(address, userId = null) {
 
 export async function updateAddress(id, address, userId = null) {
   const userFilter = userId != null ? ` AND user_id = ${sqlValue(Number(userId))}` : "";
-  const setClause = `customer = ${sqlValue(address.customer || "Senza nome")}, activity = ${sqlValue(address.activity || "")}, location = ${sqlValue(address.location || "")}, full_address = ${sqlValue(address.fullAddress || "")}, address_type = ${sqlValue(address.addressType || "customer")}, phone = ${sqlValue(address.phone || "")}, phone_type = ${sqlValue(address.phoneType || "cell")}, phone_name = ${sqlValue(address.phoneName || "")}, phone2 = ${sqlValue(address.phone2 || "")}, phone2_type = ${sqlValue(address.phone2Type || "fisso")}, phone2_name = ${sqlValue(address.phone2Name || "")}, phone_preferred = ${sqlValue(address.phonePreferred || "phone")}, email = ${sqlValue(address.email || "")}, notes = ${sqlValue(address.notes || "")}, open_morning = ${sqlValue(address.openMorning || "")}, close_morning = ${sqlValue(address.closeMorning || "")}, open_afternoon = ${sqlValue(address.openAfternoon || "")}, close_afternoon = ${sqlValue(address.closeAfternoon || "")}, default_duration = ${sqlValue(Number(address.defaultDuration || 45))}, weekly_hours = ${sqlValue(address.weeklyHours ? JSON.stringify(address.weeklyHours) : null)}, lat = ${sqlValue(address.lat === undefined ? null : Number(address.lat))}, lng = ${sqlValue(address.lng === undefined ? null : Number(address.lng))}, place_id = ${sqlValue(address.placeId !== undefined ? address.placeId : (address.place_id ?? null))}, is_rest_stop = ${sqlValue(address.isRestStop ? 1 : 0)}, is_lunch_stop = ${sqlValue(address.isLunchStop ? 1 : 0)}`;
+  const setClause = `customer = ${sqlValue(txtField(address.customer) || "Senza nome")}, activity = ${sqlValue(txtField(address.activity))}, location = ${sqlValue(txtField(address.location))}, full_address = ${sqlValue(txtField(address.fullAddress))}, address_type = ${sqlValue(address.addressType || "customer")}, phone = ${sqlValue(address.phone || "")}, phone_type = ${sqlValue(address.phoneType || "cell")}, phone_name = ${sqlValue(address.phoneName || "")}, phone2 = ${sqlValue(address.phone2 || "")}, phone2_type = ${sqlValue(address.phone2Type || "fisso")}, phone2_name = ${sqlValue(address.phone2Name || "")}, phone_preferred = ${sqlValue(address.phonePreferred || "phone")}, email = ${sqlValue(address.email || "")}, notes = ${sqlValue(address.notes || "")}, open_morning = ${sqlValue(address.openMorning || "")}, close_morning = ${sqlValue(address.closeMorning || "")}, open_afternoon = ${sqlValue(address.openAfternoon || "")}, close_afternoon = ${sqlValue(address.closeAfternoon || "")}, default_duration = ${sqlValue(Number(address.defaultDuration || 45))}, weekly_hours = ${sqlValue(address.weeklyHours ? JSON.stringify(address.weeklyHours) : null)}, lat = ${sqlValue(address.lat === undefined ? null : Number(address.lat))}, lng = ${sqlValue(address.lng === undefined ? null : Number(address.lng))}, place_id = ${sqlValue(address.placeId !== undefined ? address.placeId : (address.place_id ?? null))}, is_rest_stop = ${sqlValue(address.isRestStop ? 1 : 0)}, is_lunch_stop = ${sqlValue(address.isLunchStop ? 1 : 0)}`;
   if (dbMode === "postgres") {
     const rows = await runSql(`UPDATE addresses SET ${setClause}, updated_at = NOW() WHERE id = ${sqlValue(Number(id))}${userFilter} RETURNING *;`, true);
     return rows[0] ? rowToAddress(rows[0]) : null;
