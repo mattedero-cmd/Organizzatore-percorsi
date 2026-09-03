@@ -1,3 +1,10 @@
+## v5.110 — 2026-07-23
+Ricerca in archivio: i contatti senza note (quasi tutti) erano invisibili.
+- **Bug (grave, SQLite)**: la ricerca concatenava i campi con `||` proteggendo con `coalesce` **solo** `activity`. In SQLite `'testo' || NULL` è **NULL**, e `NULL LIKE '%x%'` non è mai vero: bastava UNA colonna NULL — tipicamente `notes`, ma anche `location`/`activity` sui contatti creati da Maps — perché il contatto **sparisse del tutto dalla ricerca**.
+- Aggravante: `sqlValue("")` salva le stringhe vuote come **NULL**, quindi ogni contatto senza note aveva `notes = NULL` → praticamente **tutti** i contatti erano irraggiungibili cercando per nome.
+- **Fix**: ogni colonna della ricerca è protetta con `coalesce(...,'')`. Riprodotto e verificato: 20 contatti con lo stesso nome e sedi diverse → prima **0 risultati**, ora **20**; ricerca per sede ("Sede 7") e per indirizzo ("Via Roma") corrette.
+- Nota: il ramo **PostgreSQL** (produzione su Vercel) usa `concat_ws`, che ignora i NULL, e non era affetto da questo difetto.
+
 ## v5.109 — 2026-07-23
 Tappa manuale da Maps: niente più contatti doppi in archivio.
 - **Bug (grave)**: scegliendo un luogo sulla mappa dal pannello "+ Manuale", il pulsante **"💾 Salva"** del picker salvava SUBITO il contatto in archivio col nome grezzo di Google. L'utente poi correggeva nome cliente e sede nella scheda e premeva **"+ Salva e aggiungi"**, che salvava una **seconda volta** → ogni tappa manuale creava **due contatti** per lo stesso cliente.

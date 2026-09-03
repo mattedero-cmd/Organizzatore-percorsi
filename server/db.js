@@ -775,7 +775,11 @@ export async function listAddresses(search = "", userId = null) {
     const rows = await runSql(`SELECT * FROM addresses ${where} ORDER BY lower(nullif(trim(coalesce(activity,'')), '')) NULLS LAST, lower(nullif(trim(coalesce(customer,'')), '')) NULLS LAST, lower(coalesce(location,'')), id ASC;`, true);
     return rows.map(rowToAddress);
   }
-  const where = term ? `WHERE lower(customer || ' ' || coalesce(activity,'') || ' ' || location || ' ' || full_address || ' ' || notes) LIKE ${sqlValue(`%${term}%`)}${userFilter}` : (userFilter ? `WHERE 1=1${userFilter}` : "");
+  // ⚠️ In SQLite `x || NULL` è NULL: bastava UNA colonna NULL (tipicamente `notes`, o
+  // `activity`/`location` sui contatti creati da Maps) perché l'intera concatenazione
+  // diventasse NULL e la riga sparisse dalla ricerca (`NULL LIKE '%x%'` non è mai vero).
+  // Ogni colonna va quindi protetta con coalesce, non solo `activity`.
+  const where = term ? `WHERE lower(coalesce(customer,'') || ' ' || coalesce(activity,'') || ' ' || coalesce(location,'') || ' ' || coalesce(full_address,'') || ' ' || coalesce(notes,'')) LIKE ${sqlValue(`%${term}%`)}${userFilter}` : (userFilter ? `WHERE 1=1${userFilter}` : "");
   const rows = await runSql(`SELECT * FROM addresses ${where} ORDER BY nullif(trim(coalesce(activity,'')), '') COLLATE NOCASE, nullif(trim(coalesce(customer,'')), '') COLLATE NOCASE, location COLLATE NOCASE, id ASC;`, true);
   return rows.map(rowToAddress);
 }
