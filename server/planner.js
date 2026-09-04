@@ -687,6 +687,7 @@ async function insertBreaks(rows, options) {
     scheduledDate = null,
     lunchFixedTime = null,
     lunchFixedSpot = null, // locale scelto a mano dall'utente: forza SOLO la posizione geografica del pranzo, non l'orario
+    lunchBeforeStopUid = null, // posizione scelta dall'utente: pranzo PRIMA di questa tappa (ordine, non orario)
     restBreaksEnabled = true, // false → nessuna sosta automatica (l'utente le ha disattivate/eliminate per questo giro)
     homeLat = null, homeLng = null
   } = options;
@@ -817,8 +818,26 @@ async function insertBreaks(rows, options) {
   const dayTouchesLunch = _dayStart != null && _dayEnd != null
     && Math.max(_dayStart, LUNCH_OPEN) < Math.min(_dayEnd, LUNCH_CLOSE);
 
-  if (lunchBreakEnabled && dayTouchesLunch) {
-    let placed = false;
+  // 0. POSIZIONE SCELTA DALL'UTENTE (riordino manuale): il pranzo va PRIMA di una tappa
+  //    precisa. È una scelta esplicita sull'ORDINE, quindi vince su tutto e vale anche se la
+  //    giornata non tocca la finestra pranzo (l'utente sa cosa vuole). L'inserimento è quello
+  //    "in guida" (stessa logica della sez. 3), così l'assorbimento della guida resta corretto.
+  let placed = false;
+  if (lunchBreakEnabled && lunchBeforeStopUid) {
+    const idx = rows.findIndex(r => !r.type && (r.stopUid === lunchBeforeStopUid || r.uid === lunchBeforeStopUid));
+    if (idx >= 0) {
+      const dep = parseTime(rows[idx].departureTime) ?? parseTime(rows[idx].arrivalTime) ?? LUNCH_OPEN;
+      const entry = await makeLunchEntry(idx, rows[idx - 1] ?? null, rows[idx], dep);
+      entry.userPlaced = true;   // esente dal filtro "mai come prima attività": l'ha chiesto l'utente
+      insertions.push(entry);
+      placed = true;
+      L(`  → PRANZO posizionato dall'utente PRIMA di "${rows[idx].customer}" (@${formatTime(dep)})`);
+    } else {
+      L(`  → pranzo: tappa di ancoraggio "${lunchBeforeStopUid}" non più nel giro, posizione automatica`);
+    }
+  }
+
+  if (lunchBreakEnabled && dayTouchesLunch && !placed) {
 
     // 1. Fixed-window stop spanning lunch: insert lunch at fixed time (no timeShift)
     for (let i = 0; i < rows.length; i++) {
@@ -1269,7 +1288,8 @@ async function insertBreaks(rows, options) {
   // guida (non `noTimeShift`): il pranzo consumato durante un'ATTESA forzata alla prima tappa
   // (arrivo anticipato / cliente chiuso) NON è "la prima attività" e resta valido.
   for (let k = insertions.length - 1; k >= 0; k--) {
-    if (insertions[k].type === "lunch" && insertions[k].beforeIndex === 0 && !insertions[k].noTimeShift) {
+    if (insertions[k].type === "lunch" && insertions[k].beforeIndex === 0
+        && !insertions[k].noTimeShift && !insertions[k].userPlaced) {
       insertions.splice(k, 1);
     }
   }
@@ -1536,6 +1556,7 @@ export async function planRoute(payload, settings, restStops = []) {
   const { rows: enrichedRows, addedMinutes, debugLog } = await insertBreaks(best.rows, {
     lunchBreakEnabled, lunchBreakMinutes, lunchFixedTime,
     lunchFixedSpot: payload.lunchFixedSpot || null,
+    lunchBeforeStopUid: payload.lunchBeforeStopUid || null, // posizione del pranzo scelta col riordino
     restBreaksEnabled: payload.restBreaks !== false, // false → nessuna sosta automatica per questo giro
 
     restStops: activeRestStops,
@@ -1640,6 +1661,9 @@ export async function planRoute(payload, settings, restStops = []) {
     lunchBreak: lunchBreakEnabled,
     lunchBreakMinutes,
     lunchFixedTime: lunchFixedTime || "",
+    // Posizione del pranzo scelta col riordino: va restituita (e quindi salvata) o si
+    // perderebbe al ricalcolo successivo, tornando alla posizione automatica.
+    lunchBeforeStopUid: payload.lunchBeforeStopUid || "",
     restBreaks: payload.restBreaks !== false, // stato soste automatiche del giro (persiste al salvataggio/riapertura)
     maxReturnTime: payload.departureLatest || "",
     mapMode: [...new Set(best.rows.map((row) => row.legSource).concat(best.finalLeg.source))].join(", "),

@@ -1853,7 +1853,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.114 &mdash; luglio 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.115 &mdash; luglio 2026</p>
         </div>
       </div>
 
@@ -3929,15 +3929,20 @@ function renderManualOrder(result) {
     <details class="panel order-panel" ${state.manualOrderRows ? "open" : ""}>
       <summary>Riordina tappe manualmente</summary>
       <div class="order-list" style="margin-top:10px;">
-        ${rows.filter(r => !r.stopPart || r.stopPart === "morning").map((row, i) => `
-          <div class="order-item">
-            <span class="order-num">${i + 1}</span>
-            <span>${escapeHtml(row.customer)} ${escapeHtml(row.location || "")}</span>
+        ${(() => { let n = 0; return rows.filter(r => !r.stopPart || r.stopPart === "morning").map((row, i) => {
+          // La numerazione conta solo le TAPPE: la pausa pranzo sta nell'elenco ma non è una tappa.
+          if (row.type !== "lunch") n++;
+          return `
+          <div class="order-item${row.type === "lunch" ? " order-item--lunch" : ""}">
+            <span class="order-num">${row.type === "lunch" ? I.fork(14) : n}</span>
+            <span>${row.type === "lunch"
+              ? `Pausa pranzo <span class="stop-meta">${minutesLabel(row.durationMinutes)}</span>`
+              : `${escapeHtml(row.customer)} ${escapeHtml(row.location || "")}`}</span>
             <div class="row">
               ${i > 0 ? `<button class="btn icon-btn" data-move-up="${i}" title="Sposta su">${I.arrowUp(14)}</button>` : ""}
               ${i < rows.length - 1 ? `<button class="btn icon-btn" data-move-down="${i}" title="Sposta giù">${I.arrowDown(14)}</button>` : ""}
             </div>
-          </div>`).join("")}
+          </div>`; }).join(""); })()}
       </div>
       <div class="actions">
         <button class="btn primary" id="replan-order">${I.check(14)} Ricalcola con quest'ordine</button>
@@ -4855,6 +4860,9 @@ async function replanFromResult() {
     lunchBreakMinutes: Number(v.lunchBreakMinutes || result.lunchBreakMinutes || 45),
     lunchFixedTime: v.lunchFixedTime || result.lunchFixedTime || "",
     lunchFixedSpot: lunchFixedSpot || undefined, // locale pranzo scelto a mano (posizione decisa dal planner)
+    // Posizione del pranzo scelta col riordino: va conservata anche nei ricalcoli fatti
+    // dagli altri pannelli, altrimenti il pranzo tornerebbe dove dice il planner.
+    lunchBeforeStopUid: result.lunchBeforeStopUid || undefined,
     restBreaks // soste automatiche on/off del giro
   };
 
@@ -6020,16 +6028,34 @@ async function saveAddressForm(form) {
 
 // Returns the ordered list of unique stops (no split-afternoon duplicates, no breaks)
 // from either manualOrderRows (already filtered) or result.rows.
+// Elenco riordinabile. Include anche la PAUSA PRANZO: l'utente deve poterla spostare
+// prima/dopo un intervento senza doverle imporre un orario fisso (la posizione diventa
+// `lunchBeforeStopUid` nel payload — vedi replanWithOrder).
 function getOrderableStops(result) {
   if (state.manualOrderRows) return [...state.manualOrderRows];
-  return result.rows.filter(r => !r.type && (!r.stopPart || r.stopPart === "morning"));
+  return result.rows.filter(r =>
+    (!r.type && (!r.stopPart || r.stopPart === "morning")) || r.type === "lunch");
 }
 
 // ── manual order replan ───────────────────────────────────────────────────────
 
 async function replanWithOrder(manualOrder) {
   const result = normalizeSavedRoute(state.result);
-  const rows = manualOrder ? getOrderableStops(result) : result.rows.filter(r => !r.type && (!r.stopPart || r.stopPart === "morning"));
+  const ordered = manualOrder ? getOrderableStops(result) : result.rows.filter(r => !r.type && (!r.stopPart || r.stopPart === "morning"));
+  // La pausa pranzo sta NELL'ELENCO riordinabile ma non è una tappa: la sua posizione
+  // diventa "pranzo prima di questa tappa" (ancoraggio all'ordine, non all'orario).
+  // Pranzo in fondo = dopo l'ultima tappa → nessun ancoraggio, decide il planner.
+  const lunchAt = ordered.findIndex(r => r.type === "lunch");
+  let lunchBeforeStopUid = "";
+  if (manualOrder && lunchAt >= 0) {
+    const next = ordered.slice(lunchAt + 1).find(r => !r.type);
+    lunchBeforeStopUid = next ? (next.stopUid || next.uid || "") : "";
+  } else if (!manualOrder) {
+    lunchBeforeStopUid = ""; // "Ottimizzato": si torna alla posizione automatica
+  } else {
+    lunchBeforeStopUid = result.lunchBeforeStopUid || "";
+  }
+  const rows = ordered.filter(r => !r.type);
   // Tutte le righe cliente (mattina+pomeriggio): servono a RIUNIRE la durata di una tappa
   // spezzata dal pranzo, altrimenti il riordino manderebbe solo la durata della mattina.
   const customerRows = result.rows.filter(x => !x.type);
@@ -6081,6 +6107,7 @@ async function replanWithOrder(manualOrder) {
         // Mantieni anche il LOCALE pranzo scelto a mano dopo un riordino
         lunchFixedSpot: (() => { const p = result.rows.find(x => x.type === "lunch" && x.userPicked && x.lat != null);
           return p ? { customer: p.customer, address: p.address, lat: p.lat, lng: p.lng, weeklyHours: p.weeklyHours || null, addressId: p.addressId ?? null } : undefined; })(),
+        lunchBeforeStopUid, // posizione del pranzo scelta col riordino manuale
         restBreaks: state.resultRestEnabled !== null ? state.resultRestEnabled : (result.restBreaks !== false), // preserva stato soste
         manualOrder
       })

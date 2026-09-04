@@ -1,3 +1,11 @@
+## v5.115 — 2026-07-24
+La pausa pranzo si sposta nell'ordine, senza doverle imporre un orario.
+- **Bug/limite**: dopo il calcolo la pausa pranzo era "immobile": per metterla prima di un intervento preciso bisognava per forza fissarle un **orario** (`alle`), cosa scomoda e spesso sbagliata. Nell'elenco "Riordina tappe manualmente" la pausa non compariva proprio.
+- **Fix**: la pausa pranzo ora è **nell'elenco riordinabile**, con le sue frecce su/giù come le tappe (distinta dall'icona e non numerata, perché non è una tappa). La si sposta dove serve e si preme "Ricalcola con quest'ordine".
+- Il planner riceve la posizione come **ancoraggio all'ordine** (`lunchBeforeStopUid` = "pranzo prima di questa tappa"), non come orario: l'orario resta calcolato, con l'assorbimento della guida già introdotto in v5.094. La scelta **vince sulla logica automatica** e vale anche fuori dalla finestra pranzo — è una decisione esplicita dell'utente.
+- L'ancoraggio **persiste**: viene restituito dal planner, salvato col giro e riproposto nei ricalcoli successivi (anche da altri pannelli). Se la tappa di riferimento viene eliminata, si torna in automatico alla posizione calcolata, senza errori. "Ottimizzato" azzera l'ancoraggio.
+- Verificato: pranzo ancorato prima di A/B/C → finisce esattamente lì, ancoraggio restituito; uid inesistente → posizione automatica; E2E dall'interfaccia (sposta la pausa con la freccia → ricalcola → il pranzo è fra B e C).
+
 ## v5.114 — 2026-07-23
 Ricerca per parole: con insegne diffuse (es. "Eni", decine di sedi) si restringe scrivendo anche la città.
 - **Bug**: la ricerca cercava la **frase intera** dentro un unico blocco di testo (nome + attività + sede + indirizzo). Poiché fra i campi c'è un separatore — e l'attività è spesso vuota — cercare `"Eni Cles"` restituiva **0 risultati** pur avendo decine di "Eni" con sede "Cles". Il modo naturale per restringere semplicemente non funzionava, e con molti omonimi si era costretti a scorrere.

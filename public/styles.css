@@ -4388,3 +4388,11 @@ html[data-brand2] .visit-history-details[open] .visit-history-toggle { color: va
   opacity: 0.65;
   font-style: italic;
 }
+
+/* Riordino: la pausa pranzo è nell'elenco ma non è una tappa — si distingue senza urlare */
+.order-item--lunch .order-num {
+  color: var(--accent);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
