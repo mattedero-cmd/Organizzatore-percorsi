@@ -1,3 +1,11 @@
+## v5.123 — 2026-09-06
+Multi-giorno: la variante "ESTREMI" — le zone lontane e povere si fondono in una giornata sola.
+- **Problema**: sul giro reale ENI 202609 l'app dava 1/13/3 tappe (Malé da sola con 472' di margine, una giornata da 13) contro il 7/4/4 costruito a mano dall'utente con la sua "giornata Estremi" (i punti terminali di più valli in un solo anello). `assignZones` apriva una zona per Malé e il numero di zone è un pavimento sul numero di giornate: nessuna fase successiva poteva rimediare.
+- **Fix**: nuova dimensione delle varianti a confronto (v5.120): con `extremes` le zone LONTANE con al massimo 3 gruppi si fondono in un'unica zona; `growDays` la spezza con l'oracolo reale se non ci sta in una giornata, quindi la fusione non può creare giornate infattibili. Il criterio di scelta resta "meno giornate, poi meno guida": la variante vince solo se conviene davvero.
+- **Risultati (replay fedele `scripts/replay-multiday-eni.mjs`)**: da 1/13/3 con 1078' di guida a **3/6/8 con 1023'** (−55'). Sull'altro log reale (19 tappe): **da 5 a 3 giornate a km invariati** (1111→1115). Su 40 geometrie a stella: 38 casi con meno giornate, 0 con più, 0 tappe fuori chiusura.
+- **Falsificato e scartato**: confrontare i gruppi col MEMBRO più vicino della zona invece che col seme incatena tutta la regione in una zona sola (5/2/10, +39'). Annotato in `docs/MULTI_GIORNO.md`.
+- Diagnostica: la riga VARIANTE mostra la composizione (tappe per giornata) e, per le varianti perdenti, la loro riga ZONE se diversa da quella scelta.
+
 ## v5.122 — 2026-09-06
 Replay fedele del giro reale: finalmente si può provare offline una modifica al clustering.
 - **Il problema di fondo**: `docs/MULTI_GIORNO.md` avverte da sempre che i test offline (linea d'aria) non riproducono la produzione, e la storia del progetto è piena di modifiche "buone offline" che sul giro vero peggioravano. Mancava lo strumento per chiudere il cerchio.

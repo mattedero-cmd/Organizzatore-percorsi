@@ -323,6 +323,23 @@ export function assignZones(groups, home, opts = {}) {
     : (z => nearHomeT(z) <= NEAR_HOME_RADIUS);
   const far = zones.filter(z => !isNearZone(z));
   const near = zones.filter(isNearZone);
+  // v5.123 — variante "estremi" (opts.extremes): le zone LONTANE e POVERE (al massimo TRE gruppi)
+  // si fondono in un'unica zona. (Soglia 2 non basta: nel caso ENI la zona di Canazei ha 3 gruppi.)
+  // NON confrontare i gruppi col membro piu' vicino della zona invece che col seme: provato, incatena
+  // tutta la regione in una zona sola (Canazei→Cavalese→San Michele→Trento→…) e dà 5/2/10. E' la "giornata Estremi" che l'utente costruisce a mano: i punti
+  // TERMINALI di valli diverse (Male' in Val di Sole, Canazei in Fassa) raccolti in un solo anello,
+  // invece di una giornata quasi vuota per ciascuno (Diagnostica ENI 202609: Male' da sola, 472'
+  // di margine). growDays accresce poi la zona con l'oracolo reale: se le tappe non ci stanno in
+  // una giornata, la spezza — quindi la fusione non puo' mai creare una giornata infattibile.
+  // Il numero di zone e' un PAVIMENTO sul numero di giornate: fonderle e' l'unico modo di scendere.
+  if (opts.extremes) {
+    const poor = far.filter(z => z.members.length <= 3);
+    if (poor.length >= 2) {
+      for (const z of poor) far.splice(far.indexOf(z), 1);
+      const seedZone = poor.reduce((a, b) => (b.seedHome > a.seedHome ? b : a));
+      far.push({ seed: seedZone.seed, members: poor.flatMap(z => z.members), seedHome: seedZone.seedHome, extremes: true });
+    }
+  }
   if (near.length) {
     // seme della zona unita = il gruppo piu' lontano fra tutti (resta l'estremo da cui partire)
     const seedZone = near.reduce((a, b) => (b.seedHome > a.seedHome ? b : a));
@@ -705,14 +722,16 @@ export async function buildDayClusters(stops, home, budgetMin, opts = {}, dayFea
   // sul giro reale, a parita' di giornate e km, distribuisce meglio le tappe fra le giornate lontane;
   // "seed" prima di "nearest" perche' e' il comportamento storico gia' validato con l'utente.
   const variants = [];
-  for (const gate of [true, false]) for (const mode of ["seed", "nearest"]) variants.push({ mode, gate });
+  // v5.123: terza dimensione "estremi" (zone per membro piu' vicino + fusione delle zone lontane
+  // povere). Sta in CODA alla lista: a parita' di giornate e guida vince sempre il piano storico.
+  for (const extremes of [false, true]) for (const gate of [true, false]) for (const mode of ["seed", "nearest"]) variants.push({ mode, gate, extremes });
   const runs = [];
-  for (const { mode, gate } of variants) {
+  for (const { mode, gate, extremes } of variants) {
     const lines = [];
-    const vOpts = { ...opts, nearHomeMode: mode, partialGate: gate, log: opts.log ? (m => lines.push(m)) : undefined };
+    const vOpts = { ...opts, nearHomeMode: mode, partialGate: gate, extremes, log: opts.log ? (m => lines.push(m)) : undefined };
     let days;
     try { days = await buildDayClustersOnce(stops, home, budgetMin, vOpts, dayFeasible); }
-    catch (e) { runs.push({ mode, gate, days: null, lines, err: e }); continue; }
+    catch (e) { runs.push({ mode, gate, extremes, days: null, lines, err: e }); continue; }
     let drive = 0;
     if (dayFeasible) {
       for (const d of days) {
@@ -722,7 +741,7 @@ export async function buildDayClusters(stops, home, budgetMin, opts = {}, dayFea
     } else {
       for (const d of days) drive += estimateDayMinutes(d, home, vOpts).driveMin;
     }
-    runs.push({ mode, gate, days, drive, lines });
+    runs.push({ mode, gate, extremes, days, drive, lines });
   }
   const ok = runs.filter(r => r.days && r.days.length);
   if (!ok.length) { const f = runs.find(r => r.err); if (f) throw f.err; return []; }
@@ -731,7 +750,14 @@ export async function buildDayClusters(stops, home, budgetMin, opts = {}, dayFea
   const best = ok[0];
   if (opts.log) {
     for (const r of ok) {
-      opts.log(`VARIANTE vicinato "${r.mode}"${r.mode === "seed" ? " (storica)" : " (membro piu' vicino)"} · gate economia ${r.gate ? "ON" : "OFF"}: ${r.days.length} giornate, guida ${Math.round(r.drive)}'${r === best ? "  <<< SCELTA" : ""}`);
+      opts.log(`VARIANTE vicinato "${r.mode}"${r.mode === "seed" ? " (storica)" : " (membro piu' vicino)"} · gate economia ${r.gate ? "ON" : "OFF"}${r.extremes ? " · ESTREMI" : ""}: ${r.days.length} giornate (${r.days.map(d => d.length).join("/")} tappe), guida ${Math.round(r.drive)}'${r === best ? "  <<< SCELTA" : ""}`);
+    }
+    // Perche' una variante ha perso? La sua riga ZONE dice come aveva raggruppato (solo se diversa).
+    const bestZone = best.lines.find(l => l.startsWith("ZONE "));
+    for (const r of ok) {
+      if (r === best) continue;
+      const z = r.lines.find(l => l.startsWith("ZONE "));
+      if (z && z !== bestZone) opts.log(`   ${r.extremes ? "ESTREMI" : r.mode}/${r.gate ? "ON" : "OFF"} → ${z}`);
     }
     for (const line of best.lines) opts.log(line);
   }

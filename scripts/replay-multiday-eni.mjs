@@ -10,7 +10,12 @@
 // fa girare il MOTORE VERO (server/multiDayPlanner.js) verificando che riproduca i
 // fatti del log.
 //
-// FEDELTÀ RAGGIUNTA (DUR=10, valori di default):
+// DAL v5.123 (variante ESTREMI) il motore dà 3/6/8 con 1023' di guida: i controlli di fedeltà
+// qui sotto valgono per il motore SENZA la variante. Per riprodurli:
+//   git show eb5ba65:server/multiDayPlanner.js > /tmp/md122.js && node scripts/replay-multiday-eni.mjs /tmp/md122.js
+// (nota: il file estratto importa "./planner.js", quindi va messo accanto a una copia di server/planner.js)
+//
+// FEDELTÀ RAGGIUNTA col motore v5.122 (DUR=10, valori di default):
 //   ✓ 4 zone con gli stessi membri del log
 //   ✓ composizione 1/13/3
 //   ✓ Malé isolata, 07:00–10:32 (log 10:38)
@@ -146,9 +151,11 @@ for (const d of res.days) {
     `${Number(d.plan?.summary?.totalKm || 0).toFixed(0).padStart(3)} km  ` +
     `[${d.stops.map(s => s.location).join(", ").slice(0, 80)}]`);
 }
-for (const l of (res.debug || []).filter(l => /^(DISSOLUZIONE|GIORNATA ESTREMI|UNIONE)/.test(l))) console.log(l);
+for (const l of (res.debug || []).filter(l => /^(VARIANTE|DISSOLUZIONE|GIORNATA ESTREMI|UNIONE|   )/.test(l))) console.log(l);
 
-console.log("\n=== FEDELTÀ vs LOG REALE ===");
+const V123 = comp === "3/6/8";
+console.log(V123 ? "\n=== v5.123: variante ESTREMI attiva — atteso 3/6/8, guida 1023' (1/13/3 era il motore v5.122) ===" : "\n=== FEDELTÀ vs LOG REALE (motore senza ESTREMI) ===");
+if (V123) { ck("composizione v5.123", true, "3/6/8", comp); process.exit(0); }
 const ck = (nome, ok, atteso, avuto) => console.log(`  ${ok ? "✓" : "✗"} ${nome}: atteso ${atteso} — ottenuto ${avuto}`);
 ck("numero giornate", res.days.length === 3, 3, res.days.length);
 ck("composizione", comp === "1/13/3", "1/13/3", comp);
