@@ -1,3 +1,8 @@
+## v5.121 — 2026-09-06
+Diagnostica: la riga "MOTORE" non mente più sulla versione del server.
+- **Bug**: la prima riga della Diagnostica multi-giorno annunciava `MOTORE: … (v5.105)` mentre il server girava la **v5.120** — la versione era scritta a mano e nessuno l'aveva aggiornata per 15 rilasci. Proprio la riga che serve a capire *"il server è aggiornato o no?"* dava la risposta sbagliata: leggendo un log si sarebbe concluso che il server fosse vecchio di quindici versioni, quando invece nello stesso log comparivano le "VARIANTE …" introdotte in v5.120.
+- **Fix**: la riga ora elenca le **fasi realmente attive** del motore (per-zona + unione parziale + riempimento + dissoluzione + varianti a confronto) invece di una versione hardcoded. Le fasi cambiano insieme al motore, quindi la riga non può più restare indietro.
+
 ## v5.120 — 2026-09-06
 Multi-giorno: la correzione di v5.118 non è più una scommessa — si calcolano più piani e vince il migliore.
 - **Perché**: una revisione avversaria di v5.118 (5 agenti in worktree isolati, ~400 esecuzioni) ha **falsificato** la giustificazione della correzione principale, pur confermandone il guadagno sul giro reale. Tre reperti eseguiti, non ipotizzati.

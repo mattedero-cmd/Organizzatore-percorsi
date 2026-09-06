@@ -962,7 +962,10 @@ export async function planMultiDay(payload, settings = {}, restStops = []) {
     log,
   };
   log(`=== PIANO MULTI-GIORNO ${baseDate} ===`);
-  log(`MOTORE: per-zona + fillPartial + dissoluzione (v5.105) — se NON vedi questa riga, il server è ancora vecchio`);
+  // Elenca le FASI realmente attive invece di una versione scritta a mano: quella restava
+  // indietro (diceva ancora "v5.105" alla v5.120) proprio nella riga che serve a capire se
+  // il server è aggiornato. Le fasi cambiano col motore, quindi la riga non può più mentire.
+  log(`MOTORE: per-zona + unione parziale + riempimento + dissoluzione + varianti a confronto`);
   log(`finestra ${formatTime(startMin)}–${formatTime(endMin)} (budget ${budgetMin}min) · pranzo ${opts.lunchMin}min`);
 
   const ensureCoords = async (s) => {
