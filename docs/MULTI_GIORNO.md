@@ -359,6 +359,12 @@ geometrie "a stella" (il modello dell'utente) oltre che sui due log reali. Nessu
   (19 tappe) fa **5 → 6 giornate, +138 km (+12,4%)**, perché la giornata di San Candido perde la
   partenza alle 05:30. Rompe l'invariante di v5.120 ("zero casi con più giornate di prima").
 
+### Prototipo della fase "estremi": provato sul replay fedele → NO-OP (v5.122)
+Il prototipo prodotto dall'analisi (fase con mossa a due tempi/scambio) è stato eseguito con
+`scripts/replay-multiday-eni.mjs` contro il motore attuale: **risultato identico, 1/13/3**, la fase
+non scatta nemmeno (nessuna riga "GIORNATA ESTREMI" in Diagnostica). Quindi non è solo rischiosa
+come dicevano i verificatori: sul giro reale **non risolve**. Non è stata integrata.
+
 ### Cosa resta valido per il prossimo tentativo
 - Il criterio di scelta fra varianti è `meno giornate, poi meno guida`: **cieco all'equilibrio**. Ma
   aggiungerlo all'obiettivo, da solo, non basta (vedi sopra) e cambia i risultati altrove.
@@ -420,10 +426,28 @@ geometrie "a stella" (il modello dell'utente) oltre che sui due log reali. Nessu
   (`POST /api/folders`, nome scelto dall'utente, default "Più giorni <data>"). Alla fine si apre
   la cartella nei salvati. I giri creati sono giri VERI (navigabili/modificabili/ricalcolabili).
 
+## Il REPLAY FEDELE — `scripts/replay-multiday-eni.mjs` (v5.122) ⭐ USARLO SEMPRE
+Chiude il buco del VINCOLO CRITICO: prima non esisteva un modo di provare offline una modifica al
+clustering, e ogni taratura era una scommessa. Lo script ricostruisce i tempi REALI dal log ENI
+202609 (tempi da casa + vicini stampati + **ancoraggi** imposti dai fatti del log, Floyd-Warshall),
+sostituisce Google con uno stub su quella matrice e fa girare il **motore vero**.
+
+```bash
+node scripts/replay-multiday-eni.mjs                    # motore attuale
+node scripts/replay-multiday-eni.mjs /percorso/alt.js   # confronta una variante
+```
+Fedeltà verificata (default `DUR=10`): **4 zone identiche**, **composizione 1/13/3**, Malé isolata
+07:00–10:32 (log 10:38), e **partenza della giornata da 13 tappe alle 05:22 identica al log** — firma
+forte, significa che casa→Silandro e il calcolo a ritroso combaciano. Km 886 contro 939 (−5,6%): lo
+scarto viene dalla conversione tempo→km dello stub e **non tocca le decisioni di clustering**, che
+usano i tempi.
+- `DUR` (durata intervento) **va tenuto a 10**: è il valore che riproduce il log (sono stazioni di
+  servizio, visite rapide). Con `DUR ≥ 15` il motore dà 4 giornate 9/1/4/3 e il confronto non vale più.
+- Regola: **una modifica al clustering si prova qui PRIMA di toccare il motore**, e va confrontata
+  anche sull'altro log reale (19 tappe) e sulle geometrie a stella.
+
 ## Da fare (in ordine, solo con dati reali)
-- [ ] **PRIMA DI TUTTO: replay offline FEDELE del giro reale** (deve riprodurre GEOMETRIA, VICINI,
-      ZONE e la composizione 1/13/3 del log ENI 202609). Senza, ogni modifica al clustering è una
-      scommessa: in v5.121 quattro verificatori hanno prodotto ricostruzioni in disaccordo fra loro.
+- [x] ~~replay offline FEDELE del giro reale~~ → fatto in v5.122 (`scripts/replay-multiday-eni.mjs`).
 - [ ] **Giornata "ESTREMI"** (squilibrio 1/13/3 contro il 7/4/4 dell'utente): vedi la sezione dedicata
       sopra per la diagnosi e i quattro rimedi già falsificati. Da riprendere solo col replay fedele.
 - [ ] Scelta del **giorno della settimana** per zona (negozi tutti aperti) — marginale.
