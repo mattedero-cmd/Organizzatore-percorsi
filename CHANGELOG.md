@@ -1,3 +1,11 @@
+## v5.116 — 2026-09-06
+Un luogo scelto da Maps viene salvato con le sue coordinate (lat/lng).
+- **Bug**: nel form "Nuovo percorso", il pannello "+ Manuale" con "Scegli sulla mappa" compilava anche i campi nascosti `rp-custom-lat`/`rp-custom-lng`, ma il pulsante **"+ Salva e aggiungi"** (`#add-custom-stop`) le **buttava via**: la POST a `/api/addresses` non le inviava e nemmeno la tappa aggiunta al giro le portava. Il contatto finiva in archivio **senza coordinate**, pur essendo stato scelto sulla mappa. (Il gemello nella vista risultato, `#rv-add-custom-stop`, le inviava già: era un'incoerenza fra i due pannelli.)
+- **Conseguenze**: ogni pianificazione doveva rigeocodificare quel contatto lato server (v5.102) e il **multi-giorno** perdeva precisione — la matrice dei tempi reali si costruisce dalle coordinate, e in montagna una posizione approssimata sposta la tappa di valle.
+- **Fix 1 (client)**: `#add-custom-stop` ora legge lat/lng come fa già "+ Usa senza salvare" e le invia sia nella POST sia nella tappa aggiunta al giro; se il server ha geocodificato lui, vincono le sue.
+- **Fix 2 (server, rete di sicurezza)**: `POST` e `PUT /api/addresses` ora chiamano `ensureAddressCoords()` — se c'è l'indirizzo ma mancano le coordinate, il contatto viene **geocodificato prima di scriverlo sul DB**. Vale per **ogni** via di salvataggio: scheda archivio compilata a mano, "+ Salva e aggiungi", import contatti Google, comando vocale, client vecchi.
+- **Prudenza sul fallback**: si accetta solo una geocodifica **vera** di Google. `resolvePlace` ha due ripieghi — il centroide di città e, come ultima spiaggia, **le coordinate di casa** (46.004, 11.196): salvare quelle metterebbe il contatto a casa in silenzio, molto peggio del non averle. Verificato: con chiave e risposta valida → `source:"google"` accettato; senza chiave, "Via Qualunque 3, Silandro" → `local-estimate` con le coordinate di casa, **scartato**. Un errore di geocodifica non blocca mai il salvataggio.
+
 ## v5.115 — 2026-07-24
 La pausa pranzo si sposta nell'ordine, senza doverle imporre un orario.
 - **Bug/limite**: dopo il calcolo la pausa pranzo era "immobile": per metterla prima di un intervento preciso bisognava per forza fissarle un **orario** (`alle`), cosa scomoda e spesso sbagliata. Nell'elenco "Riordina tappe manualmente" la pausa non compariva proprio.

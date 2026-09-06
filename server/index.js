@@ -295,6 +295,30 @@ async function authenticate(request) {
   return getSession(cookies.session || "");
 }
 
+// Un contatto d'archivio deve SEMPRE finire salvato con lat/lng: senza coordinate il planner
+// non può calcolare le distanze (v5.102) e il multi-giorno perde la matrice dei tempi reali.
+// Rete di sicurezza lato server valida per OGNI via di salvataggio (scheda archivio, "+ Salva e
+// aggiungi", import contatti Google, comando vocale, client vecchi): se l'indirizzo c'è ma le
+// coordinate no, si geocodifica prima di scrivere sul DB.
+// PRUDENZA: si accetta SOLO una geocodifica vera di Google. `resolvePlace` ha due fallback —
+// il centroide di città e, come ultima spiaggia, le coordinate di casa (46.004, 11.196):
+// persistere quelle metterebbe silenziosamente il contatto a casa, cosa peggiore del non
+// averle. Un errore non blocca mai il salvataggio.
+async function ensureAddressCoords(body) {
+  if (!body || typeof body !== "object") return;
+  const has = (v) => v != null && v !== "" && Number.isFinite(Number(v)) && Number(v) !== 0;
+  if (has(body.lat) && has(body.lng)) return;
+  if (!body.fullAddress && !body.address) return;
+  try {
+    const c = await resolvePlace({
+      fullAddress: body.fullAddress || body.address,
+      location: body.location || "",
+      customer: body.customer || "",
+    });
+    if (c && c.source === "google" && has(c.lat) && has(c.lng)) { body.lat = c.lat; body.lng = c.lng; }
+  } catch { /* si salva comunque senza coordinate */ }
+}
+
 const _themeMap = {
   default: { dark: "night",         light: "day" },
   neon:    { dark: "nero",          light: "neon-giorno" },
@@ -683,6 +707,7 @@ async function handleApi(request, response) {
     if (method === "POST" && url.pathname === "/api/addresses") {
       const body = await parseBody(request);
       if (!body.fullAddress) return sendJson(response, 400, { error: "Indirizzo completo obbligatorio" });
+      await ensureAddressCoords(body);
       const address = await createAddress(body, userId);
       return sendJson(response, 201, address);
     }
@@ -690,6 +715,7 @@ async function handleApi(request, response) {
     const addressMatch = url.pathname.match(/^\/api\/addresses\/(\d+)$/);
     if (addressMatch && method === "PUT") {
       const body = await parseBody(request);
+      await ensureAddressCoords(body);
       const address = await updateAddress(addressMatch[1], body, userId);
       return sendJson(response, 200, address);
     }

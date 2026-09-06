@@ -1853,7 +1853,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.115 &mdash; luglio 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.116 &mdash; settembre 2026</p>
         </div>
       </div>
 
@@ -8010,12 +8010,18 @@ function bindEvents() {
       updateRouteFromForm();
       if (!state.route.customAddress || !state.route.customCustomer) { showToast("Cliente e indirizzo obbligatori"); return; }
       const wh = readWeeklyHours();
+      // Coordinate scelte sulla mappa: vanno SALVATE con il contatto. Senza, il contatto
+      // finiva in archivio senza lat/lng e ogni pianificazione doveva rigeocodificarlo
+      // (e il multi-giorno perdeva precisione nella matrice dei tempi reali).
+      const lat = parseFloat(document.getElementById("rp-custom-lat")?.value) || state.route.customLat || null;
+      const lng = parseFloat(document.getElementById("rp-custom-lng")?.value) || state.route.customLng || null;
       const saved = await api("/api/addresses", {
         method: "POST",
         body: JSON.stringify({
           customer: state.route.customCustomer, location: state.route.customLocation,
           fullAddress: state.route.customAddress,
           weeklyHours: wh || null,
+          lat, lng,
           defaultDuration: state.route.customDuration || state.settings.defaultStopDuration || 45,
           phone: (document.getElementById("rp-custom-phone")?.value || state.route.customPhone || "").trim()
         })
@@ -8026,6 +8032,8 @@ function bindEvents() {
         addressId: saved?.id, customer: state.route.customCustomer, location: state.route.customLocation,
         fullAddress: state.route.customAddress, durationMinutes: state.route.customDuration || state.settings.defaultStopDuration || 45,
         phone: (document.getElementById("rp-custom-phone")?.value || state.route.customPhone || "").trim(),
+        // se il server ha geocodificato lui, usa le sue coordinate
+        lat: saved?.lat ?? lat, lng: saved?.lng ?? lng,
         weeklyHours: wh, recognized: true
       });
       Object.assign(state.route, { customCustomer: "", customLocation: "", customAddress: "", customDuration: null, customPhone: "", customWeeklyHours: null, customLat: null, customLng: null });
