@@ -468,7 +468,10 @@ giornata PER PRIMI, poi torna alla crescita "il più vicino prima".
   Vipiteno in zona Silandro già dalla zonizzazione. **Lezione**: il replay non aveva mostrato il
   problema perché nella sua matrice Vipiteno entrava nella giornata Silandro tramite le fasi
   successive; coi tempi reali no. Ogni rilascio del clustering va confermato con la Diagnostica
-  reale, il replay da solo non basta. È la mossa
+  reale, il replay da solo non basta.
+- **CONFERMATO in produzione (Diagnostica reale v5.125)**: variante ESTREMI scelta, **9/5/3 con
+  1019'** (era 1052'), 914 km (era 939; piano dell'utente 903). Val d'Adige 9 · Nord = Silandro,
+  Bolzano×2, ENIMOOV, Vipiteno · Estremi = Canazei, Cavalese, Malé. Caso CHIUSO. È la mossa
 dell'utente: i terminali di valli diverse in un anello solo. `growDays` interroga poi l'oracolo reale
 e spezza la zona se non ci sta in una giornata, quindi la fusione **non crea mai giornate
 infattibili**; il confronto "meno giornate, poi meno guida" garantisce che se non conviene non
