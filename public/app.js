@@ -1853,7 +1853,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.118 &mdash; settembre 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.119 &mdash; settembre 2026</p>
         </div>
       </div>
 
@@ -2419,7 +2419,10 @@ async function recalcSavedMultiDay(id) {
   if (!plan || !plan.payload) { showToast("Giro non trovato"); return; }
   if (state.planning) return;
   const baseReq = { ...(plan.payload.baseReq || {}), scheduledDate: new Date().toISOString().slice(0, 10) };
-  const stops = plan.payload.stops || [];
+  // Stessa regola dei giri singoli: il giro salvato conserva una fotografia delle tappe, ma
+  // l'ARCHIVIO e' la fonte di verita'. Si riallineano ai contatti prima di ripianificare, altrimenti
+  // il ricalcolo userebbe indirizzi/orari/coordinate vecchi.
+  const stops = (plan.payload.stops || []).map(hydrateRowFromArchive);
   if (!stops.length) { showToast("Il giro salvato non ha tappe"); return; }
   state.planning = true;
   showSpinner("Ricalcolo giro salvato…");
@@ -2511,8 +2514,68 @@ async function loadInitialData() {
 
 // ── normalize saved route ─────────────────────────────────────────────────────
 
+// ── anagrafica → giri già salvati ─────────────────────────────────────────────
+// L'ARCHIVIO È LA FONTE DI VERITÀ per i dati del contatto. Un giro salvato conserva una FOTOGRAFIA
+// della tappa presa al momento della pianificazione: correggendo poi il cliente in anagrafica
+// (indirizzo, telefono, orari, coordinate) il giro continuava a mostrare i dati vecchi, e l'unico
+// modo per vederli aggiornati era RIFARE il giro. Ora ogni riga con `addressId` viene ri-allineata
+// al contatto nel momento in cui il giro si mostra — niente da salvare, niente da ricreare.
+//
+// Si aggiornano SOLO i campi che appartengono al CONTATTO. Restano intatti quelli che appartengono
+// al GIRO: durata dell'intervento, finestra oraria, ignoreHours, "prima tappa", NOTE DELLA TAPPA
+// (che sono per-giro dalla v5.097, non del contatto) e tutti i valori calcolati (orari, km, guida).
+// Non si toccano: le pause (`row.type`), le tappe provvisorie (senza `addressId`) e i giri importati,
+// che per progetto hanno gli `addressId` azzerati ed sono self-contained (vedi CLAUDE.md,
+// "Condivisione giri") — non hanno un contatto in archivio a cui allinearsi.
+function addressById(id) {
+  if (id == null) return null;
+  const src = state.allAddresses || [];
+  if (state._addrByIdSrc !== src) {                 // la mappa si ricostruisce solo se l'archivio cambia
+    state._addrById = new Map(src.map(a => [String(a.id), a]));
+    state._addrByIdSrc = src;
+  }
+  return state._addrById.get(String(id)) || null;
+}
+
+// `obj` puo' essere una RIGA del risultato (campo `address`) o una TAPPA salvata (`fullAddress`):
+// l'indirizzo aggiornato viene scritto nella chiave che l'oggetto gia' usa.
+function hydrateRowFromArchive(obj) {
+  const row = obj;
+  if (!row || row.type || row.addressId == null) return row;
+  const a = addressById(row.addressId);
+  if (!a) return row;                                // contatto eliminato: si tiene la fotografia
+  const wh = a.weeklyHours || null;
+  const flat = wh ? deriveHoursFromWeekly(wh) : {
+    openMorning: a.openMorning || "", closeMorning: a.closeMorning || "",
+    openAfternoon: a.openAfternoon || "", closeAfternoon: a.closeAfternoon || ""
+  };
+  const prevAddr = row.address || row.fullAddress || "";
+  const nextAddr = a.fullAddress || prevAddr;
+  const next = {
+    ...row,
+    customer: a.customer || row.customer,
+    activity: a.activity ?? row.activity,
+    location: a.location ?? row.location,
+    phone: a.phone ?? row.phone,
+    email: a.email ?? row.email,
+    weeklyHours: wh,
+    ...flat
+  };
+  if ("address" in row) next.address = nextAddr;
+  if ("fullAddress" in row || !("address" in row)) next.fullAddress = nextAddr;
+  const hasCoord = v => v != null && v !== "" && Number.isFinite(Number(v));
+  if (hasCoord(a.lat) && hasCoord(a.lng)) { next.lat = Number(a.lat); next.lng = Number(a.lng); }
+  // Se è cambiato il PUNTO (indirizzo o coordinate), orari calcolati e chilometri del giro non
+  // valgono più: lo si segnala nella vista risultato invece di mostrare numeri sbagliati in silenzio.
+  const movedAddr = prevAddr !== nextAddr;
+  const movedCoord = hasCoord(row.lat) && hasCoord(next.lat) &&
+    (Number(row.lat) !== Number(next.lat) || Number(row.lng) !== Number(next.lng));
+  if (movedAddr || movedCoord) next.addressChangedInArchive = true;
+  return next;
+}
+
 function normalizeSavedRoute(route) {
-  const rows = Array.isArray(route?.rows) ? route.rows : [];
+  const rows = (Array.isArray(route?.rows) ? route.rows : []).map(hydrateRowFromArchive);
   const lastRow = rows[rows.length - 1] || {};
   const finalLeg = route?.finalLeg || {};
   const summary = route?.summary || {};
@@ -4108,6 +4171,19 @@ function renderResult() {
       </div>
 
       ${result.notes ? `<div class="result-notes">${escapeHtml(result.notes)}</div>` : ""}
+
+      ${(() => {
+        // I dati del contatto sono già aggiornati dall'archivio (hydrateRowFromArchive). Se però è
+        // cambiato il PUNTO, orari e chilometri calcolati non valgono più: meglio dirlo che mostrare
+        // numeri sbagliati in silenzio. Il ricalcolo resta una scelta dell'utente (costa chiamate API).
+        const moved = rows.filter(r => r.addressChangedInArchive).map(r => r.customer || r.location || "tappa");
+        if (!moved.length) return "";
+        const chi = [...new Set(moved)].join(", ");
+        return `<div class="result-notes" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+          <span>L'indirizzo di <b>${escapeHtml(chi)}</b> è cambiato in anagrafica: orari e chilometri qui sotto sono ancora quelli vecchi.</span>
+          <button class="btn" id="recalc-after-archive-change">${I.refresh(14)} Ricalcola il giro</button>
+        </div>`;
+      })()}
 
       ${state.googleMapsKey ? `<div id="route-map" style="height:280px;border-radius:8px;border:1px solid var(--line);margin-bottom:14px;"></div>` : ""}
 
@@ -7528,7 +7604,8 @@ function bindEvents() {
     }
 
     // ── result-view: ricalcola ────────────────────────────────────────────────
-    if (e.target.closest("#rv-replan-btn") || e.target.closest("#rv-replan-from-add") || e.target.closest("#rv-replan-stopwindow") || e.target.closest(".rv-stop-replan-btn")) {
+    if (e.target.closest("#rv-replan-btn") || e.target.closest("#rv-replan-from-add") || e.target.closest("#rv-replan-stopwindow") || e.target.closest(".rv-stop-replan-btn")
+        || e.target.closest("#recalc-after-archive-change")) {
       await replanFromResult();
       return;
     }
