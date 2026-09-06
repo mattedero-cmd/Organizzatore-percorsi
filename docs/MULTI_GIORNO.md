@@ -313,7 +313,7 @@ La Diagnostica, a ogni giornata chiusa, logga il detour di ogni candidato scarta
 (`FUORI CORRIDOIO` / `OLTRE BUDGET` / `ORARI NON ok`) → serve a tarare la frazione sul giro reale.
 Lo **swap pass-through/terminale è stato RIMOSSO** (era la causa principale del mescolamento).
 
-## La "giornata ESTREMI" — il caso ENI 202609 (2026-09-06), RISOLTA in v5.123 (vedi in fondo alla sezione)
+## La "giornata ESTREMI" — il caso ENI 202609 (2026-09-06), RISOLTA in v5.123/5.124 (vedi in fondo alla sezione)
 Giro reale di 17 tappe. **Piano dell'utente (a mano): 903 km, 3 giornate, 7/4/4 tappe.
 Piano dell'app: 939 km, 3 giornate, 1/13/3** — una giornata con UNA tappa (Malé, 472' di margine,
 rientro 10:38) e una con TREDICI (05:22–17:38, 52' di margine). **I km sono quasi uguali (+4%): il
@@ -446,21 +446,24 @@ usano i tempi.
 - Regola: **una modifica al clustering si prova qui PRIMA di toccare il motore**, e va confrontata
   anche sull'altro log reale (19 tappe) e sulle geometrie a stella.
 
-### SOLUZIONE (v5.123): la variante "ESTREMI" in `assignZones`
+### SOLUZIONE (v5.123 → corretta in v5.124): la variante "ESTREMI" in `assignZones`
 Terza dimensione delle varianti a confronto (`extremes` × `partialGate` × `nearHomeMode`, 8 corse).
-Con `extremes:true`, dopo la partizione in zone le zone **LONTANE** (non vicino-casa) con **al
-massimo 3 gruppi** si fondono in un'unica zona (seme = il gruppo più lontano da casa). È la mossa
+Con `extremes:true`, dopo la partizione in zone le **DUE** zone **LONTANE** (non vicino-casa) più
+povere (**al massimo 3 gruppi**, a parità le più lontane) si fondono in un'unica zona (seme = il
+gruppo più lontano da casa) e i loro semi diventano **terminali**: `growDays` li mette nella
+giornata PER PRIMI, poi torna alla crescita "il più vicino prima".
+- **v5.123 in produzione** fondeva TUTTE le zone lontane povere (8 gruppi) e la crescita greedy
+  da Canazei lasciava insieme i due terminali opposti: giornata Vipiteno→Malé da 383 km (9/2/6,
+  1042'). Da qui la fusione a coppie e i terminali prioritari (v5.124): con la sola fusione a coppie
+  il risultato restava 1/13/3 perché Vipiteno (115' da Canazei) entrava prima di Malé (124').
+- **Replay v5.124: 9/5/3 con 1035'** — Val d'Adige (9) · Vipiteno+ENIMOOV+Bolzano×2+Silandro ·
+  Canazei+Cavalese+Malé. Struttura del piano dell'utente (7/4/4), San Michele resta in Val d'Adige.
+- Log 19 tappe: identico (5 giornate, 1111 km). 40 stelle: 3 con meno giornate, 0 con più, km identici.
+- Numeri precedenti della v5.123 (3/6/8, 19 tappe 5→3) venivano dalla fusione totale, scartata. È la mossa
 dell'utente: i terminali di valli diverse in un anello solo. `growDays` interroga poi l'oracolo reale
 e spezza la zona se non ci sta in una giornata, quindi la fusione **non crea mai giornate
 infattibili**; il confronto "meno giornate, poi meno guida" garantisce che se non conviene non
 viene scelta (le varianti ESTREMI stanno in coda: a parità vince il piano storico).
-- Replay ENI (DUR=10): **1/13/3 con 1078' → 3/6/8 con 1023'** (Borgo/Civezzano/Ravina ·
-  Vipiteno/ENIMOOV/Bolzano×2/Silandro/Malé · Canazei/Cavalese/San Michele/Trento×2/Rovereto×2/Ala).
-  Non è il 7/4/4 dell'utente alla lettera ma ha la stessa struttura (una giornata "Nord" con
-  Vipiteno+Bolzano+Silandro, una con Canazei+Cavalese+San Michele) e meno guida.
-- Log 19 tappe (DUR=15): **5 → 3 giornate**, km 1111 → 1115, zero fuori chiusura.
-- 40 stelle (DUR=20): 38 con meno giornate, 0 con più, 0 fuori chiusura, km +5% (pagati per le
-  giornate in meno).
 - **Vicolo cieco provato**: far confrontare il gruppo col MEMBRO più vicino della zona anziché col
   seme (idea: Vipiteno è a 67' da Bolzano ma 115' da Canazei). Incatena l'intera regione in una zona
   sola (Canazei→Cavalese→San Michele→Trento→…) e produce 5/2/10 a 1117'. Il seme resta il riferimento.
@@ -469,7 +472,7 @@ viene scelta (le varianti ESTREMI stanno in coda: a parità vince il piano stori
 
 ## Da fare (in ordine, solo con dati reali)
 - [x] ~~replay offline FEDELE del giro reale~~ → fatto in v5.122 (`scripts/replay-multiday-eni.mjs`).
-- [x] ~~Giornata "ESTREMI"~~ → fatta in v5.123 (variante `extremes` in `assignZones`, replay 3/6/8).
+- [x] ~~Giornata "ESTREMI"~~ → fatta in v5.123/5.124 (variante `extremes` in `assignZones` + terminali prioritari, replay 9/5/3).
 - [ ] Scelta del **giorno della settimana** per zona (negozi tutti aperti) — marginale.
 - [x] ~~Tarare la frazione corridoio~~ → fatta in v5.104 (0.35 sulla Diagnostica reale).
 - [x] ~~"Crea i giri" + cartella unica con nome~~ → fatta in v5.106.

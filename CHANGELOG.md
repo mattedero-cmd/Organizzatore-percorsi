@@ -1,3 +1,10 @@
+## v5.124 — 2026-09-06
+Multi-giorno: la giornata ESTREMI ora è quella giusta (Canazei + Cavalese + Malé), non Vipiteno→Malé.
+- **Bug (Diagnostica reale della v5.123)**: la fusione univa TUTTE le zone lontane povere (Malé + Silandro/Bolzano + Canazei, 8 gruppi); `growDays` la spezzava lasciando insieme i due terminali OPPOSTI: giornata "Vipiteno → Malé" da 383 km. Risultato 9/2/6 con 1042': meglio del 1/13/3 ma geograficamente assurdo.
+- **Fix 1**: si fondono solo le DUE zone lontane più povere (a parità le più lontane): Malé + Canazei.
+- **Fix 2**: nella zona fusa i **terminali** (i semi delle zone fuse) entrano per primi nella giornata; la crescita "il più vicino prima" prendeva Vipiteno al posto di Malé e vanificava la fusione. Esauriti i terminali, la crescita torna normale.
+- **Replay fedele**: **9/5/3 con 1035'** — Val d'Adige (9) · Nord = Vipiteno+ENIMOOV+Bolzano×2+Silandro · Estremi = Canazei+Cavalese+Malé. È la struttura del piano dell'utente (7/4/4), con San Michele in Val d'Adige invece che negli Estremi. Log 19 tappe: identico a prima (5 giornate, 1111 km). 40 stelle: 3 casi con meno giornate, 0 con più, km identici.
+
 ## v5.123 — 2026-09-06
 Multi-giorno: la variante "ESTREMI" — le zone lontane e povere si fondono in una giornata sola.
 - **Problema**: sul giro reale ENI 202609 l'app dava 1/13/3 tappe (Malé da sola con 472' di margine, una giornata da 13) contro il 7/4/4 costruito a mano dall'utente con la sua "giornata Estremi" (i punti terminali di più valli in un solo anello). `assignZones` apriva una zona per Malé e il numero di zone è un pavimento sul numero di giornate: nessuna fase successiva poteva rimediare.

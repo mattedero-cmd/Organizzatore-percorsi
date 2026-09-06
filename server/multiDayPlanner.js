@@ -333,11 +333,15 @@ export function assignZones(groups, home, opts = {}) {
   // una giornata, la spezza — quindi la fusione non puo' mai creare una giornata infattibile.
   // Il numero di zone e' un PAVIMENTO sul numero di giornate: fonderle e' l'unico modo di scendere.
   if (opts.extremes) {
-    const poor = far.filter(z => z.members.length <= 3);
-    if (poor.length >= 2) {
+    // Solo le DUE zone piu' povere (a parita', le piu' lontane): fondere tutte le zone lontane
+    // (Diagnostica reale 2026-09-06) produceva una zona da 8 gruppi che growDays spezzava lasciando
+    // insieme i due terminali OPPOSTI (Vipiteno + Male', 383 km in una giornata).
+    const poor = far.filter(z => z.members.length <= 3)
+      .sort((a, b) => a.members.length - b.members.length || b.seedHome - a.seedHome).slice(0, 2);
+    if (poor.length === 2) {
       for (const z of poor) far.splice(far.indexOf(z), 1);
       const seedZone = poor.reduce((a, b) => (b.seedHome > a.seedHome ? b : a));
-      far.push({ seed: seedZone.seed, members: poor.flatMap(z => z.members), seedHome: seedZone.seedHome, extremes: true });
+      far.push({ seed: seedZone.seed, members: poor.flatMap(z => z.members), seedHome: seedZone.seedHome, extremes: true, terminals: poor.map(z => z.seed) });
     }
   }
   if (near.length) {
@@ -794,8 +798,12 @@ async function buildDayClustersOnce(stops, home, budgetMin, opts = {}, dayFeasib
   // il più VICINO finché la giornata resta FATTIBILE (motore reale). Una lista troppo grande si
   // spezza in più giornate (estremo → casa). Aggiunge a `days`. Niente mescolanze: la lista è
   // già una zona/corridoio coerente (o i resti accorpati).
-  const growDays = async (groupList, label) => {
+  const growDays = async (groupList, label, terminals = []) => {
     const unassigned = [...groupList];
+    // v5.123: in una zona ESTREMI i TERMINALI (i semi delle zone fuse) entrano per primi nella
+    // giornata: e' il senso della giornata "Estremi" (Male' + Canazei insieme). Senza priorita'
+    // la crescita "il piu' vicino prima" prendeva Vipiteno al posto di Male' e la fusione era vana.
+    const isTerminal = g => terminals.includes(g);
     let guard = 0;
     while (unassigned.length && guard++ < 5000) {
       const dayIndex = days.length;
@@ -812,13 +820,27 @@ async function buildDayClustersOnce(stops, home, budgetMin, opts = {}, dayFeasib
         added = false;
         const dayStops = flat(dayGroups);
         let best = -1, bestDist = Infinity;
+        const pendingTerminals = unassigned.some(isTerminal);
         for (let i = 0; i < unassigned.length; i++) {
+          if (pendingTerminals && !isTerminal(unassigned[i])) continue;
           let d = Infinity;
           for (const cs of unassigned[i]) for (const ds of dayStops) { const t = legMin(ds, cs, opts); if (t < d) d = t; }
           if (d >= bestDist - 1e-6) continue;
           const tentative = [...dayStops, ...unassigned[i]];
           if (!(await feasible(tentative, dayIndex))) continue;
           bestDist = d; best = i;
+        }
+        // nessun terminale ci sta piu': si torna alla crescita normale (i terminali restanti
+        // apriranno la giornata successiva come semi, essendo i piu' lontani)
+        if (best < 0 && pendingTerminals) {
+          for (let i = 0; i < unassigned.length; i++) {
+            if (isTerminal(unassigned[i])) continue;
+            let d = Infinity;
+            for (const cs of unassigned[i]) for (const ds of dayStops) { const t = legMin(ds, cs, opts); if (t < d) d = t; }
+            if (d >= bestDist - 1e-6) continue;
+            if (!(await feasible([...dayStops, ...unassigned[i]], dayIndex))) continue;
+            bestDist = d; best = i;
+          }
         }
         if (best >= 0) { dayGroups.push(unassigned.splice(best, 1)[0]); added = true; }
       }
@@ -848,7 +870,7 @@ async function buildDayClustersOnce(stops, home, budgetMin, opts = {}, dayFeasib
 
   // Una zona alla volta (niente mescolanze tra valli), dalla più vicina a casa alla più lontana.
   for (let zi = 0; zi < orderedZones.length; zi++) {
-    await growDays(orderedZones[zi].members, `Z${zi + 1} ${nameOf(orderedZones[zi].seed[0])}`);
+    await growDays(orderedZones[zi].members, `Z${zi + 1} ${nameOf(orderedZones[zi].seed[0])}`, orderedZones[zi].terminals || []);
   }
 
   // UNIONE PARZIALE SUL CORRIDOIO: una giornata lontana POVERA assorbe singoli gruppi "sulla via" da
