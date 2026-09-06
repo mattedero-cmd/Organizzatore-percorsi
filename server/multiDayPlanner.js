@@ -193,10 +193,6 @@ export const CLOSURE_TOLERANCE_MIN = 10;
 // via il più vicino al precedente (rientro verso casa). Così il lungo viaggio si fa presto,
 // quando i negozi sono ancora chiusi, e si arriva alle tappe quando aprono — più tempo utile
 // al lavoro. È l'ordine che verrà bloccato nel giro della giornata.
-// Ordina le tappe di una giornata "far-first": prima il punto più lontano da casa, poi via
-// via il più vicino al precedente (rientro verso casa). Così il lungo viaggio si fa presto,
-// quando i negozi sono ancora chiusi, e si arriva alle tappe quando aprono — più tempo utile
-// al lavoro. È l'ordine che verrà bloccato nel giro della giornata.
 function orderDayFarFirst(dayStops, home, opts = {}) {
   if (dayStops.length <= 1) return [...dayStops];
   let fi = 0, fd = -1;
@@ -285,10 +281,6 @@ function groupColocated(stops, opts = {}) {
 // Raggio (min di strada da casa) entro cui le tappe sono considerate "vicino casa" e accorpate in
 // un'unica zona/giornata (hop brevi attorno a casa). Tarabile sulla Diagnostica.
 const NEAR_HOME_RADIUS = 35;
-// Diametro massimo della zona vicino-casa: anche se un membro è entro il raggio, la zona non viene
-// accorpata al vicinato se il suo estremo è più lontano di così (un corridoio lungo che sfiora casa
-// resta una zona a sé). 2 × NEAR_HOME_RADIUS.
-const NEAR_HOME_DIAMETER = 70;
 export function assignZones(groups, home, opts = {}) {
   const homeT = g => Math.min(...g.map(s => legMin(home, s, opts)));
   const between = (g, k) => {
@@ -309,27 +301,30 @@ export function assignZones(groups, home, opts = {}) {
   // hop brevi attorno a casa: senza questo accorpamento ognuna diventerebbe una zona/giornata a sé
   // (Rovereto, Trento, Levico, Pergine...). Le uniamo in un'unica zona vicino-casa.
   //
-  // v5.118 — SI GUARDA IL MEMBRO PIÙ VICINO, NON IL SEME. `seedHome` è il tempo-casa del SEME, che
-  // per costruzione è il gruppo PIÙ LONTANO della zona (`sorted` è decrescente): usarlo qui
-  // significava che una zona era "vicino casa" solo se il suo membro più LONTANO stava entro il
-  // raggio. Diagnostica reale 2026-09-06: la zona seminata da San Michele a/A (37', due minuti
-  // oltre il raggio) trascinava fuori dal vicinato Trento 26' e Trento 27'; quella seminata da Ala
-  // (54') trascinava fuori Rovereto 33' e Rovereto 40'. Risultato: TRE zone per nove tappe tutte
-  // entro un'ora da casa e quindi — poiché growDays lavora una zona alla volta e il numero di zone
-  // è un PAVIMENTO sul numero di giornate — tre giornate che chiudevano alle 08:59, 07:18 e 10:38
-  // con 571/672/472 minuti di margine. Il criterio contraddiceva se stesso: tappe individualmente
-  // DENTRO il raggio (26', 27', 33') venivano classificate "lontane".
-  // GUARDIA DI DIAMETRO: un corridoio lungo che sfiora casa non va riclassificato per intero, quindi
-  // si richiede anche che il membro più lontano resti entro NEAR_HOME_DIAMETER. Sovra-accorpare qui
-  // è sicuro per costruzione (growDays rispezza da solo con l'oracolo reale a ogni passo);
-  // sotto-accorpare no, perché nessuna fase a valle sa ricomporre il vicinato.
-  // NB unità: sono minuti BUFFERATI (legMin applica il markup traffico), non minuti Google grezzi.
+  // v5.120 — DUE MODALITA', si tengono entrambe e vince la migliore (vedi buildDayClusters).
+  //   "seed"    (storica, <= v5.117): la zona e' "vicino casa" se il suo SEME — che per costruzione
+  //             e' il membro piu' LONTANO — sta entro il raggio.
+  //   "nearest" (v5.118): basta che il membro piu' VICINO stia entro il raggio.
+  // La modalita' "seed" contraddice se stessa sui dati reali: Diagnostica 2026-09-06, la zona
+  // seminata da San Michele a/A (37', DUE minuti oltre il raggio) espelle dal vicinato Trento 26' e
+  // Trento 27'; quella seminata da Ala (54') espelle Rovereto 33' e 40'. Nove tappe entro un'ora da
+  // casa finiscono in TRE zone, e il numero di zone e' un PAVIMENTO sul numero di giornate.
+  // La modalita' "nearest" pero' NON e' sicura in generale: su geometrie "a stella" (valli che si
+  // toccano solo passando da casa) accorpa valli opposte, e growDays NON sa rimediare — spezza per
+  // FATTIBILITA', mai per direzione o per economia (il criterio di corridoio di v5.014 e' stato
+  // revertito). Verifica avversaria v5.119: 21 regressioni su 180 geometrie casuali, fino a +81 km
+  // e a una giornata in piu'. Per questo la scelta non e' cablata qui: si costruiscono ENTRAMBI i
+  // piani e si tiene quello con meno giornate (a parita', meno guida). Cosi' il caso reale guadagna
+  // e nessuna geometria puo' peggiorare rispetto al comportamento storico.
+  // NB unita': sono minuti BUFFERATI (legMin applica il markup traffico), non minuti Google grezzi.
   const nearHomeT = z => Math.min(...z.members.map(g => homeT(g)));
-  const isNearZone = z => nearHomeT(z) <= NEAR_HOME_RADIUS && z.seedHome <= NEAR_HOME_DIAMETER;
+  const isNearZone = opts.nearHomeMode === "seed"
+    ? (z => z.seedHome <= NEAR_HOME_RADIUS)
+    : (z => nearHomeT(z) <= NEAR_HOME_RADIUS);
   const far = zones.filter(z => !isNearZone(z));
   const near = zones.filter(isNearZone);
   if (near.length) {
-    // seme della zona unita = il gruppo più lontano fra tutti (resta l'estremo da cui partire)
+    // seme della zona unita = il gruppo piu' lontano fra tutti (resta l'estremo da cui partire)
     const seedZone = near.reduce((a, b) => (b.seedHome > a.seedHome ? b : a));
     const merged = { seed: seedZone.seed, members: near.flatMap(z => z.members), seedHome: seedZone.seedHome };
     far.push(merged);
@@ -392,6 +387,10 @@ const PARTIAL_GLOBAL_TOLERANCE = 10;
 const TAU_DISSOLVE = 0.75;          // guardia anti-mescolanza (backstop; decidono zona+economia)
 const DISSOLVE_GROUP_DETOUR = 60;   // Δguida reale max (min) per singolo gruppo spostato
 const DISSOLVE_MIN_GAIN = 30;       // guadagno minimo di guida (min) perché la dissoluzione convenga
+// Entro questo scarto di Δguida due giornate riceventi si considerano equivalenti in costo: a quel
+// punto decide la COERENZA DI VALLE (detour dal corridoio), non un pugno di minuti. Vedi lo spareggio
+// in dissolveDays.
+const DISSOLVE_TIE_MIN = 20;
 
 const homeMinG = (g, home, opts) => Math.min(...g.map(s => legMin(home, s, opts)));
 const groupGapMin = (a, b, opts) => { let m = Infinity; for (const x of a) for (const y of b) { const t = legMin(x, y, opts); if (t < m) m = t; } return m; };
@@ -474,8 +473,15 @@ async function fillPartial(days, allGroups, home, opts, dayFeasible, endMin) {
       // letteralmente sulla via di casa da Eni Station: 1'). Silandro è rimasta SOLA con 242' di
       // guida per una tappa, ed è finita accoppiata a Malé in una giornata da 357 km. La fase
       // pensata per riempire le giornate povere ne creava una nuova, più povera.
-      const costRecv = (fP.driveMin != null && curDriveP != null) ? fP.driveMin - curDriveP : null;
+      // Se `opts.partialGate === false` il gate e' spento: e' la variante storica (<= v5.117), messa a
+      // confronto in buildDayClusters. Il gate ottimizza i minuti di guida LOCALI, mentre l'obiettivo
+      // dichiarato e' "meno giornate, poi meno km": verifica avversaria v5.119, esiste un giro reale
+      // (lo stesso senza tre clienti) in cui il gate costa una giornata intera. Per questo non e'
+      // cablato: si prova acceso e spento e vince il piano migliore.
+      const costRecv = (opts.partialGate === false || fP.driveMin == null || curDriveP == null) ? null : fP.driveMin - curDriveP;
       const gainDonor = (fDonorFull?.driveMin != null && fDonor.driveMin != null) ? fDonorFull.driveMin - fDonor.driveMin : null;
+      // NB: se una delle due misure manca il gate LASCIA PASSARE (comportamento <= v5.117):
+      // una metrica rotta non deve bloccare le mosse.
       if (costRecv != null && gainDonor != null && costRecv > gainDonor + PARTIAL_GLOBAL_TOLERANCE) {
         if (opts.log) opts.log(`   ✗ "${nameOf(c.g[0])}": antieconomico (costa ${Math.round(costRecv)}' al ricevente, ne fa risparmiare ${Math.round(gainDonor)}' al donatore) → lasciato`);
         continue;
@@ -625,7 +631,18 @@ async function dissolveDays(daysIn, allGroups, home, opts, dayFeasible, endMin, 
             if (endMin != null && f.dayEndWithBreaks != null && f.dayEndWithBreaks > endMin - MERGE_RETURN_MARGIN) continue;
             const delta = f.driveMin - base;
             if (delta > Math.max(DISSOLVE_GROUP_DETOUR, dDrive - DISSOLVE_MIN_GAIN - totalDelta)) continue;
-            if (!best || delta < best.delta) best = { j, delta, f };
+            // SPAREGGIO DI COERENZA (v5.120): la scelta della giornata ricevente era un puro argmin
+            // di Δguida, quindi a parità sostanziale di costo poteva vincere una giornata di un'altra
+            // valle. Diagnostica reale 2026-09-06: Malé (Val di Sole) finiva nella giornata della Val
+            // Venosta — Silandro→Malé costa 138', nessun passo breve li unisce, e l'imbocco naturale
+            // di Malé è San Michele a/A (71'). A parità di Δ entro DISSOLVE_TIE_MIN vince la giornata
+            // con il DETOUR DAL CORRIDOIO minore, cioè quella sulla cui via di casa il gruppo si trova
+            // davvero. È il criterio che il progetto già dichiara come definizione di "sul corridoio"
+            // (vedi fillPartial), qui usato come spareggio e non come veto: non può far fallire una
+            // dissoluzione, può solo indirizzarla meglio.
+            const det = corridorDetourGG(seedJ, g, home, opts);
+            if (!best || delta < best.delta - DISSOLVE_TIE_MIN
+                || (delta <= best.delta + DISSOLVE_TIE_MIN && det < best.det)) best = { j, delta, f, det };
           }
           if (!best) { okAll = false; failWhy = `"${nameOf(g[0])}" senza giornata ricevente`; break; }
           trial[best.j] = [...trial[best.j], ...g];
@@ -673,7 +690,55 @@ async function dissolveDays(daysIn, allGroups, home, opts, dayFeasible, endMin, 
 // produzione; lo swap (≤v5.015) MESCOLAVA. Entrambi usavano gate approssimati. La vera causa era la
 // divergenza dell'approssimazione dal motore reale (es. Bressanone esiliato per l'interazione col
 // pranzo): ora il gate è il motore reale.
+// v5.120 — DUE PIANI, VINCE IL MIGLIORE.
+// La modalita' di accorpamento vicino-casa ("seed" storica vs "nearest") non e' decidibile a priori:
+// "nearest" e' quella che sblocca il giro reale (5 giornate -> 3) ma su geometrie "a stella" accorpa
+// valli opposte e puo' peggiorare, e nessuna fase a valle sa rimediare. Invece di scommettere si
+// costruiscono ENTRAMBI i piani e si tiene quello con MENO GIORNATE; a parita' di giornate, quello
+// con meno guida totale; a parita' di tutto vince "seed" (il comportamento storico, gia' validato).
+// Garanzia: il risultato non puo' MAI essere peggiore — per numero di giornate e poi per guida —
+// di quello che l'algoritmo produceva prima. Costo: il clustering gira due volte, ma senza
+// chiamate Google in piu' (buildLegTimeMatrix ha gia' prefetchato tutte le coppie e routeBetween
+// tiene la cache), quindi e' solo CPU.
 export async function buildDayClusters(stops, home, budgetMin, opts = {}, dayFeasible = null) {
+  // A parita' di giornate e guida vince la PRIMA di questa lista: "gate acceso" per primo perche'
+  // sul giro reale, a parita' di giornate e km, distribuisce meglio le tappe fra le giornate lontane;
+  // "seed" prima di "nearest" perche' e' il comportamento storico gia' validato con l'utente.
+  const variants = [];
+  for (const gate of [true, false]) for (const mode of ["seed", "nearest"]) variants.push({ mode, gate });
+  const runs = [];
+  for (const { mode, gate } of variants) {
+    const lines = [];
+    const vOpts = { ...opts, nearHomeMode: mode, partialGate: gate, log: opts.log ? (m => lines.push(m)) : undefined };
+    let days;
+    try { days = await buildDayClustersOnce(stops, home, budgetMin, vOpts, dayFeasible); }
+    catch (e) { runs.push({ mode, gate, days: null, lines, err: e }); continue; }
+    let drive = 0;
+    if (dayFeasible) {
+      for (const d of days) {
+        try { const f = await dayFeasible(orderDayFarFirst(d, home, vOpts), 0); drive += f.ok ? (f.driveMin || 0) : 0; }
+        catch { /* la giornata resta senza contributo: il confronto usa comunque il numero di giornate */ }
+      }
+    } else {
+      for (const d of days) drive += estimateDayMinutes(d, home, vOpts).driveMin;
+    }
+    runs.push({ mode, gate, days, drive, lines });
+  }
+  const ok = runs.filter(r => r.days && r.days.length);
+  if (!ok.length) { const f = runs.find(r => r.err); if (f) throw f.err; return []; }
+  // meno giornate, poi meno guida; a parita' vince "seed" perche' e' primo in `modes`
+  ok.sort((a, b) => (a.days.length - b.days.length) || (a.drive - b.drive));
+  const best = ok[0];
+  if (opts.log) {
+    for (const r of ok) {
+      opts.log(`VARIANTE vicinato "${r.mode}"${r.mode === "seed" ? " (storica)" : " (membro piu' vicino)"} · gate economia ${r.gate ? "ON" : "OFF"}: ${r.days.length} giornate, guida ${Math.round(r.drive)}'${r === best ? "  <<< SCELTA" : ""}`);
+    }
+    for (const line of best.lines) opts.log(line);
+  }
+  return best.days;
+}
+
+async function buildDayClustersOnce(stops, home, budgetMin, opts = {}, dayFeasible = null) {
   const allGroups = groupColocated(stops.map(s => ({ ...s })), opts); // array di gruppi
   const zones = assignZones(allGroups, home, opts);
   // Ordine dei giri: dall'estremo PIÙ VICINO a casa, allontanandosi (richiesta dell'utente).

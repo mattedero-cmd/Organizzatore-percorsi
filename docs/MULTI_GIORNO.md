@@ -75,6 +75,54 @@ byte-identiche, km per giornata a scarto 0,0% e fine giornata a scarto 0 minuti.
 riproduzione fedele in mano si tocca il clustering. Ricostruirlo è la prima cosa da fare alla
 prossima Diagnostica.
 
+### ⚠️ v5.120 — la Causa 1 è stata FALSIFICATA nella giustificazione (leggere prima di toccarla)
+Una revisione avversaria (5 agenti, worktree isolati, ~400 esecuzioni) ha eseguito tre confutazioni:
+1. **«Sovra-accorpare vicino casa è sicuro per costruzione, growDays rispezza da solo» è FALSO.**
+   `growDays` spezza per **fattibilità oraria**, mai per direzione né per economia — il criterio di
+   corridoio di v5.014 è stato revertito e non è mai tornato. La partizione in ZONE è l'**unica**
+   guardia anti-mescolanza a quello stadio: indebolirla si paga in giornate che mescolano valli
+   opposte, e nessuna fase a valle sa smontare una giornata vicino-casa già compatta (fillDays unisce
+   giornate INTERE, fillPartial sposta solo verso giornate POVERE, dissolveDays guarda solo le
+   marginali). Misurato: su geometrie "a stella" (valli che si toccano solo passando da casa — il
+   modello dell'utente) v5.118 regrediva in **21 casi su 180**, fino a +81 km e a una giornata in più.
+2. **`NEAR_HOME_DIAMETER = 70` era VACUA.** Per disuguaglianza triangolare un gruppo entra nella zona
+   di un seme solo se `d(g,seme) ≤ d(g,casa)`, e i semi sono i più lontani: quindi
+   `seedHome ≤ d(seme,g) + d(g,casa) ≤ 2·d(g,casa) ≤ 2·nearHomeT`. Con `nearHomeT ≤ 35` si ha sempre
+   `seedHome ≤ 70`. Verificato su **4000 matrici metriche casuali: 0 attivazioni**, rapporto massimo
+   1,989 contro il limite teorico 2. **Non reintrodurre una guardia di questa forma**: qualunque
+   soglia ≥ 2×NEAR_HOME_RADIUS è per costruzione inerte. Una guardia vera dovrebbe misurare il
+   diametro dell'**unione** (max fra coppie di membri), non un raggio da casa.
+3. **Il gate di economia di `fillPartial` non era il motore del risultato**: la sola Causa 1 dà già
+   3 giornate/940 km sul giro reale. Peggio, Causa 1 + Causa 2 **senza** Causa 3 fa 4 giornate/974 km
+   — un accoppiamento fra le tre correzioni che il commit non dichiarava.
+
+**Come è stato risolto (v5.120): non si sceglie, si confrontano.** `buildDayClusters` costruisce
+**quattro piani** — accorpamento vicino-casa `"seed"` (storico) o `"nearest"` (v5.118) × gate di
+economia acceso/spento — e tiene quello con **meno giornate**; a parità, meno guida; a parità di tutto
+vince il comportamento storico (primo nella lista). Poiché una delle varianti *è* l'algoritmo di prima,
+**il risultato non può mai essere peggiore di prima** per numero di giornate. La Diagnostica stampa una
+riga `VARIANTE …: N giornate, guida M'` per ciascuna, con `<<< SCELTA` sulla vincente: è lì che si
+verifica la decisione sul giro vero. Costo: nessuna chiamata Google in più (la matrice è già in cache),
+0,14 s sul giro reale. Misura su 180 geometrie a stella: **−21 giornate a +150 km totali su 60.750
+(+0,25%), e ZERO casi con più giornate di prima** (erano 21).
+
+> Se un giorno servisse una terza modalità di zonizzazione, aggiungerla alla lista `variants` è
+> sufficiente: il confronto la rende automaticamente non-regressiva.
+
+### ⚠️ Effetto collaterale AMPLIFICATO da tenere d'occhio: lo slittamento dei giorni della settimana
+L'oracolo valida ogni giornata con l'indice PROVVISORIO (`addWorkdaysISO(baseDate, dayIndex)`), ma le
+date definitive si assegnano dopo il `days.sort` finale. **Eliminare una giornata sposta di un giorno
+feriale tutte le successive**: una giornata composta in modo identico può passare da martedì a lunedì e
+trovare il cliente chiuso. È una lacuna PRE-ESISTENTE (il commento «NB sulla data» la dichiara), ma
+v5.118/v5.120 la fanno mordere di più perché tolgono giornate più spesso. Misurato su 20 scenari con
+`weeklyHours` casuali: 4 con più tappe servite fuori chiusura.
+**Mitigazione applicata (v5.120)**: le `lateStops` di ogni giornata, che il server calcolava già ma che
+**nessuna vista mostrava**, ora compaiono nel piano su più giorni con il badge "chiuso".
+**Non risolto**: la soluzione vera sarebbe ri-validare dopo il sort finale con la DATA VERA e permutare
+l'assegnazione giornata→data minimizzando le chiusure (con 3-6 giornate lo spazio è banale). NON è stata
+fatta perché l'ordine near→far delle giornate è una **richiesta esplicita dell'utente** e permutare le
+date lo violerebbe: è una scelta da concordare con lui, non da prendere in autonomia.
+
 ### Causa 1 (DECISIVA) — `assignZones`: il merge vicino-casa testava il membro SBAGLIATO
 `seedHome` è il tempo-casa del **seme**, che per costruzione è il gruppo **più LONTANO** della zona
 (`sorted` è decrescente). Usarlo per il test `<= NEAR_HOME_RADIUS` significava: una zona è "vicino
@@ -85,13 +133,11 @@ tutte entro un'ora da casa finivano in TRE zone.
 E **il numero di zone è un PAVIMENTO sul numero di giornate**, perché `growDays` gira una zona alla
 volta: 6 zone → 6 giornate, decise senza mai chiedere all'oracolo se le 9 tappe stessero insieme
 (ci stanno, con 418 minuti di margine).
-**Fix**: si testa il membro più VICINO (`nearHomeT(z) <= NEAR_HOME_RADIUS`) più una **guardia di
-diametro** `z.seedHome <= NEAR_HOME_DIAMETER` (70' = 2×raggio), così un corridoio lungo che sfiora
-casa non viene riclassificato per intero. Il seme della zona unita è il gruppo più lontano fra quelle
-unite. Asimmetria voluta: **sovra-accorpare vicino casa è sicuro** (growDays rispezza da solo, con
-l'oracolo reale come gate a ogni passo), **sotto-accorpare no**, perché nessuna fase a valle sa
-ricomporre il vicinato — le metriche di fillPartial e dissolveDays sono cieche a distanze brevi
-(vedi Causa 4).
+**Fix (v5.118, poi corretto in v5.120)**: si testa il membro più VICINO
+(`nearHomeT(z) <= NEAR_HOME_RADIUS`) invece del seme. La guardia di diametro aggiunta insieme si è
+rivelata VACUA ed è stata rimossa, e l'affermazione «sovra-accorpare è sicuro per costruzione» è stata
+FALSIFICATA: vedi la sezione v5.120 qui sopra. Oggi la modalità non è cablata — si confrontano quella
+storica e quella nuova e vince il piano migliore.
 > NB unità: `NEAR_HOME_RADIUS` è confrontato con `legMin`, cioè minuti **bufferati** (×7/6). Il
 > raggio effettivo è ~30 minuti Google reali. Qualunque nuova soglia in minuti va scritta con l'unità.
 

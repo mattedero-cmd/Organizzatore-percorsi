@@ -1853,7 +1853,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.119 &mdash; settembre 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.120 &mdash; settembre 2026</p>
         </div>
       </div>
 
@@ -1865,15 +1865,17 @@ function renderMenuInfo() {
         <li>${state.whisperConfigured ? _svg('<polyline points="20 6 9 17 4 12"/>', 14) + " Comandi vocali attivi (Whisper)" : _svg('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>', 14) + " Comandi vocali non configurati"}</li>
       </ul>
 
-      <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v5.100 — comodità e rifiniture (riepilogo v5.091–5.100)</p>
+      <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v5.120 — archivio, navigazione e più giorni (riepilogo v5.111–5.120)</p>
       <ul class="info-list">
-        <li><b>Pranzo "in guida"</b>: il tragitto verso il ristorante sul percorso è ora valutato correttamente — niente più "vuoto" tra fine pranzo e tappa successiva.</li>
-        <li><b>Orari a scatti di 5 minuti</b>: durata, arrivo/partenza e ogni campo orario si arrotondano a 5 min; il valore usato coincide sempre con quello mostrato.</li>
-        <li><b>Durata intervento di default</b> personalizzabile nelle impostazioni: comodo per i giri di consegne con durata breve ripetuta.</li>
-        <li><b>Tappe da Maps</b>: il numero di telefono della scheda Google viene caricato (Chiama/WhatsApp funzionano); WhatsApp senza numero non dà più errore.</li>
-        <li><b>Note per singola tappa</b>, oltre alle note del giro.</li>
-        <li><b>Eliminazione tappa</b>: ricalcolo automatico (orari e rientro aggiornati subito).</li>
-        <li><b>Header sotto la status bar</b>: titolo dell'app e del menu non finiscono più dietro l'ora del telefono su iPhone.</li>
+        <li><b>Più giorni, meno giri a vuoto</b>: la suddivisione automatica non lascia più giornate mezze vuote. Sul giro di prova reale: da 5 giornate a 3, con 57 km in meno.</li>
+        <li><b>Le modifiche in anagrafica si vedono subito</b> nei giri già salvati — indirizzo, telefono, orari, coordinate — senza doverli rifare. Se cambia l'indirizzo, l'app avvisa che orari e km vanno ricalcolati.</li>
+        <li><b>Il navigatore va sul GPS</b>: se la tappa ha le coordinate salvate, Naviga ci porta esattamente lì invece di cercare l'indirizzo scritto. Anche Waze, che prima veniva ignorato sulla singola tappa.</li>
+        <li><b>Un luogo scelto sulla mappa si salva con le sue coordinate</b>, e ogni contatto salvato senza coordinate viene geolocalizzato dal server.</li>
+        <li><b>Sede sempre visibile</b> nelle schede dell'archivio, e si vede quando manca.</li>
+        <li><b>Ricerca per parole</b>: scrivere "Eni Cles" restringe davvero fra decine di omonimi, in qualsiasi ordine; se i risultati sono troppi l'app lo dice invece di troncare in silenzio.</li>
+        <li><b>Ricerca da cellulare</b>: fino a 40 risultati e l'elenco arriva fino in fondo allo schermo.</li>
+        <li><b>La pausa pranzo si sposta</b> nell'elenco riordinabile, senza doverle imporre un orario.</li>
+        <li><b>Tappe a sede chiusa segnalate</b> nel piano su più giorni: prima l'avviso finiva solo nel log.</li>
       </ul>
 
       <p style="font-weight:600;font-size:0.85rem;margin-top:14px;margin-bottom:6px;">Novità v5.090 — meno bug, più controllo (riepilogo v5.081–5.090)</p>
@@ -4050,6 +4052,12 @@ function renderResultMultiDay() {
   const daysHtml = edit.map((dayStops, i) => {
     const planned = (!dirty && res.days[i]) ? (res.days[i].plan?.summary || {}) : null;
     const overBudget = !dirty && res.days[i]?.overBudget;
+    // Tappe che il planner reale ha servito FUORI DALL'ORARIO DI APERTURA in quella data. Il dato
+    // c'era già (`days[].lateStops`) ma non veniva mostrato da nessuna parte: finiva solo nel log
+    // della Diagnostica. È l'informazione più importante della giornata — trovare la saracinesca
+    // abbassata è peggio di una giornata in più — e dipende dal GIORNO DELLA SETTIMANA, che cambia
+    // quando il piano guadagna o perde una giornata.
+    const lateStops = (!dirty && res.days[i]?.lateStops) || [];
     const date = fmtDate(mdAddDaysISO(baseDate, i));
     const rowsHtml = dayStops.map((st, j) => `
         <div class="row md-stop-row" data-md-row="${i}:${j}" style="gap:6px;align-items:center;padding:5px 0;border-top:1px solid var(--line);">
@@ -4069,6 +4077,7 @@ function renderResultMultiDay() {
           <span class="stop-meta">${planned ? `${escapeHtml(planned.dayStart || "")}–${escapeHtml(planned.dayEnd || "")}` : "da ricalcolare"}</span>
         </div>
         <div class="stop-meta" style="margin:6px 0 2px;">${dayStops.length} tappe${planned ? ` · ${Number(planned.totalKm || 0).toFixed(1)} km · ${minutesLabel(planned.totalDriveMinutes)} guida` : ""}${overBudget ? ` · <span class="badge badge-warn">oltre l'orario</span>` : ""}</div>
+        ${lateStops.length ? `<div class="stop-meta" style="margin:2px 0 4px;"><span class="badge badge-error">chiuso</span> ${escapeHtml(lateStops.join(", "))} — in questa data la sede risulta chiusa: sposta la tappa in un'altra giornata</div>` : ""}
         <div style="margin-top:2px;">${rowsHtml}</div>
       </article>`;
   }).join("");
