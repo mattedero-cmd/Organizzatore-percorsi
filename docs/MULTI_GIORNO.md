@@ -54,6 +54,109 @@ lontana alla più vicina; i resti vicini si accorpano alla fine.**
   CHIUSURA, e timing della 1ª tappa (orari risolti + se è scattato il calcolo a ritroso).
 - **Chiedere SEMPRE all'utente di incollare questo log** prima di toccare i raggruppamenti.
 
+## v5.118 — le tre correzioni dalla Diagnostica reale 2026-09-06 (5 giornate → 3)
+
+> Giro di 17 tappe, casa Altopiano della Vigolana. L'utente: «può essere diviso in 3 giornate e
+> 100 km in meno». Il motore ne produceva **5 e 997 km**, di cui tre quasi vuote (chiuse alle 08:59,
+> 07:18 e 10:38, con 571/672/472 minuti di margine). Dopo le correzioni: **3 giornate e 940 km**.
+
+### Prima di tutto: l'HARNESS DI REPLAY (usarlo SEMPRE per il multi-giorno)
+Il vincolo storico «offline non c'è la chiave Google, quindi i test non riproducono la produzione»
+è stato **superato**: si imposta `process.env.GOOGLE_MAPS_API_KEY` a un valore finto PRIMA
+dell'import e si sostituisce `globalThis.fetch` con uno stub che intercetta
+`maps.googleapis.com/maps/api/directions/json` e risponde con una matrice ricostruita. Così
+`routeBetween` ritorna `source:"google"` e gira la pipeline VERA (buildLegTimeMatrix → assignZones →
+growDays → fillPartial → fillDays → dissolveDays → planRoute/insertBreaks), con MATRICE 153/153 100%.
+La matrice si costruisce da un grafo stradale sparso + Floyd-Warshall (disuguaglianza triangolare
+garantita), ancorando ESATTAMENTE i valori del log (`valore_log = round(raw × 7/6)`: le righe
+GEOMETRIA e VICINI stampano `legMin`, cioè minuti già bufferati).
+**Col codice pre-fix l'harness riproduceva la Diagnostica reale: 20/20 fatti, 43/44 righe
+byte-identiche, km per giornata a scarto 0,0% e fine giornata a scarto 0 minuti.** Solo con una
+riproduzione fedele in mano si tocca il clustering. Ricostruirlo è la prima cosa da fare alla
+prossima Diagnostica.
+
+### Causa 1 (DECISIVA) — `assignZones`: il merge vicino-casa testava il membro SBAGLIATO
+`seedHome` è il tempo-casa del **seme**, che per costruzione è il gruppo **più LONTANO** della zona
+(`sorted` è decrescente). Usarlo per il test `<= NEAR_HOME_RADIUS` significava: una zona è "vicino
+casa" solo se il suo membro più lontano sta entro il raggio. Sul giro reale, la zona seminata da
+San Michele a/A (37', **due minuti** oltre il raggio) trascinava fuori dal vicinato Trento 26' e
+Trento 27'; quella seminata da Ala (54') trascinava fuori Rovereto 33' e Rovereto 40'. Nove tappe
+tutte entro un'ora da casa finivano in TRE zone.
+E **il numero di zone è un PAVIMENTO sul numero di giornate**, perché `growDays` gira una zona alla
+volta: 6 zone → 6 giornate, decise senza mai chiedere all'oracolo se le 9 tappe stessero insieme
+(ci stanno, con 418 minuti di margine).
+**Fix**: si testa il membro più VICINO (`nearHomeT(z) <= NEAR_HOME_RADIUS`) più una **guardia di
+diametro** `z.seedHome <= NEAR_HOME_DIAMETER` (70' = 2×raggio), così un corridoio lungo che sfiora
+casa non viene riclassificato per intero. Il seme della zona unita è il gruppo più lontano fra quelle
+unite. Asimmetria voluta: **sovra-accorpare vicino casa è sicuro** (growDays rispezza da solo, con
+l'oracolo reale come gate a ogni passo), **sotto-accorpare no**, perché nessuna fase a valle sa
+ricomporre il vicinato — le metriche di fillPartial e dissolveDays sono cieche a distanze brevi
+(vedi Causa 4).
+> NB unità: `NEAR_HOME_RADIUS` è confrontato con `legMin`, cioè minuti **bufferati** (×7/6). Il
+> raggio effettivo è ~30 minuti Google reali. Qualunque nuova soglia in minuti va scritta con l'unità.
+
+### Causa 2 — `fillPartial`: il gate anti-furto non guardava il PREZZO
+Verificava solo che il donatore restasse non-vuoto e fattibile, mai quanto gli costasse la cessione.
+Sul giro reale la giornata di Canazei si è presa ENIMOOV+Bolzano (det 22') ed Eni Station (det 35')
+da quella di Silandro, mentre il donatore risparmiava **5' e 9'** — Bolzano è letteralmente sulla via
+di casa da Eni Station (1'). Silandro è rimasta SOLA con 242' di guida per una tappa ed è finita
+accoppiata a Malé in una giornata da 357 km: la fase nata per riempire le giornate povere ne creava
+una più povera.
+**Fix**: **GATE DI ECONOMIA GLOBALE** — la mossa è respinta se costa al ricevente più di quanto fa
+risparmiare al donatore, oltre `PARTIAL_GLOBAL_TOLERANCE` (10'). La tolleranza esiste perché riempire
+una giornata povera ha valore anche a costo leggermente negativo (abilita le fasi successive).
+La Diagnostica ora logga il conto: `✗ "X": antieconomico (costa N' al ricevente, ne fa risparmiare M' al donatore)`.
+
+### Causa 3 — `dissolveDays`: il tetto piatto scavalcava il criterio economico
+`DISSOLVE_GROUP_DETOUR = 60'` è assoluto, mentre `gain = dDrive - totalDelta >= DISSOLVE_MIN_GAIN`
+scala con la giornata. Il tetto morde per primo quando `dDrive > 60·k + 30`. Sul giro reale la
+giornata di Malé costa 203' di guida ed è **un solo gruppo**: l'economia avrebbe concesso fino a
+173' di Δ, il tetto ne concedeva 60 → serviva un guadagno di 143' invece dei 30 voluti, **4,8 volte
+più severo**. Da qui `"Malé" senza giornata ricevente`.
+**Fix**: budget **residuo** invece di tetto piatto —
+`Math.max(DISSOLVE_GROUP_DETOUR, dDrive - DISSOLVE_MIN_GAIN - totalDelta)`. `DISSOLVE_GROUP_DETOUR`
+resta come **pavimento** (una giornata poco costosa concede comunque i 60' storici). Il criterio
+economico aggregato resta l'unico giudice: il cambio non può accettare nulla che l'economia non
+accetterebbe già. Esito: `giornata "Malé" (guida 203') svuotata: "Malé"→[Silandro] (Δ137') · guida risparmiata ~66'`.
+
+### Causa 4 (NON corretta, ma DIMOSTRATA — leggere prima di ritoccare TAU_PARTIAL/TAU_DISSOLVE)
+La directness `dir(seme,g) = t(seme,g) / (t(seme,casa) + t(g,casa))` è **strutturalmente cieca vicino
+casa**. Per un gruppo perfettamente sul corridoio (detour 0) vale `t(seme,g) = t(seme,casa) − t(g,casa)`,
+quindi il **minimo possibile** è `(S−g)/(S+g)`. Imporre `dir <= TAU` equivale a imporre
+**`g >= S·(1−TAU)/(1+TAU)`**: con TAU_PARTIAL 0.45 e seme a 127' (Canazei), **nessun gruppo a meno
+di 48' da casa può mai passare, nemmeno a detour ZERO**. Sul giro reale erano 8 tappe su 17
+(Ravina 21', Civezzano 25', Trento 26'/27', Borgo 32', Rovereto 33'/40', San Michele 37'), escluse
+in silenzio: non compaiono nemmeno fra i "respinti", perché il log dei respinti riguarda solo il
+detour dal corridoio. È l'esatto contrario del modello dell'utente («si rientra facendo quelle sulla
+via»). La formula è verificata sui numeri del log: ENIMOOV dir 0.41 → det 22' ✓, Eni Station
+0.43 → 35' ✓, Ravina 0.38 → 6' ✓.
+Con TAU_DISSOLVE 0.75 la soglia è `g >= 0.143·S`, meno brutale ma nella stessa direzione; il bump
+0.65→0.75 di v5.104 era un cerotto su questo difetto strutturale.
+**Non è stata toccata in v5.118** perché il test giusto (detour dal corridoio, che scala) è già lì
+accanto e le tre correzioni sopra bastavano a raggiungere le 3 giornate. Se in futuro serve:
+sospendere la directness per i gruppi vicino casa e affidarsi a REGOLA DI ZONA + economia + oracolo,
+come la documentazione stessa dichiara. **Da validare solo su Diagnostica reale.**
+
+### Un difetto separato, NON corretto: partenza prima dell'orario impostato
+`server/planner.js` (blocco `first_open_minus`) calcola `currentTime = targetArrival − primaTratta`
+**senza pavimento a `startMinutes`**. Con Ala aperta 05:30 la giornata partiva alle **04:26**, pur
+avendo `startTime` 07:00. Non è solo cosmetico: gonfia lo slack che decide "giornata povera" e
+"giornata marginale". Il fix sarebbe `Math.max(startMinutes ?? currentTime, ...)`, ma tocca il motore
+della **giornata singola** (tutti i giri esistenti), quindi va deciso con l'utente.
+
+### Cosa NON ha funzionato in v5.118 (provato e rimosso)
+- **Scelta dell'estremo di partenza fra i k più lontani** (`orderDayFarFirst`): sembrava valere 78'
+  (~68 km) sulla giornata Fassa/Isarco, sulla stima che Canazei→Cavalese→Vipiteno (434') fosse molto
+  peggio dell'inverso (356'). **Sull'harness i due giri costano entrambi 393'**: la stima era una
+  congettura geografica (Canazei→Vipiteno diretto via Sella/Gardena) non supportata dai dati del log.
+  Rimosso: non si tiene un cambiamento che non guadagna nulla sull'unico giro validabile.
+
+### Margine residuo noto
+Con le tre correzioni: G1[9 tappe vicino casa] 187 km · G2[Silandro, Eni Station, ENIMOOV, Bolzano,
+Malé] 386 km · G3[Canazei, Cavalese, Vipiteno] 366 km = **940 km**. Il margine teorico rimasto
+(~44 km) è San Michele a/A, che starebbe meglio nella giornata di Silandro/Malé che nel vicinato:
+oggi lo blocca esattamente la Causa 4 (dir 0.70 > 0.45, mentre il detour dal corridoio sarebbe 27' ≤ 42').
+
 ## Algoritmo attuale (passi) — v5.103 (PER-ZONA + unione PARZIALE + DISSOLUZIONE)
 > ATTENZIONE: il GREEDY GLOBALE (v5.030–v5.044) è stato ANNULLATO — sul giro reale faceva SNAKE e
 > FRAMMENTAVA (vedi sotto "Cosa è stato provato e NON va"). Si costruisce SEMPRE per-zona.

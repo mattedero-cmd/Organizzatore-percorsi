@@ -193,6 +193,10 @@ export const CLOSURE_TOLERANCE_MIN = 10;
 // via il più vicino al precedente (rientro verso casa). Così il lungo viaggio si fa presto,
 // quando i negozi sono ancora chiusi, e si arriva alle tappe quando aprono — più tempo utile
 // al lavoro. È l'ordine che verrà bloccato nel giro della giornata.
+// Ordina le tappe di una giornata "far-first": prima il punto più lontano da casa, poi via
+// via il più vicino al precedente (rientro verso casa). Così il lungo viaggio si fa presto,
+// quando i negozi sono ancora chiusi, e si arriva alle tappe quando aprono — più tempo utile
+// al lavoro. È l'ordine che verrà bloccato nel giro della giornata.
 function orderDayFarFirst(dayStops, home, opts = {}) {
   if (dayStops.length <= 1) return [...dayStops];
   let fi = 0, fd = -1;
@@ -281,6 +285,10 @@ function groupColocated(stops, opts = {}) {
 // Raggio (min di strada da casa) entro cui le tappe sono considerate "vicino casa" e accorpate in
 // un'unica zona/giornata (hop brevi attorno a casa). Tarabile sulla Diagnostica.
 const NEAR_HOME_RADIUS = 35;
+// Diametro massimo della zona vicino-casa: anche se un membro è entro il raggio, la zona non viene
+// accorpata al vicinato se il suo estremo è più lontano di così (un corridoio lungo che sfiora casa
+// resta una zona a sé). 2 × NEAR_HOME_RADIUS.
+const NEAR_HOME_DIAMETER = 70;
 export function assignZones(groups, home, opts = {}) {
   const homeT = g => Math.min(...g.map(s => legMin(home, s, opts)));
   const between = (g, k) => {
@@ -300,10 +308,30 @@ export function assignZones(groups, home, opts = {}) {
   // Le tappe VICINO CASA (entro NEAR_HOME_RADIUS) sono tutte raggiungibili in una giornata sola con
   // hop brevi attorno a casa: senza questo accorpamento ognuna diventerebbe una zona/giornata a sé
   // (Rovereto, Trento, Levico, Pergine...). Le uniamo in un'unica zona vicino-casa.
-  const far = zones.filter(z => z.seedHome > NEAR_HOME_RADIUS);
-  const near = zones.filter(z => z.seedHome <= NEAR_HOME_RADIUS);
+  //
+  // v5.118 — SI GUARDA IL MEMBRO PIÙ VICINO, NON IL SEME. `seedHome` è il tempo-casa del SEME, che
+  // per costruzione è il gruppo PIÙ LONTANO della zona (`sorted` è decrescente): usarlo qui
+  // significava che una zona era "vicino casa" solo se il suo membro più LONTANO stava entro il
+  // raggio. Diagnostica reale 2026-09-06: la zona seminata da San Michele a/A (37', due minuti
+  // oltre il raggio) trascinava fuori dal vicinato Trento 26' e Trento 27'; quella seminata da Ala
+  // (54') trascinava fuori Rovereto 33' e Rovereto 40'. Risultato: TRE zone per nove tappe tutte
+  // entro un'ora da casa e quindi — poiché growDays lavora una zona alla volta e il numero di zone
+  // è un PAVIMENTO sul numero di giornate — tre giornate che chiudevano alle 08:59, 07:18 e 10:38
+  // con 571/672/472 minuti di margine. Il criterio contraddiceva se stesso: tappe individualmente
+  // DENTRO il raggio (26', 27', 33') venivano classificate "lontane".
+  // GUARDIA DI DIAMETRO: un corridoio lungo che sfiora casa non va riclassificato per intero, quindi
+  // si richiede anche che il membro più lontano resti entro NEAR_HOME_DIAMETER. Sovra-accorpare qui
+  // è sicuro per costruzione (growDays rispezza da solo con l'oracolo reale a ogni passo);
+  // sotto-accorpare no, perché nessuna fase a valle sa ricomporre il vicinato.
+  // NB unità: sono minuti BUFFERATI (legMin applica il markup traffico), non minuti Google grezzi.
+  const nearHomeT = z => Math.min(...z.members.map(g => homeT(g)));
+  const isNearZone = z => nearHomeT(z) <= NEAR_HOME_RADIUS && z.seedHome <= NEAR_HOME_DIAMETER;
+  const far = zones.filter(z => !isNearZone(z));
+  const near = zones.filter(isNearZone);
   if (near.length) {
-    const merged = { seed: near[0].seed, members: near.flatMap(z => z.members), seedHome: near[0].seedHome };
+    // seme della zona unita = il gruppo più lontano fra tutti (resta l'estremo da cui partire)
+    const seedZone = near.reduce((a, b) => (b.seedHome > a.seedHome ? b : a));
+    const merged = { seed: seedZone.seed, members: near.flatMap(z => z.members), seedHome: seedZone.seedHome };
     far.push(merged);
   }
   return far; // zone lontane (estremi prima) + un'unica zona vicino-casa in coda
@@ -341,6 +369,11 @@ const CORRIDOR_DETOUR = 25;   // detour max (min) del gruppo rispetto al corrido
 // TARATA sulla Diagnostica reale 2026-07-12: Ortisei→Nord det 53' (dentro con 0.35×169=59');
 // restano esclusi Cavalese→Merano 70'>31', Bressanone→Fassa 89'>38', Riva→Rovereto 69'>25'.
 const CORRIDOR_DETOUR_FRACTION = 0.35;
+// Tolleranza (min) del gate di economia globale di fillPartial: riempire una giornata povera ha un
+// valore suo (permette alle fasi successive di eliminare giornate), quindi la mossa e' ammessa
+// anche se costa al ricevente un filo piu' di quanto risparmia al donatore. Oltre questa soglia
+// e' solo spreco: si sposta guida da una giornata all'altra peggiorando il totale.
+const PARTIAL_GLOBAL_TOLERANCE = 10;
 
 // ── DISSOLUZIONE GIORNATE (dissolveDays) ─────────────────────────────────────────────────────
 // Dopo fillPartial/fillDays può sopravvivere una MEZZA GIORNATA (es. Cles+Mezzolombardo chiusa alle
@@ -394,6 +427,7 @@ async function fillPartial(days, allGroups, home, opts, dayFeasible, endMin) {
     if (!P || !P.length) continue;
     let f0 = await dayFeasible(orderDayFarFirst(P, home, opts), i);
     if (!f0.ok || f0.dayEndWithBreaks == null) continue;
+    let curDriveP = f0.driveMin ?? null;   // guida attuale del ricevente (per il gate di economia)
     let slack = (endMin ?? f0.dayEndWithBreaks) - f0.dayEndWithBreaks;
     if (slack <= SLACK_MIN) continue;                 // giornata già piena
     const seedG = seedGroupOf(P, allGroups, home, opts);  // FISSO per tutta la fase
@@ -425,13 +459,29 @@ async function fillPartial(days, allGroups, home, opts, dayFeasible, endMin) {
       if (donorRest.length === 0) { if (opts.log) opts.log(`   ✗ "${nameOf(c.g[0])}": svuoterebbe il donatore → lasciato`); continue; }
       const fDonor = await dayFeasible(orderDayFarFirst(donorRest, home, opts), c.j);
       if (!fDonor.ok) { if (opts.log) opts.log(`   ✗ "${nameOf(c.g[0])}": donatore resterebbe infattibile → lasciato`); continue; }
+      const fDonorFull = await dayFeasible(orderDayFarFirst(days[c.j], home, opts), c.j);   // donatore CON g
       // Prova ad aggiungere g alla giornata povera.
       const fP = await dayFeasible(orderDayFarFirst([...P, ...c.g], home, opts), i);
       if (!fP.ok || (endMin != null && fP.dayEndWithBreaks != null && fP.dayEndWithBreaks > endMin - MERGE_RETURN_MARGIN)) {
         if (opts.log) opts.log(`   ✗ "${nameOf(c.g[0])}": non fattibile nella povera (${fP.dayEndWithBreaks != null ? `rientro ${formatTime(fP.dayEndWithBreaks)}` : "orari"}) → lasciato`);
         continue;
       }
+      // GATE DI ECONOMIA GLOBALE (v5.118): la mossa deve costare al ricevente MENO di quanto fa
+      // risparmiare al donatore. Il vecchio gate anti-furto guardava solo che il donatore restasse
+      // non-vuoto e fattibile, mai quanto gli costasse la cessione. Diagnostica reale 2026-09-06:
+      // la giornata di Canazei si è presa ENIMOOV+Bolzano ed Eni Station dalla giornata di Silandro
+      // pagandole ~22'+35' di detour, mentre il donatore risparmiava quasi nulla (Bolzano è
+      // letteralmente sulla via di casa da Eni Station: 1'). Silandro è rimasta SOLA con 242' di
+      // guida per una tappa, ed è finita accoppiata a Malé in una giornata da 357 km. La fase
+      // pensata per riempire le giornate povere ne creava una nuova, più povera.
+      const costRecv = (fP.driveMin != null && curDriveP != null) ? fP.driveMin - curDriveP : null;
+      const gainDonor = (fDonorFull?.driveMin != null && fDonor.driveMin != null) ? fDonorFull.driveMin - fDonor.driveMin : null;
+      if (costRecv != null && gainDonor != null && costRecv > gainDonor + PARTIAL_GLOBAL_TOLERANCE) {
+        if (opts.log) opts.log(`   ✗ "${nameOf(c.g[0])}": antieconomico (costa ${Math.round(costRecv)}' al ricevente, ne fa risparmiare ${Math.round(gainDonor)}' al donatore) → lasciato`);
+        continue;
+      }
       P = [...P, ...c.g]; days[i] = P; days[c.j] = donorRest;
+      curDriveP = fP.driveMin ?? curDriveP;
       moved.add(c.g);   // bloccato: non può essere ri-rubato in questa fase
       if (opts.log) opts.log(`   ✓ "${nameOf(c.g[0])}" spostato da "${nameOf(seedGroupOf(days[c.j].length ? days[c.j] : c.g, allGroups, home, opts)[0])}" → "${nameOf(seedG[0])}"`);
       slack = endMin != null && fP.dayEndWithBreaks != null ? endMin - fP.dayEndWithBreaks : slack;
@@ -543,6 +593,16 @@ async function dissolveDays(daysIn, allGroups, home, opts, dayFeasible, endMin, 
         const trialDrive = new Map();   // driveMin di base per giornata (null = infattibile, NON ricalcolare)
         const moves = [];
         let totalDelta = 0, okAll = true, failWhy = "";
+        // BUDGET RESIDUO (v5.118) invece del tetto piatto DISSOLVE_GROUP_DETOUR: il tetto assoluto
+        // di 60' scavalcava il criterio economico gia' presente (`gain = dDrive - totalDelta >=
+        // DISSOLVE_MIN_GAIN`). Diagnostica reale 2026-09-06: la giornata di Male' costa 203' di
+        // guida, quindi ricollocarla puo' costarne fino a 173' restando conveniente — ma essendo UN
+        // SOLO gruppo, il tetto di 60' pretendeva un guadagno di 143' invece dei 30' voluti, cioe'
+        // 4,8 volte piu' severo. Ora il budget per gruppo e' quello che l'economia concede davvero,
+        // meno quanto gia' speso dai gruppi precedenti; DISSOLVE_GROUP_DETOUR resta come pavimento
+        // (una giornata poco costosa concede comunque i 60' storici). Il criterio economico
+        // aggregato resta l'unico giudice: questo cambio non puo' accettare nulla che l'economia
+        // non accetterebbe.
         for (const g of gOrder) {
           const freeZone = wholeZoneInD(g);
           const gz = zoneOf(g);
@@ -564,7 +624,7 @@ async function dissolveDays(daysIn, allGroups, home, opts, dayFeasible, endMin, 
             if (!f.ok || f.driveMin == null) continue;
             if (endMin != null && f.dayEndWithBreaks != null && f.dayEndWithBreaks > endMin - MERGE_RETURN_MARGIN) continue;
             const delta = f.driveMin - base;
-            if (delta > DISSOLVE_GROUP_DETOUR) continue;
+            if (delta > Math.max(DISSOLVE_GROUP_DETOUR, dDrive - DISSOLVE_MIN_GAIN - totalDelta)) continue;
             if (!best || delta < best.delta) best = { j, delta, f };
           }
           if (!best) { okAll = false; failWhy = `"${nameOf(g[0])}" senza giornata ricevente`; break; }
