@@ -1853,7 +1853,7 @@ function renderMenuInfo() {
         <img src="/icons/icon-192.svg" alt="" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
         <div>
           <p style="font-weight:700;font-size:1rem;margin:0;">Percorsi lavoro</p>
-          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.116 &mdash; settembre 2026</p>
+          <p class="stop-meta" style="margin:2px 0 0;">Versione 5.117 &mdash; settembre 2026</p>
         </div>
       </div>
 
@@ -2544,21 +2544,30 @@ function normalizeSavedRoute(route) {
 
 // ── navigation helpers ────────────────────────────────────────────────────────
 
+// Punto da passare al navigatore. Se la tappa ha le coordinate salvate si usano SEMPRE quelle:
+// l'indirizzo testuale è ambiguo (insegne diffuse con decine di sedi, civici che Maps non trova,
+// frazioni omonime) e il navigatore può portare a chilometri di distanza, mentre il GPS è il punto
+// esatto scelto sulla mappa. Il testo resta solo come ripiego quando le coordinate non ci sono.
+function navPoint(o) {
+  if (!o) return "";
+  const lat = Number(o.lat), lng = Number(o.lng);
+  if (Number.isFinite(lat) && Number.isFinite(lng) && (lat !== 0 || lng !== 0)) return `${lat},${lng}`;
+  return o.address || o.fullAddress || `${o.customer || ""} ${o.location || ""}`.trim() || o.label || "";
+}
+
+// true se il punto è una coppia di coordinate (serve a Waze, che ha un parametro dedicato)
+function isCoordPoint(p) { return /^-?\d+(\.\d+)?,-?\d+(\.\d+)?$/.test(p); }
+
 function routePoints(result) {
   const points = [];
   const s = result.start;
-  if (s) points.push(s.address || s.fullAddress || s.label || "");
+  if (s) points.push(navPoint(s));
   for (const row of (result.rows || [])) {
     if (row.type === "lunch") continue; // lunch has no physical location
-    if (row.type === "rest") {
-      if (row.lat && row.lng) points.push(`${row.lat},${row.lng}`);
-      else if (row.address) points.push(row.address);
-      continue;
-    }
-    points.push(row.address || `${row.customer} ${row.location || ""}`);
+    points.push(navPoint(row));
   }
   const e = result.end;
-  if (e) points.push(e.address || e.fullAddress || e.label || "");
+  if (e) points.push(navPoint(e));
   return points.filter(Boolean);
 }
 
@@ -2570,9 +2579,12 @@ function navUrl(result, pref) {
     return `http://maps.apple.com/?daddr=${stops}`;
   }
   if (pref === "waze") {
-    // Waze only supports a single destination; use the last stop before home
+    // Waze only supports a single destination; use the last stop before home.
+    // Con le coordinate si usa `ll` (parametro dedicato al GPS), non `q` che è una ricerca testuale.
     const dest = pts[pts.length - 1];
-    return `https://waze.com/ul?q=${encodeURIComponent(dest)}&navigate=yes`;
+    return isCoordPoint(dest)
+      ? `https://waze.com/ul?ll=${encodeURIComponent(dest)}&navigate=yes`
+      : `https://waze.com/ul?q=${encodeURIComponent(dest)}&navigate=yes`;
   }
   const origin = encodeURIComponent(pts[0]);
   const dest = encodeURIComponent(pts[pts.length - 1]);
@@ -2581,8 +2593,13 @@ function navUrl(result, pref) {
 }
 
 function stopNavUrl(row, pref) {
-  const addr = row.address || `${row.customer} ${row.location || ""}`;
+  const addr = navPoint(row);   // coordinate salvate → si naviga sul GPS, non sul testo
   if (pref === "apple") return `http://maps.apple.com/?q=${encodeURIComponent(addr)}`;
+  if (pref === "waze") {
+    return isCoordPoint(addr)
+      ? `https://waze.com/ul?ll=${encodeURIComponent(addr)}&navigate=yes`
+      : `https://waze.com/ul?q=${encodeURIComponent(addr)}&navigate=yes`;
+  }
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addr)}`;
 }
 
@@ -4791,7 +4808,9 @@ function rebuildStopsFromResultRows(rows) {
       fullAddress: r.address || r.fullAddress, notes: r.notes,
       phone: r.phone || addr?.phone || "", email: r.email || addr?.email || "",
       durationMinutes: totalDuration || 45,
-      lat: r.lat, lng: r.lng,
+      // come per telefono/orari, se la riga non ha le coordinate si prendono dall'archivio:
+      // una tappa salvata prima che il contatto fosse geocodificato torna così ad avere il GPS
+      lat: r.lat ?? addr?.lat ?? null, lng: r.lng ?? addr?.lng ?? null,
       weeklyHours: r.weeklyHours || addr?.weeklyHours || null,
       openMorning: r.openMorning || addr?.openMorning || "",
       closeMorning: r.closeMorning || addr?.closeMorning || "",
@@ -7707,11 +7726,7 @@ function bindEvents() {
       if (!row) return;
       // Card riempita: tap = naviga verso il locale scelto
       if (card.dataset.breakFilled === "1") {
-        const query = (row.lat && row.lng) ? `${row.lat},${row.lng}` : (row.address || row.customer || "");
-        const url = state.navigatorPref === "apple"
-          ? `http://maps.apple.com/?q=${encodeURIComponent(query)}`
-          : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
-        window.open(url, "_blank", "noopener");
+        window.open(stopNavUrl(row, state.navigatorPref), "_blank", "noopener");
         return;
       }
       // Card neutra: tap = scegli un locale
