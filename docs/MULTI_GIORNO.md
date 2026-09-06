@@ -313,7 +313,7 @@ La Diagnostica, a ogni giornata chiusa, logga il detour di ogni candidato scarta
 (`FUORI CORRIDOIO` / `OLTRE BUDGET` / `ORARI NON ok`) → serve a tarare la frazione sul giro reale.
 Lo **swap pass-through/terminale è stato RIMOSSO** (era la causa principale del mescolamento).
 
-## La "giornata ESTREMI" — il caso ENI 202609 (2026-09-06), RISOLTA in v5.123/5.124 (vedi in fondo alla sezione)
+## La "giornata ESTREMI" — il caso ENI 202609 (2026-09-06), RISOLTA in v5.123–5.125 (vedi in fondo alla sezione)
 Giro reale di 17 tappe. **Piano dell'utente (a mano): 903 km, 3 giornate, 7/4/4 tappe.
 Piano dell'app: 939 km, 3 giornate, 1/13/3** — una giornata con UNA tappa (Malé, 472' di margine,
 rientro 10:38) e una con TREDICI (05:22–17:38, 52' di margine). **I km sono quasi uguali (+4%): il
@@ -459,7 +459,16 @@ giornata PER PRIMI, poi torna alla crescita "il più vicino prima".
 - **Replay v5.124: 9/5/3 con 1035'** — Val d'Adige (9) · Vipiteno+ENIMOOV+Bolzano×2+Silandro ·
   Canazei+Cavalese+Malé. Struttura del piano dell'utente (7/4/4), San Michele resta in Val d'Adige.
 - Log 19 tappe: identico (5 giornate, 1111 km). 40 stelle: 3 con meno giornate, 0 con più, km identici.
-- Numeri precedenti della v5.123 (3/6/8, 19 tappe 5→3) venivano dalla fusione totale, scartata. È la mossa
+- Numeri precedenti della v5.123 (3/6/8, 19 tappe 5→3) venivano dalla fusione totale, scartata.
+- **v5.125 (Diagnostica reale della v5.124)**: coi tempi reali Vipiteno finiva nella zona fusa
+  (115' dal seme Canazei, ma 67' da ENIMOOV) e restava fuori dalla giornata Estremi; intanto
+  `fillDays` fondeva Silandro con la Val d'Adige (13 tappe) e non c'era più posto: le varianti
+  ESTREMI davano 13/1/3 e 10/2/5. Ora alla fusione i membri NON terminali più vicini a un'altra
+  zona lontana che ai terminali cambiano zona (regola locale, non incatena). Replay: 9/5/3 con
+  Vipiteno in zona Silandro già dalla zonizzazione. **Lezione**: il replay non aveva mostrato il
+  problema perché nella sua matrice Vipiteno entrava nella giornata Silandro tramite le fasi
+  successive; coi tempi reali no. Ogni rilascio del clustering va confermato con la Diagnostica
+  reale, il replay da solo non basta. È la mossa
 dell'utente: i terminali di valli diverse in un anello solo. `growDays` interroga poi l'oracolo reale
 e spezza la zona se non ci sta in una giornata, quindi la fusione **non crea mai giornate
 infattibili**; il confronto "meno giornate, poi meno guida" garantisce che se non conviene non

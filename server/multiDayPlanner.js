@@ -341,7 +341,26 @@ export function assignZones(groups, home, opts = {}) {
     if (poor.length === 2) {
       for (const z of poor) far.splice(far.indexOf(z), 1);
       const seedZone = poor.reduce((a, b) => (b.seedHome > a.seedHome ? b : a));
-      far.push({ seed: seedZone.seed, members: poor.flatMap(z => z.members), seedHome: seedZone.seedHome, extremes: true, terminals: poor.map(z => z.seed) });
+      const terminals = poor.map(z => z.seed);
+      const fused = { seed: seedZone.seed, members: poor.flatMap(z => z.members), seedHome: seedZone.seedHome, extremes: true, terminals };
+      // v5.125 — i membri NON terminali della zona fusa che stanno piu' vicini a un'altra zona
+      // lontana che ai terminali cambiano zona (Diagnostica reale 2026-09-06: Vipiteno era in
+      // {Male', Canazei, Vipiteno, Cavalese} perche' a 115' dal seme Canazei, ma sta a 67' da
+      // ENIMOOV/Bolzano; restava fuori dalla giornata Estremi e la giornata di Silandro nel
+      // frattempo si era gia' fusa con la Val d'Adige). Regola LOCALE: guarda solo dentro la zona
+      // fusa e solo verso zone lontane, quindi non incatena la regione come il "membro piu' vicino".
+      if (far.length) {
+        const keep = [];
+        for (const g of fused.members) {
+          if (terminals.includes(g)) { keep.push(g); continue; }
+          const dTerm = Math.min(...terminals.map(t => between(g, t)));
+          let bestZ = null, bestD = dTerm;
+          for (const z of far) { const d = between(g, z.members.flat()); if (d < bestD) { bestD = d; bestZ = z; } }
+          if (bestZ) bestZ.members.push(g); else keep.push(g);
+        }
+        fused.members = keep;
+      }
+      far.push(fused);
     }
   }
   if (near.length) {
@@ -762,6 +781,8 @@ export async function buildDayClusters(stops, home, budgetMin, opts = {}, dayFea
       if (r === best) continue;
       const z = r.lines.find(l => l.startsWith("ZONE "));
       if (z && z !== bestZone) opts.log(`   ${r.extremes ? "ESTREMI" : r.mode}/${r.gate ? "ON" : "OFF"} → ${z}`);
+      const fill = r.lines.find(l => l.startsWith("DOPO RIEMPIMENTO"));
+      if (fill) opts.log(`   ${r.extremes ? "ESTREMI" : r.mode}/${r.gate ? "ON" : "OFF"} → ${fill}`);
     }
     for (const line of best.lines) opts.log(line);
   }

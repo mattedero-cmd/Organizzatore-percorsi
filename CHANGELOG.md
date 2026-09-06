@@ -1,3 +1,10 @@
+## v5.125 — 2026-09-06
+Multi-giorno: Vipiteno va nella giornata Nord, non negli Estremi (Diagnostica reale della v5.124).
+- **Bug**: con i tempi reali la zona fusa Estremi era {Malé, Canazei, Vipiteno, Cavalese}: Vipiteno sta a 115' dal seme Canazei ma a 67' da ENIMOOV/Bolzano. Restava fuori dalla giornata Estremi (Canazei+Malé+Cavalese), e quando le fasi successive provavano a sistemarlo la giornata di Silandro si era già fusa con la Val d'Adige (13 tappe, 52' di margine): nessun posto. Le varianti ESTREMI davano 13/1/3 e 10/2/5 e perdevano contro il 1/13/3.
+- **Fix**: al momento della fusione, i membri NON terminali della zona fusa che stanno più vicini a un'altra zona lontana che ai terminali cambiano zona (Vipiteno → zona Silandro). Regola locale: guarda solo dentro la zona fusa e solo verso zone lontane, quindi non incatena la regione come il "membro più vicino" scartato in v5.123.
+- **Replay fedele**: 9/5/3 con 1035' in entrambe le varianti ESTREMI, con Vipiteno nella giornata Nord già dalla zonizzazione. Log 19 tappe e 40 stelle: identici alla v5.124.
+- Diagnostica: per le varianti perdenti stampa anche la riga "DOPO RIEMPIMENTO", per vedere come avevano composto le giornate.
+
 ## v5.124 — 2026-09-06
 Multi-giorno: la giornata ESTREMI ora è quella giusta (Canazei + Cavalese + Malé), non Vipiteno→Malé.
 - **Bug (Diagnostica reale della v5.123)**: la fusione univa TUTTE le zone lontane povere (Malé + Silandro/Bolzano + Canazei, 8 gruppi); `growDays` la spezzava lasciando insieme i due terminali OPPOSTI: giornata "Vipiteno → Malé" da 383 km. Risultato 9/2/6 con 1042': meglio del 1/13/3 ma geograficamente assurdo.
