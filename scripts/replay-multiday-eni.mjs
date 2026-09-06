@@ -155,8 +155,8 @@ for (const l of (res.debug || []).filter(l => /^(VARIANTE|DISSOLUZIONE|GIORNATA 
 
 const V123 = comp === "3/6/8";
 console.log(V123 ? "\n=== v5.123: variante ESTREMI attiva — atteso 3/6/8, guida 1023' (1/13/3 era il motore v5.122) ===" : "\n=== FEDELTÀ vs LOG REALE (motore senza ESTREMI) ===");
-if (V123) { ck("composizione v5.123", true, "3/6/8", comp); process.exit(0); }
 const ck = (nome, ok, atteso, avuto) => console.log(`  ${ok ? "✓" : "✗"} ${nome}: atteso ${atteso} — ottenuto ${avuto}`);
+if (V123) { ck("composizione v5.123", true, "3/6/8", comp); process.exit(0); }
 ck("numero giornate", res.days.length === 3, 3, res.days.length);
 ck("composizione", comp === "1/13/3", "1/13/3", comp);
 ck("4 zone", /ZONE \(4,/.test(zoneLine), "4", (zoneLine.match(/ZONE \((\d+),/) || [])[1] || "?");
