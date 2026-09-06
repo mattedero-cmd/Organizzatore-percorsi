@@ -313,6 +313,64 @@ La Diagnostica, a ogni giornata chiusa, logga il detour di ogni candidato scarta
 (`FUORI CORRIDOIO` / `OLTRE BUDGET` / `ORARI NON ok`) → serve a tarare la frazione sul giro reale.
 Lo **swap pass-through/terminale è stato RIMOSSO** (era la causa principale del mescolamento).
 
+## La "giornata ESTREMI" — il caso ENI 202609 (2026-09-06), APERTO
+Giro reale di 17 tappe. **Piano dell'utente (a mano): 903 km, 3 giornate, 7/4/4 tappe.
+Piano dell'app: 939 km, 3 giornate, 1/13/3** — una giornata con UNA tappa (Malé, 472' di margine,
+rientro 10:38) e una con TREDICI (05:22–17:38, 52' di margine). **I km sono quasi uguali (+4%): il
+difetto è lo SQUILIBRIO**, non la lunghezza.
+
+La mossa dell'utente è una giornata che lui chiama **"Estremi"**: Malé + San Michele a/A + Cavalese +
+Canazei, cioè i punti TERMINALI di **quattro valli diverse** (Sole, Adige, Fiemme, Fassa) raccolti in
+un **anello** da 319 km, invece di dedicare una giornata a ciascun punto isolato. È un'eccezione
+legittima al principio "una giornata = una valle": non è mescolare valli a caso, è chiudere gli
+estremi in un giro solo.
+
+**Il piano dell'utente è FATTIBILE e MIGLIORE — verificato**: quattro verifiche indipendenti
+(ricostruzione della matrice + `evaluateDayTiming` + `planRoute`) concordano: 17/17 tappe una sola
+volta, nessuna fuori chiusura, rientri entro le 18:30, **guida 992–1002' contro i 1052' dell'app**.
+Quindi il motore *può* eseguirlo, ma il suo clustering non lo *trova*.
+
+### Perché il motore non ci arriva (diagnosi misurata)
+1. **`assignZones` è il gate decisivo**: un gruppo apre una zona nuova se è più vicino a CASA che a
+   qualunque SEME già scelto. Malé (100' da casa, 179' dal seme più vicino) apre Z2 da sola — e **il
+   numero di zone è un pavimento sul numero di giornate**, perché `growDays` gira una zona alla volta.
+   La giornata da 1 tappa nasce lì, senza che l'oracolo venga mai interpellato.
+2. Le tre fasi di recupero (`fillPartial`, `fillDays`, `dissolveDays`) sanno fare solo **mosse a UN
+   tempo**: spostare un gruppo in una giornata che ha già spazio. La "giornata Estremi" richiede una
+   mossa a **DUE tempi** — liberare posto spostando altrove ciò che in quella giornata c'entra meno —
+   che nel motore non esiste.
+3. Per Malé, nel piano reale: l'unica giornata la cui *directness* la ammetterebbe è quella da 13
+   tappe, ma lì **l'oracolo la rifiuta** (finisce già alle 17:38); l'unica con margine è quella di
+   Canazei, dove la respinge la directness (0.79 > `TAU_DISSOLVE` 0.75) e comunque l'oracolo.
+
+### Quattro rimedi TENTATI e FALSIFICATI (2026-09-06) — non ripeterli così
+Analisi a 4 lenti + verifica avversaria indipendente, tutto **eseguito** su fixture di 80–120
+geometrie "a stella" (il modello dell'utente) oltre che sui due log reali. Nessuno è sopravvissuto:
+- **Fase "estremi" con SCAMBIO** (giornata isolata assorbita cedendo un gruppo a una terza): su
+  stella **pura** fonde due valli diverse con **guadagno consegnato ZERO** (dichiarato ~54', reale 0';
+  km invariati). L'argomento "su stella il gain è identicamente zero, quindi non scatta" è falso.
+- **Ricerca locale (move+swap) sulla guida totale**: è `improveClusters` sotto altro nome. Misurato su
+  100 geometrie a stella: **7 nuovi snake, 13 nuove giornate da 1 tappa, 14 distribuzioni più
+  squilibrate**, comprati per 0,9–1,0 km. Sul giro ENI a DUR 40 raddoppia le giornate da 1 tappa.
+- **Termine di equilibrio nell'obiettivo**: sui dati reali **non contribuisce nulla** — con
+  `lambda = 0` (pura discesa sulla guida) si ottiene lo stesso identico piano. Ciò che resta è la
+  ricerca locale sui km, cioè il fallimento storico.
+- **Pavimento sulla partenza** (vietare di partire prima di `startTime`): sull'ALTRO log reale
+  (19 tappe) fa **5 → 6 giornate, +138 km (+12,4%)**, perché la giornata di San Candido perde la
+  partenza alle 05:30. Rompe l'invariante di v5.120 ("zero casi con più giornate di prima").
+
+### Cosa resta valido per il prossimo tentativo
+- Il criterio di scelta fra varianti è `meno giornate, poi meno guida`: **cieco all'equilibrio**. Ma
+  aggiungerlo all'obiettivo, da solo, non basta (vedi sopra) e cambia i risultati altrove.
+- La strada meno rischiosa resta **una VARIANTE aggiuntiva** (non una fase sempre attiva): il
+  confronto di v5.120 garantisce che una variante peggiore non venga mai scelta. Attenzione però: a
+  **parità** vince la variante storica, quindi una variante che pareggia non porta benefici — ed è
+  esattamente ciò che succede su stella pura.
+- **Serve prima una riproduzione offline fedele**: in questa analisi i verificatori hanno prodotto
+  ricostruzioni della matrice in disaccordo fra loro (una riproduce ZONE/1-13-3 del log, un'altra dà
+  4 giornate 9/1/4/3). Senza replay fedele, ogni taratura è una scommessa — vedi il VINCOLO CRITICO.
+- Nel frattempo l'utente ha la strada manuale: riordino tappe fra giornate (v5.106) + "Crea i giri".
+
 ## Cosa è stato provato e NON va (non ripetere)
 - **`improveClusters` (ricerca locale km globale)** [v5.000–5.003]: rimescolava le giornate, rompeva il far-first. RIMOSSA.
 - **Accrescimento "minimo costo verso casa"** [v5.004]: infilava le tappe vicino casa nel giro lontano (zigzag).
@@ -363,6 +421,11 @@ Lo **swap pass-through/terminale è stato RIMOSSO** (era la causa principale del
   la cartella nei salvati. I giri creati sono giri VERI (navigabili/modificabili/ricalcolabili).
 
 ## Da fare (in ordine, solo con dati reali)
-- [x] ~~Tarare la frazione corridoio~~ → fatta in v5.104 (0.35 sulla Diagnostica reale).
+- [ ] **PRIMA DI TUTTO: replay offline FEDELE del giro reale** (deve riprodurre GEOMETRIA, VICINI,
+      ZONE e la composizione 1/13/3 del log ENI 202609). Senza, ogni modifica al clustering è una
+      scommessa: in v5.121 quattro verificatori hanno prodotto ricostruzioni in disaccordo fra loro.
+- [ ] **Giornata "ESTREMI"** (squilibrio 1/13/3 contro il 7/4/4 dell'utente): vedi la sezione dedicata
+      sopra per la diagnosi e i quattro rimedi già falsificati. Da riprendere solo col replay fedele.
 - [ ] Scelta del **giorno della settimana** per zona (negozi tutti aperti) — marginale.
+- [x] ~~Tarare la frazione corridoio~~ → fatta in v5.104 (0.35 sulla Diagnostica reale).
 - [x] ~~"Crea i giri" + cartella unica con nome~~ → fatta in v5.106.
