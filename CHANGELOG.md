@@ -1,3 +1,10 @@
+## v5.126 — 2026-09-06
+Meteo: si torna a Open-Meteo come fonte principale, i bollettini regionali solo come riserva.
+- **Problema (segnalato dall'utente)**: con giornata di sole l'app annunciava pioggia alla prima tappa, raggiungibile in 40 minuti. Non era la prima volta.
+- **Causa**: dopo il passaggio ai bollettini regionali (Meteo Trentino / Meteo Bolzano) il meteo della tappa era un dato **GIORNALIERO**: una sola descrizione per l'intera giornata e per un'intera località, temperatura interpolata fra tMin e tMax, millimetri di pioggia sempre assenti. Se pioveva nel pomeriggio o in un'altra parte della valle, la tappa del mattino risultava "pioggia".
+- **Fix**: `weatherForRow` chiama **Open-Meteo per prima**, che dà il valore **ORARIO alle coordinate esatte della tappa** (temperatura, millimetri di pioggia, vento, codice meteo). I bollettini regionali, OpenWeather e Weatherbit restano come riserva se Open-Meteo non risponde: meglio un dato giornaliero che nessun dato.
+- **Verificato con stub**: tappa alle 09:40 con pioggia prevista dalle 15:00 → prima "pioggia (Trento)" dal bollettino, ora "Sereno, 0 mm" da Open-Meteo, e il bollettino non viene nemmeno interrogato. Con Open-Meteo in errore 503 la catena ripiega correttamente su Meteo Trentino.
+
 ## v5.125 — 2026-09-06
 Multi-giorno: Vipiteno va nella giornata Nord, non negli Estremi (Diagnostica reale della v5.124).
 - **Bug**: con i tempi reali la zona fusa Estremi era {Malé, Canazei, Vipiteno, Cavalese}: Vipiteno sta a 115' dal seme Canazei ma a 67' da ENIMOOV/Bolzano. Restava fuori dalla giornata Estremi (Canazei+Malé+Cavalese), e quando le fasi successive provavano a sistemarlo la giornata di Silandro si era già fusa con la Val d'Adige (13 tappe, 52' di margine): nessun posto. Le varianti ESTREMI davano 13/1/3 e 10/2/5 e perdevano contro il 1/13/3.

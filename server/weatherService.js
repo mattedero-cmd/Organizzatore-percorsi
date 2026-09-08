@@ -440,6 +440,20 @@ async function weatherForRow(row, scheduledDate, forceHistorical) {
     lng: row.lng
   });
   const mode = forceHistorical || isPastDate(scheduledDate) ? "historical" : "forecast";
+  // v5.126 — ORDINE: Open-Meteo PRIMA di tutto.
+  // I bollettini regionali (Meteo Trentino, Meteo Bolzano) sono GIORNALIERI: una sola descrizione
+  // per l'intera giornata e per un'intera localita', temperatura interpolata fra tMin e tMax,
+  // `precipitationMm` sempre null. Su una tappa alle 09:40 stampavano "pioggia" perche' la pioggia
+  // era prevista nel pomeriggio o su un'altra parte della valle: segnalato dall'utente il
+  // 2026-09-06 con giornata di sole. Open-Meteo invece da' il valore ORARIO alle coordinate esatte
+  // della tappa, che e' quello che serve a chi deve sapere se piove al suo arrivo.
+  // I bollettini restano come RISERVA: se Open-Meteo non risponde, meglio un dato giornaliero che
+  // nessun dato.
+  try {
+    return await openMeteoWeather(coords, row, scheduledDate, mode);
+  } catch (error) {
+    console.warn("[open-meteo]", error.message);
+  }
   if (mode === "forecast") {
     try {
       const bolzano = await meteoBolzanoForecast(coords, row, scheduledDate);
